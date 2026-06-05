@@ -37,6 +37,6 @@ export default tseslint.config(
 
   // Ignore patterns (replaces .eslintignore in flat config)
   {
-    ignores: ['dist/**', 'node_modules/**', 'reference/**'],
+    ignores: ['dist/**', 'node_modules/**', 'reference/**', 'scripts/**'],
   }
 );
