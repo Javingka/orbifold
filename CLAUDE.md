@@ -116,7 +116,8 @@ Beyond methodology defaults:
 `.claude/settings.json` is tuned to minimize permission fatigue. This project's tuning beyond the pack defaults:
 - Added `pnpm` test/run/build/dev/exec and `pnpm install`/`pnpm add` (the latter two as `ask`, since new deps need Pilot awareness).
 - Added writes to root config files needed by Phase 0 (`package.json`, `tsconfig*.json`, `vite.config.*`, `index.html`, `*.config.*`, `.eslintrc*`, `.prettier*`, `svelte.config.*`, `LICENSE`, `README.md`, `CLAUDE.md`).
-- Destructive ops (force push, hard reset, `rm -rf`, publish, deploy) remain `deny`/`ask` — those are Pilot decisions.
+- `git push` moved from `deny` to `ask` (Pilot authorized at Phase 01); `git push --force`/`-f` remain `deny`.
+- Other destructive ops (hard reset, `rm -rf`, publish, deploy) remain `deny`/`ask` — those are Pilot decisions.
 
 ## Context hygiene (when to /clear)
 

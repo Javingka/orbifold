@@ -128,7 +128,6 @@
       "Edit(CLAUDE.md)"
     ],
     "deny": [
-      "Bash(git push:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(git reset --hard:*)",
@@ -160,6 +159,7 @@
       "Bash(git merge:*)",
       "Bash(git rebase:*)",
       "Bash(git cherry-pick:*)",
+      "Bash(git push:*)",
       "Bash(npm install:*)",
       "Bash(pnpm install:*)",
       "Bash(pnpm add:*)",
