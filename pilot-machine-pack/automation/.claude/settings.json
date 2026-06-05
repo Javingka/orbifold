@@ -1,0 +1,186 @@
+{
+  "_comment": "Permissions tuned to minimize permission fatigue. The methodology's review checkpoints are the real safety net; permissions are keyboard convenience. Read-only and project-internal writes are pre-approved. Only network/state changes outside the repo and irreversible operations require Pilot decision. Customize per project — see CLAUDE.md 'Permission tuning'.",
+
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git stash list:*)",
+      "Bash(git stash show:*)",
+      "Bash(git remote:*)",
+      "Bash(git fetch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)",
+      "Bash(git stash:*)",
+      "Bash(git switch:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(file:*)",
+      "Bash(stat:*)",
+      "Bash(du:*)",
+      "Bash(df:*)",
+      "Bash(pwd)",
+      "Bash(echo:*)",
+      "Bash(which:*)",
+      "Bash(env)",
+      "Bash(date)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx jest:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx prettier:*)",
+      "Bash(yarn test:*)",
+      "Bash(yarn run:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python -m unittest:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(make:*)",
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "Write(docs/**)",
+      "Edit(docs/**)",
+      "Write(src/**)",
+      "Edit(src/**)",
+      "Write(tests/**)",
+      "Edit(tests/**)",
+      "Write(test/**)",
+      "Edit(test/**)",
+      "Write(__tests__/**)",
+      "Edit(__tests__/**)",
+      "Write(spec/**)",
+      "Edit(spec/**)",
+      "Write(lib/**)",
+      "Edit(lib/**)",
+      "Write(app/**)",
+      "Edit(app/**)",
+      "Write(components/**)",
+      "Edit(components/**)",
+      "Write(pages/**)",
+      "Edit(pages/**)",
+      "Write(scripts/**)",
+      "Edit(scripts/**)",
+      "Write(.claude/**)",
+      "Edit(.claude/**)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fd:*)",
+      "Bash(rm -rf:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(sudo rm:*)",
+      "Bash(npm publish:*)",
+      "Bash(yarn publish:*)",
+      "Bash(cargo publish:*)",
+      "Bash(twine upload:*)",
+      "Bash(terraform apply:*)",
+      "Bash(terraform destroy:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(kubectl apply -f:*)",
+      "Bash(aws s3 rm:*)",
+      "Bash(aws s3 rb:*)",
+      "Bash(gcloud:*)",
+      "Bash(heroku:*)",
+      "Bash(fly deploy:*)",
+      "Bash(vercel deploy:*)",
+      "Bash(netlify deploy:*)",
+      "Bash(railway up:*)",
+      "Bash(curl -X POST:*)",
+      "Bash(curl -X PUT:*)",
+      "Bash(curl -X DELETE:*)"
+    ],
+    "ask": [
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(npm install:*)",
+      "Bash(yarn add:*)",
+      "Bash(yarn install:*)",
+      "Bash(cargo add:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(uv add:*)",
+      "Bash(brew install:*)",
+      "Bash(go get:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/escalate-on-adr.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/escalate-on-destructive.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/notify-on-blocker.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/notify-on-inventory.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/notify-phase-done.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
