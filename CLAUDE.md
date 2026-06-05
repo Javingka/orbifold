@@ -139,4 +139,4 @@ See `references/decisions-register-convention.md` for entry format.
 
 ## Pilot identity
 
-Pilot: Javier (javier@drumwave.com)
+Pilot: Javier (jcruzsm@gmail.com)
