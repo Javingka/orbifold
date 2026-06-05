@@ -3,8 +3,9 @@ import sveltePlugin from 'eslint-plugin-svelte';
 import svelteParser from 'svelte-eslint-parser';
 
 export default tseslint.config(
-  // Base TypeScript strict config
-  ...tseslint.configs.strictTypeChecked,
+  // Base TypeScript strict config (non-type-checked; type-checked rules require
+  // parserOptions.project which is deferred until the full src/ tree exists in step 00.4+)
+  ...tseslint.configs.strict,
 
   // Svelte files
   {
@@ -37,5 +38,5 @@ export default tseslint.config(
   // Ignore patterns (replaces .eslintignore in flat config)
   {
     ignores: ['dist/**', 'node_modules/**', 'reference/**'],
-  },
+  }
 );

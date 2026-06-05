@@ -1,3 +1,9 @@
 dist/
 node_modules/
 reference/
+pnpm-lock.yaml
+.claude/
+pilot-machine-pack/
+docs/
+ORBIFOLD_KICKOFF.md
+CLAUDE.md
