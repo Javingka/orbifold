@@ -136,7 +136,7 @@ All golden values were produced by running `scripts/extract-golden.mjs` (a throw
 - `tests/placeholder.test.ts` (deleted)
 - `.prettierignore` (added `scripts/`)
 - `eslint.config.js` (added `scripts/**` to ignores)
-- `.claude/settings.json` (cosmetic reformat + two permission entries added by interactive session)
+- `.claude/settings.json` (four machine-specific allow entries removed — governance cleanup per Planner review-1)
 - `docs/orbifold-v1/handoffs/phase-01-handoff.md` (this entry)
 
 ### Validation evidence (per Acceptance ID)
@@ -247,3 +247,154 @@ The Planner's REVISE (review-1) identified one governance violation: the prior D
 ### Amended commit
 
 `cfb1ec6` amended in-place (same commit message, same step scope). The amend includes the restored `settings.json` and this handoff update. `git diff HEAD~1 -- .claude/settings.json` returns empty after the amend.
+
+### Planner Review (Iteration 2)
+
+**Planner Review:** APPROVED on 2026-06-05. Iteration: 2 of 5.
+**Next action:** Dev proceeds to step 01.3
+
+---
+
+## Step 01.3 — Neo-Riemannian + Tonnetz pure engine
+
+**Date:** 2026-06-05
+**Commit(s):**
+  - **Terminal commit:** `feat(core): Phase 01 step 01.3 — neo-riemannian and tonnetz pure engines`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Completed
+
+- Implemented `src/core/theory/neo-riemannian.ts` — `NRLabel` type (`'P' | 'R' | 'L'`); `nrLabel(srcRoot, srcQual, nbrRoot, nbrQual): NRLabel | null` — exact port of prototype lines 1238–1249.
+- Implemented `src/core/theory/tonnetz.ts` — `TonnetzNode {i, j, pc}`, `TonnetzTriangle` interface; `tonnetzPc(i, j)` = `((7i+4j)%12+12)%12`; `computeTonnetzNodes(iRange, jRange)`; `computeTonnetzTriangles(nodes, root, mode)` — ported from prototype lines 962–991 (geometry stripped per ADR 0003). Imports only from `./chords`, `./scales`.
+- Completed `tests/tonnetz.test.ts` — expanded from 8 (step 01.2 partial) to 31 tests covering all parity cases for `chordPcs`, `chordVoicing`, `diatonicLookup` (carried forward), plus `tonnetzPc` (6 cases), `computeTonnetzNodes` (4 cases), `computeTonnetzTriangles` (4 cases), and `nrLabel` (9 cases).
+- Ran `scripts/extract-golden-01-3.mjs` to confirm all golden values from prototype lines 946–991, 1238–1249. All phase-file illustrative values confirmed correct (no discrepancies this step).
+- Restored `.claude/settings.json` to committed state — the prior invocation had appended machine-specific `allow` entries again (same pattern as the 01.2 governance violation). Discarded all settings.json changes before committing.
+
+### Golden values: how each was produced
+
+All golden values produced by running `scripts/extract-golden-01-3.mjs` — a throwaway Node script extracting the prototype's pure `tonnetzPc` and `nrLabel` functions from `reference/orbifold.html`. Script not committed (no runtime dependency; gitignored via the existing `scripts/` exclusions in eslint.config.js and .prettierignore).
+
+| Function | Prototype lines | Node golden result |
+|---|---|---|
+| `tonnetzPc(0, 0)` | 966 | `0` (C at origin) |
+| `tonnetzPc(1, 0)` | 966 | `7` (G — perfect fifth) |
+| `tonnetzPc(0, 1)` | 966 | `4` (E — major third) |
+| `tonnetzPc(-1, 0)` | 966 | `5` (F — negative i = fourth) |
+| `tonnetzPc(2, -1)` | 966 | `10` (A#/Bb) — phase-file formula `((14-4)%12+12)%12=10` confirmed |
+| `tonnetzPc(1, 1)` | 966 | `11` (B) |
+| Triangle upward(0,0): rootPc | 982–984 | `0`, `qual='maj'`, pcs=[0,4,7] |
+| Triangle downward(0,0): rootPc | 986–989 | `4`, `qual='min'`, pcs=[4,7,11] — rootPc = C.pc = tonnetzPc(0,1)=4 |
+| `nrLabel(0,'maj',0,'min')` | 1238–1249 | `'P'` |
+| `nrLabel(0,'maj',9,'min')` | 1238–1249 | `'R'` |
+| `nrLabel(0,'min',3,'maj')` | 1238–1249 | `'R'` |
+| `nrLabel(0,'maj',4,'min')` | 1238–1249 | `'L'` |
+| `nrLabel(0,'min',8,'maj')` | 1238–1249 | `'L'` |
+| `nrLabel(0,'maj',5,'maj')` | 1238–1249 | `null` (same mode) |
+| `nrLabel(0,'maj',1,'min')` | 1238–1249 | `null` (no PLR offset match) |
+
+**Phase-file discrepancies corrected by Node execution:**
+- None. All illustrative values in the phase file (`tonnetzPc(2,-1)=10`, P/R/L/null cases) were confirmed correct by Node execution.
+
+### Files touched
+
+- `src/core/theory/neo-riemannian.ts` (implemented — was stub)
+- `src/core/theory/tonnetz.ts` (implemented — was stub)
+- `tests/tonnetz.test.ts` (expanded from 8 to 31 tests)
+- `docs/orbifold-v1/handoffs/phase-01-handoff.md` (this entry)
+
+Note: `scripts/extract-golden-01-3.mjs` was created as a throwaway golden-value generator; it is not committed (gitignored via `scripts/` exclusions already in place from step 01.2). `scripts/extract-golden.mjs` (from step 01.2) also remains uncommitted for the same reason.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-03:** `pnpm test` → `tests/tonnetz.test.ts` — 9 nrLabel parity tests pass. All six phase-spec cases (P/R/L for maj source; R/L for min source; null same-mode) plus 3 additional null cases. Exact prototype behavior confirmed by Node execution of prototype lines 1238–1249.
+- **A-01-04:** `pnpm test` → `tests/tonnetz.test.ts` — 6 `tonnetzPc` spot-check tests pass. Origin (0,0)=0, (1,0)=7, (0,1)=4, (-1,0)=5, (2,-1)=10, (1,1)=11. All Node-confirmed from prototype line 966.
+- **A-01-08:** `grep -rn 'document\|window\|PIXI\|svelte' src/core/` → zero matches.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0 (zero errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier, all files pass)
+- `pnpm test` → 39 passed across 2 test files (voice-leading: 8, tonnetz: 31)
+- `grep -rn 'document\|window\|PIXI\|svelte' src/core/` → zero matches
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | `bjorklund(k, n)` returns byte-identical step arrays | (none yet) | — | not covered — deferred to 01.4 |
+| A-01-02 | `minimalVoiceLeading(pcsA, pcsB)` returns exact `{size, moves, perm}` | `tests/voice-leading.test.ts` | unit | covered (from 01.2) |
+| A-01-03 | `nrLabel` returns P/R/L/null matching prototype | `tests/tonnetz.test.ts` | unit | covered |
+| A-01-04 | `tonnetzPc(i, j)` implements `(7i+4j) mod 12` exactly | `tests/tonnetz.test.ts` | unit | covered |
+| A-01-05 | `chordToStrudel` and `melodyLine` produce byte-identical Strudel strings | `tests/tonnetz.test.ts` | unit | partial — `chordPcs`/`chordVoicing` covered; full codegen deferred to 01.5 |
+| A-01-06 | `rhythmToStrudel` produces byte-identical `stack(...)` strings | (none yet) | — | not covered — deferred to 01.5 |
+| A-01-07 | `buildComposition` pads shorter tracks with `silence` correctly | (none yet) | — | not covered — deferred to 01.5 |
+| A-01-08 | All `src/core/**` modules have zero DOM/PIXI/Svelte imports | `grep -rn 'document\|window\|PIXI\|svelte' src/core/` | proxy:static-analysis | covered |
+| A-01-09 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 | command execution | live-system | partial — tsc, lint, test green; `pnpm build` deferred to 01.5 per phase file |
+
+**Proxy disclosures:** A-01-08 — grep run against committed source (`src/core/`); zero matches confirmed.
+
+### Prototype parity section
+
+| Function | Prototype lines | Test name | Test file |
+|---|---|---|---|
+| `tonnetzPc` | 966 | `tonnetzPc(0, 0) → 0 (C at origin)` | `tests/tonnetz.test.ts` |
+| `tonnetzPc` | 966 | `tonnetzPc(1, 0) → 7 (G, one step along i-axis = perfect fifth)` | `tests/tonnetz.test.ts` |
+| `tonnetzPc` | 966 | `tonnetzPc(0, 1) → 4 (E, one step along j-axis = major third)` | `tests/tonnetz.test.ts` |
+| `tonnetzPc` | 966 | `tonnetzPc(-1, 0) → 5 (F, negative i = perfect fourth)` | `tests/tonnetz.test.ts` |
+| `tonnetzPc` | 966 | `tonnetzPc(2, -1) → 10 (A#/Bb)` | `tests/tonnetz.test.ts` |
+| `tonnetzPc` | 966 | `tonnetzPc(1, 1) → 11 (B)` | `tests/tonnetz.test.ts` |
+| `computeTonnetzNodes` | 962–970 | `computeTonnetzNodes(2, 2) produces ... 25 nodes` | `tests/tonnetz.test.ts` |
+| `computeTonnetzNodes` | 962–970 | `...origin node with pc=0` | `tests/tonnetz.test.ts` |
+| `computeTonnetzNodes` | 962–970 | `...node(1,0).pc = 7 (G)` | `tests/tonnetz.test.ts` |
+| `computeTonnetzNodes` | 962–970 | `...node(0,1).pc = 4 (E)` | `tests/tonnetz.test.ts` |
+| `computeTonnetzTriangles` | 979–991 | `upward triangle at (0,0) has rootPc=0, qual="maj" (C major)` | `tests/tonnetz.test.ts` |
+| `computeTonnetzTriangles` | 979–991 | `downward triangle at (0,0) has qual="min" and rootPc = tonnetzPc(0,1) = 4 (E minor)` | `tests/tonnetz.test.ts` |
+| `computeTonnetzTriangles` | 979–991 | `C major triangle ... has diatonic info (info.roman = "I")` | `tests/tonnetz.test.ts` |
+| `computeTonnetzTriangles` | 979–991 | `triangles array is non-empty for a (2,2) grid` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "maj", 0, "min") → "P"` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "maj", 9, "min") → "R"` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "min", 3, "maj") → "R"` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "maj", 4, "min") → "L"` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "min", 8, "maj") → "L"` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "maj", 5, "maj") → null (same mode, no match)` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "maj", 7, "maj") → null (same mode)` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "min", 9, "min") → null (same mode)` | `tests/tonnetz.test.ts` |
+| `nrLabel` | 1238–1249 | `nrLabel(0, "maj", 1, "min") → null (different mode but no PLR offset matches)` | `tests/tonnetz.test.ts` |
+
+All golden values were produced by running `scripts/extract-golden-01-3.mjs` (Node-executed from prototype lines 946–991, 1238–1249). No hand-traced fallbacks. No phase-file discrepancies found.
+
+### Decisions made (if any)
+
+- `.claude/settings.json` restored to committed state (discarded unstaged modifications before commit). The prior invocation had appended machine-specific absolute-path `allow` entries again — same pattern as the 01.2 governance violation, corrected here before the commit per the "Important" instruction in the step prompt.
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- 39 tests pass across 2 test files. All five theory modules from step 01.2 remain green.
+- `src/core/theory/neo-riemannian.ts` and `src/core/theory/tonnetz.ts` now fully implemented.
+- `src/core/rhythm/**`, `src/core/codegen/**`, and `src/core/composition/**` remain as stubs (steps 01.4–01.5).
+- `pnpm-lock.yaml` unchanged (no new dependencies added).
+
+### Next-step context (only if non-obvious)
+
+- `tonnetz.ts` uses `diatonicLookup` with the `"${rootPc}:${qual}"` key format confirmed in step 01.2. Render layer (Phase 03) will consume `TonnetzNode[]` and `TonnetzTriangle[]` and add pixel layout — no changes to the pure engine needed.
+- Step 01.4 implements `euclid.ts` and `layers.ts` — no dependencies on the tonnetz engine.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
