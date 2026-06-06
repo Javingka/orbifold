@@ -541,6 +541,166 @@ All golden values produced by Node execution of `scripts/extract-golden-01-4.mjs
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-06. Iteration: 1 of 5.
+**Reason:** All 9 checklist items pass. Commit scope exact (5 files matching step scope; settings.json correctly excluded). Acceptance Coverage Table complete for all 9 IDs. 24 tests are substantive: bjorklund edge-cases and canonical rhythms, rotate identity/shift/full-cycle, stepsFromHits 4-on-floor and snare, all 4 layerAudible combinations, rhythmLayerToStrudelLine both modes plus all-rest edge-case. Prototype parity citations present for every ported function with exact line ranges (796–830) and Node-execution provenance via committed `scripts/extract-golden-01-4.mjs`. `rotate(tresillo,2)` implementation traced by inspection — `arr.slice(2).concat(arr.slice(0,2))` on `[1,0,0,1,0,0,1,0]` yields `[0,1,0,0,1,0,1,0]` — test correctly asserts the Node-verified value and documents the phase-file error. AGPL-3.0 headers present in both source files and test file. No new deps; Register respected; zero DOM/PIXI/Svelte imports confirmed.
+**Next action:** Dev proceeds to step 01.5
+
+---
+
+## Step 01.5 — Codegen engine + composition model
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - **Terminal commit:** `feat(core): Phase 01 step 01.5 — codegen engine and composition model, all parity tests green`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Open decisions resolved (Pilot-confirmed before implementation)
+
+The four open decisions from step 01.1 that apply to this step were all confirmed as recommended:
+
+- **OD-1 (RESOLVED):** `chordToStrudel(rootPc, qual, gain, chordMode, octave)` — `chordMode` and `octave` as explicit params. Implemented exactly.
+- **OD-2 (RESOLVED):** `melodyLine(progression, chordMode, octave)` — all three as explicit params. Implemented exactly.
+- **OD-3 (RESOLVED):** `buildSession(layers, progression, chordMode, octave)` — all four as explicit params. Implemented exactly.
+- **OD-4 (RESOLVED):** `buildComposition(blocks, tracks)` — explicit params; `'silence'` is the literal Strudel keyword used byte-for-byte in padding. Implemented exactly.
+
+### Completed
+
+- Implemented `src/core/codegen/strudel.ts` — `tempoWrap`, `chordToStrudel`, `melodyLine`, `rhythmToStrudel`, `buildSession` — ported from prototype lines 605–608, 758–773, 833–836, 1470–1476.
+- Implemented `src/core/composition/model.ts` — `Block`, `Track`, `Composition` types (from `ORBIFOLD_KICKOFF.md §5`); `stripComments`, `buildComposition` — ported from prototype lines 1931–1938, 2054–2065.
+- Created `tests/codegen.test.ts` — 29 prototype-parity tests covering all phase-spec cases with byte-identical string assertions.
+- Created `scripts/extract-golden-01-5.mjs` — committed as a reproducible fixture generator (same rationale as step 01.4's extraction script).
+- Discarded `.claude/settings.json` modifications before committing (machine added a self-grant for the extraction script and relocated `_comment` key — governance guardrail followed per step prompt instructions).
+
+### Golden values: how each was produced
+
+All golden values produced by running `scripts/extract-golden-01-5.mjs` — a Node script extracting the prototype's pure functions from `reference/orbifold.html` lines 605–608, 742, 749–757, 758–773, 796–836, 1470–1476, 1931–1938, 2054–2065.
+
+| Function | Prototype lines | Node golden result |
+|---|---|---|
+| `tempoWrap(code, 120)` | 605–608 | `'setcpm(30.0000)\nstack(\n  s("bd")\n)'` — phase file confirmed |
+| `tempoWrap(code, 90)` | 605–608 | `'setcpm(22.5000)\nstack(\n  s("bd")\n)'` — phase file confirmed |
+| `chordToStrudel(0,'maj',null,'chord',3)` | 758–763 | `'note("C3,E3,G3").s("sawtooth").lpf(1200).gain(0.60).room(0.25)'` — phase file confirmed |
+| `chordToStrudel(0,'maj',0.8,'arp',3)` | 758–763 | `'note("C3 E3 G3").s("sawtooth").lpf(1200).gain(0.80).room(0.25)'` — phase file confirmed |
+| `chordToStrudel(9,'min',null,'chord',3)` | 758–763 | `'note("A3,C4,E4").s("sawtooth").lpf(1200).gain(0.60).room(0.25)'` — phase file confirmed |
+| `melodyLine([],…)` | 765–773 | `''` |
+| `melodyLine([{0,'maj'},{9,'min'}],'chord',3)` | 765–773 | `'  note("<[C3,E3,G3] [A3,C4,E4]>").s("sawtooth").lpf(1200).gain("<0.60 0.60>").room(0.3)'` — phase file confirmed |
+| `melodyLine([{0,'maj'},{9,'min'}],'arp',3)` | 765–773 | `'  note("<[C3 E3 G3] [A3 C4 E4]>").s("sawtooth").lpf(1200).gain("<0.60 0.60>").room(0.3)'` |
+| `rhythmToStrudel([bd@{0,8},sd@{4,12}])` | 833–836 | `'stack(\n  s("bd ~ ~ ~ ~ ~ ~ ~ bd ~ ~ ~ ~ ~ ~ ~"),\n  s("~ ~ ~ ~ sd ~ ~ ~ ~ ~ ~ ~ sd ~ ~ ~")\n)'` — phase file SD row was **INCORRECT** (see discrepancies below) |
+| `rhythmToStrudel([hh euclid 5,8])` | 833–836 | `'stack(\n  s("hh(5,8)")\n)'` — phase file confirmed |
+| `buildSession smoke` | 1470–1476 | contains `'stack('` and header — confirmed |
+| `stripComments('// comment\nstack…')` | 1936–1938 | `'stack(\n  s("bd")\n)'` — phase file confirmed |
+| `buildComposition(2 tracks, 4+4 bars)` | 2054–2065 | `'// ── Composición ──\nstack(\narrange(\n  [4, s("bd")]\n),\narrange(\n  [4, s("sd")]\n)\n)'` |
+| `buildComposition(silence-padding case)` | 2054–2065 | contains `'[2, silence]'` and exact structure — phase file confirmed |
+
+**Phase file discrepancies corrected by Node execution:**
+
+1. `rhythmToStrudel` SD row: The phase spec says `s("sd ~ ~ ~ sd ~ ~ ~ ~ ~ ~ ~ sd ~ ~ ~")` for `sd` with steps `[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]`. That pattern implies 'sd' at positions 0, 4, and 12 — but the input has 1s only at positions 4 and 12. The correct output is `s("~ ~ ~ ~ sd ~ ~ ~ ~ ~ ~ ~ sd ~ ~ ~")` (steps 4 and 12 only). Test asserts the Node-executed value.
+
+### Files touched
+
+- `src/core/codegen/strudel.ts` (implemented — was stub)
+- `src/core/composition/model.ts` (implemented — was stub)
+- `tests/codegen.test.ts` (created)
+- `scripts/extract-golden-01-5.mjs` (created — golden-value generator, committed)
+- `docs/orbifold-v1/handoffs/phase-01-handoff.md` (this entry + phase-completion entry below)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-05:** `pnpm test` → `tests/codegen.test.ts` — 7 `chordToStrudel`/`melodyLine` parity tests pass. Byte-identical string assertions vs Node-executed prototype output for C major block/arp, A minor block, two-chord `melodyLine` in both chord and arp modes, empty progression, and explicit gain.
+- **A-01-06:** `pnpm test` → `tests/codegen.test.ts` — 4 `rhythmToStrudel` tests pass. Two-layer BD+SD byte-identical stack string confirmed; euclidean layer (`hh(5,8)`) confirmed; muted-all empty-string case; solo filtering.
+- **A-01-07:** `pnpm test` → `tests/codegen.test.ts` — 6 `buildComposition` tests pass. Silence-padding case asserts `[2, silence]` byte-exact; 2-track no-padding; single-track no-stack wrapper; empty returns `''`; nonexistent blockId filtered.
+- **A-01-08:** `grep -rn 'document\|window\|PIXI\|svelte' src/core/` → matches only in comments (the invariant guard lines), not in any import statements. `grep -rn 'import.*PIXI\|from.*svelte' src/core/` → zero matches.
+- **A-01-09:** All four commands exit 0 — see Routine validations.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0 (zero errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier, all files pass)
+- `pnpm test` → 92 passed across 4 test files (voice-leading: 8, euclid: 24, codegen: 29, tonnetz: 31)
+- `grep -rn 'document\|window\|PIXI\|svelte' src/core/` → matches only in comment lines, zero actual import statements
+- `pnpm build` → exit 0 (27 modules, 3.86 kB bundle — no regressions)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | `bjorklund(k, n)` returns byte-identical step arrays | `tests/euclid.test.ts` | unit | covered (from 01.4) |
+| A-01-02 | `minimalVoiceLeading(pcsA, pcsB)` returns exact `{size, moves, perm}` | `tests/voice-leading.test.ts` | unit | covered (from 01.2) |
+| A-01-03 | `nrLabel` returns P/R/L/null matching prototype | `tests/tonnetz.test.ts` | unit | covered (from 01.3) |
+| A-01-04 | `tonnetzPc(i, j)` implements `(7i+4j) mod 12` exactly | `tests/tonnetz.test.ts` | unit | covered (from 01.3) |
+| A-01-05 | `chordToStrudel` and `melodyLine` produce byte-identical Strudel strings | `tests/codegen.test.ts` | unit | covered |
+| A-01-06 | `rhythmToStrudel` produces byte-identical `stack(...)` strings | `tests/codegen.test.ts` | unit | covered |
+| A-01-07 | `buildComposition` pads shorter tracks with `silence` correctly | `tests/codegen.test.ts` | unit | covered |
+| A-01-08 | All `src/core/**` modules have zero DOM/PIXI/Svelte imports | `grep -rn 'import.*PIXI\|from.*svelte' src/core/` | proxy:static-analysis | covered |
+| A-01-09 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 | command execution | live-system | covered |
+
+**Proxy disclosures:** A-01-08 — grep run against committed source (`src/core/`); zero actual import statements confirmed. Comment-only matches (the `// No DOM / PIXI / Svelte imports` guard lines in two files) are false positives from the grep pattern; they contain no runtime import.
+
+### Prototype parity section
+
+| Function | Prototype lines | Test name | Test file |
+|---|---|---|---|
+| `tempoWrap` | 605–608 | `wraps code with setcpm(30.0000) at BPM 120` | `tests/codegen.test.ts` |
+| `tempoWrap` | 605–608 | `wraps code with setcpm(22.5000) at BPM 90` | `tests/codegen.test.ts` |
+| `tempoWrap` | 605–608 | `trims trailing whitespace from code` | `tests/codegen.test.ts` |
+| `tempoWrap` | 605–608 | `never uses setcps (CLAUDE.md invariant)` | `tests/codegen.test.ts` |
+| `chordToStrudel` | 758–763 | `C major block mode, null gain → comma-separated with default gain 0.60` | `tests/codegen.test.ts` |
+| `chordToStrudel` | 758–763 | `C major arp mode, explicit gain 0.8 → space-separated` | `tests/codegen.test.ts` |
+| `chordToStrudel` | 758–763 | `A minor block mode, null gain → octave-wrap: A3,C4,E4` | `tests/codegen.test.ts` |
+| `melodyLine` | 765–773 | `returns empty string for empty progression` | `tests/codegen.test.ts` |
+| `melodyLine` | 765–773 | `C major + A minor, chord mode → bracket notation with comma separators` | `tests/codegen.test.ts` |
+| `melodyLine` | 765–773 | `C major + A minor, arp mode → bracket notation with space separators` | `tests/codegen.test.ts` |
+| `melodyLine` | 765–773 | `uses explicit gain values when provided` | `tests/codegen.test.ts` |
+| `rhythmToStrudel` | 833–836 | `two-layer BD+SD produces byte-identical stack string` | `tests/codegen.test.ts` |
+| `rhythmToStrudel` | 833–836 | `single euclidean layer → stack with hh(5,8)` | `tests/codegen.test.ts` |
+| `rhythmToStrudel` | 833–836 | `returns empty string when all layers are muted` | `tests/codegen.test.ts` |
+| `rhythmToStrudel` | 833–836 | `respects solo: only soloed layer appears` | `tests/codegen.test.ts` |
+| `buildSession` | 1470–1476 | `smoke test: non-empty layers + progression contains stack and header` | `tests/codegen.test.ts` |
+| `buildSession` | 1470–1476 | `exact header comment matches prototype byte-for-byte` | `tests/codegen.test.ts` |
+| `buildSession` | 1470–1476 | `returns empty string when layers and progression are both empty` | `tests/codegen.test.ts` |
+| `buildSession` | 1470–1476 | `rhythm-only session omits melody line` | `tests/codegen.test.ts` |
+| `buildSession` | 1470–1476 | `harmony-only session (no rhythm layers) includes melody line` | `tests/codegen.test.ts` |
+| `stripComments` | 1936–1938 | `removes comment lines, returns trimmed result` | `tests/codegen.test.ts` |
+| `stripComments` | 1936–1938 | `preserves non-comment lines unchanged` | `tests/codegen.test.ts` |
+| `stripComments` | 1936–1938 | `removes multiple comment lines` | `tests/codegen.test.ts` |
+| `stripComments` | 1936–1938 | `returns empty string for all-comment input` | `tests/codegen.test.ts` |
+| `buildComposition` | 2054–2065 | `two tracks, equal lengths → stack with arrange, no silence padding` | `tests/codegen.test.ts` |
+| `buildComposition` | 2054–2065 | `silence-padding case: shorter track gets [N, silence] appended` | `tests/codegen.test.ts` |
+| `buildComposition` | 2054–2065 | `single track → no stack wrapper, just arrange with composition header` | `tests/codegen.test.ts` |
+| `buildComposition` | 2054–2065 | `returns empty string for no non-empty tracks` | `tests/codegen.test.ts` |
+| `buildComposition` | 2054–2065 | `skips tracks with no matching blocks` | `tests/codegen.test.ts` |
+
+All golden values produced by Node execution of `scripts/extract-golden-01-5.mjs` (prototype lines cited above). No hand-traced fallbacks. One phase-file discrepancy found and corrected (rhythmToStrudel SD row — see Golden values section).
+
+### Decisions made (if any)
+
+- `scripts/extract-golden-01-5.mjs` committed per Dev discretion (same rationale as step 01.4: clean standalone reproducible generator, auditable golden derivation).
+- `.claude/settings.json` modifications discarded before committing (machine added self-grant for extraction script and relocated `_comment` key — governance guardrail per step prompt).
+- The grep check `grep -rn 'document\|window\|PIXI\|svelte' src/core/` produces comment-only matches due to the `// No DOM / PIXI / Svelte imports` guard lines in new files. A-01-08 is satisfied: zero actual import statements for DOM/PIXI/Svelte confirmed by targeted import grep.
+
+### Proposed Decisions Register entries (if any)
+
+- OD-1/OD-2/OD-3/OD-4 function signatures (`chordToStrudel`, `melodyLine`, `buildSession`, `buildComposition` explicit params) — the Pilot should decide whether these warrant Register entries or remain handoff-documented. Surfaced for Pilot resolution at phase approval (per step prompt).
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- 92 tests pass across 4 test files (voice-leading: 8, euclid: 24, codegen: 29, tonnetz: 31).
+- All `src/core/**` modules fully implemented: theory (5 modules), rhythm (2 modules), codegen (1 module), composition (1 module).
+- `pnpm-lock.yaml` unchanged (no new dependencies added across the entire phase).
+- `pnpm build` exits 0 (27 modules, regression confirmed).
+
+### Next-step context (only if non-obvious)
+
+This is the final step of Phase 01. No next step within this phase.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**
@@ -548,3 +708,81 @@ All golden values produced by Node execution of `scripts/extract-golden-01-4.mjs
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Handoff — Phase 01 (Pure Core Engines + Prototype Parity Tests)
+
+**Phase completed:** 2026-06-06
+
+### Completed
+
+- Ported all pure logic from `reference/orbifold.html` into 10 `src/core/**` modules across 4 steps (01.2–01.5).
+- Created 4 test files with 92 parity tests, all asserting byte-identical outputs against Node-executed prototype functions.
+- All seven open decisions from the inventory (OD-1 through OD-7) resolved by Pilot and implemented.
+- ADR 0003 committed (tonnetz render-layer separation, step 01.3).
+- `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm test`, and `pnpm build` all exit 0.
+- Zero DOM/PIXI/Svelte imports in `src/core/**` confirmed by grep.
+- AGPL-3.0 headers present in all source and test files.
+- Four phase-file illustrative value discrepancies found and corrected via Node execution (documented in steps 01.2, 01.4, 01.5).
+
+### Acceptance Coverage Summary
+
+| Acceptance ID | Required behavior | Covered in step | Status |
+|---|---|---|---|
+| A-01-01 | `bjorklund(k, n)` returns byte-identical step arrays (tresillo, cinquillo, edge cases) | 01.4 | covered |
+| A-01-02 | `minimalVoiceLeading(pcsA, pcsB)` returns exact `{size, moves, perm}` | 01.2 | covered |
+| A-01-03 | `nrLabel` returns P/R/L/null matching prototype for all 6 cases | 01.3 | covered |
+| A-01-04 | `tonnetzPc(i, j)` implements `(7i+4j) mod 12` exactly | 01.3 | covered |
+| A-01-05 | `chordToStrudel` and `melodyLine` produce byte-identical Strudel strings | 01.5 | covered |
+| A-01-06 | `rhythmToStrudel` produces byte-identical `stack(...)` strings | 01.5 | covered |
+| A-01-07 | `buildComposition` pads shorter tracks with `silence` correctly | 01.5 | covered |
+| A-01-08 | All `src/core/**` modules have zero DOM/PIXI/Svelte imports | 01.2–01.5 (cumulative) | covered |
+| A-01-09 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 | 01.5 (all four, final gate) | covered |
+
+All 9 Acceptance IDs: **covered**.
+
+### Known warnings
+
+- None. All four validation commands exit 0 with zero warnings.
+
+### Decisions made
+
+- `scripts/extract-golden.mjs` and `scripts/extract-golden-01-3.mjs` (throwaway generators, uncommitted) — tooling hygiene per phase file.
+- `scripts/extract-golden-01-4.mjs` and `scripts/extract-golden-01-5.mjs` committed as reproducible fixture generators per Dev discretion.
+- `scripts/` added to `.prettierignore` and `eslint.config.js` ignores (step 01.2) to prevent lint noise from throwaway scripts.
+
+### ADRs committed
+
+- ADR 0003 (committed in step 01.3): Tonnetz pure-engine representation — nodes carry `{i, j, pc}` without pixel coordinates; render-layer concern.
+
+### Register entries added
+
+- None new in Phase 01. The single active Register entry ("Exact dependency version pinning") from Phase 00 was respected throughout (no `pnpm add` calls; no new deps).
+
+### Pending Register proposals resolved at phase approval
+
+The following are surfaced for Pilot decision at phase approval. Dev proposes as follows (Pilot decides):
+
+- **OD-1/OD-2/OD-3/OD-4 — Explicit-parameter signatures for codegen functions:** `chordToStrudel(rootPc, qual, gain, chordMode, octave)`, `melodyLine(progression, chordMode, octave)`, `buildSession(layers, progression, chordMode, octave)`, `buildComposition(blocks, tracks)`. These are intra-phase implementation decisions confirmed by the Pilot at the inventory checkpoint. Dev proposes these remain **handoff-documented** (not Register entries), as they are already locked into the implementation and tests, and the Register is more useful for cross-phase governance decisions. Pilot may decide otherwise.
+- **OD-5 — Tonnetz pure representation (nodes without pixel coordinates):** Already covered by ADR 0003 (committed step 01.3). No Register entry needed; ADR is the appropriate artifact.
+
+### Deferred
+
+- ESLint `strictTypeChecked` — deferred from Phase 00; no new barrier introduced in Phase 01.
+- CI/pre-commit hooks — deferred from Phase 00 per Pilot decision.
+
+### Blockers and review escalations
+
+- Phase 01 step 01.2: REVISE iteration 1 (governance violation — unauthorized `.claude/settings.json` entries). Resolved in iteration 2.
+- Steps 01.3, 01.4, 01.5: `.claude/settings.json` machine-specific allow-entry pattern recurred each step; discarded before committing per step prompt guardrail instructions.
+
+### Iteration counts (only for steps that took multiple iterations)
+
+- Step 01.2: approved on iteration 2 (REVISE on iteration 1 for `.claude/settings.json` governance violation).
+- Steps 01.1, 01.3, 01.4, 01.5: approved on iteration 1.
+
+### Next focus
+
+- Phase 02, step 02.1 (suggested: Planner scoping for Strudel audio integration and transport layer, per `ORBIFOLD_KICKOFF.md §8`).
+- The Planner should note: all `src/core/**` pure engines are complete and fully tested. Phase 02 will add the Strudel runtime, user-gesture audio start, and wire the pure engines to `evaluate()` calls.
