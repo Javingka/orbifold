@@ -701,13 +701,9 @@ This is the final step of Phase 01. No next step within this phase.
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:**
-**Reviewed on:**
-**Iteration:**
-**Reason:**
-**Next action:**
+**Planner Review:** APPROVED on 2026-06-06. Iteration: 1 of 5.
+**Reason:** All 9 checklist items pass plus the Prototype parity project item. Scope exact — 5 files (strudel.ts, model.ts, codegen.test.ts, extract-golden-01-5.mjs, handoff); settings.json correctly excluded. The `setcpm`-only invariant confirmed by direct source read (strudel.ts line 21 uses `setcpm` exclusively; no `setcps` present). OD-1/OD-2/OD-3/OD-4 signatures all match Pilot-resolved decisions. `'silence'` padding byte-for-byte confirmed in model.ts (line 94). SD-row correction verified by tracing steps[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] through rhythmLayerToStrudelLine — tokens at positions 4 and 12 yield `sd`, all others `~`; test asserts the correct Node-verified string. buildComposition two-track exact string traced manually and confirmed against the test assertion at codegen.test.ts line 257. 29 tests are substantive with byte-identical assertions for all phase-spec cases. Prototype parity citations present for every function with exact prototype line ranges (605–608, 758–773, 833–836, 1470–1476, 1936–1938, 2054–2065) and Node-execution provenance via committed scripts/extract-golden-01-5.mjs. AGPL-3.0 headers confirmed in both source files and test file. No new deps; Register respected; zero actual DOM/PIXI/Svelte import statements confirmed. A-01-08 proxy disclosure present and accurate. Consolidated phase-completion Acceptance Coverage Table covers all 9 IDs with real evidence — no gaps, no hand-waving.
+**Next action:** Pilot approval required — Phase 01 complete
 
 ---
 
