@@ -76,3 +76,114 @@ No Acceptance IDs touched by this step. Step 02.1 is the inventory step; Accepta
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Step 02.2 — Session store + code-derivation tests
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - **Terminal commit:** `feat(state): Phase 02 step 02.2 — session store, SessionState types, and code-derivation parity tests`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Completed
+
+- Confirmed all four open decisions resolved before writing code: OD-1 (manual smoke test), OD-2 (Svelte writable store), OD-3 (250 ms heuristic), OD-4 (inside gesture handler). All resolves per Pilot direction in the invocation prompt.
+- Implemented `src/state/session.ts` with: `Chord`, `HarmonyState`, `RhythmState`, `NowPlaying`, `SessionState` interfaces exported; `DEFAULT_SESSION_STATE` constant; `sessionStore` Svelte writable; pure derivation helpers `rhythmCode()`, `harmonyCode()`, `sessionCode()`; transport stubs `setNowPlaying()`, `setBpm()`, `requeueLive()`.
+- Code-derivation helpers return un-wrapped Strudel bodies (no `setcpm` header) — audio layer applies `tempoWrap` in step 02.3; no double-wrapping possible.
+- `requeueLive()` reads store state, derives code for the current source, and returns the string — no audio call (wired in step 02.4).
+- For `source='harmony'`, `requeueLive` returns `harmonyCode(state).trim()` matching prototype line 1312.
+- For `source='chord'`, `requeueLive` uses `chordToStrudel(lastChord...)` matching prototype line 1313.
+- Created `tests/session.test.ts` with 27 Vitest parity tests running in Node (no AudioContext, no DOM).
+- All 119 tests pass (92 Phase 01 + 27 new session tests).
+- `tsc --noEmit`, `pnpm lint`, `pnpm test` all exit 0.
+- `grep -rn "audio" src/state/session.ts` shows only comments, no import.
+
+### Files touched
+
+- `src/state/session.ts` (implemented — was stub)
+- `tests/session.test.ts` (created)
+- `docs/orbifold-v1/handoffs/phase-02-handoff.md` (this file — appended)
+
+### Validation evidence (per Acceptance ID)
+
+- A-02-09: `pnpm exec vitest run session` → 27 tests passed. Each of `rhythmCode()`, `harmonyCode()`, `sessionCode()` is tested with a fixed input and compared byte-for-byte against calling the same Phase 01 core function (`rhythmToStrudel`, `melodyLine`, `buildSession`) directly. `setNowPlaying` and `setBpm` are tested with `get(sessionStore)` read-back. `requeueLive()` is tested for all four `nowPlaying.source` values plus null and empty-result edge cases.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec vitest run session` → 27 passed (new session tests only)
+- `pnpm test` → 119 passed (92 Phase 01 + 27 session; 0 failures, 0 regressions)
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0 (eslint + prettier both clean)
+- `grep -rn "audio" src/state/session.ts` → 6 comment-only matches, 0 import matches
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | AudioContext starts after user gesture; no error | — | operability | not covered — deferred to step 02.5 (manual smoke test) |
+| A-02-02 | "▶ Groove" plays rhythm pattern; label shows "Ritmo · groove" | — | operability | not covered — deferred to step 02.5 |
+| A-02-03 | "▶ Progresión" plays harmony; label shows "Armonía · progresión" | — | operability | not covered — deferred to step 02.5 |
+| A-02-04 | "▶ Sesión" plays both; label shows "Sesión · ritmo + armonía" | — | operability | not covered — deferred to step 02.5 |
+| A-02-05 | BPM change audible within one cycle; setcpm only | — | operability + proxy:static-analysis | not covered — deferred to step 02.5 and 02.3 grep |
+| A-02-06 | Live edit takes effect at next cycle boundary (hot-swap) | — | operability | not covered — deferred to step 02.5 |
+| A-02-07 | "■ Silencio" stops all audio; label shows "silencio" | — | operability | not covered — deferred to step 02.5 |
+| A-02-08 | Audio does not auto-start on page load | — | operability | not covered — deferred to step 02.5 |
+| A-02-09 | `rhythmCode()`, `harmonyCode()`, `sessionCode()` produce byte-identical Strudel strings to core codegen | `tests/session.test.ts` | unit | covered |
+| A-02-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 at phase end | — | live-system | partial — tsc/lint/test pass; `pnpm build` deferred to step 02.5 (audio module not yet implemented) |
+
+**Notes on partial coverage:**
+- A-02-01 through A-02-08: operability-only; all deferred to step 02.5 per the plan in `docs/orbifold-v1/inventories/phase-02-inventory.md` and phase file §Operability requirements.
+- A-02-10: `pnpm build` not run in this step because `src/audio/strudel.ts` is still a stub (`export {}`); build is verified at step 02.3 (audio module) and again at step 02.5 (final gate).
+
+### Prototype parity
+
+| Prototype function | Prototype lines | Port target | Test |
+|---|---|---|---|
+| `melodyLine()` | 765–773 | `harmonyCode(state)` in `src/state/session.ts` | `tests/session.test.ts` — `harmonyCode() parity with melodyLine` suite (4 tests) |
+| `rhythmToStrudel()` | 833–836 | `rhythmCode(state)` in `src/state/session.ts` | `tests/session.test.ts` — `rhythmCode() parity with rhythmToStrudel` suite (4 tests) |
+| `buildSession()` | 1470–1476 | `sessionCode(state)` in `src/state/session.ts` | `tests/session.test.ts` — `sessionCode() parity with buildSession` suite (5 tests) |
+| `setNowPlaying(label, source)` | 1477–1486 | `setNowPlaying()` in `src/state/session.ts` | `tests/session.test.ts` — `setNowPlaying` suite (4 tests); DOM manipulation stripped; nowPlaying field updated correctly |
+| `requeueLive()` | 1307–1315 | `requeueLive()` in `src/state/session.ts` | `tests/session.test.ts` — `requeueLive()` suite (7 tests); all four source branches tested plus null/empty edge cases |
+
+**Behavioral fidelity notes:**
+- `setNowPlaying`: The prototype (lines 1477–1486) updated DOM elements (`document.getElementById('nowPlayingEl').textContent = label`). The port strips DOM manipulation entirely and only updates the Svelte store's `nowPlaying` field. The test verifies the field values via `get(sessionStore)`.
+- `requeueLive()`: The prototype (line 1312) calls `melodyLine().trim()` for 'harmony'; the port does the same (`harmonyCode(state).trim()`). The prototype (line 1313) takes the last chord in `melState.progression`; the port does `progression[progression.length - 1]`. Both edge cases (empty progression → null, empty rhythm → null) are tested.
+- Audio calls (`queueForNextCycle`, `isPlaying`) are NOT present in step 02.2 — `requeueLive` only derives and returns the code string; full wiring is step 02.4.
+
+### Decisions made (if any)
+
+- OD-1 through OD-4 confirmed resolved per Pilot direction in invocation prompt. No new decisions made by the Dev.
+- `requeueLive()` for `source='harmony'` returns `.trim()`-ed output matching prototype line 1312. This is a derived behavior from the prototype, not a new decision.
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- `src/state/session.ts` fully implemented (all types, default state, store, derivation helpers, transport stubs).
+- `tests/session.test.ts` created with 27 tests.
+- 119 tests total pass. `src/audio/strudel.ts` remains a stub (`export {}`).
+- `pnpm-lock.yaml` unchanged — no new dependencies.
+
+### Next-step context (only if non-obvious)
+
+- Step 02.3 implements `src/audio/strudel.ts`. It must NOT import from `src/state/session.ts` (to avoid circular dependency; the store imports from core, audio from core; transport wiring at step 02.4 goes into the store).
+- The `setcpm`-via-`(globalThis as any).setcpm` access pattern (with `typeof` guard) is confirmed as the only approach per the inventory's live-doc check.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
