@@ -294,6 +294,113 @@ No Acceptance IDs touched by this step. Step 02.1 is the inventory step; Accepta
 
 ### Planner Review
 
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-06
+**Iteration:** 1 of 5
+**Reason:** All 9 checklist items pass (8 standard + prototype parity). Commit scope exactly 3 files (orchestrator-verified). Commit message format correct. tsc/lint/build/test all exit 0 (orchestrator-verified: 119 tests, 0 regressions). No live-system audio behavior overclaimed — operability evidence correctly deferred to step 02.5 with explicit disclosure. Coverage Table complete and honest for all 10 IDs: A-02-05 partitioned correctly (static-analysis half covered now, audible half deferred), A-02-09 carried from step 02.2, A-02-10 partial acknowledged. Register respected: no new deps, pnpm-lock.yaml unchanged. No governance conflicts: setcps fallback omission is correctly disclosed as an invariant-driven deviation, citing prototype line 651 explicitly in both the code comments (lines 160–161) and the parity table ("setcps fallback intentionally omitted (CLAUDE.md invariant)") — parity-documentation requirement satisfied. Source-level verification confirms: no top-level initStrudel call; initAudio() is idempotent; runNow uses tempoWrap imported from core/codegen; queueForNextCycle uses 250 ms setTimeout with stale-queue guard; hush uses named export strudelHush(); setcpm accessed via (globalThis as any).setcpm with typeof guard; AGPL-3.0 header present; no DOM imports. vite-env.d.ts ambient declaration covers initStrudel, evaluate, hush, samples with accurate signatures and no any-papering of real types.
+**Next action:** Dev proceeds to step 02.4
+
+---
+
+## Step 02.4 — Wire transport: playGroove, playProgression, playSession, BPM, hot-swap
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - **Terminal commit:** `feat(state): Phase 02 step 02.4 — wire transport: playGroove, playProgression, playSession, BPM, hot-swap`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Completed
+
+- Implemented `playGroove()`, `playProgression()`, `playSession()`, `hushAll()`, `setBpm()` (with audio), `initAudio()` (re-export), and `requeueLive()` (with audio queuing) in `src/state/session.ts`.
+- Added minimal transport UI to `src/app/App.svelte`: "Init audio", "▶ Groove", "▶ Progresión", "▶ Sesión", "■ Silencio" buttons; BPM input (range 40–280); "Ahora: {label}" now-playing label; canvas placeholder; temporary-UI comment clearly marking Phase 02 scope.
+- Seeded audible defaults in `onMount`: 4-on-the-floor BD layer (steps `[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]`) and C major chord (`rootPc=0, qual='maj', gain=0.6`) — each play button produces audible output on first load without additional interaction.
+- **Audio import: lazy dynamic import** — `@strudel/web` accesses `window` at its own module-evaluation time (`dist/index.mjs` line 14806: `window.initStrudel = rD`). A static `import * as audio from '../audio/strudel.js'` would execute this in Node/Vitest, causing "window is not defined" and breaking all 27 session tests. The fix is a cached `getAudio(): Promise<AudioModule>` helper that calls `import('../audio/strudel.js')` on first transport call. All transport functions (`playGroove`, `playProgression`, `playSession`, `hushAll`, `setBpm`, `initAudio`, `requeueLive`) go through `getAudio()`. The pure derivation functions (`rhythmCode`, `harmonyCode`, `sessionCode`, `setNowPlaying`) remain fully synchronous and import-free from the audio layer.
+- `requeueLive()` remains synchronous (returns `string | null`) as the session tests expect; audio queuing is fire-and-forget (`void getAudio().then(...)`).
+- All 119 tests pass (92 Phase 01 + 27 session); the session tests confirm no import-time audio side effect from the lazy-load strategy.
+- `pnpm exec tsc --noEmit` → exit 0; `pnpm lint` → exit 0; `pnpm build` → exit 0 (38 modules, 407 kB strudel chunk + 9.77 kB app); `pnpm dev` boots cleanly (no console errors; port conflicts are environmental/transient).
+
+### Files touched
+
+- `src/state/session.ts` (transport methods implemented; lazy audio import added)
+- `src/app/App.svelte` (temporary transport UI added; default state seeded in onMount)
+- `docs/orbifold-v1/handoffs/phase-02-handoff.md` (this file — appended)
+
+### Validation evidence (per Acceptance ID)
+
+- A-02-09: All 27 session tests still pass (`pnpm test` → 119 total). The lazy-load strategy preserves Node test environment (no `window` access at import time). Verified: the pure derivation helpers (`rhythmCode`, `harmonyCode`, `sessionCode`, `requeueLive`) are identical to step 02.2 — the audio call inside `requeueLive` is gated inside a `.then()` that never runs in Node (the dynamic import of `@strudel/web` in Node would fail at that point, but `requeueLive()` itself returns the derived code string synchronously before the Promise resolves, so tests that check the return value are not affected).
+- A-02-10 (gate commands): `pnpm exec tsc --noEmit` → exit 0; `pnpm lint` → exit 0; `pnpm test` → 119 passed; `pnpm build` → exit 0.
+- A-02-01 through A-02-08 (operability): not covered in this step — deferred to step 02.5 manual smoke test (per phase plan; `pnpm dev` boots without console errors confirming the wiring is structurally correct).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier clean; Prettier auto-fixed App.svelte formatting before final check)
+- `pnpm test` → 119 passed (92 Phase 01 + 27 session; 0 failures, 0 regressions)
+- `pnpm build` → exit 0 (38 modules; app 9.77 kB, strudel 407 kB; audio module now included in bundle)
+- `pnpm dev` → launched on port 5184 (5173–5183 in use by other processes); no console errors; Vite ready in 284 ms.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | AudioContext starts after user gesture; no error | — | operability | not covered — deferred to step 02.5 (manual smoke test); `initAudio()` button is wired |
+| A-02-02 | "▶ Groove" plays rhythm pattern; label shows "Ritmo · groove" | — | operability | not covered — deferred to step 02.5; `playGroove()` is wired |
+| A-02-03 | "▶ Progresión" plays harmony; label shows "Armonía · progresión" | — | operability | not covered — deferred to step 02.5; `playProgression()` is wired |
+| A-02-04 | "▶ Sesión" plays both; label shows "Sesión · ritmo + armonía" | — | operability | not covered — deferred to step 02.5; `playSession()` is wired |
+| A-02-05 | BPM change audible within one cycle; setcpm only | `src/audio/strudel.ts` (grep) | proxy:static-analysis | partial — static-analysis half carried from step 02.3; audible-behavior half deferred to step 02.5; `setBpm()` now calls `audio.setTempo(bpm)` |
+| A-02-06 | Live edit takes effect at next cycle boundary (hot-swap) | — | operability | not covered — deferred to step 02.5; `requeueLive()` calls `audio.queueForNextCycle()` |
+| A-02-07 | "■ Silencio" stops all audio; label shows "silencio" | — | operability | not covered — deferred to step 02.5; `hushAll()` is wired |
+| A-02-08 | Audio does not auto-start on page load | — | operability | not covered — deferred to step 02.5; lazy-load ensures no AudioContext at module load |
+| A-02-09 | `rhythmCode()`, `harmonyCode()`, `sessionCode()` produce byte-identical Strudel strings to core codegen | `tests/session.test.ts` | unit | covered — 27 tests pass in Node despite session.ts now importing (lazily) the audio module; confirms no import-time audio side effect |
+| A-02-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 at phase end | — | live-system | partial — all four pass now; "phase end" gate confirmed at step 02.5 |
+
+**Notes on partial coverage:**
+- A-02-01 through A-02-08: operability-only; all deferred to step 02.5 per the plan in `docs/orbifold-v1/inventories/phase-02-inventory.md` and phase file §Operability requirements. This step wires all the handlers; the smoke test in step 02.5 exercises them in a browser.
+- A-02-10: all four gate commands pass right now; "phase end" label is claimed at step 02.5 after full smoke test.
+
+**Operability evidence (intermediate — per phase §Operability requirements for step 02.4):**
+- `pnpm dev` → launched without errors (port 5184, ready in 284 ms). No console errors during startup. The transport panel HTML renders; the store subscription is reactive (`$sessionStore.nowPlaying.label` updates on store writes). Full audible verification is step 02.5.
+
+### Prototype parity
+
+| Prototype function | Prototype lines | Port target | Behavioral fidelity |
+|---|---|---|---|
+| `rhythmPlay.onclick` (playGroove) | 1493–1498 | `playGroove()` in `src/state/session.ts` | Derives `rhythmCode(state)`, calls `audio.runNow(code)`, calls `setNowPlaying('Ritmo · groove', 'rhythm')`; no-op when code is empty (prototype shows `stageHint` message — DOM manipulation stripped) |
+| `progPlay.onclick` (playProgression) | 1499–1504 | `playProgression()` in `src/state/session.ts` | Derives `harmonyCode(state).trim()` matching prototype line 1502 (`.trim()`), calls `audio.runNow(code)`, calls `setNowPlaying('Armonía · progresión', 'harmony')`; no-op when code is empty |
+| `sessionPlay.onclick` (playSession) | 1487–1492 | `playSession()` in `src/state/session.ts` | Derives `sessionCode(state)`, calls `audio.runNow(code)`, calls `setNowPlaying('Sesión · ritmo + armonía', 'session')`; no-op when code is empty |
+| `hushBtn.onclick` (hushAll) | 1507 | `hushAll()` in `src/state/session.ts` | Calls `audio.hush()` (which internally calls `strudelHush()` and clears `_currentCode`), then `setNowPlaying(null, null)` |
+| `setBpm` / `setTempo` | 653–668 | `setBpm()` in `src/state/session.ts` + `setTempo()` in `src/audio/strudel.ts` | Updates store bpm field; calls `audio.setTempo(bpm)` which clamps, nudges `setcpm`, debounces re-eval at 130 ms |
+| `requeueLive()` | 1307–1315 | `requeueLive()` in `src/state/session.ts` | All four source branches ('rhythm', 'session', 'harmony', 'chord') preserved from step 02.2; audio queuing added via `getAudio().then(a => a.queueForNextCycle(code))` gated by `a.isPlaying()` |
+| `initStrudel()` user-gesture entry | 600–603 | `initAudio()` in `src/state/session.ts` (re-exported from audio layer) | Delegates to `audio.initAudio()` which calls `initStrudel()` inside the gesture handler; CLAUDE.md invariant preserved |
+
+### Decisions made (if any)
+
+- **Lazy dynamic import for audio module** — `@strudel/web@1.0.3` dist bundle executes `window.initStrudel = rD` at module-evaluation time (line 14806), which throws "window is not defined" in Node/Vitest if `src/audio/strudel.ts` is statically imported from `src/state/session.ts`. Resolution: all transport functions use a `getAudio()` helper that calls `import('../audio/strudel.js')` on first invocation and caches the Promise. This keeps pure derivation helpers testable in Node (A-02-09) while maintaining full audio wiring in the browser. The step 02.4 spec anticipated this: "if importing audio at module load breaks the Node test environment, refactor so the audio import does not execute audio at import time."
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- `src/state/session.ts` fully wired (all transport methods implemented; lazy audio import).
+- `src/app/App.svelte` updated with temporary transport UI and default state seed.
+- 119 tests pass. Audio module included in build (38 modules, up from 27).
+- `pnpm-lock.yaml` unchanged — no new dependencies.
+
+### Next-step context (only if non-obvious)
+
+- Step 02.5 is the operability verification step: run `pnpm dev`, open a browser, click each transport button, record observed results. The lazy-load strategy means the first transport call (any of initAudio/playGroove/etc.) triggers the dynamic import of `@strudel/web`. In a browser this is fine; in Node it would fail (but no Node code calls transport functions).
+- The `requeueLive()` audio side-effect path (the `void getAudio().then(...)` chain) will not be exercised by Node tests — session tests exercise only the return value (the derived code string), which is computed synchronously before the Promise chain runs.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**
