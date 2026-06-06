@@ -391,6 +391,156 @@ All golden values were produced by running `scripts/extract-golden-01-3.mjs` (No
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-05. Iteration: 1 of 5.
+**Reason:** All 9 checklist items pass. Scope exact (4 files, no settings.json in commit). Acceptance Coverage Table complete and accurate. 31 tests are substantive — spot-checks cover negative coordinates, non-trivial triangle rootPc derivation, all 5 PLR cases plus 4 null cases. Prototype parity citations present for every ported function with exact line ranges and Node-execution provenance. `nrLabel` and `tonnetzPc` implementations verified line-by-line against prototype lines 1238–1249 and 966 respectively; triangle generation verified against lines 979–991. No new deps; AGPL headers present; zero DOM/PIXI/Svelte imports confirmed by grep. The viewport-clipping omission in `computeTonnetzNodes` is correct and intentional per ADR 0003 (render layer handles culling).
+**Next action:** Dev proceeds to step 01.4
+
+---
+
+## Step 01.4 — Rhythm engines: euclid and layers
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - **Terminal commit:** `feat(core): Phase 01 step 01.4 — rhythm engines: euclid and layers`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Completed
+
+- Implemented `src/core/rhythm/euclid.ts` — `RSTEPS`, `bjorklund`, `rotate`, `stepsFromHits` with explicit `totalSteps` parameter — ported from prototype lines 794, 796–813.
+- Implemented `src/core/rhythm/layers.ts` — `Sound` type, `RhythmLayer` interface, `layerAudible`, `rhythmLayerToStrudelLine` (single-layer body of `rhythmLayerLines`) — ported from prototype lines 815–830.
+- Created `tests/euclid.test.ts` — 24 prototype-parity tests covering all phase-spec cases plus additional invariant checks.
+- Created `scripts/extract-golden-01-4.mjs` — the golden-value generator for this step; committed as a reproducible fixture generator per Dev discretion (as allowed by phase 01.5 spec).
+- Discarded `.claude/settings.json` modifications before committing (same machine-specific allow-entry pattern as prior steps — governance guardrail followed).
+
+### Golden values: how each was produced
+
+All golden values produced by running `scripts/extract-golden-01-4.mjs` — a Node script that extracted the prototype's pure functions from `reference/orbifold.html` lines 796–836. The script is committed at `scripts/extract-golden-01-4.mjs`.
+
+| Function | Prototype lines | Node golden result |
+|---|---|---|
+| `bjorklund(0, 8)` | 796–811 | `[0,0,0,0,0,0,0,0]` |
+| `bjorklund(8, 8)` | 796–811 | `[1,1,1,1,1,1,1,1]` |
+| `bjorklund(3, 8)` | 796–811 | `[1,0,0,1,0,0,1,0]` (tresillo — phase file confirmed) |
+| `bjorklund(5, 8)` | 796–811 | `[1,0,1,1,0,1,1,0]` (cinquillo) |
+| `bjorklund(2, 5)` | 796–811 | `[1,0,1,0,0]` |
+| `bjorklund(4, 4)` | 796–811 | `[1,1,1,1]` |
+| `bjorklund(1, 4)` | 796–811 | `[1,0,0,0]` |
+| `rotate(tresillo, 0)` | 812 | `[1,0,0,1,0,0,1,0]` (identity) |
+| `rotate(tresillo, 2)` | 812 | `[0,1,0,0,1,0,1,0]` — phase file illustrative value `[0,1,0,0,1,0,0,1]` was **INCORRECT**; Node-executed prototype gives `[0,1,0,0,1,0,1,0]`. Test uses corrected value. |
+| `rotate(tresillo, 8)` | 812 | `[1,0,0,1,0,0,1,0]` (full cycle = identity) |
+| `stepsFromHits([0,4,8,12])` | 813 | `[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0]` |
+| `stepsFromHits([4,12])` | 813 | `[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0]` |
+| `layerAudible(muted, [muted])` | 820–823 | `false` |
+| `layerAudible(solo, [solo, nonSolo])` | 820–823 | `true` |
+| `layerAudible(nonSolo, [solo, nonSolo])` | 820–823 | `false` |
+| `layerAudible(normal, [bd, normal])` | 820–823 | `true` |
+| `rhythmLayerToStrudelLine({euclid:'5,8'})` | 826–830 | `'  s("hh(5,8)")'` |
+| `rhythmLayerToStrudelLine({steps:[1,0,...,1,0,...]})` | 826–830 | `'  s("bd ~ ~ ~ ~ ~ ~ ~ bd ~ ~ ~ ~ ~ ~ ~")'` |
+
+**Phase file discrepancy corrected by Node execution:**
+- `rotate(tresillo, 2)`: phase file stated `[0,1,0,0,1,0,0,1]`; Node-executed prototype gives `[0,1,0,0,1,0,1,0]`. Left-rotate by 2 on `[1,0,0,1,0,0,1,0]` yields `[0,1,0,0,1,0,1,0]`. The phase file example was wrong; the test asserts the correct value.
+
+### Files touched
+
+- `src/core/rhythm/euclid.ts` (implemented — was stub)
+- `src/core/rhythm/layers.ts` (implemented — was stub)
+- `tests/euclid.test.ts` (created)
+- `scripts/extract-golden-01-4.mjs` (created — golden-value generator, committed)
+- `docs/orbifold-v1/handoffs/phase-01-handoff.md` (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-01:** `pnpm test` → `tests/euclid.test.ts` (24 tests) — all passed. Covers `bjorklund` edge cases (k=0, k=n), tresillo E(3,8), cinquillo E(5,8), 2:5 pattern, `rotate` identity and shift cases, `stepsFromHits` 4-on-the-floor and snare cases. All values Node-confirmed from prototype lines 796–813.
+- **A-01-06 (partial — building block):** `rhythmLayerToStrudelLine` is the single-layer render function that `rhythmToStrudel` (step 01.5) will orchestrate into a full `stack(...)` string. The per-layer Strudel formatting is proven correct here; the full `rhythmToStrudel` stack is covered in step 01.5 / `tests/codegen.test.ts`.
+- **A-01-08:** `grep -rn 'document\|window\|PIXI\|svelte' src/core/` → zero matches (exit 1, no output).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0 (zero errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier, all files pass)
+- `pnpm test` → 63 passed across 3 files (voice-leading: 8, euclid: 24, tonnetz: 31)
+- `grep -rn 'document\|window\|PIXI\|svelte' src/core/` → zero matches
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | `bjorklund(k, n)` returns byte-identical step arrays | `tests/euclid.test.ts` | unit | covered |
+| A-01-02 | `minimalVoiceLeading(pcsA, pcsB)` returns exact `{size, moves, perm}` | `tests/voice-leading.test.ts` | unit | covered (from 01.2) |
+| A-01-03 | `nrLabel` returns P/R/L/null matching prototype | `tests/tonnetz.test.ts` | unit | covered (from 01.3) |
+| A-01-04 | `tonnetzPc(i, j)` implements `(7i+4j) mod 12` exactly | `tests/tonnetz.test.ts` | unit | covered (from 01.3) |
+| A-01-05 | `chordToStrudel` and `melodyLine` produce byte-identical Strudel strings | `tests/tonnetz.test.ts` | unit | partial — `chordPcs`/`chordVoicing` covered; full codegen deferred to 01.5 |
+| A-01-06 | `rhythmToStrudel` produces byte-identical `stack(...)` strings | `tests/euclid.test.ts` | unit | partial — `rhythmLayerToStrudelLine` (per-layer format) covered; full `rhythmToStrudel` stack deferred to 01.5 |
+| A-01-07 | `buildComposition` pads shorter tracks with `silence` correctly | (none yet) | — | not covered — deferred to 01.5 |
+| A-01-08 | All `src/core/**` modules have zero DOM/PIXI/Svelte imports | `grep -rn 'document\|window\|PIXI\|svelte' src/core/` | proxy:static-analysis | covered |
+| A-01-09 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 | command execution | live-system | partial — tsc, lint, test green; `pnpm build` deferred to 01.5 per phase file |
+
+**Notes on partial coverage:**
+- A-01-06: `rhythmLayerToStrudelLine` proves the per-layer Strudel string format is byte-identical to the prototype (lines 826–830). `rhythmToStrudel` (lines 833–836) — the function that wraps them in `stack(...)` with audibility filtering — is implemented in `src/core/codegen/strudel.ts` (step 01.5) and tested in `tests/codegen.test.ts`.
+- A-01-09: `pnpm build` deferred to step 01.5 per phase file ("After all implementations, run `pnpm build`").
+
+**Proxy disclosures:** A-01-08 — grep run against committed source (`src/core/`); zero matches confirmed (grep exits 1, no output).
+
+### Prototype parity section
+
+| Function | Prototype lines | Test name | Test file |
+|---|---|---|---|
+| `bjorklund` | 796–811 | `E(0,8) → 8 zeros` | `tests/euclid.test.ts` |
+| `bjorklund` | 796–811 | `E(8,8) → 8 ones` | `tests/euclid.test.ts` |
+| `bjorklund` | 796–811 | `E(3,8) → tresillo [1,0,0,1,0,0,1,0]` | `tests/euclid.test.ts` |
+| `bjorklund` | 796–811 | `E(5,8) → cinquillo [1,0,1,1,0,1,1,0]` | `tests/euclid.test.ts` |
+| `bjorklund` | 796–811 | `E(2,5) → 2:5 pattern [1,0,1,0,0]` | `tests/euclid.test.ts` |
+| `bjorklund` | 796–811 | `E(4,4) → [1,1,1,1]` | `tests/euclid.test.ts` |
+| `bjorklund` | 796–811 | `E(1,4) → [1,0,0,0]` | `tests/euclid.test.ts` |
+| `bjorklund` | 796–811 | `result length is always n` | `tests/euclid.test.ts` |
+| `rotate` | 812 | `rotate by 0 → identity` | `tests/euclid.test.ts` |
+| `rotate` | 812 | `rotate by 2 → [0,1,0,0,1,0,1,0]` (phase file value corrected) | `tests/euclid.test.ts` |
+| `rotate` | 812 | `rotate by array length → identity (full cycle)` | `tests/euclid.test.ts` |
+| `rotate` | 812 | `rotate preserves array length` | `tests/euclid.test.ts` |
+| `stepsFromHits` | 813 | `4-on-the-floor: stepsFromHits([0,4,8,12])` | `tests/euclid.test.ts` |
+| `stepsFromHits` | 813 | `snare at 4 and 12: stepsFromHits([4,12])` | `tests/euclid.test.ts` |
+| `stepsFromHits` | 813 | `default totalSteps is RSTEPS (16)` | `tests/euclid.test.ts` |
+| `stepsFromHits` | 813 | `empty hits → all zeros` | `tests/euclid.test.ts` |
+| `stepsFromHits` | 813 | `explicit totalSteps parameter` | `tests/euclid.test.ts` |
+| `layerAudible` | 820–823 | `muted layer → false` | `tests/euclid.test.ts` |
+| `layerAudible` | 820–823 | `solo layer with itself + non-solo layer → true` | `tests/euclid.test.ts` |
+| `layerAudible` | 820–823 | `non-solo layer when another is solo → false` | `tests/euclid.test.ts` |
+| `layerAudible` | 820–823 | `normal layer (no mute, no solo in array) → true` | `tests/euclid.test.ts` |
+| `rhythmLayerToStrudelLine` | 826–830 | `euclidean layer → s("hh(5,8)")` | `tests/euclid.test.ts` |
+| `rhythmLayerToStrudelLine` | 826–830 | `explicit-steps layer with two hits → correct token string` | `tests/euclid.test.ts` |
+| `rhythmLayerToStrudelLine` | 826–830 | `all-zero steps → all rests` | `tests/euclid.test.ts` |
+
+All golden values produced by Node execution of `scripts/extract-golden-01-4.mjs` (prototype lines 796–836). No hand-traced fallbacks. One phase-file discrepancy found and corrected: `rotate(tresillo, 2)` expected `[0,1,0,0,1,0,0,1]` in the phase file; Node-executed prototype returns `[0,1,0,0,1,0,1,0]`. Test asserts the correct Node-executed value.
+
+### Decisions made (if any)
+
+- `scripts/extract-golden-01-4.mjs` committed (not just discarded) per Dev discretion allowed by the phase 01.5 spec: "it need not be committed unless the Dev judges it useful as a reproducible fixture generator." This step's script is a clean, standalone reproducible generator and provides an auditable record of how goldens were derived.
+- `.claude/settings.json` modifications discarded before committing (machine-specific allow entries discarded per governance guardrail).
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- 63 tests pass across 3 test files (voice-leading: 8, euclid: 24, tonnetz: 31).
+- `src/core/rhythm/euclid.ts` and `src/core/rhythm/layers.ts` fully implemented.
+- `src/core/codegen/strudel.ts` and `src/core/composition/model.ts` remain as stubs (step 01.5).
+- `pnpm-lock.yaml` unchanged (no new dependencies added).
+
+### Next-step context (only if non-obvious)
+
+- Step 01.5 will import `rhythmLayerToStrudelLine` and `layerAudible` from `layers.ts` to implement `rhythmToStrudel` in `strudel.ts`. The per-layer format is already proven correct here.
+- The `rotate` golden-value discrepancy (phase file vs prototype) is documented. Step 01.5 has no rotate usage but the pattern of verifying phase file illustrative values against Node execution should continue.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**
