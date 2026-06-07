@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: AGPL-3.0-only
   Orbifold — root Svelte component.
-  Phase 03 will initialize PIXI and render the Tonnetz / rhythm scenes.
+  Phase 03 step 03.2: PIXI stage initialized; blank canvas visible.
   Phase 04 will replace the temporary transport buttons below with the full UI.
 -->
 <script lang="ts">
@@ -15,16 +15,19 @@
     hushAll,
     setBpm,
   } from '../state/session.js';
+  import { initStage } from '../render/stage.js';
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let stageEl: HTMLDivElement;
 
   // ── TEMPORARY TRANSPORT UI (Phase 02 only) ──────────────────────────────
   // These buttons are minimal wires for step 02.4 and step 02.5 smoke-testing.
   // Phase 04 will replace this entire block with the full Svelte UI.
-  // The <canvas id="pixi-canvas"> placeholder below is for Phase 03.
 
   // Seed the store with audible defaults on first load.
   // DEFAULT_SESSION_STATE has empty layers and progression (spec §02.2).
   // We seed here rather than mutating the constant to keep the type clean.
-  onMount(() => {
+  onMount(async () => {
     sessionStore.update((s) => ({
       ...s,
       // Minimal default rhythm: 4-on-the-floor BD (prototype pattern used in
@@ -44,6 +47,17 @@
         progression: [{ rootPc: 0, qual: 'maj' as const, gain: 0.6 }],
       },
     }));
+
+    // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
+    // initStage appends app.view inside stageEl and registers resize handler.
+    const app = await initStage(stageEl);
+    if (app === null) {
+      // ADR 0006: WebGL unavailable — fallback message shown inside stageEl by initStage.
+      return;
+    }
+
+    // Step 03.3 will call buildTonnetz(get(sessionStore)) here.
+    // Step 03.4 will call registerTicker(app) here.
   });
 
   function handleBpmInput(event: Event) {
@@ -52,8 +66,13 @@
   }
 </script>
 
-<!-- Phase 03 / 04 canvas placeholder — PIXI will mount here -->
-<canvas id="pixi-canvas"></canvas>
+<!--
+  OD-3 resolution: div#stage is the full-screen PIXI mount target.
+  PIXI's resizeTo tracks this div. z-index: 0 keeps it behind the transport panel.
+  The <canvas id="pixi-canvas"> stub from Phase 02 is replaced by this div;
+  PIXI appends its own canvas element inside it via initStage.
+-->
+<div id="stage" bind:this={stageEl}></div>
 
 <!-- TEMPORARY TRANSPORT PANEL — Phase 02 only; replaced in Phase 04 -->
 <div class="transport-panel">
@@ -88,7 +107,30 @@
 </div>
 
 <style>
+  /*
+   * div#stage: full-screen PIXI canvas container.
+   * position: fixed so it covers the entire viewport regardless of body scroll.
+   * z-index: 0 — sits behind the transport panel overlay.
+   * OD-3 resolution: matches prototype div#stage geometry (line 906 resizeTo target).
+   */
+  #stage {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  /*
+   * Transport panel floats above the PIXI canvas.
+   * position: relative with z-index: 1 renders it on top of #stage (z-index: 0).
+   * Phase 04 will replace this layout entirely.
+   */
   .transport-panel {
+    position: relative;
+    z-index: 1;
     font-family: system-ui, sans-serif;
     padding: 1rem;
     display: flex;
@@ -106,10 +148,5 @@
     width: 100%;
     margin: 0;
     font-size: 0.875rem;
-  }
-  #pixi-canvas {
-    display: block;
-    width: 100%;
-    height: 0; /* Phase 03 will set real dimensions */
   }
 </style>
