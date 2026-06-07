@@ -18,28 +18,36 @@ import { layerAudible } from '../src/core/rhythm/layers.js';
 import type { RhythmLayer } from '../src/core/rhythm/layers.js';
 
 // ── tempoWrap ─────────────────────────────────────────────────────────────
-// Prototype lines 605–608. Golden via Node execution.
+// Prototype lines 605–608; corrected per ADR 0005 (setcps, not setcpm).
+//
+// ADR 0005: setcpm does NOT exist in @strudel/web@1.0.3. The prototype's
+// setcpm(bpm/4) was a latent no-op bug (threw ReferenceError on every evaluate;
+// fallback stripped the tempo header). The correct function is setcps(bpm/240).
+// These tests assert the corrected output; byte-identical parity with the
+// prototype would reproduce the defect. Approved deviation — see ADR 0005.
 
 describe('tempoWrap', () => {
-  it('wraps code with setcpm(30.0000) at BPM 120', () => {
-    // bpm/4 = 120/4 = 30, toFixed(4) = "30.0000"
+  it('wraps code with setcps(0.500000) at BPM 120', () => {
+    // bpm/240 = 120/240 = 0.5, toFixed(6) = "0.500000"
     const code = 'stack(\n  s("bd")\n)';
-    expect(tempoWrap(code, 120)).toBe('setcpm(30.0000)\nstack(\n  s("bd")\n)');
+    expect(tempoWrap(code, 120)).toBe('setcps(0.500000)\nstack(\n  s("bd")\n)');
   });
 
-  it('wraps code with setcpm(22.5000) at BPM 90', () => {
-    // bpm/4 = 90/4 = 22.5, toFixed(4) = "22.5000"
+  it('wraps code with setcps(0.375000) at BPM 90', () => {
+    // bpm/240 = 90/240 = 0.375, toFixed(6) = "0.375000"
     const code = 'stack(\n  s("bd")\n)';
-    expect(tempoWrap(code, 90)).toBe('setcpm(22.5000)\nstack(\n  s("bd")\n)');
+    expect(tempoWrap(code, 90)).toBe('setcps(0.375000)\nstack(\n  s("bd")\n)');
   });
 
   it('trims trailing whitespace from code', () => {
-    expect(tempoWrap('s("bd")  ', 120)).toBe('setcpm(30.0000)\ns("bd")');
+    expect(tempoWrap('s("bd")  ', 120)).toBe('setcps(0.500000)\ns("bd")');
   });
 
-  it('never uses setcps (CLAUDE.md invariant)', () => {
+  it('uses setcps (ADR 0005) and never uses .fast or .slow', () => {
     const result = tempoWrap('s("bd")', 120);
-    expect(result).not.toContain('setcps');
+    expect(result).toContain('setcps(');
+    expect(result).not.toContain('.fast');
+    expect(result).not.toContain('.slow');
   });
 });
 

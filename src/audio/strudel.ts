@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — Strudel audio bridge: init (user gesture), runNow,
-//             queueForNextCycle, hush, setTempo (setcpm only).
+//             queueForNextCycle, hush, setTempo (setcps per ADR 0005).
 //
 // Ported from reference/orbifold.html:
 //   State globals (strudelReady, currentCode, queuedCode, currentBpm): lines 582–585
@@ -12,12 +12,16 @@
 //   hush() usages:              lines 1507, 2107, 2113
 //   isPlaying() ref:            line 898
 //
-// Design invariants (CLAUDE.md):
+// Design invariants (CLAUDE.md + ADR 0005):
 //   - Audio starts ONLY after a user gesture: initStrudel() is called inside
 //     initAudio(), never at module load.
-//   - Tempo uses setcpm EXCLUSIVELY — never setcps, .fast, or .slow.
-//   - setcpm is NOT a named export; it is only available as
-//     (globalThis as any).setcpm after the first evaluate() call.
+//   - Tempo is set via setcps(bpm/240) — NEVER via .fast or .slow (those
+//     time-stretch patterns and break chord-geometry timing). setcpm does NOT
+//     exist in @strudel/web@1.0.3; only setcps and setbpm are registered in
+//     the evaluate scope. The prototype's setcpm was a latent no-op bug.
+//     See ADR 0005 (docs/adr/0005-tempo-setcps-not-setcpm.md).
+//   - setcps is NOT a named module export; it is injected into globalThis by
+//     evalScope() after the first evaluate() call. Guard with typeof check.
 //   - hush() and evaluate() ARE named exports from @strudel/web.
 //   - No DOM imports; no top-level audio side-effects.
 
@@ -163,25 +167,31 @@ export function hush(): void {
 /**
  * Nudge the Strudel scheduler tempo without restarting.
  *
- * setcpm is NOT a named export — it is injected into globalThis by evalScope()
- * after the first evaluate() call (repl.mjs lines 69–70, 107–115).
- * Guard with typeof check exactly as prototype lines 650–651.
+ * ADR 0005: setcps is the correct tempo function in @strudel/web@1.0.3.
+ * setcpm does NOT exist in the pinned version; using it throws ReferenceError.
+ * setcps IS injected into globalThis by evalScope() after the first evaluate()
+ * call (repl.mjs lines 69–70, 107–115). Guard with typeof check.
  *
- * The prototype's fallback to setcps (line 651) is intentionally omitted:
- * CLAUDE.md invariant — setcpm ONLY, never setcps.
+ * This is the best-effort live-nudge path. The reliable path is the debounced
+ * runNow() in setTempo(), which re-evaluates with the setcps header from
+ * tempoWrap() (that evaluate call is what actually makes tempo changes audible).
  *
- * Ported from prototype lines 647–651 (setcps fallback removed per invariant).
+ * .fast and .slow remain forbidden — they time-stretch patterns and break
+ * the chord-geometry timing. Only the global-clock unit changed (setcpm →
+ * setcps) because setcpm does not exist in the pinned version.
+ *
+ * Ported from prototype lines 647–651 (setcpm replaced with setcps per ADR 0005).
  */
 function tryLiveTempo(): void {
   if (!audioReady) return;
   try {
-    // setcpm is injected into globalThis by evalScope() after the first evaluate()
-    // call (repl.mjs lines 69–70, 107–115). It is NOT a named export.
-    // Access pattern matches prototype lines 650–651.
+    // setcps is injected into globalThis by evalScope() after the first evaluate()
+    // call (repl.mjs lines 69–70, 107–115). It is NOT a named module export.
+    // ADR 0005: setcps(bpm/240) — setcpm does not exist in @strudel/web@1.0.3.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (typeof (globalThis as any).setcpm === 'function') {
+    if (typeof (globalThis as any).setcps === 'function') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (globalThis as any).setcpm(_currentBpm / 4);
+      (globalThis as any).setcps(_currentBpm / 240);
     }
   } catch {
     // best-effort; scheduler may not be running
@@ -192,15 +202,16 @@ function tryLiveTempo(): void {
  * Update BPM and propagate to the running pattern.
  *
  * 1. Clamps to [40, 280] and stores the value.
- * 2. Calls tryLiveTempo() to nudge the scheduler's cpm immediately.
+ * 2. Calls tryLiveTempo() to nudge the scheduler's cps immediately (best-effort).
  * 3. Debounces a full re-evaluate of currentCode at 130 ms to ensure the
- *    setcpm in tempoWrap takes effect on the next iteration (reliable path).
+ *    setcps header from tempoWrap takes effect on the next iteration (reliable path).
  *
- * Uses setcpm EXCLUSIVELY — never setcps, .fast, or .slow (CLAUDE.md).
+ * ADR 0005: tempo is set via setcps(bpm/240) — never via .fast or .slow.
+ * setcpm does not exist in @strudel/web@1.0.3.
  *
  * Ported from prototype lines 653–668 (DOM manipulation stripped;
  * compState/compPos playhead logic belongs to the composition layer,
- * deferred to Phase 03+).
+ * deferred to Phase 03+; setcpm replaced with setcps per ADR 0005).
  */
 export function setTempo(bpm: number): void {
   _currentBpm = Math.max(40, Math.min(280, Math.round(bpm)));

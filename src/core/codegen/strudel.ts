@@ -9,16 +9,25 @@ import { type Quality, chordVoicing } from '../theory/chords.js';
 import { type RhythmLayer, layerAudible, rhythmLayerToStrudelLine } from '../rhythm/layers.js';
 
 /**
- * Wrap a Strudel pattern string with a setcpm tempo directive.
+ * Wrap a Strudel pattern string with a setcps tempo directive.
  *
- * Uses `setcpm` only — never `setcps`, `.fast`, or `.slow` (CLAUDE.md invariant).
- * 1 Strudel cycle = 1 bar of 4/4; cpm = BPM / 4.
+ * Uses `setcps(bpm/240)` — never `setcpm`, `.fast`, or `.slow`.
+ * 1 Strudel cycle = 1 bar of 4/4; cps = BPM / 240 (60 s/min ÷ 4 beats/cycle).
  *
- * Ported from prototype lines 605–608.
+ * ADR 0005: `setcpm` does NOT exist in @strudel/web@1.0.3; the pinned package
+ * only registers `setcps` and `setbpm` in the evaluate scope. The original
+ * prototype's `setcpm(bpm/4)` call threw `ReferenceError: setcpm is not defined`
+ * on every evaluate, causing the fallback to strip the tempo header — meaning
+ * tempo never actually changed (a latent no-op bug in the prototype). This
+ * implementation uses `setcps`, which IS registered, so BPM changes are
+ * audible. `.fast`/`.slow` remain forbidden (they time-stretch patterns and
+ * break the chord-geometry timing). See docs/adr/0005-tempo-setcps-not-setcpm.md.
+ *
+ * Ported from prototype lines 605–608 (with corrected tempo function per ADR 0005).
  */
 export function tempoWrap(code: string, bpm: number): string {
-  const cpm = bpm / 4;
-  return `setcpm(${cpm.toFixed(4)})\n${code.trim()}`;
+  const cps = bpm / 240;
+  return `setcps(${cps.toFixed(6)})\n${code.trim()}`;
 }
 
 /**

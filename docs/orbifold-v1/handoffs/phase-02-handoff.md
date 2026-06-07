@@ -531,3 +531,115 @@ Our port used `on:change` on the number input, which only fires on blur/Enter �
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## ADR 0005 tempo fix — setcps replaces setcpm (operability defect, Phase 02)
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - **Terminal commit:** `fix(audio): Phase 02 — tempo via setcps per ADR 0005 (setcpm absent in @strudel/web 1.0.3)`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** defect-fix — ADR-0005-driven correctness fix (not a step iteration; supersedes the 02.5-fixes entry's pending Pilot re-test for A-02-05)
+
+### What changed and why
+
+The Pilot's smoke test after step 02.5-fixes confirmed that BPM changes still had no audible effect on tempo. Diagnostic logging showed every evaluate throwing:
+
+```
+[DIAG runNow] PRIMARY evaluate threw → fallback strips setcpm: ReferenceError: setcpm is not defined
+```
+
+Root cause: `setcpm` does not exist anywhere in `@strudel/web@1.0.3`. The pinned package only registers `setcps` and `setbpm` in the evaluate scope. The original prototype's `setcpm(bpm/4)` was a latent no-op bug (always threw, fallback always stripped the tempo header). ADR 0005 was opened and accepted by the Pilot, amending the tempo invariant: tempo is now `setcps(bpm/240)` — the function that IS registered. `.fast`/`.slow` remain forbidden (they time-stretch patterns and break chord-geometry timing).
+
+### Files touched
+
+- `src/core/codegen/strudel.ts` — `tempoWrap()`: changed from `setcpm(${(bpm/4).toFixed(4)})` to `setcps(${(bpm/240).toFixed(6)})`. Doc comment updated to reference `setcps` and cite ADR 0005. The corrected math: 120 BPM → 0.500000 cps; 90 BPM → 0.375000 cps.
+- `tests/codegen.test.ts` — All `tempoWrap` assertions updated to expect `setcps(...)` output. The "never uses setcps" invariant test was corrected to "uses setcps and never uses .fast or .slow". Comment block at the `tempoWrap` suite explains this is a Pilot-approved deviation from prototype byte-parity (the prototype's tempo was a known no-op bug). Non-tempo assertions (`chordToStrudel`, `melodyLine`, `rhythmToStrudel`, `buildSession`, `buildComposition`) are unchanged byte-for-byte.
+- `src/audio/strudel.ts`:
+  - File-level "Design invariants" comment block corrected: `setcpm EXCLUSIVELY` → `setcps(bpm/240)`, with ADR 0005 citation.
+  - `tryLiveTempo()` doc comment and implementation: `(globalThis as any).setcpm(_currentBpm / 4)` → `(globalThis as any).setcps(_currentBpm / 240)`, with `typeof` guard on `setcps` (not `setcpm`).
+  - `setTempo()` doc comment: references `setcps` and ADR 0005 instead of `setcpm`.
+- `docs/orbifold-v1/handoffs/phase-02-handoff.md` (this file — appended)
+
+### Phase 01 codegen test update — parity rationale
+
+The Phase 01 `tests/codegen.test.ts` tempoWrap tests were updated from asserting `setcpm(30.0000)` to asserting `setcps(0.500000)` (and `setcpm(22.5000)` → `setcps(0.375000)` for BPM 90). This is a deliberate, Pilot-approved deviation from byte-identical prototype parity for tempoWrap only. The prototype's tempo behavior was a confirmed latent bug (setcpm always threw, tempo was never actually set). Reproducing the bug byte-for-byte would not constitute parity — it would reproduce a defect. All other codegen golden values (gain, voicing, stack structure, session header, composition structure) remain byte-identical.
+
+### A-02-05 grep-wording supersession
+
+The Phase 02 phase file's A-02-05 static-analysis check reads:
+> `grep -rn 'setcps\|\.fast\|\.slow' src/audio/` → zero matches
+
+This check is superseded by ADR 0005. `setcps` is now intentionally used in `src/audio/strudel.ts` (in `tryLiveTempo`). The correct post-ADR-0005 invariant check is:
+
+```
+grep -rn '\.fast\|\.slow' src/audio/ src/core/
+```
+
+which must return zero executable matches (comments are acceptable). Confirmed: all `.fast`/`.slow` occurrences in those directories are comment-only. `setcps` now appears correctly in executable code in both `tempoWrap` and `tryLiveTempo`.
+
+### Headless validation results
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier clean)
+- `pnpm test` → **119 passed** (same count as before: 92 Phase 01 + 27 session; no regressions; the 4 updated tempoWrap expectations now pass with `setcps` output)
+- `pnpm build` → exit 0 (38 modules; app 9.77 kB, strudel 407 kB; identical to prior steps)
+- `grep -rn '\.fast\|\.slow' src/audio/ src/core/` → 5 comment-only matches, 0 executable
+- `setcps` confirmed in executable code: `src/core/codegen/strudel.ts` line 30 (`return \`setcps(...)\``), `src/audio/strudel.ts` `tryLiveTempo` (globalThis call)
+
+### Audible re-verification pending Pilot
+
+The headless validations confirm structural correctness (types, lint, build, unit tests). Audio tempo behavior (BPM slider now audibly changes tempo within one cycle) cannot be verified headlessly. The Pilot must run `pnpm dev` and repeat smoke-test items 6–7 (BPM change to 90, return to 120) to confirm A-02-05 is resolved.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | AudioContext starts after user gesture; no error | — | operability | carried from 02.5-fixes — pending Pilot re-test |
+| A-02-02 | "▶ Groove" plays rhythm pattern; label shows "Ritmo · groove" | — | operability | carried from 02.5-fixes — pending Pilot re-test |
+| A-02-03 | "▶ Progresión" plays harmony; label shows "Armonía · progresión" | — | operability | carried from 02.5-fixes — pending Pilot re-test |
+| A-02-04 | "▶ Sesión" plays both; label shows "Sesión · ritmo + armonía" | — | operability | carried from 02.5-fixes — pending Pilot re-test |
+| A-02-05 | BPM change audible within one cycle; setcps per ADR 0005 | `src/core/codegen/strudel.ts` + `src/audio/strudel.ts` (grep) | proxy:static-analysis + operability | partial — static-analysis confirmed (setcps in tempoWrap executable + tryLiveTempo; .fast/.slow comment-only); audible re-verification pending Pilot |
+| A-02-06 | Live edit takes effect at next cycle boundary (hot-swap) | — | operability | carried from 02.5-fixes — pending Pilot re-test |
+| A-02-07 | "■ Silencio" stops all audio; label shows "silencio" | — | operability | carried from 02.5-fixes — pending Pilot re-test |
+| A-02-08 | Audio does not auto-start on page load | — | operability | carried from 02.5-fixes — pending Pilot re-test |
+| A-02-09 | `rhythmCode()`, `harmonyCode()`, `sessionCode()` produce byte-identical Strudel strings to core codegen | `tests/codegen.test.ts`, `tests/session.test.ts` | unit | covered — 119 tests pass; tempoWrap tests updated to assert corrected setcps output |
+| A-02-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 at phase end | — | live-system | partial — all four pass headlessly; "phase end" gate requires Pilot audible re-verification |
+
+### Prototype parity note (this fix)
+
+| Prototype | Line | Behavior | Port behavior | Status |
+|---|---|---|---|---|
+| `tempoWrap` using `setcpm(bpm/4)` | 605–608 | Always threw ReferenceError; tempo never set (latent bug) | `setcps(bpm/240)` — actually sets tempo | Pilot-approved correctness deviation per ADR 0005 |
+| `tryLiveTempo` calling `setcpm` global | 650–651 | `setcpm` not defined; typeof guard → no-op | `setcps` global with typeof guard → nudges tempo | Same pattern, correct function |
+
+### Decisions made (if any)
+
+- No new decisions; ADR 0005 is already Pilot-approved and committed.
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None. The ADR was already written by the Pilot; this is a clean implementation of the approved decision.
+
+### Environment state after this fix
+
+- `src/core/codegen/strudel.ts` updated (tempoWrap uses setcps).
+- `tests/codegen.test.ts` updated (4 tempoWrap assertions use setcps output).
+- `src/audio/strudel.ts` updated (tryLiveTempo uses setcps; all setcpm references in comments corrected).
+- 119 tests pass. `pnpm-lock.yaml` unchanged — no new dependencies.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
