@@ -21,7 +21,7 @@
 //   - hush() and evaluate() ARE named exports from @strudel/web.
 //   - No DOM imports; no top-level audio side-effects.
 
-import { initStrudel, evaluate, hush as strudelHush } from '@strudel/web';
+import { initStrudel, evaluate, hush as strudelHush, samples } from '@strudel/web';
 import { tempoWrap } from '../core/codegen/strudel.js';
 
 // ── Module-level state ────────────────────────────────────────────────────────
@@ -62,7 +62,17 @@ let _tempoDebounce: ReturnType<typeof setTimeout> | null = null;
 export async function initAudio(): Promise<void> {
   if (audioReady) return;
   try {
-    initStrudel({ prebake: () => Promise.resolve() });
+    // Load dirt-samples exactly as the prototype (reference/orbifold.html line 601):
+    //   initStrudel({ prebake: () => samples('github:tidalcycles/dirt-samples') });
+    //
+    // We create the promise once and:
+    //   1. Pass it to prebake so Strudel awaits it before scheduling patterns.
+    //   2. Await it ourselves so audioReady is only set after samples are loaded,
+    //      which fixes the race where the first "▶ Groove" click ran before bd/sd/hh
+    //      were available (causing "[cyclist] error: sound bd not found!").
+    const samplesReady = samples('github:tidalcycles/dirt-samples');
+    initStrudel({ prebake: () => samplesReady });
+    await samplesReady;
     audioReady = true;
   } catch (initErr) {
     // eslint-disable-next-line no-console

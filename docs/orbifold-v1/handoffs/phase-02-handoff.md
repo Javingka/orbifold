@@ -401,6 +401,129 @@ No Acceptance IDs touched by this step. Step 02.1 is the inventory step; Accepta
 
 ### Planner Review
 
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-06
+**Iteration:** 1 of 5
+**Reason:** All 9 checklist items pass (8 standard + prototype parity). Commit scope exactly 3 files (orchestrator-verified, tree clean). Commit message format correct. Gate commands all exit 0 (tsc/lint/test/build). Coverage Table complete and honest: all 10 IDs mapped; operability IDs (A-02-01 through A-02-08) correctly deferred to step 02.5 without overclaiming; A-02-09 carried (27 unit tests pass, confirming lazy-import strategy preserves Node testability); A-02-10 partial acknowledged. Intermediate operability evidence matches phase spec requirements for step 02.4 exactly (`pnpm dev` launches without console errors). Register respected: no new dependencies, pnpm-lock.yaml unchanged, exact-pinning entry honored. Reversibility intact: 119 tests pass (92 Phase 01 + 27 session, zero regressions); DEFAULT_SESSION_STATE unmodified; defaults seeded only in onMount (never runs in Node). Prototype parity citations present for all 7 transport functions with exact line ranges and specific behavioral-fidelity notes. Lazy `getAudio()` pattern verified in source: pure derivation helpers are synchronous and audio-import-free (lines 190–221 of session.ts); transport functions go through the cached Promise; `requeueLive()` returns the derived string synchronously before the fire-and-forget `.then()` chain runs — this is the correct isolation pattern, not a workaround. App.svelte is clearly marked TEMPORARY in both the script block comment and the HTML comment; no PIXI/Tonnetz/orbit UI added; canvas placeholder has `height: 0` with a Phase 03 comment. AGPL-3.0 header present in session.ts and App.svelte.
+**Next action:** Pilot approval required before step 02.5 — operability smoke test needs the Pilot to verify audio in the browser
+
+---
+
+## Step 02.5 — Smoke-test defect fixes (02.5-fixes iteration)
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - **Terminal commit:** `fix(audio): Phase 02 — load dirt-samples in prebake and use input event for BPM (02.5 smoke-test defects)`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** defect-fix (not a full step iteration — these are prototype-parity corrections surfaced by the Pilot's manual smoke test)
+
+### Defects addressed
+
+Two prototype-parity failures were identified by the Pilot during the Phase 02 step 02.5 manual smoke test:
+
+#### DEFECT 1 — Drum samples never loaded (`src/audio/strudel.ts`, `initAudio`)
+
+**Symptom:** `[cyclist] error: sound bd not found! Is it loaded?` repeated in console; groove was silent; first load often appeared to do nothing (required a refresh).
+
+**Root cause (prototype-parity failure):** The prototype (reference/orbifold.html line 601) calls:
+```js
+initStrudel({ prebake: () => samples('github:tidalcycles/dirt-samples') });
+```
+Our port replaced the prebake with a no-op:
+```ts
+initStrudel({ prebake: () => Promise.resolve() });
+```
+This means `bd`, `sd`, `hh`, and all other drum samples were never fetched. Additionally, `audioReady` was set to `true` synchronously after calling `initStrudel()` (before any async prebake resolved), so the first "▶ Groove" click could fire `evaluate()` before samples were available — explaining the "first load did nothing" race.
+
+**Fix applied:**
+1. Added `samples` to the import from `@strudel/web` (it is a named export at line 15080 of `dist/index.mjs`, and already declared in `src/vite-env.d.ts`).
+2. Restored the prebake to load `github:tidalcycles/dirt-samples` exactly as the prototype.
+3. Awaited the samples promise ourselves before setting `audioReady = true`, so `initAudio()` resolves only once samples are loaded:
+```ts
+const samplesReady = samples('github:tidalcycles/dirt-samples');
+initStrudel({ prebake: () => samplesReady });
+await samplesReady;
+audioReady = true;
+```
+The same promise is passed to `prebake` (so Strudel's internal scheduler also awaits it) and awaited by `initAudio` (so our `audioReady` flag is set only after samples are truly available).
+
+**Prototype citation:** reference/orbifold.html line 601.
+
+#### DEFECT 2 — BPM change didn't affect tempo (`src/app/App.svelte`, BPM input)
+
+**Symptom:** Moving the BPM spinner or typing a new value had no audible effect on tempo; only blur/Enter would trigger a change.
+
+**Root cause (prototype-parity failure):** The prototype (reference/orbifold.html line 669) wires the tempo control with the `input` event:
+```js
+document.getElementById('cps').addEventListener('input', (e) => setBpm(...));
+```
+Our port used `on:change` on the number input, which only fires on blur/Enter — not on every increment click or keystroke.
+
+**Fix applied:** Changed `on:change={handleBpmInput}` to `on:input={handleBpmInput}` in `src/app/App.svelte`. The handler chain is unchanged: `input` event → `handleBpmInput` → `store.setBpm(bpm)` → `audio.setTempo(bpm)` (which clamps, nudges `setcpm`, and debounces re-evaluation at 130 ms). The `setcpm`-only invariant is unaffected.
+
+**Prototype citation:** reference/orbifold.html line 669 (`addEventListener('input', ...)`).
+
+### Files touched
+
+- `src/audio/strudel.ts` (import: added `samples`; `initAudio`: restored prebake + await samples)
+- `src/app/App.svelte` (BPM input: `on:change` → `on:input`)
+- `docs/orbifold-v1/handoffs/phase-02-handoff.md` (this file — appended)
+
+### Headless validation results
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier clean)
+- `pnpm test` → 119 passed (92 Phase 01 + 27 session; 0 failures, 0 regressions). The lazy dynamic-import strategy from step 02.4 remains intact: `samples` is imported from `@strudel/web` inside `src/audio/strudel.ts`, which is itself only loaded via `import('../audio/strudel.js')` in the browser path; Node/Vitest never executes that import.
+- `pnpm build` → exit 0 (38 modules; app 9.77 kB, strudel 407 kB; identical module count to step 02.4)
+- `grep -rn 'setcps\|\.fast\|\.slow' src/audio/` → 5 comment-only matches, 0 executable — `setcpm`-only invariant confirmed
+
+### Audible verification
+
+**Pending Pilot re-test.** Audible behavior (drum samples playing, BPM spinner affecting live tempo) cannot be verified headlessly. The Pilot must run `pnpm dev` and repeat the smoke-test items 2–7 to confirm both defects are resolved.
+
+### Acceptance Coverage
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | AudioContext starts after user gesture; no error | — | operability | partial — `initAudio` now awaits sample loading before resolving; audible re-verification pending Pilot |
+| A-02-02 | "▶ Groove" plays rhythm pattern; label shows "Ritmo · groove" | — | operability | partial — drum samples now loaded in prebake; audible re-verification pending Pilot |
+| A-02-03 | "▶ Progresión" plays harmony; label shows "Armonía · progresión" | — | operability | partial — harmony was audible in prior smoke test; re-verification pending Pilot |
+| A-02-04 | "▶ Sesión" plays both; label shows "Sesión · ritmo + armonía" | — | operability | partial — session was partially audible (harmony only); with drum fix, re-verification pending Pilot |
+| A-02-05 | BPM change audible within one cycle; setcpm only | `src/audio/strudel.ts` (grep) | proxy:static-analysis + operability | partial — static-analysis confirmed (0 executable setcps/.fast/.slow); `on:input` fix wires live BPM; audible re-verification pending Pilot |
+| A-02-06 | Live edit takes effect at next cycle boundary (hot-swap) | — | operability | not covered — deferred to Pilot re-verification |
+| A-02-07 | "■ Silencio" stops all audio; label shows "silencio" | — | operability | not covered — deferred to Pilot re-verification |
+| A-02-08 | Audio does not auto-start on page load | — | operability | not covered — deferred to Pilot re-verification |
+| A-02-09 | `rhythmCode()`, `harmonyCode()`, `sessionCode()` produce byte-identical Strudel strings to core codegen | `tests/session.test.ts` | unit | covered — 119 tests pass; no regressions |
+| A-02-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 at phase end | — | live-system | partial — all four pass headlessly; "phase end" gate requires Pilot audible verification first |
+
+### Prototype parity citations (this fix iteration)
+
+| Prototype source | Line | Port location | Fix |
+|---|---|---|---|
+| `initStrudel({ prebake: () => samples('github:tidalcycles/dirt-samples') })` | 601 | `src/audio/strudel.ts` `initAudio()` | Restored exact prebake; added await so `audioReady` is set only after samples load |
+| `addEventListener('input', (e) => setBpm(...))` | 669 | `src/app/App.svelte` BPM `<input>` | Changed `on:change` to `on:input` |
+
+### Decisions made (if any)
+
+- The `samples` promise is created before calling `initStrudel` and reused as both the prebake argument and the awaited value. This avoids double-fetching and ensures both the Strudel scheduler and our `audioReady` flag gate on the same resolved state.
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None. Both defects were clear prototype-parity failures with unambiguous fixes.
+
+### Environment state after this fix iteration
+
+- `src/audio/strudel.ts` updated (samples loaded in prebake; initAudio awaits samples before setting audioReady).
+- `src/app/App.svelte` updated (BPM input uses `on:input`).
+- 119 tests pass. `pnpm-lock.yaml` unchanged — no new dependencies.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**

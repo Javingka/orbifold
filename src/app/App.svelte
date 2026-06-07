@@ -77,7 +77,7 @@
       max="280"
       step="1"
       value={$sessionStore.bpm}
-      on:change={handleBpmInput}
+      on:input={handleBpmInput}
     />
   </label>
 
