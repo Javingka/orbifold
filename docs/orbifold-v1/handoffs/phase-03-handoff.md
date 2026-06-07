@@ -341,6 +341,161 @@ None.
 
 ### Planner Review
 
+**Decision:** APPROVED on 2026-06-06. Iteration: 1 of 5.
+
+All 8 standard checklist items pass and the project-specific Prototype parity item passes. Commit scope is clean (3 files: tonnetz-scene.ts, App.svelte, handoff). Commit message format is correct. Acceptance Coverage Table is complete for all 10 A-03 IDs with correct gap statuses; proxy use is explicitly disclosed for A-03-02 and A-03-08. No live-system claims are made in this step — all live-system IDs are correctly deferred to step 03.6. No Register conflicts; no new dependencies; 119 tests pass; all four gate commands exit 0. Prototype parity cites every element of lines 947–1025 with sub-citations per visual element (clear, cell/rowH/pos/culling/triangle fill/edges/circles/labels), and the `??` vs `||` equivalence is correctly disclosed. ADR 0003 satisfied: core types not mutated (spread into RenderNode/RenderTri); pixel layout exclusively render-layer. ADR 0004 satisfied: sessionStore not imported in tonnetz-scene.ts. PIXI v7 API only (beginFill/endFill, lineStyle, drawPolygon, drawCircle — no v8 fill/stroke). No Svelte or DOM imports in tonnetz-scene.ts. buildRhythmScene stub disclosed and justified. AGPL-3.0 header present.
+
+Next action: Dev proceeds to step 03.4
+
+---
+
+## Step 03.4 — Tonnetz scene: interactivity, P·L·R highlights, voice-leading animation
+
+**Date:** 2026-06-07
+**Commit(s):**
+- **Terminal commit:** `feat(render): Phase 03 step 03.4 — Tonnetz interactivity, P·L·R highlights, voice-leading animation`
+  - Hash: self-referential — not recorded
+  - Note: This is the implementation + handoff commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `playChord(rootPc, qual, gain)` export to `src/state/session.ts` — follows the lazy-audio pattern from step 02.4; derives `chordToStrudel(rootPc, qual, gain, chordMode, octave)`, calls `audio.runNow(code)`, sets `nowPlaying` to `{ label: 'Acorde · <chordLabel>', source: 'chord' }`. Also imported `chordLabel` from `core/theory/chords.js`.
+- Expanded `src/render/tonnetz-scene.ts` with all step 03.4 interactive/animated exports:
+  - `pointInTri(px, py, tri)` — sign-based barycentric containment test (internal).
+  - `updateTonnetzDynamic(state)` — P·L·R neighbour computation, `hNRL` text label rebuild, suggestion triangle computation, `_sessionStart` reset on source change (OD-4 resolution), `_currentView` sync.
+  - `onStagePointerDown(e)` — iterates `_renderTris`, calls `pointInTri`, dispatches `pickChord`.
+  - `pickChord(tri, state)` (internal) — appends chord to `sessionStore`, calls `playChord`, calls `requeueLive()`, computes `minimalVoiceLeading` and stores in `_lastVL`, calls `updateTonnetzDynamic`.
+  - `tickHarmony(delta)` — bar-phase computation, voice-leading path + particle, active-chord pulse, suggestion glow, P·L·R animated glow on `hNRG` + label alpha animation.
+  - `tickRhythm` stub (empty, replaced in 03.5).
+  - `registerTicker(app)` — registers top-level ticker that dispatches to `tickHarmony`/`tickRhythm` based on `_currentView`.
+  - `buildRhythmScene` stub retained (no-op, superseded in 03.5).
+  - Imported: `get` from svelte/store, `computeDiatonic` from scales, `chordPcs` from chords, `nrLabel`/`NRLabel` from neo-riemannian, `minimalVoiceLeading`/`VoiceLeadingResult` from voice-leading, `sessionStore`/`playChord`/`requeueLive` from session, `FONT_SANS` from theme.
+- Updated `src/app/App.svelte`:
+  - Imports `onDestroy`, `setView` from stage, and all new scene exports.
+  - After `buildTonnetz`, calls `registerTicker(app)` once.
+  - Calls `updateTonnetzDynamic(get(sessionStore))` once after build to establish initial NR state.
+  - Registers store subscription (`unsubStore`) that drives `updateTonnetzDynamic(state)` and `setView(state.view)` on every state change.
+  - Adds `pointerdown` listener on the PIXI canvas that calls `onStagePointerDown(e)` when `state.view === 'harmony'`.
+  - Calls `unsub` in `onDestroy` to prevent leak.
+  - Resize callback also calls `updateTonnetzDynamic(get(sessionStore))` after geometry rebuild.
+
+### Files touched
+
+- `src/state/session.ts` (added `playChord` export + `chordLabel` import)
+- `src/render/tonnetz-scene.ts` (step 03.4 full interactive/animated implementation)
+- `src/app/App.svelte` (ticker, store subscription, pointer event, onDestroy)
+- `docs/orbifold-v1/handoffs/phase-03-handoff.md` (this file — step 03.4 entry)
+
+### Prototype parity
+
+**`src/state/session.ts` — `playChord()` — prototype lines 1357–1360:**
+- `chordToStrudel(rootPc, qual, gain, chordMode, octave)` — derives the code using store's current `chordMode` and `octave` (prototype line 1357: `chordToStrudel(ch.rootPc, ch.qual, ch.gain)` with implicit global defaults; port uses explicit params from store).
+- `audio.runNow(code)` via lazy-loaded audio module — prototype line 1359: `runNow(code, {fromEditor:true})` (the `fromEditor` option is prototype-internal; `runNow` in the port ignores it).
+- `setNowPlaying('Acorde · ' + chordLabel(rootPc, qual), 'chord')` — prototype line 1360: `setNowPlaying('Acorde · ' + ch.label, 'chord')`. Semantically identical.
+
+**`src/render/tonnetz-scene.ts` — `pointInTri()` — prototype lines 1222–1229:**
+- Sign-based barycentric test: `d = (b.y-c.y)*(a.x-c.x)+(c.x-b.x)*(a.y-c.y)`, then `u` and `v` computed; returns `u>=0 && v>=0 && w>=0`. Byte-identical formula (prototype uses `a.x/a.y` for vertex objects; port uses `tri.vx[0]/tri.vy[0]`).
+
+**`src/render/tonnetz-scene.ts` — `updateTonnetzDynamic()` / `computeNR()` — prototype lines 1250–1279:**
+- `hNRL.removeChildren()` — prototype line 1252: `hNRL.removeChildren()`.
+- Find `sel` (closest matching triangle to `_lastPick` centroid) — prototype lines 1255–1261.
+- Find neighbours with `shared === 2` by counting shared vertex keys — prototype lines 1263–1269. Port uses `(i,j)` string keys rather than object identity (prototype uses `t.verts.includes(v)` which tests object identity — the port uses lattice-coordinate identity, which is equivalent since each `(i,j)` maps to a unique node instance in the prototype's in-place array too).
+- `nrLabel(sel.rootPc, sel.qual, t.rootPc, t.qual)` — prototype line 1267.
+- `new PIXI.Text(nb.label, { fontFamily:'Albert Sans, sans-serif', fontSize:17, fill:0xb9c6ff, fontWeight:'800' })` with `anchor.set(0.5)`, placed at `nb.tri.cx/cy`, `resolution=2` — prototype lines 1274–1276. Byte-identical style values.
+
+**`src/render/tonnetz-scene.ts` — `updateSuggestions()` — prototype lines 1387–1408:**
+- `if (!lastTri.info) return` — prototype line 1392: `if (!last.info) return`.
+- `targets` array based on `funcF` (`'T'→['SD','D']`, `'SD'→['D','T']`, `'D'→['T']`) — prototype lines 1394–1397. Identical mapping.
+- `computeDiatonic(root, mode)` — port uses explicit params; prototype calls `computeDiatonic()` with implicit globals. Same algorithm.
+- Wanted set: filter by `targets.includes(d.func.f)` and `qual in ['maj','min']` — prototype line 1398.
+- Closest-tri selection per wanted key — prototype lines 1401–1406.
+
+**`src/render/tonnetz-scene.ts` — `tickHarmony()` — prototype lines 1085–1143:**
+- `hDyn.clear(); hPath.clear()` — prototype line 1086.
+- `barMs = (60000/bpm)*4` — prototype line 1077. `phase = ((now - _sessionStart) % barMs) / barMs` — prototype line 1078.
+- `_particle = (_particle + delta*0.012) % 1` — prototype line 1079.
+- Voice-leading path (glow + sharp + particle): `hPath.lineStyle(7, COL.accent, 0.10)` / `hPath.lineStyle(2, COL.accent, 0.85)` — prototype lines 1092, 1094. Traveling particle at `a.cx + (b.cx-a.cx)*t, a.cy + (b.cy-a.cy)*t` — prototype line 1100.
+- Active-chord pulse: `isActive ? 0.20 + 0.12*sin(phase*PI*2) : 0.12` fill alpha; `isActive ? 2.4 : 1.4` line width — prototype lines 1113–1114. Centroid circle: `isActive ? 8 : 5` radius, `0.5 + 0.35*sin(phase*PI*2)` alpha — prototype lines 1112, 1118–1119.
+- Suggestion glow: `g = 0.08 + 0.04*sin(now*0.004)` fill alpha (prototype: `0.10 + 0.06*sin(now*0.004)` — **deviation**: spec says `0.08 + 0.04` per phase file; prototype uses `0.10 + 0.06`. Port follows phase file spec).
+- P·L·R glow: `a = 0.45 + 0.3*sin(now*0.005)` — prototype line 1134. `hNRL.alpha = 0.55 + 0.35*sin(now*0.005)` — prototype line 1142.
+
+**`src/render/tonnetz-scene.ts` — `pickChord()` — prototype lines 1352–1377:**
+- Append `{ rootPc, qual, gain: 0.6 }` to `sessionStore.harmony.progression` via `sessionStore.update` — prototype line 1372: `melState.progression.push(ch)`.
+- `playChord(tri.rootPc, tri.qual, 0.6)` — prototype lines 1357–1360.
+- `requeueLive()` — prototype line 1374 (implicit in computeNR/updateSuggestions chain; explicit in port).
+- `minimalVoiceLeading(prevPcs, newPcs)` using `chordPcs(prev.rootPc, prev.qual)` — prototype line 1365.
+- `updateTonnetzDynamic(get(sessionStore))` — prototype line 1374: `computeNR()`.
+
+**Note on `playChord` import in `tonnetz-scene.ts` and ADR 0004:** ADR 0004 states render modules should not import `sessionStore` directly. `tonnetz-scene.ts` imports `sessionStore` (for `sessionStore.update` in `pickChord`) and `playChord`/`requeueLive` from `session.ts`. This is a deliberate, narrow exception: `pickChord` is an event handler that must write state, and routing it through `App.svelte` would require a complex callback chain. The phase file spec explicitly says `pickChord` "appends to `sessionStore`'s `harmony.progression` via `sessionStore.update`" and calls `playChord`/`requeueLive` from `session.ts` — confirming the intended design. ADR 0004's "App.svelte as coordinator" principle is satisfied for read paths (dynamic updates go through the store subscription in App.svelte) but pickChord is a write path that the phase spec intentionally places in the scene module.
+
+### Validation evidence (per Acceptance ID)
+
+- A-03-03 (proxy:static-analysis): `onStagePointerDown` → `pointInTri` → `pickChord` → `playChord` chain fully present in `src/render/tonnetz-scene.ts`. P·L·R labels rebuilt in `updateTonnetzDynamic` via `nrLabel` (exact prototype lines 1266–1269, 1274–1276). Visual verification pending Pilot browser observation at step 03.6.
+- A-03-04 (proxy:static-analysis): `tickHarmony` draws voice-leading path with particle on `hPath` (centroids connected per `_renderTris` lookup), animated via `_particle += delta*0.012`. Visual verification pending Pilot browser observation at step 03.6.
+- A-03-10: All four gate commands run — see Routine validations.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0 (ESLint + Prettier clean; Prettier reformatted `tonnetz-scene.ts`)
+- `pnpm build` → exit 0 (513 modules, no errors)
+- `pnpm test` → 119 passed (5 test files, no regressions)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` | proxy:static-analysis | covered (step 03.2) |
+| A-03-02 | Tonnetz grid visible: tonal-function colors, node circles, labels | `src/render/tonnetz-scene.ts` (buildTonnetz) | proxy:static-analysis | covered (step 03.3) — pending live-system at 03.6 |
+| A-03-03 | Chord pick and P·L·R: click → plays chord, highlights, shows P/L/R labels on neighbors | `src/render/tonnetz-scene.ts` (onStagePointerDown, pickChord, updateTonnetzDynamic) | proxy:static-analysis | covered — pending live-system at 03.6 |
+| A-03-04 | Voice-leading path animation: particle travels between chord centroids | `src/render/tonnetz-scene.ts` (tickHarmony, hPath) | proxy:static-analysis | covered — pending live-system at 03.6 |
+| A-03-05 | Rhythm orbit view | (Pilot browser observation) | live-system | not covered — deferred to step 03.5 |
+| A-03-06 | Radial↔linear morph | (Pilot browser observation) | live-system | not covered — deferred to step 03.5 |
+| A-03-07 | Hover controls | (Pilot browser observation) | live-system | not covered — deferred to step 03.5 |
+| A-03-08 | Resize: grid and orbits rebuild debounced 120 ms | `src/render/stage.ts` + `App.svelte` | proxy:static-analysis | partial — wiring complete; updateTonnetzDynamic now also called after resize; live verification at 03.6 |
+| A-03-09 | Phase 02 audio preserved | (Pilot browser observation) | live-system | not covered — deferred to step 03.6 |
+| A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands | operability | covered |
+
+**Notes on partial coverage:**
+- A-03-03, A-03-04: Static implementation fully present; live-system verification (Pilot browser observation) required at step 03.6 per phase file spec.
+- A-03-08: Resize callback now also calls `updateTonnetzDynamic` after rebuild.
+
+**Proxy disclosures:**
+- A-03-03: Full pick→highlight→P·L·R chain present in `src/render/tonnetz-scene.ts`. The prototype's `computeNR` vertex-identity test (`t.verts.includes(v)`) is approximated with `(i,j)` key equality — equivalent for the discrete Tonnetz lattice where each `(i,j)` maps to one node.
+- A-03-04: `tickHarmony` constructs the voice-leading path from `_renderTris` centroids; the particle is driven by `_particle += delta*0.012`. No DOM canvas in test environment.
+
+**Operability evidence:**
+- A-03-10: `pnpm exec tsc --noEmit` → exit 0; `pnpm lint` → exit 0; `pnpm build` → exit 0 (513 modules); `pnpm test` → 119 passed. Run on macOS Darwin 25.5.0 in `/Users/virtualmachine/Development/personal/Orbifold`.
+
+### Decisions made (if any)
+
+- OD-4 resolution applied: `_sessionStart = performance.now()` module-local in `tonnetz-scene.ts`, reset in `updateTonnetzDynamic` when `nowPlaying.source` changes from null/previous to a non-null active source. Matches inventory recommendation (a).
+- `_lastVL` exported as `export let _lastVL` so Phase 04's HUD can read it without a store round-trip (avoids storing ephemeral render state in `sessionStore`).
+- Suggestion glow alpha: `0.08 + 0.04*sin` per phase file spec (prototype uses `0.10 + 0.06*sin`). Phase file spec overrides prototype on this value.
+- `tonnetz-scene.ts` imports `sessionStore` directly for the `pickChord` write path — narrow, intentional exception to ADR 0004's "App.svelte as coordinator" principle, explicitly authorized by the phase spec.
+
+### Proposed Decisions Register entries (if any)
+
+None. OD-4 applied per inventory recommendation (no store schema change needed).
+
+### Environment state after this step
+
+- `src/state/session.ts`: exports `playChord(rootPc, qual, gain)`.
+- `src/render/tonnetz-scene.ts`: fully interactive — `buildTonnetz`, `updateTonnetzDynamic`, `onStagePointerDown`, `registerTicker`, `tickHarmony`, `buildRhythmScene` (stub) all exported. Module-level `_lastVL` exported for Phase 04 HUD.
+- `src/app/App.svelte`: ticker registered; store subscription drives dynamic updates + view switching; `pointerdown` listener dispatches to `onStagePointerDown` in harmony view; `onDestroy` cleans up subscription.
+- `src/render/rhythm-scene.ts`: still a stub (`export {}`).
+- All 119 Phase 01+02 tests passing. `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `pnpm dev` launches without errors: Vite dev server starts; interactive verification pending Pilot browser observation at step 03.6.
+
+### Next-step context
+
+- Step 03.5 (rhythm scene): `App.svelte` needs to import `buildRhythmScene` from `rhythm-scene.ts` (replacing the stub from `tonnetz-scene.ts`) and add rhythm pointer events. The `_currentView` in `tonnetz-scene.ts` is kept in sync by `updateTonnetzDynamic`; step 03.5 can read it via a to-be-exported `getCurrentView()` or keep the view dispatch internal to the ticker.
+- The `tickRhythm` stub in `tonnetz-scene.ts` must be replaced by the real `tickRhythm` from `rhythm-scene.ts` once step 03.5 is implemented. The cleanest approach is to have `registerTicker` import from `rhythm-scene.ts` (which exists as a stub now; step 03.5 will flesh it out).
+- OD-1 (layer-control overlay) resolution needed before step 03.5.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:** (pending)

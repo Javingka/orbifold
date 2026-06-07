@@ -36,6 +36,7 @@ import {
   rhythmToStrudel,
   buildSession,
 } from '../core/codegen/strudel.js';
+import { chordLabel } from '../core/theory/chords.js';
 
 // ── Lazy audio loader ──────────────────────────────────────────────────────
 // @strudel/web accesses window at module-evaluation time (dist/index.mjs line
@@ -398,4 +399,27 @@ export function requeueLive(): string | null {
   }
 
   return null;
+}
+
+/**
+ * Play a single chord immediately via runNow and update nowPlaying.
+ *
+ * Derives the Strudel code from `chordToStrudel` using the current store's
+ * chordMode and octave, calls `audio.runNow(code)`, and sets nowPlaying to
+ * `{ label: 'Acorde · <chordLabel>', source: 'chord' }`.
+ *
+ * Prototype: `pickChord()` lines 1357–1360 (runNow call + setNowPlaying).
+ * Follows the lazy-audio pattern established in step 02.4.
+ *
+ * @param rootPc - Root pitch class (0–11).
+ * @param qual   - Chord quality.
+ * @param gain   - Per-chord gain (0–1.2; prototype default 0.6).
+ */
+export function playChord(rootPc: number, qual: Quality, gain: number): void {
+  const state = get(sessionStore);
+  const code = chordToStrudel(rootPc, qual, gain, state.chordMode, state.harmony.octave);
+  const label = 'Acorde · ' + chordLabel(rootPc, qual);
+  // Fire and forget — audio is lazy-loaded; runNow resolves async.
+  void getAudio().then((a) => a.runNow(code));
+  setNowPlaying(label, 'chord');
 }

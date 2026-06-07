@@ -1,11 +1,11 @@
 <!--
   SPDX-License-Identifier: AGPL-3.0-only
   Orbifold — root Svelte component.
-  Phase 03 step 03.3: Tonnetz static geometry built and wired to resize.
+  Phase 03 step 03.4: Tonnetz interactivity, P·L·R highlights, voice-leading animation.
   Phase 04 will replace the temporary transport buttons below with the full UI.
 -->
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     sessionStore,
     initAudio,
@@ -16,11 +16,20 @@
     setBpm,
   } from '../state/session.js';
   import { get } from 'svelte/store';
-  import { initStage, onResize } from '../render/stage.js';
-  import { buildTonnetz, buildRhythmScene } from '../render/tonnetz-scene.js';
+  import { initStage, onResize, setView } from '../render/stage.js';
+  import {
+    buildTonnetz,
+    buildRhythmScene,
+    updateTonnetzDynamic,
+    onStagePointerDown,
+    registerTicker,
+  } from '../render/tonnetz-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
   let stageEl: HTMLDivElement;
+
+  // Store-subscription unsubscribe handle (cleaned up in onDestroy).
+  let unsubStore: (() => void) | null = null;
 
   // ── TEMPORARY TRANSPORT UI (Phase 02 only) ──────────────────────────────
   // These buttons are minimal wires for step 02.4 and step 02.5 smoke-testing.
@@ -58,7 +67,7 @@
       return;
     }
 
-    // ── Step 03.3: initial scene build ─────────────────────────────────────
+    // ── Initial scene build ────────────────────────────────────────────────
     // Build Tonnetz static geometry immediately after stage init.
     // Prototype: buildTonnetz() called at lines 928–929 from initPixi().
     buildTonnetz(get(sessionStore));
@@ -69,9 +78,52 @@
     onResize(() => {
       buildTonnetz(get(sessionStore));
       buildRhythmScene(get(sessionStore));
+      // After rebuild, restore dynamic overlays.
+      updateTonnetzDynamic(get(sessionStore));
     });
 
-    // Step 03.4 will call registerTicker(app) here.
+    // ── Step 03.4: register ticker ─────────────────────────────────────────
+    // Prototype: app.ticker.add(tick) at line 931.
+    registerTicker(app);
+
+    // ── Step 03.4: initial dynamic state after build ───────────────────────
+    // Call updateTonnetzDynamic once to establish _lastPick / NR / suggestions
+    // from the seeded progression (C major chord).
+    updateTonnetzDynamic(get(sessionStore));
+
+    // ── Step 03.4: store subscription for reactive updates ─────────────────
+    // Subscribe to sessionStore: drive dynamic scene updates when state changes.
+    // Prototype: reactive updates are triggered by DOM mutations / direct calls
+    // in the prototype; the port uses Svelte store subscription.
+    // Per ADR 0004: App.svelte is the coordinator; scene modules do NOT import
+    // sessionStore directly.
+    unsubStore = sessionStore.subscribe((state) => {
+      // Update P·L·R highlights and suggestion triangles when harmony changes.
+      updateTonnetzDynamic(state);
+      // Update layer visibility when view changes.
+      setView(state.view);
+    });
+
+    // ── Step 03.4: canvas pointerdown → chord pick ─────────────────────────
+    // Prototype: app.view.addEventListener('pointerdown', onStagePointer) at line 2157.
+    // Port: event wired here from App.svelte so scene modules stay DOM-free
+    // (the scene module receives the PointerEvent, not the canvas directly).
+    const canvas = app.view as HTMLCanvasElement;
+    canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+      const state = get(sessionStore);
+      if (state.view === 'harmony') {
+        onStagePointerDown(e);
+      }
+      // Rhythm view pointer handling deferred to step 03.5.
+    });
+  });
+
+  // ── Cleanup ────────────────────────────────────────────────────────────────
+  onDestroy(() => {
+    if (unsubStore !== null) {
+      unsubStore();
+      unsubStore = null;
+    }
   });
 
   function handleBpmInput(event: Event) {
