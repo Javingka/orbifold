@@ -215,6 +215,132 @@ None. The signature change for `initStage` is within implementation scope and co
 
 ### Planner Review
 
+**Decision:** APPROVED on 2026-06-06. Iteration: 1 of 5.
+
+All 8 checklist items pass. Prototype parity is fully cited (theme.ts: prototype lines 882–884 + CSS lines 33–36; stage.ts: lines 900–944 with exact per-line mapping including the inventory-corrected addChild order). The WebGL detection deviation is documented and covered by ADR 0006. The `initStage` signature change (HTMLElement instead of HTMLCanvasElement, async wrapper) is disclosed, justified by the Pilot-resolved OD-3, and within implementation scope — no Register proposal required. `getStageRefs()` is a clean unspecced addition within scope. No new deps; no Register conflicts; 119 tests pass; all four gate commands exit 0.
+
+Next action: Dev proceeds to step 03.3
+
+---
+
+## Step 03.3 — Tonnetz scene: static geometry
+
+**Date:** 2026-06-06
+**Commit(s):**
+- **Terminal commit:** `feat(render): Phase 03 step 03.3 — Tonnetz static geometry and tonal-function coloring`
+  - Hash: self-referential — not recorded
+  - Note: This is the implementation + handoff commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Completed
+
+- Implemented `src/render/tonnetz-scene.ts` — static build portion:
+  - Local types `RenderNode` (TonnetzNode + {x,y}) and `RenderTri` (TonnetzTriangle + per-vertex {vx,vy} + centroid {cx,cy}).
+  - `buildTonnetz(state: SessionState): void` — clears, computes pixel layout, calls core engine, draws triangle fills + edges + node circles + labels.
+  - Module-level `_renderNodes: RenderNode[]` and `_renderTris: RenderTri[]` for hit-testing in step 03.4.
+  - `getRenderNodes()` and `getRenderTris()` accessors for other modules.
+  - `buildRhythmScene(state: SessionState): void` stub (no-op) — exported so `App.svelte` can import it for the resize callback without errors.
+  - Viewport culling applied after pixel layout (prototype line 965 pattern): triangles whose vertices are outside the viewport are excluded.
+  - Non-null assertion (`!`) avoided: ESLint rule `no-non-null-assertion` satisfied by restructuring the `info !== null` conditional.
+- Updated `src/app/App.svelte`:
+  - Imported `get` from `svelte/store`, `onResize` from `stage.js`, `buildTonnetz` and `buildRhythmScene` from `tonnetz-scene.js`.
+  - After `initStage` succeeds, calls `buildTonnetz(get(sessionStore))` and `buildRhythmScene(get(sessionStore))`.
+  - Registers resize callback via `onResize(() => { buildTonnetz(get(sessionStore)); buildRhythmScene(get(sessionStore)); })`.
+  - Updated header comment to reference step 03.3.
+- AGPL-3.0 header on `tonnetz-scene.ts`.
+
+### Files touched
+
+- `src/render/tonnetz-scene.ts` (implemented from stub)
+- `src/app/App.svelte` (wired buildTonnetz, buildRhythmScene, onResize)
+- `docs/orbifold-v1/handoffs/phase-03-handoff.md` (this file — step 03.3 entry)
+
+### Prototype parity
+
+**`src/render/tonnetz-scene.ts` — prototype `buildTonnetz()`, lines 947–1025:**
+
+- `hGrid.clear(); hNodes.clear(); hLabels.removeChildren()` — prototype line 949. Exact match.
+- `cell = Math.max(78, Math.min(132, Math.min(W,H)/6.4))`, `rowH = cell * 0.866` — prototype lines 953–954. Byte-identical formula.
+- `cx = W/2`, `cy = H/2` — prototype lines 955. Identical.
+- `cols = Math.ceil(W/cell)+4`, `rows = Math.ceil(H/rowH)+4`, `ci = Math.ceil(cols/2)`, `cj = Math.ceil(rows/2)` — prototype lines 956–958. Identical.
+- `pos(i,j) = { x: cx + i*cell + j*cell*0.5, y: cy - j*rowH }` — prototype line 961. Identical.
+- Viewport culling `if (p.x < -cell || p.x > W+cell || p.y < -cell || p.y > H+cell) continue` — prototype line 965. Identical condition.
+- Triangle generation from culled nodeAt map — prototype lines 979–991. Port calls `computeTonnetzTriangles(coreNodes, root, mode)` on the full core set (per ADR 0003), then filters to triangles where all three vertices survived viewport culling. This preserves diatonic info lookup identity with the prototype (`dia[key]` → `info`) while satisfying ADR 0003 (pixel layout remains render-layer).
+- Centroid `cxT=(ra.x+rb.x+rc.x)/3`, `cyT=(...)` — prototype line 975. Identical formula.
+- Triangle fill: `FUNC_COL[info.func.cls] ?? COL.node` for in-key, alpha 0.16; `COL.bg` alpha 0.04 for out-of-key — prototype lines 996–1001. Semantically identical (prototype uses `|| COL.node`; port uses `?? COL.node` — equivalent since FUNC_COL values are nonzero hex numbers, not falsy).
+- Edges: `hGrid.lineStyle(1, COL.line, 0.9)`, moveTo/lineTo per triangle — prototype lines 1004–1009. Identical.
+- `scaleSet = new Set(SCALE_INTERVALS[mode].map(iv => (root+iv)%12))` — prototype line 1012. Identical logic.
+- Node circles: `hNodes.beginFill(0x0c0e13,1); hNodes.lineStyle(1.4, inScale?COL.accent:COL.faint, inScale?0.8:0.5); hNodes.drawCircle(n.x,n.y, inScale?13:10); hNodes.endFill()` — prototype lines 1015–1016. Byte-identical arguments.
+- `new PIXI.Text(NOTE_NAMES[n.pc], { fontFamily:FONT_SERIF, fontSize:inScale?15:12.5, fill:inScale?0xeaedf4:0x6d7384, fontWeight:'500' })` with `anchor.set(0.5)`, `resolution=2`, positioned at `(n.x, n.y)` — prototype lines 1017–1022. Identical style values; `FONT_SERIF = 'Fraunces, serif'` matches prototype string exactly.
+- Step 03.3 defers `computeNR()` call (prototype line 1024) to step 03.4.
+
+**Deviation:** The `buildRhythmScene` exported from `tonnetz-scene.ts` is a no-op stub; the real implementation goes in `rhythm-scene.ts` (step 03.5). This deviates from the final file layout but is the minimal change needed to unblock `App.svelte` compilation without errors. The stub will be superseded in step 03.5 when `App.svelte` imports `buildRhythmScene` from `rhythm-scene.ts` instead.
+
+### Validation evidence (per Acceptance ID)
+
+- A-03-02 (proxy:static-analysis): `src/render/tonnetz-scene.ts` contains `buildTonnetz` which draws triangle fills by tonal function (`FUNC_COL[info.func.cls]`), node circles with scale-member highlighting (`inScale ? COL.accent : COL.faint`), and note-name labels (`NOTE_NAMES[n.pc]`, `FONT_SERIF`). All geometry formulas verified against prototype lines 947–1025. Visual verification pending Pilot browser observation at step 03.6.
+- A-03-08 (partial proxy): `onResize(() => { buildTonnetz(...); buildRhythmScene(...); })` wired in `App.svelte` — resize callback now drives both scene rebuilds. The debounce registration was already in `stage.ts` (step 03.2); this step completes the wiring. Still a proxy until Pilot browser-tests the resize behavior at step 03.6.
+- A-03-10 gate commands: all four run, all exit 0. See Routine validations.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0 (after fixing ESLint `no-non-null-assertion` by restructuring the `info !== null` conditional)
+- `pnpm build` → exit 0 (511 modules, no errors)
+- `pnpm test` → 119 passed (5 test files, no regressions)
+- `pnpm dev` → Vite server started at port 5186 without import errors. Visual verification pending Pilot browser observation.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` (detection branch) | proxy:static-analysis | covered (step 03.2) |
+| A-03-02 | Tonnetz grid visible: tonal-function triangle colors, node circles, note labels | `src/render/tonnetz-scene.ts` (buildTonnetz) | proxy:static-analysis | covered — pending live-system at step 03.6 |
+| A-03-03 | Chord pick and P·L·R | (Pilot browser observation) | live-system | not covered — deferred to step 03.4 |
+| A-03-04 | Voice-leading path animation | (Pilot browser observation) | live-system | not covered — deferred to step 03.4 |
+| A-03-05 | Rhythm orbit view | (Pilot browser observation) | live-system | not covered — deferred to step 03.5 |
+| A-03-06 | Radial↔linear morph | (Pilot browser observation) | live-system | not covered — deferred to step 03.5 |
+| A-03-07 | Hover controls | (Pilot browser observation) | live-system | not covered — deferred to step 03.5 |
+| A-03-08 | Resize behavior: grid and orbits rebuild debounced 120 ms | `src/render/stage.ts` (debounce) + `src/app/App.svelte` (onResize callback) | proxy:static-analysis | partial — wiring complete; live verification deferred to step 03.6 |
+| A-03-09 | Phase 02 audio preserved | (Pilot browser observation) | live-system | not covered — deferred to step 03.6 |
+| A-03-10 | Gate commands: tsc, lint, test, build all exit 0 | Dev ran all four gate commands | operability | covered |
+
+**Notes on partial coverage:**
+- A-03-02: Static geometry code is complete and parity-verified against prototype lines 947–1025. Live-system confirmation (Pilot browser observation) is deferred to step 03.6 per the phase file spec.
+- A-03-08: Resize wiring complete in this step. Live resize behavior requires browser observation.
+
+**Proxy disclosures:**
+- A-03-02: buildTonnetz draws geometry using exact prototype formulas. The WebGL/DOM render environment is not exercisable in Node/Vitest. Source lines `src/render/tonnetz-scene.ts` 67–207 are cited as the proxy.
+- A-03-08: `onResize` callback registered at `src/app/App.svelte` lines 68–72 (approximately). Debounce in `src/render/stage.ts` lines 109–116.
+
+**Operability evidence:**
+- A-03-10: `pnpm exec tsc --noEmit` → exit 0; `pnpm lint` → exit 0; `pnpm build` → exit 0 (511 modules); `pnpm test` → 119 passed. All four gate commands run on macOS Darwin 25.5.0 in `/Users/virtualmachine/Development/personal/Orbifold`.
+
+### Decisions made (if any)
+
+- `buildRhythmScene` stub exported from `tonnetz-scene.ts` rather than from `rhythm-scene.ts` for this step only. This avoids requiring `rhythm-scene.ts` to be meaningfully implemented before step 03.3. Step 03.5 will move the real implementation to `rhythm-scene.ts` and update `App.svelte` imports accordingly.
+- Non-null assertion (`!`) avoided throughout by restructuring conditionals (ESLint `no-non-null-assertion` rule is configured as an error in this project).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/tonnetz-scene.ts`: `buildTonnetz`, `buildRhythmScene` (stub), `getRenderNodes`, `getRenderTris`, `RenderNode`, `RenderTri` all exported.
+- `src/app/App.svelte`: calls `buildTonnetz` and `buildRhythmScene` after `initStage`; `onResize` callback registered.
+- `src/render/rhythm-scene.ts`: still a stub (`export {}`).
+- All 119 Phase 01+02 tests passing. `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+
+### Next-step context
+
+- Step 03.4 must import `getRenderTris()` from `tonnetz-scene.ts` for hit-testing.
+- `buildTonnetz` currently omits the `computeNR()` call at the end (prototype line 1024) — step 03.4 should call `updateTonnetzDynamic(state)` after `buildTonnetz` completes to restore P·L·R overlays on resize.
+- The `app` variable in `App.svelte` `onMount` is used only in the null-check and the "Step 03.4 will call registerTicker(app) here" comment — step 03.4 must use it for `registerTicker(app)`.
+- Step 03.5 will replace the `buildRhythmScene` stub in `tonnetz-scene.ts` with the real export from `rhythm-scene.ts`; `App.svelte` imports need updating then.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:** (pending)

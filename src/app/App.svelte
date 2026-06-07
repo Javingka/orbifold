@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: AGPL-3.0-only
   Orbifold — root Svelte component.
-  Phase 03 step 03.2: PIXI stage initialized; blank canvas visible.
+  Phase 03 step 03.3: Tonnetz static geometry built and wired to resize.
   Phase 04 will replace the temporary transport buttons below with the full UI.
 -->
 <script lang="ts">
@@ -15,7 +15,9 @@
     hushAll,
     setBpm,
   } from '../state/session.js';
-  import { initStage } from '../render/stage.js';
+  import { get } from 'svelte/store';
+  import { initStage, onResize } from '../render/stage.js';
+  import { buildTonnetz, buildRhythmScene } from '../render/tonnetz-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
   let stageEl: HTMLDivElement;
@@ -56,7 +58,19 @@
       return;
     }
 
-    // Step 03.3 will call buildTonnetz(get(sessionStore)) here.
+    // ── Step 03.3: initial scene build ─────────────────────────────────────
+    // Build Tonnetz static geometry immediately after stage init.
+    // Prototype: buildTonnetz() called at lines 928–929 from initPixi().
+    buildTonnetz(get(sessionStore));
+    buildRhythmScene(get(sessionStore));
+
+    // Wire the resize callback: rebuild both scenes when the window is resized.
+    // Prototype lines 935–943: resize calls buildTonnetz() and buildRhythmScene().
+    onResize(() => {
+      buildTonnetz(get(sessionStore));
+      buildRhythmScene(get(sessionStore));
+    });
+
     // Step 03.4 will call registerTicker(app) here.
   });
 
