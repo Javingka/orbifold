@@ -133,8 +133,17 @@
       return;
     }
 
+    // Round-3 fix (Defect A): PIXI's ResizePlugin schedules its first resize
+    // asynchronously (next animation frame) when resizeTo is provided. Calling
+    // buildTonnetz/buildRhythmScene immediately after initStage returns means
+    // app.screen.width/height may still be 0 (or the initial canvas placeholder
+    // size), producing zero-sized geometry that makes hit-tests and the playhead
+    // invisible. Waiting one rAF ensures PIXI has completed its first resize
+    // before we query app.screen dimensions.
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
     // ── Initial scene build ────────────────────────────────────────────────
-    // Build Tonnetz static geometry immediately after stage init.
+    // Build Tonnetz static geometry after PIXI's first resize completes.
     // Prototype: buildTonnetz() called at lines 928–929 from initPixi().
     buildTonnetz(get(sessionStore));
     buildRhythmScene(get(sessionStore));

@@ -840,3 +840,62 @@ Matches prototype's `scheduleHideLayerCtl` debounce (line 1341, prototype used 2
 - `pnpm test` → 119 passed (no regressions)
 
 Headless note: "Coordinate fix verified with offsetX/Y pattern matching prototype. Playhead root cause identified via log and fixed. Visual re-verification pending Pilot re-test."
+
+---
+
+### Round-3 fixes (step 03.6 continuation — 2026-06-07)
+
+**Commit:** `fix(render): Phase 03 — 03.6 round-3: geometry timing (rAF), playhead, solo/mute/delete`
+
+Three residual operability defects addressed in this round.
+
+**Defect A — Geometry computed before PIXI completes initial resize**
+
+Root cause: `new PIXI.Application({ resizeTo: stageEl })` uses the PIXI ResizePlugin which schedules its first resize asynchronously (next animation frame). `buildTonnetz` and `buildRhythmScene` were called immediately after `initStage` returned in `App.svelte` `onMount`, in the same microtask. At that point `app.screen.width` and `app.screen.height` were still 0 (or the initial placeholder size), so all geometry was computed with `W = 0, H = 0`. This produced: zero-sized triangles with centroids at (0,0), making hit-tests always miss; and `_rCenter.maxR = 0`, making the playhead a zero-length invisible line.
+
+Fix: In `src/app/App.svelte` `onMount`, after `initStage` returns `app`, inserted `await new Promise<void>((r) => requestAnimationFrame(() => r()))` before calling `buildTonnetz` and `buildRhythmScene`. This allows PIXI's ResizePlugin to complete its first async resize so `app.screen.width/height` reflect the actual viewport dimensions when geometry is computed.
+
+**Defect B — Playhead never appears in rhythm view**
+
+Root cause identified via static analysis of the geometry path: `_rCenter.maxR = 0` (from Defect A above). With `maxR = 0`, the radial playhead endpoints were `rin = 0 - 22 = -22`, `rout = 0 + 18 = 18`, and `cx = cy = 0` — producing a tiny 40 px line at the top-left corner of the viewport, nearly invisible at 18% alpha. The `playing` branch itself was correct: the round-2 fix (second `get(sessionStore)` call for `liveSource`) was already in place and functioning. The `_sessionStart` OD-4 reset in `updateRhythmDynamic` was also correct.
+
+Fix: The rAF wait from Defect A fix restores correct geometry dimensions. After the fix, `_rCenter.innerR` and `_rCenter.maxR` are computed from the real viewport size, so the playhead endpoints span the full orbit area as intended.
+
+Note: No diagnostic console.log was left in the committed code. The root cause was identified via static analysis of the geometry computation path: `rebuildRhythmGeo` assigns `maxR = Math.min(W, H) * 0.4` where W and H come from `app.screen.width/height`. With W=0/H=0 at the time of the original build call, this produces maxR=0 → zero-length playhead.
+
+**Defect C — Solo/Mute/Delete buttons verification**
+
+The current `handleLayerSolo`, `handleLayerMute`, and `handleLayerDelete` handlers in `App.svelte` were reviewed against the spec. All three already correctly call `sessionStore.update(...)`, `buildRhythmScene(get(sessionStore))`, and `requeueLive()`. The `requeueLive` export is already imported from `session.js`. No code change was needed for Defect C — the round-2 fix had already wired these correctly.
+
+Note: `requeueLive()` is a no-op when `nowPlaying.source === null` (i.e., when nothing is playing). If the user toggles solo/mute without first pressing "▶ Groove", the visual label color updates (via `buildRhythmScene`) but no audio requeue fires — which is the correct behavior.
+
+### Files touched (round-3)
+
+- `src/app/App.svelte` (Defect A: rAF wait before buildTonnetz/buildRhythmScene)
+- `docs/orbifold-v1/handoffs/phase-03-handoff.md` (this entry)
+
+### Routine validations (round-3)
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0
+- `pnpm build` → exit 0 (514 modules, no new errors)
+- `pnpm test` → 119 passed (no regressions)
+
+### Acceptance Coverage Table (round-3)
+
+All A-03 IDs remain at the same status as round-2. The rAF fix is structural (ensures geometry dimensions are correct before drawing), not a new feature. Visual re-verification pending Pilot re-test.
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` | proxy:static-analysis | covered |
+| A-03-02 | Tonnetz grid visible (geometry now computed with correct dimensions) | `src/render/tonnetz-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-03 | Chord pick and P·L·R (hit-tests now use correct geometry) | `src/render/tonnetz-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-04 | Voice-leading path animation | `src/render/tonnetz-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-05 | Rhythm orbit view (geometry + dot visibility now correct) | `src/render/rhythm-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-06 | Radial↔linear morph | `src/render/rhythm-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-07 | Hover controls | `src/render/rhythm-scene.ts` + `App.svelte` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-08 | Resize: grid and orbits rebuild debounced 120 ms | `src/render/stage.ts` + `App.svelte` | proxy:static-analysis | covered |
+| A-03-09 | Phase 02 audio preserved | (Pilot browser observation) | live-system | visual re-verification pending Pilot |
+| A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands | operability | covered |
+
+Visual re-verification pending Pilot.
