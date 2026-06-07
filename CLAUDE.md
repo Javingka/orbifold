@@ -68,7 +68,7 @@ These are referenced by phase files in their Validation sections. (Until Phase 0
 These are hard invariants from `ORBIFOLD_KICKOFF.md` §6. Do NOT break them; a step that would requires a Pilot decision (surface it).
 
 **Musical / engine**
-- 1 Strudel cycle = 1 bar of 4/4. Tempo is set by the app via **`setcpm`** from BPM. **Never** use `setcps`/`.fast`/`.slow` for tempo in generated code. BPM changes by re-evaluating and/or live.
+- 1 Strudel cycle = 1 bar of 4/4. Tempo is set by the app via the global clock — **`setcps`** (`bpm/240` for 4/4) — emitted into the re-evaluated pattern header. **Never** use `.fast`/`.slow` for tempo (they time-stretch patterns and break the geometry/voice-leading timing). BPM changes by re-evaluating. **Note:** `setcpm` does NOT exist in the pinned `@strudel/web@1.0.3` (only `setcps`/`setbpm` are registered); the original prototype's tempo control was a latent no-op bug. Phase 2 fixes it via `setcps` to meet the kickoff §8 / A-02-05 acceptance. See ADR 0005. (Supersedes the original "setcpm only" invariant from kickoff §6.)
 - Tonnetz: `pc(i,j) = (7i + 4j) mod 12`. ▲ = major triad, ▼ = minor.
 - P·L·R = the three triads sharing an edge with the current one (two common tones, one voice moves 1–2 semitones).
 - Minimal voice-leading = shortest path in the orbifold (sum signed `circDelta`, pick the permutation with the smallest Σ).
