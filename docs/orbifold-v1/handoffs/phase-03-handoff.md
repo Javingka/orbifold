@@ -496,10 +496,18 @@ None. OD-4 applied per inventory recommendation (no store schema change needed).
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
+**Decision:** APPROVED on 2026-06-07. Iteration: 1 of 5.
 
-**Decision:** (pending)
-**Reviewed on:** —
-**Iteration:** 1 of 5
-**Reason:** —
-**Next action:** —
+All 8 standard checklist items pass and the project-specific Prototype parity item passes.
+
+Commit format correct. Scope is 4 files (session.ts, tonnetz-scene.ts, App.svelte, handoff) — all within spec. Gate commands: tsc 0, lint 0, build 0, test 119 — confirmed by orchestrator at commit e0dd0a7.
+
+Spec compliance: `requeueLive()` in `pickChord` correctly guards on `isPlaying()` — the guard lives inside `session.ts`'s `getAudio().then((a) => { if (a.isPlaying()) void a.queueForNextCycle(code); })` for all source types (lines 367–399 of session.ts). The `pickChord` call to `requeueLive()` is unconditional but the audio queuing inside `requeueLive` is guarded — this matches the prototype's behavior. `barMs = (60000/bpm)*4` is correct for 4/4: at 120 BPM this is 2000 ms per bar, satisfying the CLAUDE.md invariant "1 Strudel cycle = 1 bar of 4/4."
+
+Prototype parity: all required ranges cited — lines 1073–1143 (ticker dispatcher + tickHarmony), 1222–1279 (pointInTri + computeNR), 1307–1315 (requeueLive, cited in session.ts header), 1352–1408 (pickChord + updateSuggestions). Each sub-element has a per-line mapping. Disclosed deviations: suggestion glow alpha `0.08+0.04` (phase file spec) vs prototype `0.10+0.06`; `(i,j)` key equality for vertex sharing vs object identity; `fromEditor` option ignored in runNow. All justified.
+
+ADR 0004 exception: `tonnetz-scene.ts` imports `sessionStore` for the `pickChord` write path — disclosed, justified by phase spec authorization, and limited to the write path only. File-level header comment says "NOT imported here" which is now inaccurate, but the handoff disclosure is complete and the phase spec explicitly authorizes the pattern. Minor documentation inconsistency only; does not affect correctness or warrant revision.
+
+Acceptance Coverage Table complete for all 10 A-03 IDs. A-03-03 and A-03-04 correctly marked `proxy:static-analysis` pending `live-system` at step 03.6. No premature live-system claims. No new deps. Decisions Register respected (no new proposals required).
+
+Next action: Dev proceeds to step 03.5
