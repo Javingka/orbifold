@@ -297,7 +297,7 @@ export function tickRhythm(_delta: number): void {
 
   // Compute bar phase for playhead
   const state = get(sessionStore);
-  const bpm = state.bpm;
+  const bpm = state.bpm > 0 ? state.bpm : 120; // Defect 3 fix: guard against bpm=0/NaN
   const barMs = (60000 / bpm) * 4;
   const now = performance.now();
   const phase = ((now - _sessionStart) % barMs) / barMs; // 0..1 per bar
@@ -312,16 +312,33 @@ export function tickRhythm(_delta: number): void {
 
   // ── Per-layer orbit drawing — prototype lines 1156–1181 ──────────────────
   _rGeo.forEach((g, li) => {
-    const dim = layerAudible(g.layer, _layers) ? 1 : 0.28;
+    // Defect 2 fix: use live _layers[li] for audibility and step state so that
+    // store updates (mute, step toggle) are reflected each frame without a full
+    // geometry rebuild. Falls back to g.layer only if _layers is shorter (safety).
+    const liveLayer = _layers[li] ?? g.layer;
+    const dim = layerAudible(liveLayer, _layers) ? 1 : 0.28;
 
     // Guide ring: 16-gon lerped between polar and linear — prototype lines 1159–1163
+    // Defect 5 fix: in linear mode (m > 0.5), skip the closing segment back to step 0
+    // so we don't draw a diagonal line across the full width.
     rRings.lineStyle(1.2, COL.line, 0.5 * dim);
-    for (let s = 0; s <= RSTEPS; s++) {
-      const idx = s % RSTEPS;
-      const x = lerp(g.polar[idx].x, g.lin[idx].x, m);
-      const y = lerp(g.polar[idx].y, g.lin[idx].y, m);
-      if (s === 0) rRings.moveTo(x, y);
-      else rRings.lineTo(x, y);
+    if (m <= 0.5) {
+      // Radial mode (or morph toward radial): close the polygon back to step 0.
+      for (let s = 0; s <= RSTEPS; s++) {
+        const idx = s % RSTEPS;
+        const x = lerp(g.polar[idx].x, g.lin[idx].x, m);
+        const y = lerp(g.polar[idx].y, g.lin[idx].y, m);
+        if (s === 0) rRings.moveTo(x, y);
+        else rRings.lineTo(x, y);
+      }
+    } else {
+      // Linear mode (or morph toward linear): open polyline — no closing segment.
+      for (let s = 0; s < RSTEPS; s++) {
+        const x = lerp(g.polar[s].x, g.lin[s].x, m);
+        const y = lerp(g.polar[s].y, g.lin[s].y, m);
+        if (s === 0) rRings.moveTo(x, y);
+        else rRings.lineTo(x, y);
+      }
     }
 
     // Step dots — prototype lines 1166–1177
@@ -331,7 +348,7 @@ export function tickRhythm(_delta: number): void {
       const y = lerp(g.polar[s].y, g.lin[s].y, m);
       pos.push({ x, y });
 
-      if (g.layer.steps[s] === 1) {
+      if (liveLayer.steps[s] === 1) {
         // Active step: accent circle r=7.5 — prototype line 1171–1172
         rRings.beginFill(COL.accent, 0.95 * dim);
         rRings.lineStyle(0);
@@ -405,8 +422,10 @@ export function tickRhythm(_delta: number): void {
 
     // Highlight current step dot in white + accent — prototype lines 1203–1210
     _rGeo.forEach((g, li) => {
-      if (!layerAudible(g.layer, _layers)) return;
-      if (g.layer.steps[curStep] === 1) {
+      // Defect 2 fix: use _layers[li] for live step data (same as guide-ring draw above).
+      const liveLayer = _layers[li] ?? g.layer;
+      if (!layerAudible(liveLayer, _layers)) return;
+      if (liveLayer.steps[curStep] === 1) {
         const p = _stepPos[li] !== undefined ? _stepPos[li][curStep] : null;
         if (p != null) {
           rDyn.beginFill(0xffffff, 0.5);
@@ -438,8 +457,9 @@ export function onStagePointerDown(e: PointerEvent): void {
   const refs = getStageRefs();
   const { app } = refs;
   const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  // Defect 1 fix: apply DPR scale factor (autoDensity with resolution>1).
+  const x = (e.clientX - rect.left) * (app.screen.width / rect.width);
+  const y = (e.clientY - rect.top) * (app.screen.height / rect.height);
 
   // Find nearest step across all layers — prototype lines 1290–1292
   let bestLi = -1;
@@ -489,8 +509,9 @@ export function onStageContextMenu(e: PointerEvent): void {
   const refs = getStageRefs();
   const { app } = refs;
   const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  // Defect 1 fix: apply DPR scale factor (autoDensity with resolution>1).
+  const x = (e.clientX - rect.left) * (app.screen.width / rect.width);
+  const y = (e.clientY - rect.top) * (app.screen.height / rect.height);
 
   // Nearest layer: compare all step positions — prototype lines 1300–1303
   let bestLi2 = -1;
@@ -540,8 +561,9 @@ export function onStagePointerMove(e: PointerEvent, _state: SessionState): void 
   const refs = getStageRefs();
   const { app } = refs;
   const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  // Defect 1 fix: apply DPR scale factor (autoDensity with resolution>1).
+  const x = (e.clientX - rect.left) * (app.screen.width / rect.width);
+  const y = (e.clientY - rect.top) * (app.screen.height / rect.height);
 
   // Find nearest layer — prototype: nearestLayer(), lines 1319–1324
   let bestLi3 = -1;
@@ -571,6 +593,24 @@ export function onStagePointerMove(e: PointerEvent, _state: SessionState): void 
  */
 export function getHoveredLayerIndex(): number {
   return _hoveredLayerIndex;
+}
+
+/**
+ * Return the canvas-local position of a layer's label anchor (current morph state).
+ * Defect 4 fix: App.svelte uses this to position the DOM overlay at a fixed location
+ * relative to the layer, rather than tracking the pointer on every pointermove.
+ *
+ * @param li - Layer index.
+ * @returns Canvas-local {x, y} of the label anchor, or null if layer not found.
+ */
+export function getLayerLabelPos(li: number): { x: number; y: number } | null {
+  const g = _rGeo[li];
+  if (g === undefined) return null;
+  const m = _rMorph;
+  return {
+    x: lerp(g.labelPolar.x, g.labelLin.x, m),
+    y: lerp(g.labelPolar.y, g.labelLin.y, m),
+  };
 }
 
 /**

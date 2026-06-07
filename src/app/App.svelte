@@ -31,6 +31,7 @@
     onStageContextMenu,
     onStagePointerMove,
     getHoveredLayerIndex,
+    getLayerLabelPos,
     setMorphTarget,
   } from '../render/rhythm-scene.js';
 
@@ -44,6 +45,29 @@
   let hoveredLayerIndex = -1;
   let overlayX = 0;
   let overlayY = 0;
+
+  // Defect 4 fix: position overlay at the layer's label anchor (canvas geometry),
+  // not at the pointer position. The position is recomputed only when hoveredLayerIndex
+  // changes (Svelte $: reactive statement), so the overlay is stationary while hovered.
+  // getLayerLabelPos returns PIXI logical-pixel coords; with autoDensity:true these
+  // are identical to CSS pixels, so we just add the canvas bounding rect offset.
+  $: {
+    if (hoveredLayerIndex >= 0) {
+      const labelPos = getLayerLabelPos(hoveredLayerIndex);
+      if (labelPos !== null) {
+        // Get canvas element rect for viewport-space conversion.
+        const canvasEl = document.querySelector('#stage canvas') as HTMLCanvasElement | null;
+        const canvasRect = canvasEl !== null ? canvasEl.getBoundingClientRect() : null;
+        if (canvasRect !== null) {
+          // labelPos.x/y are in PIXI logical (CSS-equivalent) pixels.
+          // autoDensity:true ensures PIXI logical px === CSS px, so no scale needed.
+          // The canvas rect offset converts from canvas-local to viewport coords.
+          overlayX = canvasRect.left + labelPos.x + 12;
+          overlayY = canvasRect.top + labelPos.y - 16;
+        }
+      }
+    }
+  }
 
   // Current morph target for the button toggle.
   let morphTarget: 0 | 1 = 0;
@@ -173,13 +197,9 @@
       const state = get(sessionStore);
       if (state.view === 'rhythm') {
         onStagePointerMove(e, state);
-        // Update DOM overlay state reactively
+        // Update hovered layer index; overlay position is computed reactively in
+        // the $: block above keyed on hoveredLayerIndex (Defect 4 fix).
         hoveredLayerIndex = getHoveredLayerIndex();
-        if (hoveredLayerIndex >= 0) {
-          // Position the overlay near the pointer
-          overlayX = e.clientX + 12;
-          overlayY = e.clientY - 30;
-        }
       } else {
         hoveredLayerIndex = -1;
       }

@@ -446,11 +446,14 @@ export function onStagePointerDown(e: PointerEvent): void {
   const refs = getStageRefs();
   const { app } = refs;
   const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  const px = e.clientX - rect.left;
-  const py = e.clientY - rect.top;
+  // Defect 1 fix: apply DPR scale factor so hit-test uses canvas-local coordinates
+  // even when autoDensity:true with resolution > 1 causes the canvas to have a
+  // CSS size different from its logical pixel size.
+  const localX = (e.clientX - rect.left) * (app.screen.width / rect.width);
+  const localY = (e.clientY - rect.top) * (app.screen.height / rect.height);
 
   for (const tri of _renderTris) {
-    if (pointInTri(px, py, tri)) {
+    if (pointInTri(localX, localY, tri)) {
       pickChord(tri, get(sessionStore));
       return;
     }

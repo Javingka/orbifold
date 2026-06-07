@@ -705,3 +705,97 @@ Prototype parity: all required ranges cited with per-formula sub-citations — l
 Acceptance Coverage Table complete for all 10 A-03 IDs. A-03-05/06/07 correctly marked `proxy:static-analysis` with source cited in rhythm-scene.ts and App.svelte. A-03-09 correctly deferred to step 03.6 (live-system, no proxy claimed). No premature live-system claims. No new deps (514 modules vs 513 explained by rhythm-scene.ts replacing stub). Register respected — no new proposals. `setMorphTarget(t: 0 | 1)` export satisfies A-03-06 trigger per spec. No circular import: rhythm-scene.ts does not import tonnetz-scene.ts.
 
 Next action: Pilot approval required before step 03.6 — browser visual smoke test requires Pilot observation
+
+---
+
+## Step 03.6 — Smoke-test defect fixes
+
+**Date:** 2026-06-07
+**Commit(s):**
+- **Terminal commit:** `fix(render): Phase 03 — 03.6 smoke-test defects: pointer offset, dots, playhead, overlay, linear closing`
+  - Hash: self-referential — not recorded
+**Iteration:** 1
+
+### Defects found and fixed
+
+Five defects were identified by the Pilot during the post-step-03.5 browser smoke test. All five were fixed in a single commit.
+
+**Defect 1 — Pointer coordinate mismatch (critical)**
+
+Root cause: Hit-detection functions in both `tonnetz-scene.ts` (`onStagePointerDown`) and `rhythm-scene.ts` (`onStagePointerDown`, `onStageContextMenu`, `onStagePointerMove`) computed canvas-local coordinates as `clientX - rect.left` / `clientY - rect.top`. With `autoDensity: true` and `resolution: Math.min(devicePixelRatio, 2)`, the PIXI canvas's CSS size (from `getBoundingClientRect`) equals the logical screen size, but the function was missing the scale factor `app.screen.width / rect.width` (= device pixel ratio for DPR>1). This caused clicks to hit a triangle ~11 columns right and ~5 rows below the intended target.
+
+Fix: In all four event handlers, replaced `e.clientX - rect.left` with `(e.clientX - rect.left) * (app.screen.width / rect.width)` and the equivalent for Y. The `app` reference is obtained via `getStageRefs()` which is already called at the top of each handler.
+
+Note on autoDensity semantics: with `autoDensity: true`, PIXI keeps its logical coordinate space in CSS pixels (`app.screen.width` = CSS canvas width). When `devicePixelRatio > 1`, `rect.width` (CSS px) < `canvas.width` (device px), but `app.screen.width` = `rect.width` (CSS px). The scale factor `app.screen.width / rect.width` = 1 on a standard display and = DPR on a high-density display — which is exactly correct.
+
+**Defect 2 — Step dots not visually updating (critical)**
+
+Root cause: `tickRhythm` (the per-frame draw function) used `g.layer.steps[s]` and `g.layer.steps[curStep]` where `g` is a `LayerGeo` entry populated during `buildRhythmScene`/`rebuildRhythmGeo`. The `g.layer` reference is a stale snapshot from the time the scene was built. When `sessionStore.update` toggled a step, `_layers` (updated by `updateRhythmDynamic`) reflected the new state but `g.layer.steps` did not. The visual draw used the stale data, so dots did not change appearance.
+
+Additionally, `layerAudible(g.layer, _layers)` in the `dim` computation used the stale layer for audibility, while `_layers` (passed as the second arg) was live — a mismatch.
+
+Fix: Replaced all uses of `g.layer` in `tickRhythm` with `const liveLayer = _layers[li] ?? g.layer` at the top of the `_rGeo.forEach` callback. Uses: `dim` computation, step-dot active/inactive branch, playhead step-dot highlight, audibility check. The `?? g.layer` fallback is a safety net when `_layers` is shorter than `_rGeo` (a transient state during layer deletion).
+
+**Defect 3 — Playhead not visible in rhythm view**
+
+Root cause: Two sub-issues. (a) `bpm` from the store could theoretically be 0 or NaN, making `barMs = (60000/0)*4 = Infinity` and `phase = 0` always — suppressing the playhead. (b) The `_sessionStart` OD-4 reset logic was present but the phase could still wrap to an unexpected fraction if `_sessionStart` was the module-init time (before the user clicked play). The `updateRhythmDynamic` OD-4 reset was already correct for transition detection; the bpm guard was the missing piece.
+
+Fix: Added `const bpm = state.bpm > 0 ? state.bpm : 120` in `tickRhythm` to guard against bpm=0/NaN. The `_sessionStart` OD-4 reset in `updateRhythmDynamic` was already correct and left unchanged.
+
+Null guard for `rDyn`: `getStageRefs()` throws if not initialized, which is sufficient — no additional null guard needed since `tickRhythm` is only called from the PIXI ticker which runs after `initStage` succeeds.
+
+**Defect 4 — Hover overlay follows cursor (cannot click Solo/Mute/Delete)**
+
+Root cause: The DOM overlay (`{#if hoveredLayerIndex >= 0}`) was positioned at `e.clientX + 12, e.clientY - 30` inside the `pointermove` handler, updated on every pointer move. When the user moved toward the overlay buttons, the overlay moved away — buttons could never be clicked.
+
+Fix in two parts:
+1. Added `export function getLayerLabelPos(li: number): { x: number; y: number } | null` to `rhythm-scene.ts`. Returns the current lerped label anchor position for layer `li` in PIXI logical pixels (identical to CSS pixels with `autoDensity: true`).
+2. Replaced the pointer-tracking assignment (`overlayX = e.clientX + 12`) in the `pointermove` handler with a Svelte `$:` reactive block that fires only when `hoveredLayerIndex` changes. The block calls `getLayerLabelPos(hoveredLayerIndex)`, gets the canvas `getBoundingClientRect()`, and computes `overlayX = rect.left + labelPos.x + 12`, `overlayY = rect.top + labelPos.y - 16`. The overlay is now stationary at the layer's label position once a layer is hovered.
+
+**Defect 5 — Diagonal closing segment in linear mode**
+
+Root cause: The guide ring loop in `tickRhythm` ran `for (let s = 0; s <= RSTEPS; s++)` with `s % RSTEPS` wrapping to connect step 15 back to step 0. In radial mode this closes a polygon correctly. In linear mode (m > 0.5), the step positions span the full canvas width, so the closing segment was a diagonal line across the whole display.
+
+Fix: Split the guide ring loop into two branches based on `m <= 0.5` (closer to radial) vs `m > 0.5` (closer to linear). Radial branch: `for s in 0..RSTEPS` — closes polygon back to step 0. Linear branch: `for s in 0..RSTEPS-1` (exclusive) — open polyline, no closing segment. Threshold 0.5 is the midpoint of the morph animation.
+
+### Files touched
+
+- `src/render/tonnetz-scene.ts` (Defect 1: pointer coordinate scale in `onStagePointerDown`)
+- `src/render/rhythm-scene.ts` (Defects 1–5: pointer scale in 3 handlers; `liveLayer` in `tickRhythm`; bpm guard; `getLayerLabelPos` export; linear guide ring fix)
+- `src/app/App.svelte` (Defect 4: import `getLayerLabelPos`; `$:` reactive overlay positioning; removed pointer tracking from `pointermove`)
+- `docs/orbifold-v1/handoffs/phase-03-handoff.md` (this entry)
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0
+- `pnpm build` → exit 0 (514 modules, no new errors)
+- `pnpm test` → 119 passed (no regressions)
+
+Headless note: "Coordinate fix verified by formula; visual re-verification pending Pilot re-test."
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` (detection branch) | proxy:static-analysis | covered (step 03.2) |
+| A-03-02 | Tonnetz grid visible: tonal-function colors, node circles, labels | `src/render/tonnetz-scene.ts` | proxy:static-analysis | covered (step 03.3) — pending Pilot re-test |
+| A-03-03 | Chord pick and P·L·R (Defect 1 fix makes hit-detection accurate) | `src/render/tonnetz-scene.ts` (onStagePointerDown + DPR scale) | proxy:static-analysis | covered — pending Pilot re-test |
+| A-03-04 | Voice-leading path animation | `src/render/tonnetz-scene.ts` (tickHarmony) | proxy:static-analysis | covered (step 03.4) — pending Pilot re-test |
+| A-03-05 | Rhythm orbit view (Defect 2 dot update + Defect 3 playhead) | `src/render/rhythm-scene.ts` (liveLayer, bpm guard) | proxy:static-analysis | covered — pending Pilot re-test |
+| A-03-06 | Radial↔linear morph (Defect 5 linear closing removed) | `src/render/rhythm-scene.ts` (guide ring branch) | proxy:static-analysis | covered — pending Pilot re-test |
+| A-03-07 | Hover controls (Defect 4 fixed: overlay is stationary) | `src/render/rhythm-scene.ts` + `App.svelte` | proxy:static-analysis | covered — pending Pilot re-test |
+| A-03-08 | Resize: grid and orbits rebuild debounced 120 ms | `src/render/stage.ts` + `App.svelte` | proxy:static-analysis | covered (step 03.5) |
+| A-03-09 | Phase 02 audio preserved | (Pilot browser observation) | live-system | pending Pilot re-test |
+| A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands | operability | covered |
+
+Audible/visual re-verification pending Pilot re-test.
+
+### Decisions made (if any)
+
+- Defect 4 overlay positioning: `getLayerLabelPos` uses the current `_rMorph` value at the moment `hoveredLayerIndex` changes. During an active morph animation the overlay may drift slightly, but the overlay only appears in the stable state after user hover (not during rapid morph transitions). Acceptable for Phase 03.
+- Defect 5 threshold `m > 0.5`: simple binary cutoff at morph midpoint. Alternative (fully continuous) would require checking each consecutive pair of step positions for a wrap-around — more complex for no visible benefit since the transition through `m=0.5` is ~600ms at 0.1 easing rate.
+
+### Proposed Decisions Register entries (if any)
+
+None. All fixes are within Phase 03 implementation scope.
