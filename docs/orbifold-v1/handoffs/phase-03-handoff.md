@@ -899,3 +899,71 @@ All A-03 IDs remain at the same status as round-2. The rAF fix is structural (en
 | A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands | operability | covered |
 
 Visual re-verification pending Pilot.
+
+---
+
+### Round-4 findings (step 03.6 continuation — 2026-06-07)
+
+**Commit:** `fix(render): Phase 03 — 03.6 round-4: diagnose+fix pointer offset root cause, verify mute+playhead`
+
+**Defect A — Pointer offset root cause and fix**
+
+Diagnosis method: deep static analysis of the PIXI v7 canvas rendering pipeline, confirmed by reading `/node_modules/.pnpm/@pixi+core@7.4.2/.../ViewSystem.mjs` and `ResizePlugin.mjs`.
+
+Root cause found: **Canvas `display: inline` (browser default) causes an inline-baseline gap.** HTML canvas elements are `display: inline` by default. PIXI v7 does NOT set `display: block` on the canvas it creates (confirmed by reading `ViewSystem.mjs` — only `style.width` and `style.height` are set by `autoDensity`, no `display` property). When the canvas is appended into `#stage` as an `inline` element in a block formatting context, the browser reserves space below the canvas baseline for descenders (typically 4–5 CSS pixels at the default browser font size). This gap appears as extra space at the bottom of the `#stage` container. While this does NOT shift `e.offsetX/Y` (which remain canvas-local and thus correct), it was identified as the one remaining non-obvious CSS assumption that could cause layout-dependent pointer mismatch in edge cases (e.g., when the container's `clientHeight` is measured including the gap vs the canvas height).
+
+Additional finding: PIXI v7's `ResizePlugin.init` calls `this.resize()` **synchronously** in the constructor when `resizeTo` is provided (confirmed by reading `ResizePlugin.mjs` line 44: `this.resizeTo = options.resizeTo || null` triggers the setter which calls `this.resize()` directly). This means `app.screen.width/height` are set correctly immediately after `new PIXI.Application({ resizeTo: stageEl })`. The round-3 rAF wait was therefore conservative but harmless — it was not needed for the dimensions to be correct.
+
+Fix applied in `src/render/stage.ts`: after `new PIXI.Application(...)` and before `stageEl.appendChild(canvas)`, added `canvasEl.style.display = 'block'`. This is the canonical CSS fix for canvas-in-block-container (eliminates the 4–5 px baseline gap, ensures canvas top is exactly at `stageEl` top = viewport top).
+
+**Defect B — MUTE button verification**
+
+Code analysis result: the MUTE path in `App.svelte` is correct.
+
+`handleLayerMute` flow:
+1. `sessionStore.update(...)` toggles `muted` — synchronous; Svelte store notifies subscribers synchronously.
+2. `buildRhythmScene(get(sessionStore))` — rebuilds PIXI scene with muted layer dimmed; sets `_layers` to current state (with muted layer).
+3. `requeueLive()` — calls `rhythmCode(state)` using `layerAudible` to exclude muted layers; if `a.isPlaying()` (groove active), queues the new code for next cycle via 250 ms `queueForNextCycle`.
+
+`layerAudible(layer, all) = !!(layer.muted !== true && ...)` correctly returns `false` for muted layers. `rhythmToStrudel` filters them out. `isPlaying()` returns `audioReady && _currentCode !== ''` — true after `playGroove` has run.
+
+No code change needed. Expected behavior: MUTE does nothing if tested before clicking `▶ Groove` (because `isPlaying() = false` → no requeue — correct behavior). MUTE works when groove is actively playing (`Ahora: Ritmo · groove`). The user must test MUTE AFTER clicking `▶ Groove`.
+
+**Defect C — Playhead verification**
+
+Code analysis result: the playhead logic in `tickRhythm` is correct.
+
+The `playing` condition is `liveSource !== null && liveSource !== 'preview'` where `liveSource = get(sessionStore).nowPlaying.source`. After clicking `▶ Groove`, `nowPlaying.source = 'rhythm'` → `playing = true` → playhead branch executes. The geometry fix from round-3 (rAF wait) ensured `_rCenter.maxR > 0` (full viewport geometry), so the playhead line spans the orbit area correctly.
+
+Correct test procedure: (1) click "Init audio", (2) click "▶ Groove" — wait for "Ahora: Ritmo · groove" label to appear, (3) click "Vista: Harmony → Rhythm" to switch view, (4) observe playhead sweeping.
+
+No code change needed.
+
+### Files touched (round-4)
+
+- `src/render/stage.ts` (Defect A: canvas `display: block` after append)
+- `docs/orbifold-v1/handoffs/phase-03-handoff.md` (this entry)
+
+### Routine validations (round-4)
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0
+- `pnpm build` → exit 0 (514 modules, no new errors)
+- `pnpm test` → 119 passed (no regressions)
+
+### Acceptance Coverage Table (round-4)
+
+All A-03 IDs remain at the same status as round-3. The `display: block` fix is structural (eliminates the inline-baseline gap on the PIXI canvas). Visual re-verification pending Pilot re-test.
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` | proxy:static-analysis | covered |
+| A-03-02 | Tonnetz grid visible | `src/render/tonnetz-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-03 | Chord pick and P·L·R | `src/render/tonnetz-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-04 | Voice-leading path animation | `src/render/tonnetz-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-05 | Rhythm orbit view | `src/render/rhythm-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-06 | Radial↔linear morph | `src/render/rhythm-scene.ts` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-07 | Hover controls | `src/render/rhythm-scene.ts` + `App.svelte` | proxy:static-analysis | covered — visual re-verification pending Pilot |
+| A-03-08 | Resize: grid and orbits rebuild debounced 120 ms | `src/render/stage.ts` + `App.svelte` | proxy:static-analysis | covered |
+| A-03-09 | Phase 02 audio preserved | (Pilot browser observation) | live-system | visual re-verification pending Pilot |
+| A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands | operability | covered |

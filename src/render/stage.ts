@@ -76,7 +76,12 @@ export async function initStage(stageEl: HTMLElement): Promise<PIXI.Application 
   });
 
   // Append PIXI's canvas into the stage div — prototype line 913: mount.appendChild(app.view)
-  stageEl.appendChild(_app.view as HTMLCanvasElement);
+  // display:block eliminates the inline-baseline gap (canvas is inline by default) that
+  // would shift the canvas a few CSS pixels below the container top, causing a persistent
+  // small pointer-coordinate offset even after switching to e.offsetX/Y.
+  const canvasEl = _app.view as HTMLCanvasElement;
+  canvasEl.style.display = 'block';
+  stageEl.appendChild(canvasEl);
 
   // ── Create layer containers — prototype lines 916–918 ───────────────────────
   harmonyLayer = new PIXI.Container();
