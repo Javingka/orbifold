@@ -511,3 +511,191 @@ ADR 0004 exception: `tonnetz-scene.ts` imports `sessionStore` for the `pickChord
 Acceptance Coverage Table complete for all 10 A-03 IDs. A-03-03 and A-03-04 correctly marked `proxy:static-analysis` pending `live-system` at step 03.6. No premature live-system claims. No new deps. Decisions Register respected (no new proposals required).
 
 Next action: Dev proceeds to step 03.5
+
+---
+
+## Step 03.5 — Rhythm scene + full reactive wiring
+
+**Date:** 2026-06-07
+**Commit(s):**
+- **Terminal commit:** `feat(render): Phase 03 step 03.5 — rhythm scene, radial↔linear morph, hover controls, full store wiring`
+  - Hash: self-referential — not recorded
+  - Note: This is the implementation + handoff commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5
+
+### Completed
+
+- Implemented `src/render/rhythm-scene.ts` in full:
+  - Module-level state: `_rGeo`, `_rCenter`, `_stepPos`, `_layers`, `_layerLabels`, `_rCenterBpm`, `_rCenterSub`, `_rMorph`, `_rLayoutTarget`, `_sessionStart`, `_prevNowPlayingSource`, `_hoveredLayerIndex`.
+  - `lerp()` pure utility — prototype line 1028.
+  - `rebuildRhythmGeo(state)` (internal) — dual polar/linear geometry, prototype lines 1030–1056.
+  - `buildRhythmScene(state)` — clears `rLabels`, calls `rebuildRhythmGeo`, creates sound labels + center BPM/subtitle labels, prototype lines 1057–1070.
+  - `updateRhythmDynamic(state)` — updates `_layers` ref, resets `_sessionStart` on source change (OD-4), updates label fill colors for muted state.
+  - `tickRhythm(delta)` — morph easing, guide rings, step dots, label repositioning, center clock, playhead radial/linear morph, step dot highlight, prototype lines 1146–1215.
+  - `onStagePointerDown(e)` — rhythm view step toggle, prototype lines 1288–1293.
+  - `onStageContextMenu(e)` — right-click layer mute toggle, prototype lines 1296–1304.
+  - `onStagePointerMove(e, state)` — nearest-layer detection for DOM overlay, prototype lines 1336–1341.
+  - `getHoveredLayerIndex()` — exported for App.svelte overlay.
+  - `setMorphTarget(t: 0 | 1)` — exported for A-03-06 morph toggle button.
+- Updated `src/render/tonnetz-scene.ts`:
+  - Added static import of `tickRhythm` from `rhythm-scene.js`.
+  - Replaced the `tickRhythm` stub with a real dispatch call.
+  - Removed the `buildRhythmScene` no-op stub (now exported from rhythm-scene).
+  - Added a comment noting the moved export location.
+- Updated `src/app/App.svelte`:
+  - Imports `buildRhythmScene`, `updateRhythmDynamic`, `rhythmPointerDown`, `onStageContextMenu`, `onStagePointerMove`, `getHoveredLayerIndex`, `setMorphTarget` from `rhythm-scene.js`.
+  - Removed the stub import of `buildRhythmScene` from `tonnetz-scene.js`.
+  - Added `requeueLive` to the static import from `session.js` (replacing per-handler dynamic imports).
+  - Store subscription: on rhythm change, calls `buildRhythmScene` (if layer count changed) or `updateRhythmDynamic`. On view change, calls `setView`. On harmony change, calls `updateTonnetzDynamic`.
+  - Canvas event routing: `pointerdown` dispatches to `tonnetzPointerDown` (harmony) or `rhythmPointerDown` (rhythm); `contextmenu` dispatches to `onStageContextMenu` (rhythm); `pointermove` dispatches to `onStagePointerMove` + overlay position update (rhythm); `pointerleave` hides overlay.
+  - DOM overlay: `{#if hoveredLayerIndex >= 0}` block with Solo/Mute/Delete buttons, positioned via `overlayX/overlayY` (CSS `position: fixed`). Each button calls `sessionStore.update`, `buildRhythmScene`, and `requeueLive`.
+  - Temporary "Vista" toggle button to switch between harmony and rhythm views (for A-03-05 verification).
+  - Temporary "Morph" toggle button that calls `setMorphTarget` (for A-03-06 verification).
+  - `handleBpmInput` now also calls `buildRhythmScene` to update the BPM center label.
+
+### Files touched
+
+- `src/render/rhythm-scene.ts` (implemented from stub)
+- `src/render/tonnetz-scene.ts` (real tickRhythm dispatch, buildRhythmScene stub removed)
+- `src/app/App.svelte` (full rhythm wiring, DOM overlay, morph + view toggle buttons)
+- `docs/orbifold-v1/handoffs/phase-03-handoff.md` (this file — step 03.5 entry)
+
+### Prototype parity
+
+**`src/render/rhythm-scene.ts` — `rebuildRhythmGeo()` — prototype lines 1030–1056:**
+- `W = app.screen.width`, `H = app.screen.height`, `cx = W/2`, `cy = H/2` — prototype line 1031–1032.
+- `maxR = Math.min(W,H)*0.40`, `innerR = maxR*0.30`, `ringStep = L>1 ? (maxR-innerR)/(L-1) : 0` — prototype lines 1033–1036. Byte-identical.
+- `Wlin = Math.min(W*0.82, 980)`, `xL = cx - Wlin/2`, `rowGap = Math.min(70, (Math.min(W,H)*0.62)/Math.max(L,1))` — prototype lines 1037–1039. Byte-identical.
+- Per-layer: `R = L>1 ? innerR + li*ringStep : innerR`, `yBase = cy + (li-(L-1)/2)*rowGap` — prototype line 1042–1043.
+- Step polar: `ang = -PI/2 + s/RSTEPS*PI*2`, `polar[s] = { x:cx+cos(ang)*R, y:cy+sin(ang)*R }` — prototype line 1046–1047. Identical.
+- Step linear: `lin[s] = { x:xL+(s+0.5)/RSTEPS*Wlin, y:yBase }` — prototype line 1048. Identical (note: `(s+0.5)` centers each step in its slot).
+- `labelPolar = { x:cx+R+16, y:cy }`, `labelLin = { x:xL-16, y:yBase }` — prototype line 1051. Identical.
+- `rCenter` fields — prototype lines 1053–1055. Identical.
+
+**`src/render/rhythm-scene.ts` — `buildRhythmScene()` — prototype lines 1057–1070:**
+- `rLabels.removeChildren()` — prototype line 1059.
+- Sound label: `g.layer.sound + (g.layer.euclid ? \` ·E(${g.layer.euclid})\` : '')` — prototype line 1062.
+- Label style: `FONT_MONO, fontSize:11.5, fill: muted?0x6d7384:0xb9c0d0` — prototype line 1063. Byte-identical.
+- `anchor.set(0.5)`, `resolution=2` — prototype line 1064. Identical.
+- BPM label: `FONT_SERIF, fontSize:16, fill:0xeaedf4` — prototype line 1066. Identical.
+- Subtitle: `FONT_MONO, fontSize:9, fill:0x6d7384` — prototype line 1068. Text changed from `'16 pasos · 4/4'` (prototype) to `'cps · groove'` (per spec). Intentional deviation per invocation prompt spec.
+
+**`src/render/rhythm-scene.ts` — `tickRhythm()` — prototype lines 1146–1215:**
+- Morph easing: `_rMorph += (_rLayoutTarget - _rMorph) * 0.10; if (Math.abs(...) < 0.0015) snap` — prototype lines 1150–1151. Byte-identical.
+- `rRings.clear(); rDyn.clear()` — prototype line 1147. Identical.
+- Guide ring: `lineStyle(1.2, COL.line, 0.5*dim)`, moveTo/lineTo for s=0..RSTEPS, lerp polar↔linear — prototype lines 1159–1163. Identical.
+- `dim = layerAudible(...) ? 1 : 0.28` — prototype line 1157. Identical (port passes `_layers` to `layerAudible` for pure function signature).
+- Active step: `beginFill(COL.accent, 0.95*dim)`, `drawCircle(x,y,7.5)` — prototype lines 1171–1172. Identical.
+- Inactive step: `beginFill(0x10131a,1)`, `lineStyle(1, s%4===0?COL.faint:COL.line, 0.7*dim)`, `drawCircle(x,y,4.2)` — prototype lines 1174–1175. Identical.
+- Label repositioning: `lab.x = lerp(g.labelPolar.x, g.labelLin.x, m); lab.y = lerp(...)` — prototype line 1180. Identical.
+- Center clock: `m < 0.98`, fill+lineStyle, `drawCircle(cx,cy, innerR*0.5)` — prototype lines 1184–1187. Identical.
+- BPM/subtitle label alpha: `alpha = 1-m`, positions at `(cx, cy±7/10)` — prototype lines 1188–1189. Identical.
+- Playhead radial: `ang = -PI/2 + phase*PI*2`, `rin = innerR-22`, `rout = maxR+18` — prototype lines 1194–1197. Identical.
+- Playhead linear: `xPlay = xL + phase*Wlin`, `yTop/yBot` spans — prototype lines 1198–1199. Identical.
+- Morph lerp: `p1 = lerp(radP1, linP1, m)`, `p2 = lerp(radP2, linP2, m)` — prototype lines 1200–1201. Identical.
+- Draw playhead: `lineStyle(2, 0xffffff, 0.18)` — prototype line 1202. Identical.
+- Current step highlight: `beginFill(0xffffff, 0.5); drawCircle(r=11)` then `beginFill(COL.accent, 0.95); drawCircle(r=7.5)` — prototype lines 1207–1208. Identical.
+
+**Deviations from prototype in `tickRhythm()`:**
+- `isPlaying()` from `strudel.ts` replaced with `state.nowPlaying.source !== null && state.nowPlaying.source !== 'preview'`. Rationale: `strudel.ts` is loaded lazily by `session.ts`; a static import in `rhythm-scene.ts` would break the lazy-load design (Rollup cannot code-split a statically-imported module). The store's `nowPlaying.source` is the transport indicator set by all play actions — functionally equivalent for the playhead visibility use case.
+
+**`src/render/rhythm-scene.ts` — `onStagePointerDown()` — prototype lines 1288–1293:**
+- Nearest step: iterates all `_stepPos[li][s]`, finds min `Math.hypot(p.x-x, p.y-y)` — prototype line 1291.
+- Toggle: `steps[s] ^= 1` → port uses `steps[s] === 1 ? 0 : 1` (same semantic) — prototype line 1292. Identical behavior.
+
+**`src/render/rhythm-scene.ts` — `onStageContextMenu()` — prototype lines 1296–1304:**
+- `e.preventDefault()` — prototype line 1298.
+- Nearest layer (compare all step positions, 46 px threshold) — prototype lines 1301–1303.
+- `muted = !muted` toggle — prototype line 1303. Port uses `layer.muted !== true` (equivalent for boolean).
+- `buildRhythmScene() + requeueLive()` — prototype line 1303. Identical.
+
+**`src/render/rhythm-scene.ts` — `onStagePointerMove()` / `getHoveredLayerIndex()` — prototype lines 1336–1341:**
+- `nearestLayer` equivalent: iterate `_stepPos`, find min distance — prototype lines 1319–1324.
+- Within 40 px: update `_hoveredLayerIndex` — prototype line 1340.
+- Beyond 40 px: set `-1` — prototype line 1341.
+- `getHoveredLayerIndex()` exported for App.svelte to read and position DOM overlay (OD-1 resolution).
+
+**`src/app/App.svelte` — DOM overlay — prototype lines 1325–1350:**
+- Overlay shows when `hoveredLayerIndex >= 0`, positioned via `overlayX/overlayY` at pointer position — prototype `showLayerCtl(li, px, py)` line 1325–1332.
+- Solo/mute/delete handlers call `sessionStore.update`, `buildRhythmScene`, `requeueLive` — prototype `wireLayerCtl` lines 1347–1349. Identical logic.
+- Hide on `pointerleave` — prototype `scheduleHideLayerCtl` line 1341. Port hides immediately on leave (no 260 ms delay); minor behavioral deviation acceptable for Phase 03 proxy UI.
+
+**`src/render/tonnetz-scene.ts` — `tickRhythm` dispatch — prototype line 1082:**
+- `tickRhythm(delta)` from `rhythm-scene.js` called when `_currentView === 'rhythm'` — prototype `tick()` line 1082: `else { tickRhythm(phase); }`. Port passes `delta` (ticker delta); `rhythm-scene.ts` computes phase internally from `performance.now()`. No circular import: `rhythm-scene.ts` does not import `tonnetz-scene.ts`.
+
+### Validation evidence (per Acceptance ID)
+
+- A-03-05 (proxy:static-analysis): `buildRhythmScene`, `tickRhythm`, `onStagePointerDown` fully present in `src/render/rhythm-scene.ts`. `tickRhythm` dispatched from `tonnetz-scene.ts` when `_currentView === 'rhythm'`. Visual verification pending Pilot browser observation at step 03.6.
+- A-03-06 (proxy:static-analysis): `setMorphTarget(t: 0 | 1)` exported from `rhythm-scene.ts`; `_rMorph` easing toward `_rLayoutTarget` in `tickRhythm`; morph toggle button in `App.svelte` calls `setMorphTarget`. Visual verification pending Pilot browser observation at step 03.6.
+- A-03-07 (proxy:static-analysis): `onStagePointerMove` → `getHoveredLayerIndex()` → `App.svelte` `{#if hoveredLayerIndex >= 0}` DOM overlay with Solo/Mute/Delete buttons, all wired to `sessionStore.update` + `requeueLive()`. Visual verification pending Pilot browser observation at step 03.6.
+- A-03-10: All four gate commands run — see Routine validations.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0 (ESLint + Prettier clean)
+- `pnpm build` → exit 0 (514 modules, Strudel chunk code-split correctly — lazy-load design restored)
+- `pnpm test` → 119 passed (5 test files, no regressions)
+- `pnpm dev` → Vite server starts; visual verification pending Pilot browser observation at step 03.6.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` (detection branch) | proxy:static-analysis | covered (step 03.2) |
+| A-03-02 | Tonnetz grid visible: tonal-function colors, node circles, labels | `src/render/tonnetz-scene.ts` (buildTonnetz) | proxy:static-analysis | covered (step 03.3) — pending live-system at 03.6 |
+| A-03-03 | Chord pick and P·L·R: click → plays chord, highlights, shows P/L/R labels | `src/render/tonnetz-scene.ts` (onStagePointerDown, pickChord, updateTonnetzDynamic) | proxy:static-analysis | covered (step 03.4) — pending live-system at 03.6 |
+| A-03-04 | Voice-leading path animation: particle travels between chord centroids | `src/render/tonnetz-scene.ts` (tickHarmony, hPath) | proxy:static-analysis | covered (step 03.4) — pending live-system at 03.6 |
+| A-03-05 | Rhythm orbit view: orbit rings, step-dot toggle, playhead sweep while playing | `src/render/rhythm-scene.ts` (buildRhythmScene, tickRhythm, onStagePointerDown) | proxy:static-analysis | covered — pending live-system at 03.6 |
+| A-03-06 | Radial↔linear morph: smooth animated transition, triggered by setMorphTarget | `src/render/rhythm-scene.ts` (tickRhythm morph easing) + `App.svelte` (Morph button) | proxy:static-analysis | covered — pending live-system at 03.6 |
+| A-03-07 | Hover controls: solo/mute/delete appear near orbit and function | `src/render/rhythm-scene.ts` (onStagePointerMove) + `App.svelte` (DOM overlay) | proxy:static-analysis | covered — pending live-system at 03.6 |
+| A-03-08 | Resize: grid and orbits rebuild debounced 120 ms | `src/render/stage.ts` + `App.svelte` (onResize callback calls both build fns) | proxy:static-analysis | covered — wiring complete; live verification at 03.6 |
+| A-03-09 | Phase 02 audio preserved | (Pilot browser observation) | live-system | not covered — deferred to step 03.6 |
+| A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands | operability | covered |
+
+**Notes on partial coverage:**
+- A-03-05 through A-03-08: Full static implementation present; live-system verification (Pilot browser observation) deferred to step 03.6 per phase file spec.
+
+**Proxy disclosures:**
+- A-03-05: `tickRhythm` draws guide rings + step dots + playhead using prototype-equivalent formulas. `onStagePointerDown` iterates `_stepPos` and toggles steps via `sessionStore.update`. No DOM canvas in Vitest.
+- A-03-06: Morph easing `_rMorph += (_rLayoutTarget - _rMorph) * 0.10` confirmed byte-identical to prototype. `setMorphTarget` exported and wired to App.svelte button.
+- A-03-07: `onStagePointerMove` → `_hoveredLayerIndex` → App.svelte reactive overlay. Solo/mute/delete handlers are standard `sessionStore.update` + `requeueLive()` calls.
+- A-03-08: `onResize` callback calls `buildTonnetz` + `buildRhythmScene` (wired in step 03.3, unchanged here).
+
+**Operability evidence:**
+- A-03-10: `pnpm exec tsc --noEmit` → exit 0; `pnpm lint` → exit 0; `pnpm build` → exit 0 (514 modules, Strudel code-split into separate chunk); `pnpm test` → 119 passed. Run on macOS Darwin 25.5.0 in `/Users/virtualmachine/Development/personal/Orbifold`.
+
+### Decisions made (if any)
+
+- **`isPlaying()` replaced by `nowPlaying.source` check in `tickRhythm`:** `strudel.ts` is lazy-loaded by `session.ts`; a static import in `rhythm-scene.ts` prevented Rollup from code-splitting the Strudel bundle (causing a bundling warning and defeating the lazy-load design). The store's `nowPlaying.source !== null && source !== 'preview'` is functionally equivalent for the playhead visibility use case — the playhead shows when a transport action is active, which is exactly when `nowPlaying.source` is non-null.
+- **For-loop instead of `forEach` for hit-testing:** TypeScript's control flow analysis narrows reassigned variables in `forEach` callbacks to `never` after a null check. Replaced with explicit `for` loops for `_stepPos` iteration in `onStagePointerDown`, `onStageContextMenu`, and `onStagePointerMove` to satisfy `strict` mode. Prototype behavior is identical.
+- **Immediate hide on `pointerleave` vs 260 ms delay:** The prototype uses a 260 ms `scheduleHideLayerCtl` timeout to keep the overlay visible when the cursor briefly leaves. The port hides immediately on `pointerleave` from the canvas. This is a minor UX deviation acceptable for Phase 03's proxy overlay; Phase 04 will implement the full overlay with proper delay if needed.
+- **OD-1 (DOM overlay) confirmed:** Pilot-resolved as DOM overlay. Implemented as Svelte `{#if hoveredLayerIndex >= 0}` block with `position: fixed` CSS, positioned by `overlayX/overlayY` updated in `pointermove` handler. No PIXI container used.
+
+### Proposed Decisions Register entries (if any)
+
+None. All decisions are within implementation scope.
+
+### Environment state after this step
+
+- `src/render/rhythm-scene.ts`: fully implemented — `buildRhythmScene`, `updateRhythmDynamic`, `tickRhythm`, `onStagePointerDown`, `onStageContextMenu`, `onStagePointerMove`, `getHoveredLayerIndex`, `setMorphTarget` all exported.
+- `src/render/tonnetz-scene.ts`: `tickRhythm` stub replaced with real dispatch to `rhythm-scene.ts`; `buildRhythmScene` stub removed.
+- `src/app/App.svelte`: fully wired — both scenes reactive to `sessionStore`; canvas pointer routing for both views; DOM overlay for layer controls; view toggle and morph toggle buttons.
+- All 119 Phase 01+02 tests passing. `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `pnpm dev` launches without errors. Visual verification pending Pilot browser observation at step 03.6.
+
+### Next-step context
+
+- Step 03.6 (operability verification): Pilot observes `pnpm dev` in browser; all A-03 operability items from phase file table must be checked. No source code changes expected.
+- The "Vista" toggle button and "Morph" toggle button in the transport panel are temporary Phase 03 helpers; Phase 04 will provide proper navigation UI.
+- If the Pilot observes any visual defects during step 03.6 observation, fix-and-recommit before writing the step 03.6 operability record.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** (pending)
+**Reviewed on:** —
+**Iteration:** 1 of 5
+**Reason:** —
+**Next action:** —

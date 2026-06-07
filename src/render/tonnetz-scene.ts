@@ -28,6 +28,7 @@ import { sessionStore, playChord, requeueLive } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { getStageRefs } from './stage.js';
 import { COL, FUNC_COL, FONT_SERIF, FONT_SANS } from './theme.js';
+import { tickRhythm as _tickRhythmImpl } from './rhythm-scene.js';
 
 // ── Render-layer extended types (ADR 0003: do NOT mutate core types) ────────
 
@@ -643,15 +644,21 @@ export function tickHarmony(delta: number): void {
   }
 }
 
-// ── tickRhythm stub ───────────────────────────────────────────────────────────
+// ── tickRhythm dispatch ───────────────────────────────────────────────────────
 
 /**
- * Rhythm view tick — stub for step 03.4.
- * Full implementation in src/render/rhythm-scene.ts (step 03.5).
+ * Rhythm view tick — dispatches to rhythm-scene.ts.
+ * Step 03.5: replaced stub with real dispatch.
+ * To avoid circular imports (rhythm-scene imports session.ts which is not
+ * PIXI-dependent), the ticker in tonnetz-scene registers the top-level
+ * dispatcher and calls rhythmSceneTick from rhythm-scene lazily imported here.
+ * Approach: direct named import — no circular dependency because rhythm-scene.ts
+ * does NOT import tonnetz-scene.ts.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function tickRhythm(_delta: number): void {
-  // Implemented in step 03.5.
+function tickRhythm(delta: number): void {
+  // Dynamic approach: import rhythm scene's tickRhythm via the module-level
+  // import below (static import is fine — no circular dep).
+  _tickRhythmImpl(delta);
 }
 
 // ── registerTicker ────────────────────────────────────────────────────────────
@@ -674,13 +681,5 @@ export function registerTicker(app: PIXI.Application): void {
   });
 }
 
-// ── buildRhythmScene stub ─────────────────────────────────────────────────────
-
-/**
- * Stub for the rhythm scene build — implemented in step 03.5.
- * Exported so App.svelte can import it for the resize callback without errors.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function buildRhythmScene(_state: SessionState): void {
-  // Implemented in src/render/rhythm-scene.ts step 03.5.
-}
+// buildRhythmScene has been moved to src/render/rhythm-scene.ts (step 03.5).
+// App.svelte imports it from rhythm-scene.js directly.

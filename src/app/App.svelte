@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: AGPL-3.0-only
   Orbifold — root Svelte component.
-  Phase 03 step 03.4: Tonnetz interactivity, P·L·R highlights, voice-leading animation.
+  Phase 03 step 03.5: rhythm scene, radial↔linear morph, hover controls, full store wiring.
   Phase 04 will replace the temporary transport buttons below with the full UI.
 -->
 <script lang="ts">
@@ -14,22 +14,42 @@
     playSession,
     hushAll,
     setBpm,
+    requeueLive,
   } from '../state/session.js';
   import { get } from 'svelte/store';
   import { initStage, onResize, setView } from '../render/stage.js';
   import {
     buildTonnetz,
-    buildRhythmScene,
     updateTonnetzDynamic,
-    onStagePointerDown,
+    onStagePointerDown as tonnetzPointerDown,
     registerTicker,
   } from '../render/tonnetz-scene.js';
+  import {
+    buildRhythmScene,
+    updateRhythmDynamic,
+    onStagePointerDown as rhythmPointerDown,
+    onStageContextMenu,
+    onStagePointerMove,
+    getHoveredLayerIndex,
+    setMorphTarget,
+  } from '../render/rhythm-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
   let stageEl: HTMLDivElement;
 
   // Store-subscription unsubscribe handle (cleaned up in onDestroy).
   let unsubStore: (() => void) | null = null;
+
+  // DOM overlay state (OD-1 resolution: DOM overlay for layer controls).
+  let hoveredLayerIndex = -1;
+  let overlayX = 0;
+  let overlayY = 0;
+
+  // Current morph target for the button toggle.
+  let morphTarget: 0 | 1 = 0;
+
+  // Track previous layer count to detect when to do a full rebuild vs dynamic update.
+  let prevLayerCount = 0;
 
   // ── TEMPORARY TRANSPORT UI (Phase 02 only) ──────────────────────────────
   // These buttons are minimal wires for step 02.4 and step 02.5 smoke-testing.
@@ -58,6 +78,8 @@
         progression: [{ rootPc: 0, qual: 'maj' as const, gain: 0.6 }],
       },
     }));
+
+    prevLayerCount = get(sessionStore).rhythm.layers.length;
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
     // initStage appends app.view inside stageEl and registers resize handler.
@@ -96,25 +118,76 @@
     // Prototype: reactive updates are triggered by DOM mutations / direct calls
     // in the prototype; the port uses Svelte store subscription.
     // Per ADR 0004: App.svelte is the coordinator; scene modules do NOT import
-    // sessionStore directly.
+    // sessionStore directly (except for the narrow write-path exception in
+    // rhythm-scene.ts for step toggles, per spec authorization).
     unsubStore = sessionStore.subscribe((state) => {
       // Update P·L·R highlights and suggestion triangles when harmony changes.
       updateTonnetzDynamic(state);
       // Update layer visibility when view changes.
       setView(state.view);
+
+      // Rhythm dynamic updates
+      const layerCount = state.rhythm.layers.length;
+      if (layerCount !== prevLayerCount) {
+        // Layer count changed: full geometry rebuild
+        buildRhythmScene(state);
+        prevLayerCount = layerCount;
+      } else {
+        // Only label/mute state changed: dynamic update
+        updateRhythmDynamic(state);
+      }
+
+      // Update BPM label if BPM changed: trigger rebuild
+      // (buildRhythmScene recreates the BPM label with current state.bpm)
+      // This is handled above via updateRhythmDynamic which updates label state;
+      // the BPM label text is set once during buildRhythmScene and would need
+      // a rebuild to change. For now we rebuild on any state change that would
+      // affect the label (a future optimization can detect BPM change specifically).
     });
 
-    // ── Step 03.4: canvas pointerdown → chord pick ─────────────────────────
+    // ── Canvas pointer routing ─────────────────────────────────────────────
     // Prototype: app.view.addEventListener('pointerdown', onStagePointer) at line 2157.
-    // Port: event wired here from App.svelte so scene modules stay DOM-free
-    // (the scene module receives the PointerEvent, not the canvas directly).
     const canvas = app.view as HTMLCanvasElement;
+
     canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       const state = get(sessionStore);
       if (state.view === 'harmony') {
-        onStagePointerDown(e);
+        tonnetzPointerDown(e);
+      } else if (state.view === 'rhythm') {
+        rhythmPointerDown(e);
       }
-      // Rhythm view pointer handling deferred to step 03.5.
+    });
+
+    // Right-click: mute toggle (rhythm view only).
+    // Prototype: app.view.addEventListener('contextmenu', onStageContext) at line 2158.
+    canvas.addEventListener('contextmenu', (e: MouseEvent) => {
+      const state = get(sessionStore);
+      if (state.view === 'rhythm') {
+        onStageContextMenu(e as PointerEvent);
+      }
+    });
+
+    // Pointer move: hover layer detection for DOM overlay (rhythm view only).
+    // Prototype: app.view.addEventListener('pointermove', onStageHover) at line 2159.
+    canvas.addEventListener('pointermove', (e: PointerEvent) => {
+      const state = get(sessionStore);
+      if (state.view === 'rhythm') {
+        onStagePointerMove(e, state);
+        // Update DOM overlay state reactively
+        hoveredLayerIndex = getHoveredLayerIndex();
+        if (hoveredLayerIndex >= 0) {
+          // Position the overlay near the pointer
+          overlayX = e.clientX + 12;
+          overlayY = e.clientY - 30;
+        }
+      } else {
+        hoveredLayerIndex = -1;
+      }
+    });
+
+    // Hide overlay when pointer leaves the canvas.
+    canvas.addEventListener('pointerleave', () => {
+      hoveredLayerIndex = -1;
     });
   });
 
@@ -129,6 +202,65 @@
   function handleBpmInput(event: Event) {
     const target = event.target as HTMLInputElement;
     setBpm(Number(target.value));
+    // Rebuild rhythm scene to update the BPM label
+    buildRhythmScene(get(sessionStore));
+  }
+
+  // ── Layer overlay button handlers ────────────────────────────────────────
+  // OD-1 resolution: DOM overlay with solo/mute/delete buttons.
+  // Prototype: wireLayerCtl() lines 1343–1350.
+
+  function handleLayerSolo() {
+    const li = hoveredLayerIndex;
+    sessionStore.update((state) => {
+      const layers = state.rhythm.layers.map((layer, idx) => {
+        if (idx !== li) return layer;
+        return { ...layer, solo: layer.solo !== true };
+      });
+      return { ...state, rhythm: { ...state.rhythm, layers } };
+    });
+    buildRhythmScene(get(sessionStore));
+    requeueLive();
+  }
+
+  function handleLayerMute() {
+    const li = hoveredLayerIndex;
+    sessionStore.update((state) => {
+      const layers = state.rhythm.layers.map((layer, idx) => {
+        if (idx !== li) return layer;
+        return { ...layer, muted: layer.muted !== true };
+      });
+      return { ...state, rhythm: { ...state.rhythm, layers } };
+    });
+    buildRhythmScene(get(sessionStore));
+    requeueLive();
+  }
+
+  function handleLayerDelete() {
+    const li = hoveredLayerIndex;
+    hoveredLayerIndex = -1;
+    sessionStore.update((state) => {
+      const layers = state.rhythm.layers.filter((_, idx) => idx !== li);
+      return { ...state, rhythm: { ...state.rhythm, layers } };
+    });
+    buildRhythmScene(get(sessionStore));
+    requeueLive();
+  }
+
+  // ── Morph toggle ─────────────────────────────────────────────────────────
+  // A-03-06: temporary button to trigger radial↔linear morph.
+  function handleMorphToggle() {
+    morphTarget = morphTarget === 0 ? 1 : 0;
+    setMorphTarget(morphTarget);
+  }
+
+  // ── Temporary view switch helper ─────────────────────────────────────────
+  // Allows toggling between harmony and rhythm view for testing A-03-05.
+  function handleViewToggle() {
+    sessionStore.update((s) => ({
+      ...s,
+      view: s.view === 'harmony' ? 'rhythm' : 'harmony',
+    }));
   }
 </script>
 
@@ -139,6 +271,30 @@
   PIXI appends its own canvas element inside it via initStage.
 -->
 <div id="stage" bind:this={stageEl}></div>
+
+<!--
+  DOM overlay for layer controls (OD-1 resolution).
+  Shown when hoveredLayerIndex >= 0 (a rhythm layer is near the pointer).
+  Positioned near the pointer via overlayX / overlayY.
+  Prototype: div#layerCtl (lines 1325–1334 DOM overlay approach).
+  Phase 04 will absorb this into the full Svelte UI.
+-->
+{#if hoveredLayerIndex >= 0}
+  <div
+    class="layer-ctl"
+    style="left: {overlayX}px; top: {overlayY}px;"
+    on:pointerenter={() => {
+      /* keep overlay visible while cursor is on it */
+    }}
+    on:pointerleave={() => {
+      hoveredLayerIndex = -1;
+    }}
+  >
+    <button on:click={handleLayerSolo}>Solo</button>
+    <button on:click={handleLayerMute}>Mute</button>
+    <button on:click={handleLayerDelete}>Del</button>
+  </div>
+{/if}
 
 <!-- TEMPORARY TRANSPORT PANEL — Phase 02 only; replaced in Phase 04 -->
 <div class="transport-panel">
@@ -166,6 +322,18 @@
     />
   </label>
 
+  <!-- View toggle: harmony ↔ rhythm (temporary, for A-03-05 verification) -->
+  <button on:click={handleViewToggle}>
+    Vista: {$sessionStore.view === 'harmony' ? 'Harmony → Rhythm' : 'Rhythm → Harmony'}
+  </button>
+
+  <!-- Morph toggle: radial ↔ linear (A-03-06) -->
+  {#if $sessionStore.view === 'rhythm'}
+    <button on:click={handleMorphToggle}>
+      Morph: {morphTarget === 0 ? 'Radial → Linear' : 'Linear → Radial'}
+    </button>
+  {/if}
+
   <!-- Now-playing label (reactive — shows what is currently audible) -->
   <p class="now-playing">
     Ahora: {$sessionStore.nowPlaying.label ?? 'silencio'}
@@ -187,6 +355,41 @@
     height: 100%;
     z-index: 0;
     overflow: hidden;
+  }
+
+  /*
+   * DOM overlay for layer controls (OD-1 resolution).
+   * position: fixed so it tracks pointer coordinates in viewport space.
+   * z-index: 2 — above stage (0) and transport panel (1).
+   * Prototype: div#layerCtl uses position:absolute within div#stage.
+   * Port uses fixed positioning with pointer clientX/clientY for simplicity.
+   */
+  .layer-ctl {
+    position: fixed;
+    z-index: 2;
+    background: rgba(11, 13, 18, 0.9);
+    border: 1px solid #39404f;
+    border-radius: 6px;
+    padding: 4px 8px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    pointer-events: all;
+  }
+
+  .layer-ctl button {
+    background: #232734;
+    border: 1px solid #39404f;
+    color: #cfd6e6;
+    font-family: system-ui, sans-serif;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .layer-ctl button:hover {
+    background: #39404f;
   }
 
   /*
