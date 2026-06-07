@@ -9,25 +9,27 @@ import { type Quality, chordVoicing } from '../theory/chords.js';
 import { type RhythmLayer, layerAudible, rhythmLayerToStrudelLine } from '../rhythm/layers.js';
 
 /**
- * Wrap a Strudel pattern string with a setcps tempo directive.
+ * Returns the trimmed pattern string unchanged.
  *
- * Uses `setcps(bpm/240)` — never `setcpm`, `.fast`, or `.slow`.
- * 1 Strudel cycle = 1 bar of 4/4; cps = BPM / 240 (60 s/min ÷ 4 beats/cycle).
+ * This function is now an identity wrapper. Tempo is controlled via the audio
+ * layer's own Cyclist scheduler (scheduler.setCps(bpm/240)) — not via a
+ * setcps string prepended to the evaluated code. Injecting setcps into the
+ * code string failed because setcps is NOT available in the evalScope
+ * registered by @strudel/web@1.0.3's initStrudel/defaultPrebake (it is only
+ * bound inside repl(), which initStrudel never calls). The definitive fix
+ * (Phase 02 own-scheduler approach) calls scheduler.setCps() directly in the
+ * audio layer, making this code-level wrapper a no-op.
  *
- * ADR 0005: `setcpm` does NOT exist in @strudel/web@1.0.3; the pinned package
- * only registers `setcps` and `setbpm` in the evaluate scope. The original
- * prototype's `setcpm(bpm/4)` call threw `ReferenceError: setcpm is not defined`
- * on every evaluate, causing the fallback to strip the tempo header — meaning
- * tempo never actually changed (a latent no-op bug in the prototype). This
- * implementation uses `setcps`, which IS registered, so BPM changes are
- * audible. `.fast`/`.slow` remain forbidden (they time-stretch patterns and
- * break the chord-geometry timing). See docs/adr/0005-tempo-setcps-not-setcpm.md.
+ * The bpm parameter is retained in the signature for API stability (callers
+ * that pass bpm continue to compile cleanly). `.fast`/`.slow` remain
+ * forbidden — they time-stretch patterns and break chord-geometry timing.
+ * See docs/adr/0005-tempo-setcps-not-setcpm.md.
  *
- * Ported from prototype lines 605–608 (with corrected tempo function per ADR 0005).
+ * Ported from prototype lines 605–608 (behavior superseded by own-scheduler fix).
  */
-export function tempoWrap(code: string, bpm: number): string {
-  const cps = bpm / 240;
-  return `setcps(${cps.toFixed(6)})\n${code.trim()}`;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function tempoWrap(code: string, _bpm: number): string {
+  return code.trim();
 }
 
 /**

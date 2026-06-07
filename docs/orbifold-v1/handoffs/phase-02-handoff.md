@@ -643,3 +643,123 @@ The headless validations confirm structural correctness (types, lint, build, uni
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Definitive tempo fix — own-scheduler approach (post-ADR-0005, Phase 02)
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - **Terminal commit:** `fix(audio): Phase 02 — own scheduler reference for direct setCps tempo control`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** definitive-fix — second tempo defect fix; supersedes the ADR-0005-driven setcps-in-code-string approach (which also failed because setcps is not in the evalScope)
+
+### Root cause (confirmed by orchestrator diagnosis)
+
+The previous fix (ADR-0005 iteration) replaced `setcpm(bpm/4)` with `setcps(bpm/240)` in `tempoWrap()`, emitting `setcps(0.5)\nstack(...)` as the evaluated code string. This also threw ReferenceError on every evaluate, for a different reason:
+
+`setcps` as a **standalone JS statement** is NOT registered in the evalScope by `defaultPrebake()`. The `setcps` binding only exists inside `repl()` in `@strudel/core/repl.mjs` (line 112), which `initStrudel()` from `web.mjs` **never calls**. Therefore the code string `setcps(0.5)\nstack(...)` always threw, and the fallback stripped the header — making tempo still a no-op.
+
+The confirmed architecture of `@strudel/web@1.0.3`:
+- `initStrudel()` stores the scheduler as a **module-private** `let scheduler` variable in `web.mjs`
+- `Pattern.prototype.play` is patched by `web.mjs` to call that private scheduler
+- There is no exported accessor for the scheduler
+- `evaluate()` from `@strudel/web` calls `_evaluate(code)` then `pattern.play()` (which uses the private scheduler)
+
+### The fix (own-scheduler approach)
+
+Instead of calling `initStrudel()` (which hides the scheduler), we replicate its steps in `initAudio()`:
+1. Call `initAudioOnFirstClick()`, `miniAllStrings()` (same as `initStrudel` does)
+2. Create our own scheduler: `_scheduler = webaudioScheduler()` — we store it ourselves
+3. Patch `Pattern.prototype.play` to use `_scheduler` (same pattern as `web.mjs`, but pointing to our scheduler). Since `Pattern` is a singleton ESM class, this replaces `web.mjs`'s patch
+4. Call `defaultPrebake()` and `registerSynthSounds()` to set up the evalScope
+5. Load dirt-samples via `samples('github:tidalcycles/dirt-samples')`
+6. In `tryLiveTempo()`, call `_scheduler.setCps(_currentBpm / 240)` directly (Cyclist.setCps(), defined in `cyclist.mjs` line 99)
+7. In `hush()`, call `_scheduler.stop()` directly
+8. `tempoWrap()` in `core/codegen` is now an identity function (returns `code.trim()`, bpm ignored) — tempo is a scheduler property, not a code string prefix
+
+### Import consolidation (build fix)
+
+The original implementation imported from `@strudel/core`, `@strudel/webaudio`, and `@strudel/mini` directly. These are NOT in `package.json` (they are transitive dependencies of `@strudel/web`). While pnpm hoisting made them available in dev mode, Rollup rejected them in the build step. Resolution: all imports come from `@strudel/web`, which re-exports everything via `export * from '@strudel/core'` etc. in its `dist/index.mjs`.
+
+### Files touched
+
+- `src/audio/strudel.ts` — rewritten `initAudio()` (own-scheduler setup + Pattern.prototype.play patch), rewritten `runNow()` (no tempoWrap, just bare code), rewritten `tryLiveTempo()` (direct `_scheduler.setCps(bpm/240)`), rewritten `hush()` (direct `_scheduler.stop()`); all imports consolidated to `@strudel/web`
+- `src/core/codegen/strudel.ts` — `tempoWrap()` changed to identity function (`code.trim()`); `bpm` parameter renamed `_bpm` (unused, kept for API stability); doc comment updated
+- `tests/codegen.test.ts` — all four `tempoWrap` test assertions updated to expect `code.trim()` output (no tempo header); invariant test updated to assert `setcps` is NOT present (it's now excluded from code strings, not included)
+- `src/vite-env.d.ts` — consolidated all declarations back into the `@strudel/web` module (added `Cyclist` interface, `webaudioScheduler`, `initAudioOnFirstClick`, `registerSynthSounds`, `miniAllStrings`, `defaultPrebake`, `Pattern`); removed the three sub-package ambient declarations (not needed since everything is imported from `@strudel/web`)
+- `docs/orbifold-v1/handoffs/phase-02-handoff.md` (this file — appended)
+
+### Headless validation results
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier clean; one `no-extraneous-class` lint error was fixed by converting `class Cyclist` to `interface Cyclist` in vite-env.d.ts)
+- `pnpm test` → **119 passed** (92 Phase 01 + 27 session; 0 failures, 0 regressions; codegen test count: 29 — 4 tempoWrap tests updated + 25 unchanged)
+- `pnpm build` → exit 0 (38 modules; app 9.69 kB, strudel 407 kB; all imports resolve correctly from `@strudel/web`)
+
+### Audible re-verification pending Pilot
+
+The headless validations confirm structural correctness. Audio tempo behavior (BPM slider now audibly changes tempo via `scheduler.setCps()` without any code-string injection) cannot be verified headlessly. The Pilot must run `pnpm dev` and repeat smoke-test items 6–7 (BPM change to 90, return to 120) to confirm A-02-05 is resolved definitively.
+
+The invariant check for this fix:
+```
+grep -rn '\.fast\|\.slow' src/audio/ src/core/
+```
+→ 0 executable matches (the only mechanism for tempo is `_scheduler.setCps(bpm/240)`)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | AudioContext starts after user gesture; no error | — | operability | carried — pending Pilot re-test with new initAudio() |
+| A-02-02 | "▶ Groove" plays rhythm pattern; label shows "Ritmo · groove" | — | operability | carried — pending Pilot re-test |
+| A-02-03 | "▶ Progresión" plays harmony; label shows "Armonía · progresión" | — | operability | carried — pending Pilot re-test |
+| A-02-04 | "▶ Sesión" plays both; label shows "Sesión · ritmo + armonía" | — | operability | carried — pending Pilot re-test |
+| A-02-05 | BPM change audible within one cycle; no .fast/.slow | `src/audio/strudel.ts` (grep) | proxy:static-analysis + operability | partial — `_scheduler.setCps(bpm/240)` confirmed in executable code; .fast/.slow absent; audible re-verification pending Pilot |
+| A-02-06 | Live edit takes effect at next cycle boundary (hot-swap) | — | operability | carried — pending Pilot re-test |
+| A-02-07 | "■ Silencio" stops all audio; label shows "silencio" | — | operability | carried — pending Pilot re-test |
+| A-02-08 | Audio does not auto-start on page load | — | operability | carried — pending Pilot re-test |
+| A-02-09 | `rhythmCode()`, `harmonyCode()`, `sessionCode()` produce byte-identical Strudel strings to core codegen | `tests/codegen.test.ts`, `tests/session.test.ts` | unit | covered — 119 tests pass; tempoWrap identity behavior confirmed (no tempo header in code strings) |
+| A-02-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0 at phase end | — | live-system | partial — all four pass headlessly; "phase end" gate requires Pilot audible re-verification |
+
+### Prototype parity note (this fix)
+
+| Prototype | Line | Behavior | Port behavior | Status |
+|---|---|---|---|---|
+| `initStrudel({ prebake: ... })` | 600–603 | Creates scheduler (module-private) | `initAudio()` creates _scheduler (owned), patches `Pattern.prototype.play`, calls `defaultPrebake` + `registerSynthSounds` + `samples` | Behavioral parity; mechanism corrected |
+| `tryLiveTempo()` calling `setcpm`/`setcps` global | 647–651 | Both undefined; always no-op | `_scheduler.setCps(_currentBpm/240)` directly | Definitively works; no globalThis lookup |
+| `hush()` calls global `hush` | 1507, 2107, 2113 | Calls the hush export | `_scheduler.stop()` directly | Equivalent behavior via owned scheduler |
+| `tempoWrap` prefix | 605–608 | `setcpm(bpm/4)` (threw) | `code.trim()` (no prefix) | Tempo moved to scheduler layer |
+
+### Decisions made (if any)
+
+- All imports consolidated to `@strudel/web` (not sub-packages) because sub-packages are transitive only and fail in Rollup build. This is not a governance decision — it is a packaging constraint.
+- `tempoWrap`'s `bpm` parameter renamed to `_bpm` (leading underscore) to satisfy the TypeScript/ESLint no-unused-vars rule while keeping the public signature unchanged for callers.
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- Rollup build failure (`@strudel/core` not resolvable): resolved by consolidating all imports to `@strudel/web`.
+- ESLint `no-extraneous-class` on `class Cyclist` declaration: resolved by using `interface Cyclist` in vite-env.d.ts.
+
+### Environment state after this fix
+
+- `src/audio/strudel.ts` fully rewritten (own-scheduler approach; all imports from `@strudel/web`).
+- `src/core/codegen/strudel.ts`: `tempoWrap` is identity.
+- `tests/codegen.test.ts`: 4 tempoWrap tests updated; 25 others unchanged.
+- `src/vite-env.d.ts`: consolidated ambient declarations for all `@strudel/web` exports.
+- 119 tests pass. `pnpm-lock.yaml` unchanged — no new dependencies.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**

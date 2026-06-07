@@ -18,34 +18,38 @@ import { layerAudible } from '../src/core/rhythm/layers.js';
 import type { RhythmLayer } from '../src/core/rhythm/layers.js';
 
 // ── tempoWrap ─────────────────────────────────────────────────────────────
-// Prototype lines 605–608; corrected per ADR 0005 (setcps, not setcpm).
+// Prototype lines 605–608.
 //
-// ADR 0005: setcpm does NOT exist in @strudel/web@1.0.3. The prototype's
-// setcpm(bpm/4) was a latent no-op bug (threw ReferenceError on every evaluate;
-// fallback stripped the tempo header). The correct function is setcps(bpm/240).
-// These tests assert the corrected output; byte-identical parity with the
-// prototype would reproduce the defect. Approved deviation — see ADR 0005.
+// Definitive tempo fix (Phase 02 own-scheduler approach): tempoWrap is now an
+// identity function that returns code.trim(). Tempo is controlled by the audio
+// layer's Cyclist scheduler via scheduler.setCps(bpm/240) — NOT by prepending a
+// setcps string to the evaluated code. The setcps-as-string approach failed
+// because setcps is NOT in the evalScope registered by @strudel/web@1.0.3's
+// defaultPrebake (it is only bound inside repl(), which initStrudel() never
+// calls). This function exists for API stability; callers that pass bpm compile
+// cleanly. The bpm parameter is ignored.
+//
+// .fast/.slow remain forbidden — they time-stretch patterns and break the
+// chord-geometry timing. See docs/adr/0005-tempo-setcps-not-setcpm.md.
 
 describe('tempoWrap', () => {
-  it('wraps code with setcps(0.500000) at BPM 120', () => {
-    // bpm/240 = 120/240 = 0.5, toFixed(6) = "0.500000"
+  it('returns code.trim() unchanged at BPM 120 (identity — tempo via scheduler.setCps)', () => {
     const code = 'stack(\n  s("bd")\n)';
-    expect(tempoWrap(code, 120)).toBe('setcps(0.500000)\nstack(\n  s("bd")\n)');
+    expect(tempoWrap(code, 120)).toBe('stack(\n  s("bd")\n)');
   });
 
-  it('wraps code with setcps(0.375000) at BPM 90', () => {
-    // bpm/240 = 90/240 = 0.375, toFixed(6) = "0.375000"
+  it('returns code.trim() unchanged at BPM 90 (bpm parameter ignored)', () => {
     const code = 'stack(\n  s("bd")\n)';
-    expect(tempoWrap(code, 90)).toBe('setcps(0.375000)\nstack(\n  s("bd")\n)');
+    expect(tempoWrap(code, 90)).toBe('stack(\n  s("bd")\n)');
   });
 
   it('trims trailing whitespace from code', () => {
-    expect(tempoWrap('s("bd")  ', 120)).toBe('setcps(0.500000)\ns("bd")');
+    expect(tempoWrap('s("bd")  ', 120)).toBe('s("bd")');
   });
 
-  it('uses setcps (ADR 0005) and never uses .fast or .slow', () => {
+  it('never inserts setcps, .fast, or .slow (invariant: no time-stretch in code string)', () => {
     const result = tempoWrap('s("bd")', 120);
-    expect(result).toContain('setcps(');
+    expect(result).not.toContain('setcps(');
     expect(result).not.toContain('.fast');
     expect(result).not.toContain('.slow');
   });
