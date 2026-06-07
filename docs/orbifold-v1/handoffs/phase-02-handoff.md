@@ -763,3 +763,222 @@ grep -rn '\.fast\|\.slow' src/audio/ src/core/
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Step 02.5 — Operability verification and phase closure
+
+**Date:** 2026-06-06
+**Commit(s):**
+  - Defect fix 1 + defect fix 2 (committed before this operability record): `4da046e` — dirt-samples prebake restored; `on:change` → `on:input` BPM fix
+  - ADR-0005 setcps fix: `e80c037` — `setcpm` → `setcps` in `tempoWrap` and `tryLiveTempo`
+  - Definitive tempo fix: `61ad086` — own-scheduler approach; `_scheduler.setCps(bpm/240)` direct call
+  - **Terminal commit (this entry):** `docs(audio): Phase 02 step 02.5 — operability verification and phase-02 completion handoff`
+    - Hash: self-referential — not recorded
+    - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+**Iteration:** 1 of 5 (documentation-only step; no source code changes)
+
+### Completed
+
+- Read all required docs: `CLAUDE.md`, `references/methodology.md`, `references/dev-role.md`, `docs/orbifold-v1/decisions.md`, `docs/orbifold-v1/phases/phase-02.md`, and all prior entries in `docs/orbifold-v1/handoffs/phase-02-handoff.md`.
+- Recorded the Pilot-confirmed manual smoke test results as operability evidence for all 10 acceptance criteria (A-02-01 through A-02-10).
+- Ran all four final gate commands and confirmed exit 0.
+- Documented defects found during smoke testing, the root causes, and the fixes across three committed iterations.
+- Recorded the ADR 0005 tempo invariant amendment and the CLAUDE.md update.
+- Documented the prototype parity deviation on tempo (prototype's tempo was a latent no-op bug; Phase 02 implements working tempo per kickoff §8 / A-02-05).
+- Written phase-completion entry with full prototype parity summary table.
+
+### Operability evidence — Pilot-confirmed smoke test
+
+The Pilot ran `pnpm dev` at `http://localhost:5184/` (after `Cmd+Shift+R` hard reload) at head commit `61ad086` and observed:
+
+| Item | Acceptance ID | Pilot-observed result | Parity note vs prototype |
+|---|---|---|---|
+| 1. Page load — no auto-start | A-02-08 | Page loaded silently. "Init audio" button visible. No AudioContext created. | Prototype (line 600–603): `initStrudel()` called at module load — a user-gesture guard violation. Port defers initAudio to click handler per CLAUDE.md invariant. Behavioral improvement, not a regression. |
+| 2. Click "Init audio" | A-02-01 | Dirt-samples loaded (~2–3 s); no console errors from app (Yoroi wallet extension noise is unrelated). Audio system ready. | Prototype calls `initStrudel({ prebake: () => samples('github:tidalcycles/dirt-samples') })` at line 601. Port matches exact prebake call and awaits sample resolution before setting `audioReady = true`, eliminating the race the prototype had (it could evaluate before samples resolved). |
+| 3. Click "▶ Groove" | A-02-02 | Audible 4-on-the-floor kick drum (bd at steps 0/4/8/12). "Now playing" label showed "Ritmo · groove". | Prototype lines 1493–1498: `rhythmPlay.onclick` calls `runNow(rhythmToStrudel(...))` and `setNowPlaying('Ritmo · groove', 'rhythm')`. Port: `playGroove()` derives `rhythmCode(state)` (calls `rhythmToStrudel` via codegen), calls `audio.runNow(code)`, calls `setNowPlaying`. Label matches byte-for-byte. Initial smoke test failed with "sound bd not found" until dirt-samples prebake was restored (commit 4da046e). |
+| 4. Click "▶ Progresión" | A-02-03 | Audible C major chord (sawtooth synth). "Now playing" showed "Armonía · progresión". | Prototype lines 1499–1504: `progPlay.onclick` calls `runNow(melodyLine(...).trim())` and `setNowPlaying('Armonía · progresión', 'harmony')`. Port: `playProgression()` derives `harmonyCode(state).trim()`, calls `audio.runNow`, calls `setNowPlaying`. Label matches byte-for-byte. Audible on first load thanks to the C-major default seeded in `onMount`. |
+| 5. Click "▶ Sesión" | A-02-04 | Rhythm + harmony playing together. "Now playing" showed "Sesión · ritmo + armonía". | Prototype lines 1487–1492: `sessionPlay.onclick` calls `runNow(buildSession(...))` and `setNowPlaying`. Port: `playSession()` derives `sessionCode(state)`, calls `audio.runNow`, calls `setNowPlaying`. Label matches. Initial smoke test played harmony only (session sounded like harmony because groove samples weren't loaded); resolved by dirt-samples fix (commit 4da046e). |
+| 6. Change BPM to 60 | A-02-05 | Audible tempo slowed noticeably. | Prototype lines 653–668: `setBpm` clamps, calls `tryLiveTempo()` and debounces re-eval. Port: `setBpm()` → `audio.setTempo(bpm)` → `_scheduler.setCps(bpm/240)` direct call (own-scheduler approach, commit 61ad086). Required two additional iterations: (1) `on:change` → `on:input` fix (commit 4da046e); (2) own-scheduler fix replacing broken globalThis lookup (commit 61ad086). Confirmed working at `Cmd+Shift+R` reload. |
+| 7. Change BPM to 200 | A-02-05 | Audible tempo accelerated. | Same as item 6. `_scheduler.setCps(200/240) = 0.833333` confirmed by static analysis. |
+| 8. Hot-swap (live edit at next cycle) | A-02-06 | BPM change while playing took effect within one cycle (the debounced re-evaluate in `setTempo` triggers `runNow(currentCode)`). State changes mid-play re-queue to next cycle via `queueForNextCycle` (250 ms heuristic). | Prototype lines 1307–1315: `requeueLive()` reads `nowPlaying.source` and calls `runNow`/`queueForNextCycle`. Port: `requeueLive()` is called by the store when state changes; the `queueForNextCycle` 250 ms heuristic is the only option in `@strudel/web@1.0.3` (confirmed by inventory OD-3). |
+| 9. Click "■ Silencio" | A-02-07 | All audio stopped. "Now playing" showed "silencio". | Prototype line 1507: `hushBtn.onclick` calls `hush()` global and `setNowPlaying(null, null)`. Port: `hushAll()` calls `audio.hush()` (which calls `_scheduler.stop()`) then `setNowPlaying(null, null)`. "silencio" is the fallback label: `$sessionStore.nowPlaying.label ?? 'silencio'` (App.svelte). |
+| 10. Close/reopen tab — no auto-start | A-02-08 | Audio did not auto-start on reopen. No AudioContext in page console before "Init audio" click. | The lazy `getAudio()` dynamic import in `session.ts` means `@strudel/web` is not loaded at all until a transport action is called. `initAudio()` itself calls `initStrudel()` (or in the own-scheduler approach, calls `initAudioOnFirstClick()`) only when explicitly invoked from the gesture handler. Confirmed: no audio on fresh page load. |
+
+**Defects found during smoke testing and fixes applied:**
+
+**Defect (a) — Drum samples not loaded in prebake (commit 4da046e)**
+Root cause: `initAudio()` passed `prebake: () => Promise.resolve()` (no-op) instead of the prototype's `samples('github:tidalcycles/dirt-samples')`. `audioReady` was set before samples resolved, so first `evaluate()` ran without samples.
+Fix: restored `samples('github:tidalcycles/dirt-samples')` as prebake; `initAudio()` awaits the same promise before setting `audioReady = true`.
+
+**Defect (b) — BPM input used `on:change` instead of `on:input` (commit 4da046e)**
+Root cause: The prototype (line 669) uses `addEventListener('input', ...)`. The port used Svelte `on:change`, which fires only on blur/Enter — making the BPM spinner appear inert during play.
+Fix: changed `on:change={handleBpmInput}` to `on:input={handleBpmInput}` in `App.svelte`.
+
+**Defect (c) — `setcpm`/`setcps` not in evaluate scope; own-scheduler required (commits e80c037 + 61ad086)**
+Root cause (in two stages): (1) `setcpm` does not exist in `@strudel/web@1.0.3`; the code-string header `setcpm(bpm/4)` always threw (prototype latent no-op bug). ADR 0005 replaced it with `setcps(bpm/240)` in the code string (commit e80c037). (2) `setcps` is also not registered in `evalScope` by `defaultPrebake()` — it only exists inside `repl()` from `@strudel/core/repl.mjs`, which `initStrudel()` from `web.mjs` never calls. The code string still threw.
+Definitive fix (commit 61ad086): own-scheduler approach — `initAudio()` creates `_scheduler = webaudioScheduler()` directly, patches `Pattern.prototype.play` to use it, calls `defaultPrebake()` + `registerSynthSounds()`. `tryLiveTempo()` calls `_scheduler.setCps(_currentBpm/240)` directly (Cyclist.setCps). `tempoWrap()` in `core/codegen` becomes an identity function (`code.trim()`).
+
+**ADR 0005 and CLAUDE.md invariant amendment:**
+The tempo invariant in `CLAUDE.md §Project-specific guardrails` was amended from "use `setcpm` only" to "use `setcps(bpm/240)` or direct `_scheduler.setCps(bpm/240)` — never `.fast`/`.slow`". ADR 0005 (`docs/adr/0005-tempo-setcps-not-setcpm.md`) records this decision. The original `setcpm`-only invariant was based on prototype code that contained a latent bug; Phase 02 implements working tempo per kickoff §8 / A-02-05.
+
+**A-02-05 final static-analysis check (post-ADR-0005 invariant):**
+```
+grep -rn '\.fast\|\.slow' src/audio/ src/core/
+```
+Result: 4 comment-only matches, 0 executable. `setcps` appears correctly in executable code in `src/audio/strudel.ts` (`tryLiveTempo`: `_scheduler.setCps(_currentBpm / 240)`). The pre-ADR-0005 A-02-05 grep (`grep -rn 'setcps' src/audio/` → zero matches) is superseded; the correct post-ADR invariant checks for `.fast`/`.slow` absence, not `setcps` absence.
+
+### Files touched
+
+- `docs/orbifold-v1/handoffs/phase-02-handoff.md` (this file — appended, documentation only)
+
+### Final gate command results
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier clean: "All matched files use Prettier code style!")
+- `pnpm test` → 119 passed (5 test files: voice-leading 8, euclid 24, codegen 29, tonnetz 31, session 27; 0 failures; 0 regressions from Phase 01)
+- `pnpm build` → exit 0 (38 modules; `dist/assets/index-DFMebMcu.js` 9.69 kB / 4.36 kB gzip; `dist/assets/strudel-Cg8LH2hy.js` 407.17 kB / 132.45 kB gzip)
+
+### Validation evidence (per Acceptance ID)
+
+- A-02-01: Pilot observed AudioContext start without error after "Init audio" click. Dirt-samples loaded successfully (~2–3 s). Verified at head commit `61ad086`.
+- A-02-02: Pilot observed audible 4-on-the-floor BD kick. "Now playing" label showed "Ritmo · groove". Verified at `61ad086`.
+- A-02-03: Pilot observed audible C major chord. "Now playing" showed "Armonía · progresión". Verified at `61ad086`.
+- A-02-04: Pilot observed rhythm + harmony together. "Now playing" showed "Sesión · ritmo + armonía". Verified at `61ad086`.
+- A-02-05: Pilot observed audible tempo change (BPM 60 = slow, BPM 200 = fast). Static analysis: `grep -rn '\.fast\|\.slow' src/audio/ src/core/` → 4 comment-only matches, 0 executable. `_scheduler.setCps(bpm/240)` confirmed as the sole tempo mechanism.
+- A-02-06: Pilot observed BPM change while playing took effect within one cycle (debounced re-evaluate); `queueForNextCycle` 250 ms heuristic confirmed operable.
+- A-02-07: Pilot observed all audio stopped on "■ Silencio". "Now playing" showed "silencio".
+- A-02-08: Pilot observed no audio auto-start on page load and on tab reopen.
+- A-02-09: 119 Vitest tests pass including all 27 session store derivation parity tests (byte-identical Strudel strings confirmed).
+- A-02-10: `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0. Test count 119 (≥ 92 Phase 01 + session tests per A-02-10 requirement).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / evidence | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | AudioContext starts after user gesture; no error | Pilot smoke test item 2 | operability | covered |
+| A-02-02 | "▶ Groove" plays rhythm; "Now playing" = "Ritmo · groove" | Pilot smoke test item 3 | operability | covered |
+| A-02-03 | "▶ Progresión" plays harmony; "Now playing" = "Armonía · progresión" | Pilot smoke test item 4 | operability | covered |
+| A-02-04 | "▶ Sesión" plays both; "Now playing" = "Sesión · ritmo + armonía" | Pilot smoke test item 5 | operability | covered |
+| A-02-05 | BPM change audible within one cycle; no `.fast`/`.slow` | Pilot smoke test items 6–7 + grep | operability + proxy:static-analysis | covered |
+| A-02-06 | Live edit at next cycle boundary; hot-swap via `queueForNextCycle` | Pilot smoke test item 8 | operability | covered |
+| A-02-07 | "■ Silencio" stops all audio; "Now playing" = "silencio" | Pilot smoke test item 9 | operability | covered |
+| A-02-08 | No audio auto-start on page load | Pilot smoke test items 1 and 10 | operability | covered |
+| A-02-09 | `rhythmCode()`, `harmonyCode()`, `sessionCode()` byte-identical to core codegen | `tests/session.test.ts` (27 tests) | unit | covered |
+| A-02-10 | tsc/lint/test/build all exit 0 at phase end; ≥ 92 Phase 01 tests intact | Final gate commands above | live-system | covered |
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0 (ESLint + Prettier clean)
+- `pnpm test` → 119 passed (5 files, 0 failures)
+- `pnpm build` → exit 0 (38 modules, 407 kB strudel chunk)
+- `grep -rn '\.fast\|\.slow' src/audio/ src/core/` → 4 comment-only matches, 0 executable
+
+### Decisions made (if any)
+
+- No new decisions by the Dev in this step. All decisions were made in prior iterations (OD-1 through OD-4 from inventory; ADR 0005 by the Pilot).
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None. All defects were resolved in prior committed iterations.
+
+### Environment state after this step
+
+- All source files at head commit `61ad086` (definitive tempo fix). No source changes in this step.
+- 119 tests pass. `pnpm-lock.yaml` unchanged. No new dependencies introduced in Phase 02.
+
+### Next-step context (only if non-obvious)
+
+- Phase 02 is complete. Phase 03 (PIXI canvas and Tonnetz render) is the next scope.
+- `src/app/App.svelte` transport UI is marked TEMPORARY throughout — Phase 03/04 will replace it with the full Svelte + PIXI interface. The transport methods (`playGroove`, `playProgression`, `playSession`, `hushAll`, `setBpm`) remain stable across phases.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+## Phase 02 — Completion
+
+**Date:** 2026-06-06
+**Steps completed:** 02.1 (inventory), 02.2 (session store + tests), 02.3 (audio layer), 02.4 (transport wiring), 02.5-fixes (defect fixes: dirt-samples, on:input, setcps), ADR-0005 fix (setcpm → setcps in code string), definitive-tempo-fix (own-scheduler), 02.5 (operability record)
+**All Acceptance IDs:** A-02-01 through A-02-10 — all covered
+
+### Phase Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / evidence | Test type | Status |
+|---|---|---|---|---|
+| A-02-01 | AudioContext starts after user gesture; no error | Pilot smoke test (step 02.5 item 2) | operability | covered |
+| A-02-02 | "▶ Groove" plays rhythm; "Now playing" = "Ritmo · groove" | Pilot smoke test (step 02.5 item 3) | operability | covered |
+| A-02-03 | "▶ Progresión" plays harmony; "Now playing" = "Armonía · progresión" | Pilot smoke test (step 02.5 item 4) | operability | covered |
+| A-02-04 | "▶ Sesión" plays both; "Now playing" = "Sesión · ritmo + armonía" | Pilot smoke test (step 02.5 item 5) | operability | covered |
+| A-02-05 | BPM change audible within one cycle; no `.fast`/`.slow` | Pilot smoke test items 6–7 + `grep -rn '\.fast\|\.slow' src/audio/ src/core/` → 0 executable | operability + proxy:static-analysis | covered |
+| A-02-06 | Live edit at next cycle boundary; hot-swap | Pilot smoke test (step 02.5 item 8) | operability | covered |
+| A-02-07 | "■ Silencio" stops all audio; "Now playing" = "silencio" | Pilot smoke test (step 02.5 item 9) | operability | covered |
+| A-02-08 | No audio auto-start on page load | Pilot smoke test (step 02.5 items 1 and 10) | operability | covered |
+| A-02-09 | `rhythmCode()`, `harmonyCode()`, `sessionCode()` byte-identical to core codegen | `tests/session.test.ts` — 27 tests (step 02.2) | unit | covered |
+| A-02-10 | tsc/lint/test/build all exit 0; ≥ 92 Phase 01 tests intact | Final gate commands (step 02.5): 119 tests, all exit 0 | live-system | covered |
+
+### Prototype parity summary
+
+All audio and state functions from the prototype are ported. Deviations from byte-identical parity are documented and Pilot-approved.
+
+| Prototype function | Prototype lines | Port target | Deviation |
+|---|---|---|---|
+| `initStrudel({prebake: () => samples(...)})` call | 600–603 | `initAudio()` in `src/audio/strudel.ts` | Deferred to gesture handler (invariant compliance); `_scheduler` owned instead of hidden in `web.mjs`; `audioReady` set only after samples resolve (fixes prototype race) |
+| `runNow(code, opts)` | 609–631 | `runNow()` in `src/audio/strudel.ts` | DOM updates stripped; bare `evaluate(code.trim())` (no tempoWrap header — tempo is scheduler property) |
+| `queueForNextCycle(code, opts)` | 632–643 | `queueForNextCycle()` in `src/audio/strudel.ts` | 250 ms heuristic preserved; stale-queue guard preserved |
+| `tryLiveTempo()` | 647–651 | `tryLiveTempo()` (private) in `src/audio/strudel.ts` | `(globalThis as any).setcpm` → `_scheduler.setCps(_currentBpm/240)` direct call (ADR 0005; own-scheduler approach) |
+| `setBpm(bpm, opts)` | 653–668 | `setTempo(bpm)` in `src/audio/strudel.ts` | DOM/playhead manipulation stripped; clamp + nudge + debounce preserved faithfully |
+| `hush()` usage | 1507, 2107, 2113 | `hush()` in `src/audio/strudel.ts` | `_scheduler.stop()` instead of `strudelHush()` (own-scheduler approach); behavior equivalent |
+| `tempoWrap(code)` | 605–608 | `tempoWrap()` in `src/core/codegen/strudel.ts` | Identity function (`code.trim()`); tempo moved to scheduler layer (ADR 0005; prototype version was a latent no-op bug) |
+| `isPlaying()` context | 898 | `isPlaying()` in `src/audio/strudel.ts` | `audioReady && _currentCode !== ''`; equivalent predicate |
+| `melodyLine()` | 765–773 | `harmonyCode(state)` in `src/state/session.ts` | Pure derivation; parity tests green (27 session tests) |
+| `rhythmToStrudel()` | 833–836 | `rhythmCode(state)` in `src/state/session.ts` | Pure derivation; parity tests green |
+| `buildSession()` | 1470–1476 | `sessionCode(state)` in `src/state/session.ts` | Pure derivation; parity tests green |
+| `setNowPlaying(label, source)` | 1477–1486 | `setNowPlaying()` in `src/state/session.ts` | DOM manipulation stripped; Svelte store field updated; parity tests green |
+| `requeueLive()` | 1307–1315 | `requeueLive()` in `src/state/session.ts` | All four source branches; audio call gated behind lazy `getAudio()` Promise; parity tests green |
+| `rhythmPlay.onclick` (playGroove) | 1493–1498 | `playGroove()` in `src/state/session.ts` | Behavioral fidelity confirmed by Pilot smoke test |
+| `progPlay.onclick` (playProgression) | 1499–1504 | `playProgression()` in `src/state/session.ts` | Behavioral fidelity confirmed by Pilot smoke test |
+| `sessionPlay.onclick` (playSession) | 1487–1492 | `playSession()` in `src/state/session.ts` | Behavioral fidelity confirmed by Pilot smoke test |
+| `hushBtn.onclick` (hushAll) | 1507 | `hushAll()` in `src/state/session.ts` | Behavioral fidelity confirmed by Pilot smoke test |
+| BPM `<input>` `addEventListener('input', ...)` | 669 | `on:input={handleBpmInput}` in `src/app/App.svelte` | `on:change` → `on:input` corrected in defect fix (commit 4da046e) |
+
+### Known deviations from prototype parity
+
+Three deliberate deviations, all Pilot-approved:
+
+1. **Dirt-samples await before `audioReady = true`** — the prototype had a race condition: `initStrudel()` was called (starting the prebake) but `audioReady` was set before the async samples resolved, so the first `evaluate()` could run before samples were available. The port awaits the samples promise before setting `audioReady = true`, eliminating the race. This is a correctness improvement, not a regression.
+
+2. **Tempo via `_scheduler.setCps()` instead of `setcpm()`/`setcps()` in code string** — the prototype's `tempoWrap()` emitted `setcpm(bpm/4)` as a code string prefix. `setcpm` does not exist in `@strudel/web@1.0.3`; this was a confirmed latent no-op bug (tempo never worked in the prototype). Phase 02 implements working tempo via direct `_scheduler.setCps(bpm/240)` (own-scheduler approach). `tempoWrap()` is now an identity function. ADR 0005 documents this decision; `CLAUDE.md §Project-specific guardrails` was amended accordingly.
+
+3. **`initStrudel()` call deferred to gesture handler** — the prototype calls `initStrudel()` at module load, violating the user-gesture guard (Web Audio API requires a gesture before creating an AudioContext on modern browsers). The port defers initiation to the explicit "Init audio" button click. This is an invariant compliance improvement mandated by `CLAUDE.md`.
+
+### Pending Register proposals for Pilot at phase approval
+
+None. ADR 0005 already captures the tempo invariant amendment. `CLAUDE.md` was updated. No new Decisions Register entries are proposed.
+
+### Phase 02 final state
+
+- `src/audio/strudel.ts` — fully implemented (own-scheduler approach)
+- `src/core/codegen/strudel.ts` — `tempoWrap` is identity function
+- `src/state/session.ts` — full SessionState types, store, derivation helpers, transport methods, lazy audio import
+- `src/app/App.svelte` — temporary transport UI (marked TEMPORARY; replaced in Phase 04)
+- `src/vite-env.d.ts` — consolidated `@strudel/web` ambient declarations
+- `tests/session.test.ts` — 27 parity tests
+- `tests/codegen.test.ts` — 4 `tempoWrap` assertions updated to reflect identity behavior
+- `docs/adr/0005-tempo-setcps-not-setcpm.md` — ADR recorded
+- 119 tests pass. `pnpm-lock.yaml` unchanged. No new dependencies. AGPL-3.0 header present in all source files.
+
+**Phase 02 is complete. Pilot approval required to close the phase and begin Phase 03 scoping.**
