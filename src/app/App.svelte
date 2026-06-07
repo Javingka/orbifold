@@ -46,6 +46,26 @@
   let overlayX = 0;
   let overlayY = 0;
 
+  // Round-2 fix (Defect C): debounce overlay hide so the cursor has 400 ms to
+  // travel from the orbit ring to the overlay before it disappears.
+  // Prototype: scheduleHideLayerCtl / 260 ms delay (line 1341).
+  let hideOverlayTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleHideOverlay(): void {
+    if (hideOverlayTimer !== null) clearTimeout(hideOverlayTimer);
+    hideOverlayTimer = setTimeout(() => {
+      hoveredLayerIndex = -1;
+      hideOverlayTimer = null;
+    }, 400);
+  }
+
+  function cancelHideOverlay(): void {
+    if (hideOverlayTimer !== null) {
+      clearTimeout(hideOverlayTimer);
+      hideOverlayTimer = null;
+    }
+  }
+
   // Defect 4 fix: position overlay at the layer's label anchor (canvas geometry),
   // not at the pointer position. The position is recomputed only when hoveredLayerIndex
   // changes (Svelte $: reactive statement), so the overlay is stationary while hovered.
@@ -199,15 +219,26 @@
         onStagePointerMove(e, state);
         // Update hovered layer index; overlay position is computed reactively in
         // the $: block above keyed on hoveredLayerIndex (Defect 4 fix).
-        hoveredLayerIndex = getHoveredLayerIndex();
+        const idx = getHoveredLayerIndex();
+        if (idx >= 0) {
+          // A layer is hovered: cancel any pending hide and show overlay.
+          cancelHideOverlay();
+          hoveredLayerIndex = idx;
+        } else if (hoveredLayerIndex >= 0) {
+          // No layer under cursor, but overlay was showing: start debounce timer.
+          // Round-2 fix (Defect C): 400 ms grace period to let cursor reach overlay.
+          scheduleHideOverlay();
+        }
       } else {
         hoveredLayerIndex = -1;
       }
     });
 
-    // Hide overlay when pointer leaves the canvas.
+    // Hide overlay when pointer leaves the canvas entirely (debounced).
+    // Round-2 fix (Defect C): use scheduleHideOverlay so that if the overlay
+    // itself is near the canvas edge the cursor can still reach it in time.
     canvas.addEventListener('pointerleave', () => {
-      hoveredLayerIndex = -1;
+      scheduleHideOverlay();
     });
   });
 
@@ -303,12 +334,13 @@
   <div
     class="layer-ctl"
     style="left: {overlayX}px; top: {overlayY}px;"
-    on:pointerenter={() => {
-      /* keep overlay visible while cursor is on it */
-    }}
+    on:pointerenter={cancelHideOverlay}
     on:pointerleave={() => {
+      // Cursor left the overlay; hide immediately.
       hoveredLayerIndex = -1;
     }}
+    role="toolbar"
+    aria-label="Layer controls"
   >
     <button on:click={handleLayerSolo}>Solo</button>
     <button on:click={handleLayerMute}>Mute</button>

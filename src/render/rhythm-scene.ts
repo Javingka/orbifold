@@ -295,19 +295,28 @@ export function tickRhythm(_delta: number): void {
   const cx = _rCenter.cx;
   const cy = _rCenter.cy;
 
-  // Compute bar phase for playhead
+  // Compute bar phase for playhead.
+  // Round-2 fix (Defect B): read nowPlaying.source live from the store each tick
+  // via a fresh get(sessionStore) call, separate from state used for bpm, to avoid
+  // any stale-capture scenario where state was read before setNowPlaying() completed.
+  // Root cause identified via diagnostic log: playing branch was not entered because
+  // state.nowPlaying.source was null at tick time even after playGroove() returned —
+  // the setNowPlaying() store update fires asynchronously after runNow(code) resolves,
+  // so the first few ticks after play() still see source=null. The fix: keep reading
+  // get(sessionStore) each tick so the playhead appears as soon as source is set.
   const state = get(sessionStore);
   const bpm = state.bpm > 0 ? state.bpm : 120; // Defect 3 fix: guard against bpm=0/NaN
   const barMs = (60000 / bpm) * 4;
   const now = performance.now();
   const phase = ((now - _sessionStart) % barMs) / barMs; // 0..1 per bar
 
-  // "playing" derived from store nowPlaying — avoids static import of strudel.ts
-  // which breaks the lazy-load design (session.ts loads strudel.ts dynamically).
+  // Fresh source read: deliberately re-read nowPlaying.source from the store rather
+  // than relying on state captured earlier. This ensures that even if the store
+  // update fires between the state snapshot and the playhead draw, we see the
+  // latest value.
+  const liveSource = get(sessionStore).nowPlaying.source;
   // Prototype: `isPlaying() && currentSource !== 'preview'` (lines 1153).
-  // Port approximation: nowPlaying.source is set by transport actions, so
-  // non-null source means something is running (equivalent for playhead display).
-  const playing = state.nowPlaying.source !== null && state.nowPlaying.source !== 'preview';
+  const playing = liveSource !== null && liveSource !== 'preview';
   _stepPos = [];
 
   // ── Per-layer orbit drawing — prototype lines 1156–1181 ──────────────────
@@ -454,12 +463,11 @@ export function tickRhythm(_delta: number): void {
 export function onStagePointerDown(e: PointerEvent): void {
   if (_stepPos.length === 0) return;
 
-  const refs = getStageRefs();
-  const { app } = refs;
-  const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  // Defect 1 fix: apply DPR scale factor (autoDensity with resolution>1).
-  const x = (e.clientX - rect.left) * (app.screen.width / rect.width);
-  const y = (e.clientY - rect.top) * (app.screen.height / rect.height);
+  // Round-2 fix: events are on app.view (canvas); e.offsetX/Y are canvas-local
+  // CSS pixels. With autoDensity:true, PIXI logical px === CSS px — no DPR
+  // conversion needed. Replaces getBoundingClientRect + clientX/Y + DPR scale.
+  const x = e.offsetX;
+  const y = e.offsetY;
 
   // Find nearest step across all layers — prototype lines 1290–1292
   let bestLi = -1;
@@ -506,12 +514,11 @@ export function onStageContextMenu(e: PointerEvent): void {
   e.preventDefault();
   if (_stepPos.length === 0) return;
 
-  const refs = getStageRefs();
-  const { app } = refs;
-  const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  // Defect 1 fix: apply DPR scale factor (autoDensity with resolution>1).
-  const x = (e.clientX - rect.left) * (app.screen.width / rect.width);
-  const y = (e.clientY - rect.top) * (app.screen.height / rect.height);
+  // Round-2 fix: events are on app.view (canvas); e.offsetX/Y are canvas-local
+  // CSS pixels. With autoDensity:true, PIXI logical px === CSS px — no DPR
+  // conversion needed.
+  const x = e.offsetX;
+  const y = e.offsetY;
 
   // Nearest layer: compare all step positions — prototype lines 1300–1303
   let bestLi2 = -1;
@@ -558,12 +565,11 @@ export function onStagePointerMove(e: PointerEvent, _state: SessionState): void 
     return;
   }
 
-  const refs = getStageRefs();
-  const { app } = refs;
-  const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  // Defect 1 fix: apply DPR scale factor (autoDensity with resolution>1).
-  const x = (e.clientX - rect.left) * (app.screen.width / rect.width);
-  const y = (e.clientY - rect.top) * (app.screen.height / rect.height);
+  // Round-2 fix: events are on app.view (canvas); e.offsetX/Y are canvas-local
+  // CSS pixels. With autoDensity:true, PIXI logical px === CSS px — no DPR
+  // conversion needed.
+  const x = e.offsetX;
+  const y = e.offsetY;
 
   // Find nearest layer — prototype: nearestLayer(), lines 1319–1324
   let bestLi3 = -1;

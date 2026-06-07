@@ -443,14 +443,12 @@ export function updateTonnetzDynamic(state: SessionState): void {
  * @param e - Native PointerEvent from the canvas DOM element.
  */
 export function onStagePointerDown(e: PointerEvent): void {
-  const refs = getStageRefs();
-  const { app } = refs;
-  const rect = (app.view as HTMLCanvasElement).getBoundingClientRect();
-  // Defect 1 fix: apply DPR scale factor so hit-test uses canvas-local coordinates
-  // even when autoDensity:true with resolution > 1 causes the canvas to have a
-  // CSS size different from its logical pixel size.
-  const localX = (e.clientX - rect.left) * (app.screen.width / rect.width);
-  const localY = (e.clientY - rect.top) * (app.screen.height / rect.height);
+  // Round-2 fix: events are on app.view (canvas); e.offsetX/Y are canvas-local
+  // CSS pixels. With autoDensity:true, PIXI logical px === CSS px — no DPR
+  // conversion needed. Replaces getBoundingClientRect + clientX/Y + DPR scale.
+  // Prototype: app.view.addEventListener('pointerdown', onStagePointer) line 2157.
+  const localX = e.offsetX;
+  const localY = e.offsetY;
 
   for (const tri of _renderTris) {
     if (pointInTri(localX, localY, tri)) {

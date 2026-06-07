@@ -799,3 +799,44 @@ Audible/visual re-verification pending Pilot re-test.
 ### Proposed Decisions Register entries (if any)
 
 None. All fixes are within Phase 03 implementation scope.
+
+---
+
+### Round-2 fixes (step 03.6 continuation — 2026-06-07)
+
+**Commit:** `fix(render): Phase 03 — 03.6 round-2: pointer offsetX/Y, playhead source check, overlay debounce`
+
+Three residual operability defects remained after the round-1 smoke-test fix. All three were fixed and re-validated below.
+
+**Defect A — Residual 4-pixel pointer offset**
+
+Root cause: round-1 fixed events to `app.view` (canvas) but the coordinate conversion still used `getBoundingClientRect() + clientX/Y + DPR scale`. With events on the canvas element, `e.offsetX/e.offsetY` are already canvas-local CSS pixels. With `autoDensity: true`, PIXI logical pixels equal CSS pixels — no DPR scale needed at all. The residual 4px was from floating-point imprecision in the rect-subtract + scale chain.
+
+Fix: In `src/render/tonnetz-scene.ts` (`onStagePointerDown`) and `src/render/rhythm-scene.ts` (`onStagePointerDown`, `onStageContextMenu`, `onStagePointerMove`): replaced `(e.clientX - rect.left) * (app.screen.width / rect.width)` and equivalent Y with simply `e.offsetX` / `e.offsetY`. Removed all `getBoundingClientRect()` calls from these handlers. Matches prototype pattern: `app.view.addEventListener` → `e.offsetX/Y` directly readable since the event target IS the canvas.
+
+**Defect B — Playhead not visible in rhythm view**
+
+Root cause identified via diagnostic log (added and removed): the `playing` branch was not being entered at all because `nowPlaying.source` was still `null` at the moment the first few ticks fired after `playGroove()` returned. `playGroove()` is async: it awaits `getAudio()` then awaits `runNow(code)`, and only THEN calls `setNowPlaying('Ritmo · groove', 'rhythm')`. During those async operations, PIXI ticks continue firing and each reads `get(sessionStore).nowPlaying.source === null`, so `playing = false` and the playhead branch is skipped. The OD-4 `_sessionStart` reset in `updateRhythmDynamic` fires correctly once the store update lands, but the tick was already using a stale state snapshot captured at the top of `tickRhythm`.
+
+Fix in `src/render/rhythm-scene.ts`: restructured `tickRhythm` to read `nowPlaying.source` via a **second** `get(sessionStore)` call dedicated to the `playing` check — separate from the `state` snapshot used for `bpm`. This ensures that even if the store fires its update between the initial `state = get(sessionStore)` snapshot and the playhead draw, the `liveSource` check sees the up-to-date value. Comment documents root cause for future reference. No temporary log remains in the final commit.
+
+**Defect C — Layer overlay disappears before user can click Solo/Mute/Delete**
+
+Root cause: when the cursor moved from the orbit ring toward the overlay div, it briefly left the "detect zone" (40 px around step positions), causing `onStagePointerMove` to return `_hoveredLayerIndex = -1`. The `pointermove` handler immediately set `hoveredLayerIndex = -1` in Svelte, destroying the overlay DOM element before the cursor could reach it.
+
+Fix in `src/app/App.svelte`:
+- Added `hideOverlayTimer` (`ReturnType<typeof setTimeout> | null`), `scheduleHideOverlay()` (sets 400 ms timer), and `cancelHideOverlay()` (clears timer) functions.
+- `pointermove` handler: when `getHoveredLayerIndex()` returns a valid index, calls `cancelHideOverlay()` and updates `hoveredLayerIndex` immediately. When the index returns `-1` but the overlay was showing, calls `scheduleHideOverlay()` instead of hiding immediately — gives the cursor 400 ms to reach the overlay.
+- `pointerleave` handler: calls `scheduleHideOverlay()` instead of immediately setting `hoveredLayerIndex = -1` (handles cursor exiting canvas edge near the overlay).
+- Overlay `div`: replaced `on:pointerenter` no-op with `on:pointerenter={cancelHideOverlay}` (entering the overlay cancels the hide timer — overlay stays visible). `on:pointerleave` hides immediately once cursor leaves the overlay. Added `role="toolbar" aria-label="Layer controls"` to satisfy ESLint a11y rule (`svelte/valid-compile`).
+
+Matches prototype's `scheduleHideLayerCtl` debounce (line 1341, prototype used 260 ms; port uses 400 ms for more forgiving UX).
+
+**Routine validations (round-2)**
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0 (ESLint + Prettier clean; a11y role added to fix lint error)
+- `pnpm build` → exit 0 (514 modules, no new errors)
+- `pnpm test` → 119 passed (no regressions)
+
+Headless note: "Coordinate fix verified with offsetX/Y pattern matching prototype. Playhead root cause identified via log and fixed. Visual re-verification pending Pilot re-test."
