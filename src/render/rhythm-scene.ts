@@ -518,7 +518,10 @@ export function onStagePointerDown(e: PointerEvent): void {
         // audio bug exists there; the dot-toggle codepath in the prototype treats
         // euclidean and step-explicit layers identically. The port adds the explicit
         // euclid-clear here to make the port's behavior well-defined.
-        return { ...layer, steps, euclid: undefined };
+        // Drop euclid key entirely so codegen uses step-explicit mode.
+        const layerRest = { ...layer };
+        delete layerRest.euclid;
+        return { ...layerRest, steps };
       });
       return { ...state, rhythm: { ...state.rhythm, layers } };
     });

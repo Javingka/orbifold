@@ -50,10 +50,16 @@ import { chordLabel } from '../core/theory/chords.js';
 
 type AudioModule = typeof import('../audio/strudel.js');
 let _audioPromise: Promise<AudioModule> | null = null;
+/** Cached after first load so requeueLive can check isPlaying without awaiting import. */
+let _audioModule: AudioModule | null = null;
 
 function getAudio(): Promise<AudioModule> {
+  if (_audioModule) return Promise.resolve(_audioModule);
   if (!_audioPromise) {
-    _audioPromise = import('../audio/strudel.js');
+    _audioPromise = import('../audio/strudel.js').then((m) => {
+      _audioModule = m;
+      return m;
+    });
   }
   return _audioPromise;
 }
@@ -292,10 +298,13 @@ export async function playGroove(): Promise<void> {
   const state = get(sessionStore);
   const code = rhythmCode(state);
   if (!code) return;
+  // Set source before runNow so concurrent requeueLive calls see source='rhythm'.
+  // Prototype: setNowPlaying is synchronous alongside runNow in transport handlers.
+  setNowPlaying('Ritmo · groove', 'rhythm');
   const a = await getAudio();
   await a.initAudio();
+  a.setTempo(state.bpm);
   await a.runNow(code);
-  setNowPlaying('Ritmo · groove', 'rhythm');
 }
 
 /**
@@ -369,6 +378,44 @@ export async function hushAll(): Promise<void> {
  *   - 'harmony' → melodyLine().trim()
  *   - 'chord'   → chordToStrudel(last chord in progression)
  */
+/** Derive the Strudel code string for the current nowPlaying.source. */
+function deriveLiveCode(state: SessionState): string | null {
+  const { source } = state.nowPlaying;
+  if (source === 'rhythm') {
+    const code = rhythmToStrudel(state.rhythm.layers);
+    return code || null;
+  }
+  if (source === 'session') {
+    const code = sessionCode(state);
+    return code || null;
+  }
+  if (source === 'harmony') {
+    const code = harmonyCode(state).trim();
+    return code || null;
+  }
+  if (source === 'chord') {
+    const ch = state.harmony.progression[state.harmony.progression.length - 1];
+    if (!ch) return null;
+    return chordToStrudel(ch.rootPc, ch.qual, ch.gain, state.chordMode, state.harmony.octave);
+  }
+  return null;
+}
+
+function queueLiveCodeIfPlaying(syncCode: string | null): void {
+  const queue = (a: AudioModule) => {
+    if (!a.isPlaying()) return;
+    // Re-read store at queue time so step toggles are never stale (prototype: synchronous).
+    const freshCode = deriveLiveCode(get(sessionStore)) ?? syncCode;
+    if (!freshCode) return;
+    void a.queueForNextCycle(freshCode);
+  };
+  if (_audioModule) {
+    queue(_audioModule);
+  } else {
+    void getAudio().then(queue);
+  }
+}
+
 export function requeueLive(): string | null {
   const state = get(sessionStore);
   const { source } = state.nowPlaying;
@@ -376,27 +423,20 @@ export function requeueLive(): string | null {
   if (source === 'rhythm') {
     const code = rhythmCode(state);
     if (!code) return null;
-    // Wired in step 02.4: lazy-load audio and queue if playing.
-    void getAudio().then((a) => {
-      if (a.isPlaying()) void a.queueForNextCycle(code);
-    });
+    queueLiveCodeIfPlaying(code);
     return code;
   }
   if (source === 'session') {
     const code = sessionCode(state);
     if (!code) return null;
-    void getAudio().then((a) => {
-      if (a.isPlaying()) void a.queueForNextCycle(code);
-    });
+    queueLiveCodeIfPlaying(code);
     return code;
   }
   if (source === 'harmony') {
     // Prototype line 1312: code = melodyLine().trim()
     const code = harmonyCode(state).trim();
     if (!code) return null;
-    void getAudio().then((a) => {
-      if (a.isPlaying()) void a.queueForNextCycle(code);
-    });
+    queueLiveCodeIfPlaying(code);
     return code;
   }
   if (source === 'chord') {
@@ -405,9 +445,7 @@ export function requeueLive(): string | null {
     const ch = progression[progression.length - 1];
     if (!ch) return null;
     const code = chordToStrudel(ch.rootPc, ch.qual, ch.gain, state.chordMode, state.harmony.octave);
-    void getAudio().then((a) => {
-      if (a.isPlaying()) void a.queueForNextCycle(code);
-    });
+    queueLiveCodeIfPlaying(code);
     return code;
   }
 
