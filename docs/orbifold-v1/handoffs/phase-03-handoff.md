@@ -967,3 +967,191 @@ All A-03 IDs remain at the same status as round-3. The `display: block` fix is s
 | A-03-08 | Resize: grid and orbits rebuild debounced 120 ms | `src/render/stage.ts` + `App.svelte` | proxy:static-analysis | covered |
 | A-03-09 | Phase 02 audio preserved | (Pilot browser observation) | live-system | visual re-verification pending Pilot |
 | A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands | operability | covered |
+
+---
+
+## Step 03.6 — Pilot-confirmed operability (Cursor AI debug session + full smoke test)
+
+**Date:** 2026-06-08
+**Commit(s):**
+- **Cursor session commit:** `546a14f` — `fix(render): Phase 03 — Cursor session: centroid match, playhead alpha, remove seed`
+- **Terminal commit (this entry):** `docs(render): Phase 03 step 03.6 — operability verification and phase-03 completion handoff`
+  - Hash: self-referential — not recorded
+**Iteration:** Pilot-confirmed operability (final iteration)
+
+### Summary
+
+After four rounds of defect fixes (rounds 1–4 documented above), the Pilot conducted a final browser smoke test against commit 546a14f (Cursor AI debug session). All 12 operability items passed. This entry records the final gate command results, the Cursor session root causes, and closes step 03.6.
+
+### Cursor AI debug session root causes (commit 546a14f)
+
+The Cursor session identified three true root causes that had not been reached by iterative code-only analysis:
+
+**(a) Triangle highlight used first same-rootPc:qual match instead of nearest centroid**
+
+Root cause: `updateTonnetzDynamic` found the triangle to highlight by scanning `_renderTris` for the first entry where `t.rootPc === lastPick.rootPc && t.qual === lastPick.qual`. In the wrapped Tonnetz (a torus with many periods of the lattice visible), multiple triangles share the same `(rootPc, qual)` pair — one for every period of the lattice tile that falls within the viewport. The first-match scan reliably returned the wrong triangle (the one at the top-left period), while the Pilot had clicked a triangle in the center of the screen. The visual highlight appeared on the wrong cell of the grid.
+
+Fix: The `Chord` type in `src/state/session.ts` was extended with optional `cx?: number` and `cy?: number` fields. `pickChord` now stores the clicked triangle's centroid into the chord record when appending to `sessionStore.harmony.progression`. `findRenderTriForChord(chord)` was added to `tonnetz-scene.ts`: if `chord.cx` and `chord.cy` are present, it finds the triangle with matching `rootPc` and `qual` whose centroid is nearest to `(chord.cx, chord.cy)`. This resolves the duplicate ambiguity by spatial identity: the specific triangle the user clicked is identified by where they clicked, not just what they clicked.
+
+This is the most architecturally significant fix of the entire phase. The wrapped Tonnetz contains O(viewport/cell) copies of each chord quality, so same-rootPc:qual matching is fundamentally ambiguous without spatial disambiguation.
+
+**(b) Playhead alpha 0.18 — nearly invisible**
+
+Root cause: `tickRhythm` drew the playhead with `lineStyle(2, 0xffffff, 0.18)` — directly from prototype line 1202. At the prototype's original display density and dark background, 18% white was marginally visible. In the port (with `resolution: Math.min(devicePixelRatio, 2)` and the same dark bg color), 18% alpha on a 2 px line is nearly invisible, especially against the dark orbit rings.
+
+Fix: Raised the playhead draw color to `COL.accent` (`0x8aa0ff`) at alpha `0.55`. The accent blue at 55% alpha is clearly visible against the dark background and consistent with the app's color language. This is a deliberate deviation from the prototype's literal alpha value in service of the CLAUDE.md invariant "always make it obvious what is playing."
+
+**(c) Seeded C-major progression on load caused phantom highlight**
+
+Root cause: `App.svelte` `onMount` called `updateTonnetzDynamic` immediately after `buildTonnetz` with the initial store state. The initial store state (from Phase 02) included a seeded C-major progression (`harmony.progression = [{ rootPc: 0, qual: 'maj', gain: 0.6 }]`). This caused `updateTonnetzDynamic` to find the first C-major triangle in the grid and highlight it — a phantom selection that the user had never made.
+
+Fix: Removed the C-major progression seed from the initial store state. The store now initializes with `harmony.progression = []`, matching prototype line 717 which also starts with an empty progression. The Tonnetz loads clean with no pre-highlighted triangle.
+
+### 12-point operability smoke test (Pilot-confirmed)
+
+All items confirmed by Pilot browser observation after commit 546a14f.
+
+| # | Item | Acceptance ID | Expected | Result |
+|---|---|---|---|---|
+| 1 | Open `pnpm dev` — canvas visible | A-03-02 | Full-screen PIXI canvas with Tonnetz grid | confirmed |
+| 2 | Triangle tonal-function colors | A-03-02 | Tonic amber, subdominant teal, dominant pink; out-of-key faint | confirmed |
+| 3 | Node labels | A-03-02 | Note names (C, D, E…) centered on each node circle; scale-member highlighting | confirmed |
+| 4 | Click a triangle | A-03-03 | Chord plays (audible); triangle highlighted accent color; P·L·R labels appear on neighbors | confirmed (after Cursor fix: centroid match resolves same-rootPc:qual duplicates) |
+| 5 | Click a second triangle | A-03-03, A-03-04 | Second chord plays; voice-leading path draws; particle animates along path | confirmed |
+| 6 | Switch to rhythm view | A-03-05 | Orbit rings appear; Tonnetz disappears | confirmed |
+| 7 | ▶ Groove then observe rhythm view | A-03-05 | Playhead sweeps; step dots animate | confirmed (after Cursor fix: playhead raised to COL.accent at 0.55 alpha) |
+| 8 | Toggle a step dot | A-03-05 | Dot lights/dims; pattern re-queues at next cycle | confirmed |
+| 9 | Hover a layer orbit | A-03-07 | Solo/Mute/Delete controls appear at fixed position; buttons clickable; Delete removes layer; Mute cuts audio when groove playing | confirmed |
+| 10 | Trigger morph | A-03-06 | Rings morph smoothly radial↔linear; no diagonal closing segment in linear mode | confirmed |
+| 11 | Resize window | A-03-08 | Grid and orbits rebuild to fill new size (debounced 120 ms) | confirmed |
+| 12 | Phase 02 audio (transport buttons) | A-03-09 | Init audio, ▶ Groove, ▶ Progresion, ▶ Sesion, Silencio, BPM all work | confirmed |
+
+### Defect-round summary (cross-reference to prior entries)
+
+| Round | Commit | Root causes addressed |
+|---|---|---|
+| 1 | `fix(render): Phase 03 — 03.6 smoke-test defects: pointer offset, dots, playhead, overlay, linear closing` | DPR scale in event handlers; stale `g.layer` in tickRhythm; bpm guard; overlay cursor-tracking; diagonal closing segment in linear mode |
+| 2 | `fix(render): Phase 03 — 03.6 round-2: pointer offsetX/Y, playhead source check, overlay debounce` | `offsetX/Y` direct read (no rect arithmetic); async `nowPlaying.source` race; overlay 400 ms debounce |
+| 3 | `fix(render): Phase 03 — 03.6 round-3: geometry timing (rAF), playhead, solo/mute/delete` | rAF wait before geometry build (PIXI ResizePlugin async); confirmed solo/mute/delete handlers correct |
+| 4 | `fix(render): Phase 03 — 03.6 round-4: diagnose+fix pointer offset root cause, verify mute+playhead` | `display: block` on PIXI canvas (eliminates inline-baseline gap); confirmed mute + playhead logic correct |
+| Cursor | `fix(render): Phase 03 — Cursor session: centroid match, playhead alpha, remove seed` (546a14f) | Centroid-based triangle resolution; playhead alpha raised to visible; C-major seed removed |
+
+See prior handoff entries for per-round details and code reasoning.
+
+### Gate commands (actual results — 2026-06-08)
+
+| Command | Result |
+|---|---|
+| `pnpm exec tsc --noEmit` | exit 0 |
+| `pnpm lint` | exit 0 (ESLint + Prettier clean; all 514 modules) |
+| `pnpm test` | exit 0 — 119 passed (5 test files, no regressions) |
+| `pnpm build` | exit 0 — 514 modules; dist/assets/index.js 501 kB gzipped 154 kB; Strudel chunk 407 kB gzipped 132 kB; build time 975 ms |
+
+### Files touched (Cursor session, commit 546a14f)
+
+- `src/state/session.ts` — `Chord` type extended with optional `cx?: number`, `cy?: number`
+- `src/render/tonnetz-scene.ts` — `findRenderTriForChord` added; `pickChord` stores centroid; `updateTonnetzDynamic` uses `findRenderTriForChord`
+- `src/render/rhythm-scene.ts` — playhead color `COL.accent`, alpha `0.55`
+- `src/app/App.svelte` — C-major progression seed removed from initial store state
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` (detection branch) | proxy:static-analysis | covered |
+| A-03-02 | Tonnetz grid visible: tonal-function colors, node circles, labels | Pilot smoke test items 1, 2, 3 | live-system | covered |
+| A-03-03 | Chord pick and P·L·R: click → plays chord, highlights, shows P/L/R labels | Pilot smoke test item 4 | live-system | covered |
+| A-03-04 | Voice-leading path animation: particle travels between chord centroids | Pilot smoke test item 5 | live-system | covered |
+| A-03-05 | Rhythm orbit view: orbit rings, step-dot toggle, playhead sweep while playing | Pilot smoke test items 6, 7, 8 | live-system | covered |
+| A-03-06 | Radial↔linear morph: smooth animated transition | Pilot smoke test item 10 | live-system | covered |
+| A-03-07 | Hover controls: solo/mute/delete appear at fixed position and function | Pilot smoke test item 9 | live-system | covered |
+| A-03-08 | Resize: grid and orbits rebuild debounced 120 ms | Pilot smoke test item 11 | live-system | covered |
+| A-03-09 | Phase 02 audio preserved | Pilot smoke test item 12 | live-system | covered |
+| A-03-10 | Gate commands: tsc, lint, test, build all exit 0; 119 tests pass | Dev ran all four gate commands 2026-06-08 | operability | covered |
+
+---
+
+## Phase 03 Completion
+
+**Date:** 2026-06-08
+**Phase status:** All 10 A-03 Acceptance IDs covered (live-system evidence from Pilot 12-point smoke test)
+**Gate commands:** tsc 0, lint 0, test 119 passed, build 0 — all confirmed 2026-06-08
+
+### Consolidated Acceptance Coverage Table
+
+All A-03 IDs covered. Evidence type upgraded from `proxy:static-analysis` to `live-system` for A-03-02 through A-03-09 (Pilot browser smoke test confirmed for all 12 items).
+
+| Acceptance ID | Required behavior | Evidence | Gap status |
+|---|---|---|---|
+| A-03-01 | WebGL unavailable → clear error message, no crash | `src/render/stage.ts` detection branch (proxy:static-analysis; live test not exercisable in a standard WebGL-enabled browser session) | covered |
+| A-03-02 | Tonnetz grid visible: tonal-function triangle colors, node circles with scale-member highlighting, note-name labels | Pilot smoke test items 1, 2, 3 — all confirmed | covered |
+| A-03-03 | Chord pick and P·L·R: click → chord audible, triangle highlighted, P/L/R labels on neighbors | Pilot smoke test item 4 confirmed | covered |
+| A-03-04 | Voice-leading path animation: particle travels between chord centroids on progression | Pilot smoke test item 5 confirmed | covered |
+| A-03-05 | Rhythm orbit view: orbit rings visible, step-dot toggle updates pattern, playhead sweeps while playing | Pilot smoke test items 6, 7, 8 confirmed | covered |
+| A-03-06 | Radial↔linear morph: smooth animated transition, no diagonal closing segment in linear mode | Pilot smoke test item 10 confirmed | covered |
+| A-03-07 | Hover controls: solo/mute/delete appear at fixed position near orbit label, buttons clickable and functional | Pilot smoke test item 9 confirmed | covered |
+| A-03-08 | Resize: grid and orbits rebuild and fill new viewport, debounced 120 ms | Pilot smoke test item 11 confirmed | covered |
+| A-03-09 | Phase 02 audio preserved: Init audio, ▶ Groove, ▶ Progresion, ▶ Sesion, Silencio, BPM all functional | Pilot smoke test item 12 confirmed | covered |
+| A-03-10 | Gate commands: `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all exit 0; 119 tests pass | Dev ran all four gate commands 2026-06-08; actual output recorded in step 03.6 entry | covered |
+
+### Prototype parity summary
+
+All four Phase 03 render files are ported from `reference/orbifold.html`. Prototype line ranges for each:
+
+| File | Prototype source | Notes |
+|---|---|---|
+| `src/render/theme.ts` | Lines 882–884 (`COL`, `FUNC_COL`); CSS lines 33–36 (`--tonic`, `--subdom`, `--dom`, `--accent`) | Byte-identical color constants; font family strings from prototype Text style declarations at lines 1017–1019, 1063, 1066, 1068, 1274 |
+| `src/render/stage.ts` | Lines 900–944 (`initPixi()`) — PIXI Application creation, container hierarchy, resize handler | Deviations: WebGL detection changed from CDN guard to `canvas.getContext('webgl2')` (ADR 0006); `display: block` added to canvas after append (round-4 fix) |
+| `src/render/tonnetz-scene.ts` | Lines 947–1025 (`buildTonnetz()`); lines 1085–1143 (`tickHarmony()`); lines 1222–1279 (`pointInTri()`, `computeNR()`); lines 1307–1315 (`requeueLive()` call site); lines 1352–1408 (`pickChord()`, `updateSuggestions()`) | Deviations: centroid-based `findRenderTriForChord` replaces first-match lookup (Cursor fix); `cx/cy` stored in `Chord`; suggestion glow alpha `0.08+0.04` per phase file spec (prototype `0.10+0.06`) |
+| `src/render/rhythm-scene.ts` | Lines 1028–1070 (`rebuildRhythmGeo()`, `buildRhythmScene()`); lines 1146–1215 (`tickRhythm()`); lines 1288–1349 (`onStagePointerDown()`, `onStageContextMenu()`, `onStagePointerMove()`, `showLayerCtl` pattern) | Deviations: playhead raised to `COL.accent` at `0.55` alpha (from prototype `0xffffff` at `0.18`) for visibility; overlay debounce 400 ms (prototype 260 ms); `isPlaying()` replaced by `nowPlaying.source` check (lazy-load constraint) |
+
+### Known deviations from prototype parity
+
+**(a) Playhead alpha raised for visibility.** Prototype line 1202: `lineStyle(2, 0xffffff, 0.18)`. Port: `lineStyle(2, COL.accent, 0.55)`. Root cause identified by Cursor session: 18% white on a dark background was nearly invisible in the port's rendering environment. Raised to `COL.accent` (0x8aa0ff) at 0.55 alpha. Satisfies CLAUDE.md invariant "always make it obvious what is playing." The spirit of the prototype behavior (visible playhead) is preserved.
+
+**(b) Progression seeding removed — matches prototype more closely.** Port initial state before Cursor fix had `harmony.progression = [{ rootPc: 0, qual: 'maj', gain: 0.6 }]` (seeded C-major, a Phase 02 testing convenience). Port after Cursor fix: `harmony.progression = []`. Prototype line 717: `progression: []`. Removing the seed matches prototype behavior exactly. The Tonnetz loads clean with no pre-highlighted triangle.
+
+**(c) Centroid-based triangle resolution — architectural advance over prototype.** Prototype `computeNR` used same-rootPc:qual first-match, which worked because the prototype rendered a smaller Tonnetz tile with fewer duplicate copies in view. Port uses `findRenderTriForChord` with nearest-centroid to `chord.cx/cy` stored at click time. This is strictly more correct and resolves a fundamental ambiguity in the wrapped Tonnetz. The `Chord` type now carries optional `cx?/cy?` — see Pending Register proposals below.
+
+**(d) DOM overlay for layer controls instead of prototype's exact DOM pattern.** Prototype lines 1317–1350 use a `div#layerCtl` manipulated with direct style assignments. Port uses a Svelte `{#if hoveredLayerIndex >= 0}` reactive block with `position: fixed` CSS, 400 ms debounced hide timer (prototype used 260 ms), and `on:pointerenter={cancelHideOverlay}` on the overlay element. Functionally equivalent; implementation is Svelte-idiomatic and Phase 04 compatible.
+
+**(e) Subtitle text in rhythm scene.** Prototype line 1068: `'16 pasos · 4/4'`. Port: `'cps · groove'`. Intentional per phase file spec — reflects that the port uses `setcps` and the groove transport mode.
+
+**(f) `isPlaying()` replaced by `nowPlaying.source` check.** `rhythm-scene.ts` cannot statically import `strudel.ts` without defeating the Rollup lazy-load code-split. `get(sessionStore).nowPlaying.source !== null && source !== 'preview'` is functionally equivalent for playhead visibility.
+
+### Pending Register proposals
+
+**Proposal: `Chord.cx / Chord.cy` — spatial identity fields in `SessionState`**
+
+The `Chord` type in `src/state/session.ts` was extended with:
+
+```ts
+cx?: number;  // centroid x of the clicked triangle (canvas logical pixels)
+cy?: number;  // centroid y of the clicked triangle (canvas logical pixels)
+```
+
+These fields are set by `pickChord` in `tonnetz-scene.ts` and consumed by `findRenderTriForChord`. As part of the `sessionStore` state they affect the SessionState shape with downstream implications:
+- The Zod schema for session validation (Phase 05) must accommodate `cx/cy` as optional fields.
+- Session export/import must decide whether to preserve or strip them (they are render-context-specific — canvas size can change, making saved centroids stale at a different viewport size).
+- `findRenderTriForChord` already falls back to rootPc/qual nearest-match when no centroid is present, so the field is safe to omit or strip on import.
+
+Pilot should decide whether to formalize `cx/cy` as part of the permanent `Chord` schema or treat them as ephemeral render hints stripped before save. A Register entry is proposed.
+
+### Post-phase process note: Cursor AI debug session
+
+The Cursor AI debug session (commit 546a14f) resolved three defects that four rounds of iterative code-only analysis had not caught. The key advantage was interactive browser debugging: Cursor could observe the actual visual output, add diagnostic overlays, and trace click coordinates in real time. This enabled immediate identification of the rootPc:qual duplication problem (which requires visual inspection of the wrapped Tonnetz to notice) and the nearly-invisible playhead (which requires seeing the rendered output, not just reading the draw call).
+
+Recommendation for future render phases: for visual hit-test issues and rendering visibility problems, interactive browser debugging is significantly faster than iterative code analysis. Reserve code-only analysis rounds for logic bugs (store state, event routing, math errors) and use interactive debugging for spatial/visual defects.
+
+### Environment state at phase closure
+
+- `src/render/theme.ts` — pure constants, no imports
+- `src/render/stage.ts` — PIXI Application singleton, all containers, resize handler, WebGL detection, `display: block` on canvas
+- `src/render/tonnetz-scene.ts` — full build + tick + interactivity; `findRenderTriForChord` for centroid-based disambiguation
+- `src/render/rhythm-scene.ts` — full build + tick + interactivity + hover controls
+- `src/app/App.svelte` — PIXI mount, store subscription, canvas event routing, DOM overlay, view toggle, morph toggle
+- `src/state/session.ts` — `playChord` export; `Chord.cx/cy` optional fields; progression seed removed
+- All 119 Phase 01+02 tests passing; `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0
+- `pnpm dev` — full interactive app with both Tonnetz and rhythm views operational
+
+**Phase 03 is at PILOT CHECKPOINT. Awaiting Pilot approval before Phase 04 scoping.**
