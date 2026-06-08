@@ -504,7 +504,21 @@ export function onStagePointerDown(e: PointerEvent): void {
         if (idx !== li) return layer;
         const steps = layer.steps.slice();
         steps[s] = steps[s] === 1 ? 0 : 1;
-        return { ...layer, steps };
+        // Round-3 fix (Symptom 1): clear `euclid` when the user manually toggles
+        // a step. An Euclidean layer uses `s("sound(k,n)")` in codegen (which
+        // ignores `steps`), so dot toggles would have no audio effect while
+        // `euclid` remains set. Clearing it transitions the layer to step-explicit
+        // mode, where `rhythmLayerToStrudelLine` uses the `steps` array instead.
+        // This also fixes Symptom 2 (code drawer not updating on dot toggle):
+        // since `rhythmCode(state)` now produces a different string after each
+        // toggle, the store subscription in CodeDrawer fires a visible diff.
+        // Prototype line 1292: `rhythmLayers[best.li].steps[best.s]^=1` — the
+        // prototype mutates `steps` directly on the plain-object layer. After an
+        // addEuclid call the prototype layer.euclid is still set, so the same
+        // audio bug exists there; the dot-toggle codepath in the prototype treats
+        // euclidean and step-explicit layers identically. The port adds the explicit
+        // euclid-clear here to make the port's behavior well-defined.
+        return { ...layer, steps, euclid: undefined };
       });
       return { ...state, rhythm: { ...state.rhythm, layers } };
     });

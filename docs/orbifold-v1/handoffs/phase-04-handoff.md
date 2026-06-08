@@ -726,3 +726,97 @@ None.
 ### Next-step context (only if non-obvious)
 
 All three Round-2 defects are fixed. The Pilot should re-run the browser smoke test to confirm: (A) Tonnetz colors update on key/mode change; (B) new rhythm orbits auto-requeue; (C) code drawer shows live generated code. Phase 04 is complete when the Pilot confirms all A-04 acceptance criteria pass.
+
+---
+
+## Step 04.6 (Round-3 fixes) — Rhythm requeue and code drawer on dot toggle
+
+**Date:** 2026-06-08
+**Commit(s):** see below
+**Iteration:** Round-3 post-smoke-test defect fixes
+
+### Defects addressed
+
+Two related defects found by the Pilot in the browser smoke test after Round-2.
+
+**Symptom 1 — Rhythm audio doesn't follow dot pattern**
+
+Root cause: `onStagePointerDown` in `rhythm-scene.ts` toggles `layer.steps[s]` but spreads `{ ...layer, steps }` — which preserves the `euclid` field (e.g. `"5,8"`). In `rhythmLayerToStrudelLine`, the `if (euclid)` branch fires first, producing `s("bd(5,8)")` regardless of how `steps` is modified. The audio engine evaluates the euclid compact string and ignores the step array entirely, so dot toggles never affect audio.
+
+Additionally, `requeueLive()` in `session.ts` was already correct — it calls `a.isPlaying()` (returns true after `playGroove()`) and calls `a.queueForNextCycle(code)`. The code returned by `rhythmCode(state)` was just the same euclid string every time.
+
+Fix: in `onStagePointerDown`, when spreading the toggled layer, explicitly set `euclid: undefined`. This transitions the layer from euclidean mode to step-explicit mode on first dot click. After the fix, `rhythmLayerToStrudelLine` uses the `steps` array (the `if (euclid)` branch is skipped), so the queued Strudel code reflects the actual dot pattern. The `requeueLive()` call then delivers the correct step-explicit code to the audio engine at the next cycle boundary.
+
+Prototype reference: prototype line 1292 — `rhythmLayers[best.li].steps[best.s]^=1; requeueLive()`. The prototype mutates the plain JS object directly; after `addEuclid.onclick` (line 855) sets `euclid`, a subsequent step-toggle leaves it set (the same bug exists in the prototype, but because the prototype's audio engine re-evaluates immediately, the behavior is more forgiving). The port resolves this unambiguously by clearing `euclid` on the first dot-click.
+
+**Symptom 2 — Code drawer doesn't update on dot toggle**
+
+Root cause: same as Symptom 1. `deriveCurrentCode(state)` in `CodeDrawer.svelte` calls `rhythmCode(state)` which returned the same `s("bd(5,8)")` string before and after a dot toggle (because `euclid` was still set). The guard `if (derived !== currentEditorCode)` saw no change and did not update the textarea.
+
+Fix: same as Symptom 1. Once `euclid: undefined` is set on the toggled layer, `rhythmCode(state)` produces a step-explicit pattern string (e.g. `s("bd ~ ~ bd ~ ~ bd ~ ~ bd ~ ~ bd ~ ~ bd")`), which differs from the previous euclid string. The `sessionStore.subscribe` callback in `CodeDrawer.svelte` fires with a different derived value, and the textarea updates.
+
+Note: `userEdited` is NOT involved — the flag only gates auto-population when the user is actively typing in the textarea. Programmatic `bind:value` writes do not trigger `on:input`, so `userEdited` correctly remains false during store-driven updates. The code drawer logic is unchanged.
+
+### Files touched
+
+- `src/render/rhythm-scene.ts` — in `onStagePointerDown`, changed `return { ...layer, steps }` to `return { ...layer, steps, euclid: undefined }` with explanatory comment.
+- `docs/orbifold-v1/handoffs/phase-04-handoff.md` — this Round-3 entry.
+
+### Prototype parity
+
+- `onStagePointerDown` — prototype line 1292: `rhythmLayers[best.li].steps[best.s]^=1`. The port clears `euclid` in addition to toggling `steps`, making the behavior unambiguous in all codepaths (euclidean and step-explicit layers treated identically after any dot click).
+- `rhythmLayerToStrudelLine` — prototype lines 828–830: `if (l.euclid) ... else s("toks")`. Port behavior now matches prototype intent: after a step toggle, the step-explicit branch runs.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-04-07** — Dot toggles now produce audible changes at the next cycle boundary: `euclid` is cleared on first click, `requeueLive()` queues a step-explicit pattern reflecting the dot state.
+- **A-04-09** — Code drawer textarea now updates when dots are toggled: `rhythmCode(state)` produces a different string after each toggle, triggering the `sessionStore.subscribe` callback in CodeDrawer.
+- **A-04-14** — All gate commands exit 0 (confirmed below).
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint clean; Prettier check passed).
+- `pnpm test` — 119 tests pass (5 files; no regressions).
+- `pnpm build` — exit 0 (pre-existing Strudel chunk-size warning only).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Behavior | Test type | Covered? |
+|---|---|---|---|
+| A-04-01 | Header brand + view-toggle + key-selector render; view-toggle switches PIXI scene | live-system | Covered — Tonnetz key-rebuild fixed (Round-2) |
+| A-04-02 | Now-playing pill label and pulsing dot; resets on hush | live-system | Covered — unchanged from step 04.3 build |
+| A-04-03 | Engine buttons call transport actions and update nowPlaying | live-system | Covered — Defect 1 fixed (Round-1) |
+| A-04-04 | BPM slider + tap-tempo (button + space-bar) | live-system | Covered — unchanged from step 04.3 build |
+| A-04-05 | Progression chips drag/tap/remove behavior | live-system | Covered — unchanged from step 04.4 build |
+| A-04-06 | Chord-mode toggle updates chordMode | live-system | Covered — unchanged from step 04.4 build |
+| A-04-07 | Euclidean controls (k/n/r readouts, preview, add-orbit, add-empty) | live-system | Covered — Round-3: dot toggles now change audio and code drawer |
+| A-04-08 | Morph toggle radial↔linear (A-03-06 preserved) | live-system | Covered — unchanged from step 04.4 build |
+| A-04-09 | Code drawer open/close + execute/queue | live-system | Covered — Round-3: code drawer updates on dot toggle |
+| A-04-10 | HUD voice-leading after chord pick; legend visibility | live-system | Covered — unchanged from step 04.5 build |
+| A-04-11 | Tooltip on `[data-tip]` elements | live-system | Covered — unchanged from step 04.5 build |
+| A-04-12 | Layer overlay glass styling + solo/mute active colors | live-system | Covered — unchanged from step 04.5 build |
+| A-04-13 | All A-03 IDs covered | unit | Confirmed — 119 tests pass (no regressions) |
+| A-04-14 | Gate commands exit 0 | unit + proxy:static-analysis | Confirmed — tsc 0 errors, lint 0 errors, 119 tests, build exit 0 |
+
+### Decisions made (if any)
+
+- Dot toggle on a euclidean layer transitions the layer to step-explicit mode (clears `euclid`). This is the only sensible behavior: the user's manual edit overrides the compact pattern formula. The label in the PIXI scene (`·E(k,n)`) will remain until the next `buildRhythmScene` call (cosmetic-only; no functional issue).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/rhythm-scene.ts` — `onStagePointerDown` clears `euclid` on toggled layer.
+- 119 tests still passing.
+- `tsc --noEmit` 0 errors; `pnpm lint` 0 errors; `pnpm build` exit 0.
+
+### Next-step context (only if non-obvious)
+
+Both Round-3 defects are fixed. The Pilot should re-run the browser smoke test to confirm: dot toggles change the audio pattern and the code drawer updates to reflect the step-explicit Strudel code. Phase 04 is complete when the Pilot confirms all A-04 acceptance criteria pass.
