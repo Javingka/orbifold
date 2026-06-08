@@ -517,6 +517,14 @@ export function addEuclidLayer(sound: string, k: number, n: number, rot: number)
     ...s,
     rhythm: { ...s.rhythm, layers: [...s.rhythm.layers, layer] },
   }));
+  // Round-2 fix (Defect B): requeue so audio reflects the new layer at the next
+  // cycle boundary when rhythm is already playing. Without this call the orbit
+  // appears visually but the audio pattern ignores the new layer until the user
+  // manually presses ▶ Ritmo again.
+  // Prototype: addEuclid.onclick does not call requeueLive explicitly because the
+  // prototype always re-reads rhythmLayers at evaluation time — the port's
+  // requeueLive must be called explicitly to trigger the queued update.
+  requeueLive();
 }
 
 /**
@@ -538,6 +546,9 @@ export function addEmptyLayer(sound: string): void {
     ...s,
     rhythm: { ...s.rhythm, layers: [...s.rhythm.layers, layer] },
   }));
+  // Round-2 fix (Defect B): requeue so audio reflects the new layer at the next
+  // cycle when already playing. Same rationale as addEuclidLayer above.
+  requeueLive();
 }
 
 /**

@@ -94,10 +94,19 @@
   // Track previous layer count to detect when to do a full rebuild vs dynamic update.
   let prevLayerCount = 0;
 
+  // Round-2 fix (Defect A): track previous harmony key/mode to detect when
+  // buildTonnetz must be re-called (geometry and node colors depend on root+mode).
+  let prevHarmonyRoot = -1;
+  let prevHarmonyMode = '';
+
   onMount(async () => {
     // Phase 04: start with empty session (no default rhythm seed).
     // Prototype melState.progression:[] (line 717), rhythmLayers:[] (line 815).
-    prevLayerCount = get(sessionStore).rhythm.layers.length;
+    const initState = get(sessionStore);
+    prevLayerCount = initState.rhythm.layers.length;
+    // Round-2 fix (Defect A): capture initial harmony key/mode for change detection.
+    prevHarmonyRoot = initState.harmony.root;
+    prevHarmonyMode = initState.harmony.mode;
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
     // initStage appends app.view inside stageEl and registers resize handler.
@@ -146,6 +155,22 @@
     // sessionStore directly (except for the narrow write-path exception in
     // rhythm-scene.ts for step toggles, per spec authorization).
     unsubStore = sessionStore.subscribe((state) => {
+      // Round-2 fix (Defect A): rebuild Tonnetz geometry when root or mode changes
+      // because node circle colors (scale membership) and triangle fill colors
+      // (tonal function) depend on the current key. Without a rebuild the grid
+      // retains the old key's colors.
+      // Prototype: buildTonnetz() uses harmony.root + harmony.mode to determine
+      //   which nodes are in-scale and which triangles have tonal-function fill
+      //   (lines 993–1023).
+      const rootChanged = state.harmony.root !== prevHarmonyRoot;
+      const modeChanged = state.harmony.mode !== prevHarmonyMode;
+      if (rootChanged || modeChanged) {
+        buildTonnetz(state);
+        prevHarmonyRoot = state.harmony.root;
+        prevHarmonyMode = state.harmony.mode;
+        // updateTonnetzDynamic is called immediately below — no need to duplicate.
+      }
+
       // Update P·L·R highlights and suggestion triangles when harmony changes.
       updateTonnetzDynamic(state);
       // Update layer visibility when view changes.

@@ -20,46 +20,130 @@
 
   Close button ✕: closes drawer.
 
-  Local state (NOT in sessionStore — per OD-2 resolution):
+  Local state:
     open: boolean
-    currentEditorCode: string
+    currentEditorCode: string — auto-populated from session store when userEdited is false
+    userEdited: boolean — true once the user types; false after close or execute/queue
 
-  OD-2 decision: currentCode is local state in CodeDrawer.svelte, not in sessionStore.
-  Prototype's currentCode global (line 583) was a monolith side-effect; the port
-  keeps it as presentational state local to the drawer.
+  Round-2 fix (Defect C — OD-2 update):
+    Subscribe to sessionStore; derive current generated code from session state
+    (rhythmCode / harmonyCode / sessionCode based on nowPlaying.source).
+    Auto-populate textarea only when userEdited === false.
+    Prototype: prototype lines 1490, 1496, 1503 all wrote to #liveCode.value after
+    each play action, keeping the drawer in sync with what was sent to the engine.
+    The port replicates this by deriving the code from the same source each frame.
 
-  Store reads: none (all local)
+  Store reads:
+    sessionStore — for deriving live Strudel code (nowPlaying.source, rhythm, harmony, chordMode)
   Store writes:
     runEditor(code)   — prototype #runEditor.onclick (lines 524–526)
     queueEditor(code) — prototype #updateEditor.onclick (line 527)
 -->
 <script lang="ts">
-  import { runEditor, queueEditor } from '../state/session.js';
+  import { onDestroy } from 'svelte';
+  import {
+    sessionStore,
+    runEditor,
+    queueEditor,
+    rhythmCode,
+    harmonyCode,
+    sessionCode,
+  } from '../state/session.js';
 
   /** Whether the code drawer is open. Transient — NOT in sessionStore. */
   let open = false;
 
   /**
-   * Current text in the editor textarea. Transient — NOT in sessionStore.
-   * OD-2 resolution: local state only; not persisted.
-   * Prototype: currentCode global (line 583).
+   * Current text in the editor textarea. Auto-populated from the session store
+   * when userEdited is false; left alone when the user has manually edited it.
+   * Round-2 fix (Defect C): derived from session state, not a static local var.
+   * Prototype: #liveCode.value is updated by every transport play handler
+   *   (lines 1490, 1496, 1503: `document.getElementById('liveCode').value = code`).
    */
   let currentEditorCode = '';
 
+  /**
+   * Whether the user has manually edited the textarea.
+   * Reset to false when the drawer closes or when execute/queue is pressed.
+   * While true: auto-population from the store is suppressed.
+   * Prototype: prototype keeps no such flag — the HTML element's value was
+   *   always overwritten by transport actions. The port uses this flag to
+   *   avoid overwriting mid-edit user content.
+   */
+  let userEdited = false;
+
+  /**
+   * Derive the "current code" string from session state.
+   * Follows prototype order: rhythm / harmony / session / fallback to longest.
+   * Prototype: transport handlers (lines 1490, 1496, 1503) each wrote the code
+   *   they were about to play into #liveCode.value.
+   */
+  function deriveCurrentCode(state: Parameters<typeof rhythmCode>[0]): string {
+    const src = state.nowPlaying.source;
+    if (src === 'rhythm') {
+      return rhythmCode(state);
+    }
+    if (src === 'harmony' || src === 'chord') {
+      return harmonyCode(state).trim();
+    }
+    if (src === 'session') {
+      return sessionCode(state);
+    }
+    // Fallback: show whichever produces the longest non-empty string.
+    const rc = rhythmCode(state);
+    const hc = harmonyCode(state).trim();
+    const sc = sessionCode(state);
+    // Prefer the combined session code when both rhythm and harmony are present.
+    if (sc) return sc;
+    if (rc.length >= hc.length) return rc;
+    return hc;
+  }
+
+  // Subscribe to sessionStore: auto-populate textarea with generated Strudel code
+  // whenever the session changes and the user has not manually edited the textarea.
+  // Round-2 fix (Defect C): replaces the static local-var approach from step 04.4.
+  const unsubStore = sessionStore.subscribe((state) => {
+    if (!userEdited) {
+      const derived = deriveCurrentCode(state);
+      if (derived !== currentEditorCode) {
+        currentEditorCode = derived;
+      }
+    }
+  });
+
+  onDestroy(() => {
+    unsubStore();
+  });
+
   function toggleDrawer(): void {
     open = !open;
+    if (!open) {
+      // Drawer closed: reset userEdited so next open shows fresh derived code.
+      userEdited = false;
+    }
   }
 
   function handleClose(): void {
     open = false;
+    // Reset userEdited: next time drawer opens it will show the derived code.
+    userEdited = false;
   }
 
   function handleRun(): void {
     void runEditor(currentEditorCode);
+    // Reset userEdited: the executed code is now the "current code" for this drawer.
+    userEdited = false;
   }
 
   function handleQueue(): void {
     void queueEditor(currentEditorCode);
+    // Reset userEdited: queued code is committed; allow auto-population to resume.
+    userEdited = false;
+  }
+
+  function handleInput(): void {
+    // User has started editing the textarea manually.
+    userEdited = true;
   }
 </script>
 
@@ -84,12 +168,14 @@
   <!--
     Textarea. Prototype lines 246–248.
     IBM Plex Mono, 120px height, placeholder for hint.
+    on:input sets userEdited=true so auto-population is suppressed while editing.
   -->
   <textarea
     id="liveCode"
     spellcheck="false"
     placeholder={'s("bd hh sd hh")'}
     bind:value={currentEditorCode}
+    on:input={handleInput}
   ></textarea>
 
   <!--
