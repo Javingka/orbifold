@@ -1,0 +1,262 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/*
+ * Orbifold — global CSS custom properties, base resets, and utility classes.
+ *
+ * This file is imported in src/main.ts so all tokens cascade into every
+ * Svelte component. Component-specific styles live in each component's
+ * <style> block.
+ *
+ * Ported from reference/orbifold.html lines 23–351:
+ *   Font @import:          line 24
+ *   :root custom props:    lines 26–38
+ *   * reset:               line 39
+ *   html,body:             line 40
+ *   body gradient:         lines 41–49
+ *   body::after grain:     lines 51–55
+ *   .glass utility:        lines 56–62
+ *   button base:           line 63
+ *   input/select/textarea: line 64
+ *   #app layout:           line 66
+ *   .seg / .seg2:          lines 80–85
+ *   .field / .keypill:     lines 87–95
+ *   @keyframes pulse:      line 102
+ *   @keyframes dot:        line 165
+ *   @media 760px:          lines 346–351
+ *
+ * OD-1 resolution (font loading): Google Fonts <link> tags are in index.html.
+ * No @import is added here (that would double-load the fonts).
+ * app.css is for CSS custom properties and base resets only.
+ */
+
+/* ── CSS custom properties ──────────────────────────────────────────────── */
+/* Prototype lines 26–38 */
+:root {
+  --bg: #070809;
+  --bg2: #0e1118;
+  --panel: rgba(20, 23, 30, 0.56);
+  --panel-2: rgba(28, 31, 40, 0.7);
+  --stroke: rgba(255, 255, 255, 0.085);
+  --stroke-2: rgba(255, 255, 255, 0.14);
+  --text: #eaedf4;
+  --muted: #9097a6;
+  --faint: #5b6172;
+  --tonic: #f3b15a; /* tónica */
+  --subdom: #56cfc4; /* subdominante */
+  --dom: #e87bac; /* dominante */
+  --accent: #8aa0ff; /* selección / voice leading */
+  --glass-blur: 24px;
+}
+
+/* ── Base resets ─────────────────────────────────────────────────────────── */
+/* Prototype line 39 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Prototype line 40 */
+html,
+body {
+  height: 100%;
+}
+
+/* ── Body background ─────────────────────────────────────────────────────── */
+/* Prototype lines 41–49: three-layer radial + linear gradient, grain, font */
+body {
+  background: radial-gradient(1200px 700px at 70% -10%, rgba(138, 160, 255, 0.1), transparent 60%),
+    radial-gradient(900px 600px at 10% 110%, rgba(232, 123, 172, 0.07), transparent 55%),
+    linear-gradient(180deg, var(--bg2), var(--bg) 70%);
+  color: var(--text);
+  font-family: 'Albert Sans', system-ui, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Grain overlay ───────────────────────────────────────────────────────── */
+/* Prototype lines 52–55 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Glass utility class ─────────────────────────────────────────────────── */
+/* Prototype lines 56–62 */
+.glass {
+  background: var(--panel);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border: 1px solid var(--stroke);
+  box-shadow:
+    0 12px 44px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Base element resets ─────────────────────────────────────────────────── */
+/* Prototype line 63 */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text);
+  border: none;
+  background: none;
+  transition: all 0.18s ease;
+}
+
+/* Prototype line 64 */
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: var(--text);
+}
+
+/* ── App root layout ─────────────────────────────────────────────────────── */
+/* Prototype line 66: full-screen flex column containing header / stage / footer */
+#app {
+  position: relative;
+  z-index: 2;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Segmented controls ──────────────────────────────────────────────────── */
+/* Prototype lines 80–85 */
+.seg {
+  display: flex;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--stroke);
+  border-radius: 13px;
+  padding: 3px;
+}
+
+.seg button {
+  padding: 7px 18px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 10px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.seg button.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  box-shadow:
+    0 1px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.seg2 {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  padding: 2px;
+}
+
+.seg2 button {
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.seg2 button.active {
+  background: rgba(138, 160, 255, 0.16);
+  color: var(--accent);
+}
+
+/* ── Field / key selector ────────────────────────────────────────────────── */
+/* Prototype lines 87–95 */
+.field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.field select {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 6px 9px;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+.field select:focus {
+  border-color: var(--stroke-2);
+}
+
+.keypill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--stroke);
+}
+
+.keypill b {
+  color: var(--accent);
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+/* Prototype line 102 */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Prototype line 165 */
+@keyframes dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+/* Prototype lines 346–351 */
+@media (max-width: 760px) {
+  #agent {
+    width: calc(100% - 24px);
+  }
+
+  header {
+    gap: 10px;
+  }
+
+  .brand .tag {
+    display: none;
+  }
+
+  .hint {
+    max-width: 80%;
+  }
+}

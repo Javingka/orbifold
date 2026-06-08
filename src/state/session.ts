@@ -29,6 +29,8 @@ import { writable, get } from 'svelte/store';
 
 import type { Quality } from '../core/theory/chords.js';
 import type { RhythmLayer } from '../core/rhythm/layers.js';
+import type { Sound } from '../core/rhythm/layers.js';
+import { bjorklund, rotate, RSTEPS } from '../core/rhythm/euclid.js';
 import type { Composition } from '../core/composition/model.js';
 import {
   chordToStrudel,
@@ -426,4 +428,207 @@ export function playChord(rootPc: number, qual: Quality, gain: number): void {
   // Fire and forget — audio is lazy-loaded; runNow resolves async.
   void getAudio().then((a) => a.runNow(code));
   setNowPlaying(label, 'chord');
+}
+
+// ── Step 04.2: new action functions ───────────────────────────────────────
+// These functions are the wiring layer for the Phase 04 UI components.
+// Prototype references cited per CLAUDE.md §Prototype parity requirement.
+
+/**
+ * Toggle the chord play mode between block chords and arpeggio.
+ *
+ * Updates `sessionStore.chordMode` and calls `requeueLive()` so a running
+ * progression picks up the new mode at the next cycle boundary.
+ *
+ * Prototype: chordMode is implicit in `pickChord`/`melodyLine` —
+ *   `chordMode` select handlers (prototype around line 897, `chordMode` global).
+ *   `requeueLive()` call at prototype lines 1307–1315.
+ *
+ * @param mode - 'chord' (block) or 'arp' (arpeggio).
+ */
+export function setChordMode(mode: 'chord' | 'arp'): void {
+  sessionStore.update((s) => ({ ...s, chordMode: mode }));
+  requeueLive();
+}
+
+/**
+ * Update the harmony key (root pitch class, mode name, octave).
+ *
+ * Updates `harmony.root`, `harmony.mode`, and `harmony.octave` in the store
+ * and calls `requeueLive()` so a running progression uses the new key.
+ *
+ * Prototype: `melRoot` / `melMode` / `melOctave` select `onchange` handlers
+ *   (prototype around lines 369–395 HTML, change handlers implicit in JS).
+ *   `requeueLive()` at prototype lines 1307–1315.
+ *
+ * @param root   - Root pitch class 0–11.
+ * @param mode   - Mode string (e.g. 'major', 'minor').
+ * @param octave - MIDI octave offset (e.g. 3).
+ */
+export function setHarmonyKey(root: number, mode: string, octave: number): void {
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: { ...s.harmony, root, mode, octave },
+  }));
+  requeueLive();
+}
+
+/**
+ * Add a new Euclidean rhythm layer (bjorklund + rotate → 16-step array).
+ *
+ * Computes `bjorklund(k,n)`, rotates by `rot`, and maps to a 16-step array
+ * (if n < RSTEPS the pattern is repeated/truncated; if n === RSTEPS it is used
+ * directly). The `euclid` field is set to the compact `"k,n,rot"` string so
+ * `rhythmLayerToStrudelLine` can use euclidean mode.
+ *
+ * Pushes the new layer to `rhythm.layers` in the store.
+ *
+ * Prototype: `addEuclid.onclick` handler, lines 849–857.
+ *
+ * @param sound - Drum sound name (e.g. 'bd', 'hh').
+ * @param k     - Number of hits.
+ * @param n     - Number of steps in the euclidean pattern.
+ * @param rot   - Rotation offset.
+ */
+export function addEuclidLayer(sound: string, k: number, n: number, rot: number): void {
+  // bjorklund gives a pattern of length n; map to RSTEPS by repeating/truncating.
+  const raw = rotate(bjorklund(k, n), rot);
+  const steps: number[] = [];
+  for (let i = 0; i < RSTEPS; i++) {
+    steps.push(raw[i % raw.length]);
+  }
+  // euclid compact string — rhythm-scene and codegen will use this directly.
+  const euclidStr = rot !== 0 ? `${k},${n},${rot}` : `${k},${n}`;
+  const layer: RhythmLayer = {
+    sound: sound as Sound,
+    steps,
+    euclid: euclidStr,
+  };
+  sessionStore.update((s) => ({
+    ...s,
+    rhythm: { ...s.rhythm, layers: [...s.rhythm.layers, layer] },
+  }));
+}
+
+/**
+ * Add a new empty rhythm layer (all rests, 16 steps).
+ *
+ * Pushes a zero-filled 16-step layer so the user can toggle individual steps
+ * in the rhythm view.
+ *
+ * Prototype: `addLayerEmpty.onclick` handler, lines 858–861.
+ *
+ * @param sound - Drum sound name.
+ */
+export function addEmptyLayer(sound: string): void {
+  const layer: RhythmLayer = {
+    sound: sound as Sound,
+    steps: new Array(RSTEPS).fill(0) as number[],
+  };
+  sessionStore.update((s) => ({
+    ...s,
+    rhythm: { ...s.rhythm, layers: [...s.rhythm.layers, layer] },
+  }));
+}
+
+/**
+ * Preview a Euclidean rhythm pattern (toggle: play or stop).
+ *
+ * If `nowPlaying.source === 'preview'`, calls `hushAll()` (stop preview).
+ * Otherwise runs `s("${sound}").euclidRot(${k},${n},${rot})` via `audio.runNow`
+ * and sets nowPlaying to `{ label: 'Vista previa · E(k,n)', source: 'preview' }`.
+ *
+ * Prototype: `euclidPreview.onclick` handler, lines 862–876.
+ *
+ * @param sound - Drum sound name.
+ * @param k     - Number of hits.
+ * @param n     - Total steps.
+ * @param rot   - Rotation offset.
+ */
+export async function previewEuclid(
+  sound: string,
+  k: number,
+  n: number,
+  rot: number
+): Promise<void> {
+  const state = get(sessionStore);
+  if (state.nowPlaying.source === 'preview') {
+    // Toggle off: stop preview.
+    await hushAll();
+    return;
+  }
+  const code = `s("${sound}").euclidRot(${k},${n},${rot})`;
+  const a = await getAudio();
+  await a.runNow(code);
+  setNowPlaying(`Vista previa · E(${k},${n})`, 'preview');
+}
+
+/**
+ * Run Strudel code from the code drawer immediately.
+ *
+ * Calls `audio.runNow(code)` and sets nowPlaying to
+ * `{ label: 'Editor', source: 'editor' }`.
+ *
+ * Prototype: `runEditor.onclick` handler, lines 524–526 (`#runEditor` button).
+ *
+ * @param code - Raw Strudel code string from the drawer textarea.
+ */
+export async function runEditor(code: string): Promise<void> {
+  const a = await getAudio();
+  await a.runNow(code);
+  setNowPlaying('Editor', 'editor');
+}
+
+/**
+ * Queue Strudel code from the code drawer for the next cycle.
+ *
+ * Calls `audio.queueForNextCycle(code)` — the pattern takes effect at the
+ * next Strudel cycle boundary (~250 ms heuristic in @strudel/web@1.0.3).
+ *
+ * Prototype: `updateEditor.onclick` handler, line 527 (`#updateEditor` button).
+ *
+ * @param code - Raw Strudel code string from the drawer textarea.
+ */
+export async function queueEditor(code: string): Promise<void> {
+  const a = await getAudio();
+  await a.queueForNextCycle(code);
+}
+
+/**
+ * Clear the entire chord progression.
+ *
+ * Sets `harmony.progression` to `[]` and calls `requeueLive()` so a running
+ * harmony engine goes silent at the next cycle.
+ *
+ * Prototype: `clearProg` (line 1506, inside `hushBtn.onclick` context).
+ *   `melState.progression = []` + `requeueLive()`.
+ */
+export function clearProgression(): void {
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: { ...s.harmony, progression: [] },
+  }));
+  requeueLive();
+}
+
+/**
+ * Remove a single chord from the progression by index.
+ *
+ * Splices the chord at `index` from `harmony.progression` and calls
+ * `requeueLive()`.
+ *
+ * Prototype: chip `.rm` click handler, line 1440
+ *   (`melState.progression.splice(i,1); renderProgChips(); requeueLive()`).
+ *
+ * @param index - Zero-based index into `harmony.progression`.
+ */
+export function clearChordAt(index: number): void {
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: {
+      ...s.harmony,
+      progression: s.harmony.progression.filter((_, i) => i !== index),
+    },
+  }));
+  requeueLive();
 }

@@ -12,6 +12,7 @@
 // Bootstrap — mounts the Svelte App component onto #app.
 // Built with Vite + TypeScript + Svelte (not a CDN prototype).
 
+import './app/app.css';
 import App from './app/App.svelte';
 
 const app = new App({

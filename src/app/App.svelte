@@ -103,22 +103,10 @@
   // DEFAULT_SESSION_STATE has empty layers and progression (spec §02.2).
   // We seed here rather than mutating the constant to keep the type clean.
   onMount(async () => {
-    sessionStore.update((s) => ({
-      ...s,
-      // Minimal default rhythm: 4-on-the-floor BD (prototype pattern used in
-      // smoke tests). Steps array: 16-step, hits on 0/4/8/12.
-      rhythm: {
-        layers: [
-          {
-            sound: 'bd',
-            steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
-          },
-        ],
-      },
-      // Harmony progression stays empty on load — prototype melState.progression:[] (line 717).
-      // No phantom Tonnetz highlight until the user picks a chord.
-    }));
-
+    // Phase 04: start with empty session (no default rhythm seed).
+    // Prototype melState.progression:[] (line 717), rhythmLayers:[] (line 815).
+    // The temporary 4-on-the-floor BD seed used in Phase 02/03 smoke tests is
+    // removed here per Phase 04 spec (step 04.2). Users add layers via RhythmControls.
     prevLayerCount = get(sessionStore).rhythm.layers.length;
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
