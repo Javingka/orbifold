@@ -282,15 +282,18 @@ export async function initAudio(): Promise<void> {
  * Play the default rhythm groove (all active layers).
  *
  * If rhythmCode() returns '', this is a no-op (nothing to play).
- * Calls audio.runNow(code) and sets nowPlaying to 'Ritmo · groove'.
+ * Calls audio.initAudio() on first gesture (idempotent), then audio.runNow(code)
+ * and sets nowPlaying to 'Ritmo · groove'.
  *
  * Prototype: `rhythmPlay.onclick` handler, lines 1493–1498.
+ * Audio init on first play gesture per CLAUDE.md invariant (no "Init audio" button).
  */
 export async function playGroove(): Promise<void> {
   const state = get(sessionStore);
   const code = rhythmCode(state);
   if (!code) return;
   const a = await getAudio();
+  await a.initAudio();
   await a.runNow(code);
   setNowPlaying('Ritmo · groove', 'rhythm');
 }
@@ -302,12 +305,14 @@ export async function playGroove(): Promise<void> {
  * The prototype trims the melody line before calling runNow (line 1502).
  *
  * Prototype: `progPlay.onclick` handler, lines 1499–1504.
+ * Audio init on first play gesture per CLAUDE.md invariant.
  */
 export async function playProgression(): Promise<void> {
   const state = get(sessionStore);
   const code = harmonyCode(state).trim();
   if (!code) return;
   const a = await getAudio();
+  await a.initAudio();
   await a.runNow(code);
   setNowPlaying('Armonía · progresión', 'harmony');
 }
@@ -318,12 +323,14 @@ export async function playProgression(): Promise<void> {
  * If sessionCode() returns '', this is a no-op.
  *
  * Prototype: `sessionPlay.onclick` handler, lines 1487–1492.
+ * Audio init on first play gesture per CLAUDE.md invariant.
  */
 export async function playSession(): Promise<void> {
   const state = get(sessionStore);
   const code = sessionCode(state);
   if (!code) return;
   const a = await getAudio();
+  await a.initAudio();
   await a.runNow(code);
   setNowPlaying('Sesión · ritmo + armonía', 'session');
 }
@@ -425,8 +432,10 @@ export function playChord(rootPc: number, qual: Quality, gain: number): void {
   const state = get(sessionStore);
   const code = chordToStrudel(rootPc, qual, gain, state.chordMode, state.harmony.octave);
   const label = 'Acorde · ' + chordLabel(rootPc, qual);
-  // Fire and forget — audio is lazy-loaded; runNow resolves async.
-  void getAudio().then((a) => a.runNow(code));
+  // Fire and forget — audio is lazy-loaded; initAudio() is idempotent.
+  // initAudio() called here ensures the audio context is ready on the first chord pick
+  // (a user gesture), without requiring a separate "Init audio" button.
+  void getAudio().then((a) => a.initAudio().then(() => a.runNow(code)));
   setNowPlaying(label, 'chord');
 }
 
@@ -559,6 +568,7 @@ export async function previewEuclid(
   }
   const code = `s("${sound}").euclidRot(${k},${n},${rot})`;
   const a = await getAudio();
+  await a.initAudio();
   await a.runNow(code);
   setNowPlaying(`Vista previa · E(${k},${n})`, 'preview');
 }
@@ -575,6 +585,7 @@ export async function previewEuclid(
  */
 export async function runEditor(code: string): Promise<void> {
   const a = await getAudio();
+  await a.initAudio();
   await a.runNow(code);
   setNowPlaying('Editor', 'editor');
 }
@@ -591,6 +602,7 @@ export async function runEditor(code: string): Promise<void> {
  */
 export async function queueEditor(code: string): Promise<void> {
   const a = await getAudio();
+  await a.initAudio();
   await a.queueForNextCycle(code);
 }
 

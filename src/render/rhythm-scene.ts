@@ -289,6 +289,28 @@ export function tickRhythm(_delta: number): void {
   rRings.clear();
   rDyn.clear();
 
+  // Fix (Defect 3, 04.6 smoke-test): position BPM and subtitle labels at the
+  // screen centre BEFORE the early-return guard. With an empty session (no layers),
+  // _rGeo is empty and the guard fires before the label-positioning block at the
+  // bottom of this function, leaving _rCenterBpm / _rCenterSub at their default
+  // PIXI position (0, 0) — which renders the text at the canvas top-left corner.
+  // _rCenter is populated by rebuildRhythmGeo; fall back to app.screen when null
+  // (this covers the initial tick before the first buildRhythmScene completes).
+  if (_rCenterBpm !== null || _rCenterSub !== null) {
+    const bpmCx = _rCenter !== null ? _rCenter.cx : refs.app.screen.width / 2;
+    const bpmCy = _rCenter !== null ? _rCenter.cy : refs.app.screen.height / 2;
+    if (_rCenterBpm !== null) {
+      _rCenterBpm.x = bpmCx;
+      _rCenterBpm.y = bpmCy - 7;
+      _rCenterBpm.alpha = 1 - _rMorph;
+    }
+    if (_rCenterSub !== null) {
+      _rCenterSub.x = bpmCx;
+      _rCenterSub.y = bpmCy + 10;
+      _rCenterSub.alpha = 1 - _rMorph;
+    }
+  }
+
   if (_rGeo.length === 0 || _rCenter === null) return;
 
   const m = _rMorph;
@@ -390,18 +412,6 @@ export function tickRhythm(_delta: number): void {
     rRings.lineStyle(1, COL.faint, 0.6 * (1 - m));
     rRings.drawCircle(cx, cy, _rCenter.innerR * 0.5);
     rRings.endFill();
-  }
-
-  // Position and fade BPM + subtitle labels — prototype lines 1188–1189
-  if (_rCenterBpm !== null) {
-    _rCenterBpm.alpha = 1 - m;
-    _rCenterBpm.x = cx;
-    _rCenterBpm.y = cy - 7;
-  }
-  if (_rCenterSub !== null) {
-    _rCenterSub.alpha = 1 - m;
-    _rCenterSub.x = cx;
-    _rCenterSub.y = cy + 10;
   }
 
   // ── Playhead — prototype lines 1192–1214 ─────────────────────────────────

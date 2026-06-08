@@ -30,15 +30,28 @@
   // Prototype: #melRoot / #melMode / #melOctave selects with onchange handler
   // that calls requeueLive() (lines 369–395).
   // Port: calls setHarmonyKey(root, mode, octave) from session.ts (step 04.2).
-  function handleKeyChange(): void {
-    setHarmonyKey(Number(rootValue), modeValue, Number(octaveValue));
+  //
+  // Fix (Defect 2, 04.6 smoke-test): removed the $: reactive shadow variables
+  // (rootValue / modeValue / octaveValue) that were written by both bind:value
+  // and the $: reactive declaration. The two-way binding combined with the $:
+  // reactive re-assignment created a Svelte race: the $: block ran from the
+  // previous store value and overwrote the user's selection, causing it to revert.
+  // Solution: one-way value= driven by the store; each select reads its new value
+  // from event.currentTarget and the other two from the current store snapshot.
+  function handleRootChange(e: Event): void {
+    const root = Number((e.currentTarget as HTMLSelectElement).value);
+    setHarmonyKey(root, $sessionStore.harmony.mode, $sessionStore.harmony.octave);
   }
 
-  // Local shadow values for the select bindings (initialized from store).
-  // Reactive: if the store is updated externally, the selects stay in sync.
-  $: rootValue = String($sessionStore.harmony.root);
-  $: modeValue = $sessionStore.harmony.mode;
-  $: octaveValue = String($sessionStore.harmony.octave);
+  function handleModeChange(e: Event): void {
+    const mode = (e.currentTarget as HTMLSelectElement).value;
+    setHarmonyKey($sessionStore.harmony.root, mode, $sessionStore.harmony.octave);
+  }
+
+  function handleOctaveChange(e: Event): void {
+    const octave = Number((e.currentTarget as HTMLSelectElement).value);
+    setHarmonyKey($sessionStore.harmony.root, $sessionStore.harmony.mode, octave);
+  }
 </script>
 
 <!--
@@ -85,14 +98,15 @@
     <span>clave</span>
 
     <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
-    <select id="melRoot" bind:value={rootValue} on:change={handleKeyChange}>
+    <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
+    <select id="melRoot" value={String($sessionStore.harmony.root)} on:change={handleRootChange}>
       {#each NOTE_NAMES as name, i}
         <option value={String(i)}>{name}</option>
       {/each}
     </select>
 
     <!-- Mode select. Prototype: #melMode (lines 373–382). -->
-    <select id="melMode" bind:value={modeValue} on:change={handleKeyChange}>
+    <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
       <option value="major">mayor</option>
       <option value="minor">menor</option>
       <option value="dorian">dórico</option>
@@ -104,7 +118,11 @@
     </select>
 
     <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
-    <select id="melOctave" bind:value={octaveValue} on:change={handleKeyChange}>
+    <select
+      id="melOctave"
+      value={String($sessionStore.harmony.octave)}
+      on:change={handleOctaveChange}
+    >
       <option value="2">2</option>
       <option value="3">3</option>
       <option value="4">4</option>
