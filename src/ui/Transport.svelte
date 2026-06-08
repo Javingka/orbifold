@@ -199,11 +199,11 @@
   </div>
 
   <!--
-    Progression chips slot — ProgressionChips.svelte is inserted here in step 04.4.
-    The .prog wrapper div is part of the footer layout (prototype lines 505–508).
-    For now the slot is empty; ProgressionChips will be placed in App.svelte
-    inside the footer area.
+    Progression chips slot (step 04.4).
+    ProgressionChips.svelte is inserted here via Svelte <slot>.
+    The .prog wrapper div (prototype lines 505–508) is inside ProgressionChips.
   -->
+  <slot />
 </footer>
 
 <style>

@@ -3,6 +3,7 @@
   Orbifold — root Svelte component.
   Phase 03 step 03.5: rhythm scene, radial↔linear morph, hover controls, full store wiring.
   Phase 04 step 04.3: Header and Transport components added; #stage layout changed to flex:1.
+  Phase 04 step 04.4: ProgressionChips, HarmonyControls, RhythmControls, CodeDrawer added.
   Phase 04 step 04.5 will remove the temporary transport panel.
 -->
 <script lang="ts">
@@ -19,6 +20,10 @@
   } from '../state/session.js';
   import Header from '../ui/Header.svelte';
   import Transport from '../ui/Transport.svelte';
+  import ProgressionChips from '../ui/ProgressionChips.svelte';
+  import HarmonyControls from '../ui/HarmonyControls.svelte';
+  import RhythmControls from '../ui/RhythmControls.svelte';
+  import CodeDrawer from '../ui/CodeDrawer.svelte';
   import { get } from 'svelte/store';
   import { initStage, onResize, setView } from '../render/stage.js';
   import {
@@ -318,9 +323,25 @@
 <!--
   OD-3 resolution: div#stage is the PIXI mount target.
   Phase 04 step 04.3: changed from position:fixed full-screen to flex:1 within #app.
+  Phase 04 step 04.4: HarmonyControls and RhythmControls overlays placed inside #stage
+    (position:absolute; prototype .orbit-ctl CSS lines 316–319).
   PIXI's resizeTo tracks this div. The <canvas> is appended inside by initStage.
 -->
-<div id="stage" bind:this={stageEl}></div>
+<div id="stage" bind:this={stageEl}>
+  <!--
+    Harmony view overlay: chord-mode segmented control.
+    Shown only when $sessionStore.view === 'harmony' (prototype #harmonyCtl).
+    position:absolute inside #stage (prototype .orbit-ctl lines 316–319).
+  -->
+  <HarmonyControls />
+
+  <!--
+    Rhythm view overlay: morph toggle + euclidean controls.
+    Shown only when $sessionStore.view === 'rhythm' (prototype #orbitCtl).
+    position:absolute inside #stage (prototype .orbit-ctl lines 316–319).
+  -->
+  <RhythmControls />
+</div>
 
 <!--
   DOM overlay for layer controls (OD-1 resolution).
@@ -351,9 +372,18 @@
   Phase 04 step 04.3: Transport component at bottom of flex-column layout.
   Replaces the prototype <footer class="glass"> (lines 484–513).
   Includes now-playing pill, engine buttons, BPM slider, and tap-tempo.
-  ProgressionChips will be added here in step 04.4.
+  Phase 04 step 04.4: ProgressionChips inserted via slot (prototype .prog lines 505–508).
 -->
-<Transport />
+<Transport>
+  <ProgressionChips />
+</Transport>
+
+<!--
+  Code drawer: fixed position, slides up from bottom on toggle.
+  Prototype #codeTab + #codeDrawer (lines 516–528, CSS lines 237–249).
+  position:fixed so it renders outside the flex column layout.
+-->
+<CodeDrawer />
 
 <!-- TEMPORARY TRANSPORT PANEL — Phase 02 only; replaced in Phase 04.5 -->
 <div class="transport-panel">

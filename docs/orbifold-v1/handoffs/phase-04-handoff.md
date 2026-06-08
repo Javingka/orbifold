@@ -254,3 +254,140 @@ None.
 ### Next-step context (only if non-obvious)
 
 Step 04.4 creates `ProgressionChips.svelte`, `HarmonyControls.svelte`, `RhythmControls.svelte`, and `CodeDrawer.svelte`. The chips area slot in `Transport.svelte` is intentionally empty — `ProgressionChips` will be imported in `App.svelte` and placed inside the footer layout area (or the Transport component can be refactored to accept it as a slot if the Planner prefers; spec says it goes in the footer area).
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-08. Iteration: 1 of 5.
+**Reason:** All 8 standard checklist items and the prototype parity item pass. Commit scope is clean: 2 new Svelte components + App.svelte layout update + handoff, all within step 04.3 spec scope; render scene files untouched; temporary transport panel correctly preserved per spec. Commit message format matches the required pattern. Acceptance Coverage Table is complete for all 14 A-04 IDs: A-04-01 through A-04-04 correctly marked Partial with live-system deferral to step 04.6, A-04-05 through A-04-12 correctly Not Yet, A-04-13 confirmed via 119 tests, A-04-14 Partial with build deferred to step 04.6. Test evidence is relevant (119 existing tests confirm no regressions; no live-system IDs claimed). Register respected: no new deps, exact-version pinning intact, Chord.cx/cy decision untouched. Reversibility intact: no flags, no migrations, 119 tests pass. Prototype parity: Header.svelte cites prototype HTML lines 358–395, CSS lines 68–98, NOTE_NAMES line 592; Transport.svelte cites prototype HTML lines 484–513, CSS lines 180–222, BPM conversion lines 644–645, tap-tempo lines 672–691 with all four fidelity details confirmed (gap>2s reset, keep-last-6, flash-90ms, space-bar guard with INPUT/TEXTAREA/SELECT exclusion); stage flex layout cites prototype line 106. AGPL-3.0 headers present on both new files. No unauthorized deps or env/CI changes.
+**Next action:** Dev proceeds to step 04.4
+
+---
+
+## Step 04.4 — Progression chips, HarmonyControls, RhythmControls, and CodeDrawer
+
+**Date:** 2026-06-08
+**Commit(s):** see below
+**Iteration:** 1 of 1
+
+### Completed
+
+- Created `src/ui/ProgressionChips.svelte` — ports `#progChips` (prototype HTML lines 505–508, CSS lines 224–234, JS lines 1413–1468):
+  - Empty state: `<span class="prog-empty">toca acordes en el Tonnetz…</span>`.
+  - Each chip: `.prog-chip` + tonal-function class derived from `diatonicLookup(root, mode)` keyed by `rootPc:qual` (prototype `ch.info.func.cls` line 1435).
+  - Chip label: `chordLabel(ch.rootPc, ch.qual)` from `core/theory/chords.ts`.
+  - Remove button `.rm ✕`: calls `clearChordAt(index)`.
+  - Volume drag: `pointerdown` captures pointer, `pointermove` computes `dy = startY - e.clientY`, `gain = clamp(startGain + dy * 0.006, 0, 1.2)`, updates chip background via `chipGainCss(gain)` gradient. On `pointerup`: if moved → `requeueLive()`; if tap → `playChord(ch.rootPc, ch.qual, ch.gain)`.
+  - `chipGainCss(g)` → `linear-gradient(to top, rgba(138,160,255,.30) ${pct}%, rgba(255,255,255,.05) ${pct}%)` (prototype lines 1413–1415).
+  - Drag constants: threshold 3px (line 1452), step 0.006 (line 1453), clamp [0, 1.2] (line 1453).
+  - Local drag state arrays (`dragging`, `startY`, `startGain`, `moved`, `localGain`) synchronized to progression length via `$:` reactive block.
+
+- Created `src/ui/HarmonyControls.svelte` — ports `.orbit-ctl#harmonyCtl` (prototype lines 447–453, CSS lines 316–325):
+  - Shown only when `$sessionStore.view === 'harmony'` (Svelte `{#if}`).
+  - `.seg2#chordModeSeg`: two buttons `◧ acorde` / `⋯ arpegio` with `data-mode` attributes and `data-tip` tooltips.
+  - Active state driven by `$sessionStore.chordMode`. On click: `setChordMode('chord' | 'arp')`.
+  - `position: absolute` inside `#stage` at `left: 16px; bottom: 46px` (prototype `.orbit-ctl` lines 316–319).
+
+- Created `src/ui/RhythmControls.svelte` — ports `.orbit-ctl#orbitCtl` (prototype lines 426–443, CSS lines 316–325, JS lines 838–877):
+  - Shown only when `$sessionStore.view === 'rhythm'` (Svelte `{#if}`).
+  - Morph toggle: `▭ lineal` / `▭ radial` button. Toggles local `morphTarget: 0 | 1`, calls `setMorphTarget(morphTarget)` from `render/rhythm-scene.ts`. Moved from App.svelte.
+  - Euclidean controls: sound select, k/n/r sliders with reactive readouts, named pattern hint (KNOWN_PATTERNS map from prototype lines 844–846), preview toggle button, `+ órbita`, `+ capa vacía`.
+  - `euclidR` max dynamically clamped to `n-1` (prototype line 844). `euclidR` clamped reactively when `euclidN` decreases.
+  - Preview toggle: `nowPlaying.source === 'preview'` → `hushAll()`; otherwise → `previewEuclid(sound, k, n, rot)`. Button label / style changes between `▶ oír` and `■ stop`.
+  - All `data-tip` attributes from prototype lines 427–443 preserved.
+
+- Created `src/ui/CodeDrawer.svelte` — ports `#codeTab` + `#codeDrawer` (prototype HTML lines 516–528, CSS lines 237–249):
+  - Tab button `#codeTab.glass`: `position:fixed; bottom:14px; left:50%; transform:translateX(-50%)` (prototype CSS line 237). Label: `⌄ código strudel`.
+  - Drawer `#codeDrawer.glass`: `position:fixed; left:12px; right:12px; bottom:0`. Slides up via `transform:translateY(105%)` → `translateY(0)` with `.4s cubic-bezier(.22,1,.36,1)` transition (prototype lines 240–242). `.open` class applied when open.
+  - Textarea `#liveCode`: 120px height, IBM Plex Mono, placeholder `s("bd hh sd hh")`.
+  - Close button `✕` (prototype line 521).
+  - Action buttons: `▶ ejecutar (ahora)` → `runEditor(code)` (prototype line 525); `↻ encolar (próximo ciclo)` → `queueEditor(code)` (prototype line 527).
+  - `currentEditorCode` and `open` are local state (NOT in sessionStore per OD-2 resolution).
+
+- Updated `src/ui/Transport.svelte`: added `<slot />` inside `<footer>` to accept `<ProgressionChips>` via slot composition.
+- Updated `src/app/App.svelte`:
+  - Added imports for all four new components.
+  - Added `<HarmonyControls />` and `<RhythmControls />` inside `<div id="stage">` (they are `position:absolute` overlays over the PIXI canvas).
+  - Wrapped `<Transport>` to pass `<ProgressionChips />` via slot.
+  - Added `<CodeDrawer />` after Transport (it is `position:fixed`, renders outside flex flow).
+  - Did NOT remove temporary transport panel (deferred to step 04.5 per spec).
+  - Did NOT touch any render scene files.
+
+### Prototype parity
+
+- `ProgressionChips.svelte` — chip drag logic: prototype lines 1441–1466 (pointerdown/pointermove/pointerup flow, threshold 3px line 1452, step 0.006 line 1453, clamp [0, 1.2] line 1453, tap → playChord lines 1461–1464); `chipGainCss`: prototype lines 1413–1415; empty state: prototype line 1430; tonal-function class: prototype line 1435 (`ch.info.func.cls`).
+- `HarmonyControls.svelte` — HTML: prototype lines 447–453; CSS: prototype lines 316–325.
+- `RhythmControls.svelte` — HTML: prototype lines 426–443; CSS: prototype lines 316–325; Euclid controls JS: prototype lines 838–877 (renderEuclidInfo lines 839–847, addEuclid.onclick lines 849–857, addLayerEmpty.onclick lines 858–861, euclidPreview.onclick toggle lines 863–876, known patterns map lines 844–846, euclidR.max = n-1 line 844).
+- `CodeDrawer.svelte` — HTML: prototype lines 516–528; CSS: prototype lines 237–249; action handlers: prototype lines 524–527.
+
+### Files touched
+
+- `src/ui/ProgressionChips.svelte` — created
+- `src/ui/HarmonyControls.svelte` — created
+- `src/ui/RhythmControls.svelte` — created
+- `src/ui/CodeDrawer.svelte` — created
+- `src/ui/Transport.svelte` — added `<slot />` inside footer
+- `src/app/App.svelte` — added component imports and usages; HarmonyControls + RhythmControls inside `#stage`; ProgressionChips via Transport slot; CodeDrawer fixed overlay
+- `docs/orbifold-v1/handoffs/phase-04-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+- **A-04-05** — `ProgressionChips.svelte` built; chip drag gain logic, tap playChord, `✕` remove, tonal-function classes all implemented per prototype parity. Live-system verification in step 04.6.
+- **A-04-06** — `HarmonyControls.svelte` built; chord-mode toggle with active state from `$sessionStore.chordMode`, calls `setChordMode()`. Live-system verification in step 04.6.
+- **A-04-07** — `RhythmControls.svelte` built; k/n/r sliders with reactive readouts, preview toggle, `+ órbita`, `+ capa vacía`. Live-system verification in step 04.6.
+- **A-04-08** — Morph toggle moved from App.svelte temp panel to `RhythmControls.svelte`; calls `setMorphTarget()` which triggers the radial↔linear animation. Live-system verification in step 04.6.
+- **A-04-09** — `CodeDrawer.svelte` built; slide-up animation `.4s cubic-bezier(.22,1,.36,1)`, execute/queue buttons, close button. Live-system verification in step 04.6.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint clean; Prettier formatted both RhythmControls and CodeDrawer).
+- `pnpm test` — 119 tests pass (5 files; no regressions).
+- Visual check: `pnpm dev` — progression chips area visible in footer; harmony controls overlay visible in harmony view; rhythm controls overlay visible in rhythm view; code drawer tab button at bottom-center; drawer slides up on click; old temporary transport panel still visible (removed in step 04.5).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Behavior | Test type | Covered? |
+|---|---|---|---|
+| A-04-01 | Header brand + view-toggle + key-selector render; view-toggle switches PIXI scene | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-02 | Now-playing pill label and pulsing dot; resets on hush | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-03 | Engine buttons call transport actions and update nowPlaying | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-04 | BPM slider + tap-tempo (button + space-bar) | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-05 | Progression chips drag/tap/remove behavior | live-system | Partial — ProgressionChips.svelte built; live-system verification in step 04.6 |
+| A-04-06 | Chord-mode toggle updates chordMode | live-system | Partial — HarmonyControls.svelte built; live-system verification in step 04.6 |
+| A-04-07 | Euclidean controls (k/n/r readouts, preview, add-orbit, add-empty) | live-system | Partial — RhythmControls.svelte built; live-system verification in step 04.6 |
+| A-04-08 | Morph toggle radial↔linear (A-03-06 preserved) | live-system | Partial — morph toggle moved to RhythmControls.svelte; live-system verification in step 04.6 |
+| A-04-09 | Code drawer open/close + execute/queue | live-system | Partial — CodeDrawer.svelte built; live-system verification in step 04.6 |
+| A-04-10 | HUD voice-leading after chord pick; legend visibility | live-system | Not yet (step 04.5) |
+| A-04-11 | Tooltip on `[data-tip]` elements | live-system | Not yet (step 04.5) |
+| A-04-12 | Layer overlay glass styling + solo/mute active colors | live-system | Not yet (step 04.5) |
+| A-04-13 | All A-03 IDs covered | unit | Confirmed — 119 tests pass (no regressions) |
+| A-04-14 | Gate commands exit 0 | unit + proxy:static-analysis | Partial — tsc 0 errors, lint 0 errors, 119 tests; build deferred to step 04.6 |
+
+### Decisions made (if any)
+
+- `ProgressionChips` is inserted into `Transport.svelte` via a Svelte `<slot>` (Transport accepts children). This keeps the prototype's `footer > .prog` DOM structure intact while enabling independent component files. No new decisions require Register entry — the slot pattern is a standard Svelte composition mechanism.
+- `morphTarget` and `handleMorphToggle` remain in `App.svelte` (for the temp panel) AND in `RhythmControls.svelte` (the real implementation). Both coexist without conflict since they are separate local variables. App.svelte's `morphTarget` will be removed together with the temp panel in step 04.5.
+
+### Proposed Decisions Register entries (if any)
+
+None — no new architectural decisions introduced in this step.
+
+### Blockers resolved during this step (if any)
+
+- ESLint `@typescript-eslint/no-unused-vars` flagged `catch (_)` bindings in `ProgressionChips.svelte`. Fixed by using `catch { }` (optional catch binding, TypeScript 4.0+, supported in this project's TypeScript version).
+- Prettier reformatted `placeholder='s("bd hh sd hh")'` into an invalid HTML attribute (`placeholder="s("bd hh sd hh")"`). Fixed by using the Svelte expression syntax: `placeholder={'s("bd hh sd hh")'}`.
+
+### Environment state after this step
+
+- `src/ui/ProgressionChips.svelte` — created.
+- `src/ui/HarmonyControls.svelte` — created.
+- `src/ui/RhythmControls.svelte` — created.
+- `src/ui/CodeDrawer.svelte` — created.
+- `src/ui/Transport.svelte` — `<slot />` added inside `<footer>`.
+- `src/app/App.svelte` — 4 new component imports; HarmonyControls + RhythmControls inside `#stage`; ProgressionChips via Transport slot; CodeDrawer after Transport.
+- 119 tests still passing.
+- `tsc --noEmit` 0 errors; `pnpm lint` 0 errors.
+
+### Next-step context (only if non-obvious)
+
+Step 04.5 creates `Hud.svelte`, `Legend.svelte`, `Tooltip.svelte`; creates `src/state/hud.ts`; updates layer-control overlay styling in App.svelte; and removes the temporary transport panel (the `<div class="transport-panel">` block and all associated imports/functions in App.svelte). The `morphTarget` variable and `handleMorphToggle` function in App.svelte can be safely removed in step 04.5 since `RhythmControls.svelte` now owns those. The `setMorphTarget` import in App.svelte can also be removed once the temp panel is gone (the only remaining `setMorphTarget` caller will be `RhythmControls.svelte`).
