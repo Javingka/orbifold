@@ -2,7 +2,8 @@
   SPDX-License-Identifier: AGPL-3.0-only
   Orbifold — root Svelte component.
   Phase 03 step 03.5: rhythm scene, radial↔linear morph, hover controls, full store wiring.
-  Phase 04 will replace the temporary transport buttons below with the full UI.
+  Phase 04 step 04.3: Header and Transport components added; #stage layout changed to flex:1.
+  Phase 04 step 04.5 will remove the temporary transport panel.
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -16,6 +17,8 @@
     setBpm,
     requeueLive,
   } from '../state/session.js';
+  import Header from '../ui/Header.svelte';
+  import Transport from '../ui/Transport.svelte';
   import { get } from 'svelte/store';
   import { initStage, onResize, setView } from '../render/stage.js';
   import {
@@ -307,10 +310,15 @@
 </script>
 
 <!--
-  OD-3 resolution: div#stage is the full-screen PIXI mount target.
-  PIXI's resizeTo tracks this div. z-index: 0 keeps it behind the transport panel.
-  The <canvas id="pixi-canvas"> stub from Phase 02 is replaced by this div;
-  PIXI appends its own canvas element inside it via initStage.
+  Phase 04 step 04.3: Header component at top of flex-column layout.
+  Replaces the inline prototype <header class="glass"> (lines 358–395).
+-->
+<Header />
+
+<!--
+  OD-3 resolution: div#stage is the PIXI mount target.
+  Phase 04 step 04.3: changed from position:fixed full-screen to flex:1 within #app.
+  PIXI's resizeTo tracks this div. The <canvas> is appended inside by initStage.
 -->
 <div id="stage" bind:this={stageEl}></div>
 
@@ -339,7 +347,15 @@
   </div>
 {/if}
 
-<!-- TEMPORARY TRANSPORT PANEL — Phase 02 only; replaced in Phase 04 -->
+<!--
+  Phase 04 step 04.3: Transport component at bottom of flex-column layout.
+  Replaces the prototype <footer class="glass"> (lines 484–513).
+  Includes now-playing pill, engine buttons, BPM slider, and tap-tempo.
+  ProgressionChips will be added here in step 04.4.
+-->
+<Transport />
+
+<!-- TEMPORARY TRANSPORT PANEL — Phase 02 only; replaced in Phase 04.5 -->
 <div class="transport-panel">
   <p class="transport-label">Orbifold — transport (Phase 02 temp UI)</p>
 
@@ -385,19 +401,19 @@
 
 <style>
   /*
-   * div#stage: full-screen PIXI canvas container.
-   * position: fixed so it covers the entire viewport regardless of body scroll.
-   * z-index: 0 — sits behind the transport panel overlay.
-   * OD-3 resolution: matches prototype div#stage geometry (line 906 resizeTo target).
+   * div#stage: PIXI canvas container.
+   * Phase 04 step 04.3: changed from position:fixed full-screen to flex:1 within
+   * #app flex column, with margin and border-radius matching prototype line 106.
+   * Prototype: #stage { position:relative; flex:1; margin:10px 12px; border-radius:22px; overflow:hidden; }
+   * OD-3 resolution: PIXI's resizeTo tracks this div.
    */
   #stage {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
+    position: relative;
+    flex: 1;
+    margin: 10px 12px;
+    border-radius: 22px;
     overflow: hidden;
+    min-height: 0; /* prevent flex child overflow */
   }
 
   /*

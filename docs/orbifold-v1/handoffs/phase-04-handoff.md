@@ -147,3 +147,110 @@ None.
 ### Next-step context (only if non-obvious)
 
 Step 04.3 creates `src/ui/Header.svelte` and `src/ui/Transport.svelte` and imports them in `App.svelte`. The header reads `$sessionStore.view` and `$sessionStore.harmony.{root,mode,octave}`; the transport reads `$sessionStore.nowPlaying` and `$sessionStore.bpm`. Both use the new `setHarmonyKey`, `playGroove`, `playProgression`, `playSession`, `hushAll`, `setBpm` actions. The `.glass` class and `.seg` classes from `app.css` are now available globally for component use.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-08. Iteration: 1 of 5.
+**Reason:** All 8 standard checklist items and the prototype parity item pass. Commit scope is clean (4 source files + handoff, all within step spec scope; render scene files untouched; transport panel correctly preserved). Commit message format is correct. Acceptance Coverage Table covers all 14 A-04 IDs with appropriate "not yet" for live-system items and correct partial/confirmed for A-04-13/A-04-14. Test evidence is relevant (119 existing tests confirm no regressions; optional new unit tests acknowledged as not written, which is within spec). No live-system IDs claimed. Register respected: exact-version pinning holds (no new dependencies added; `bjorklund`/`rotate`/`RSTEPS`/`Sound` imports are from existing core modules); `Chord.cx/cy` ephemeral decision respected. Reversibility intact: no flags, no migrations, existing tests pass. Prototype parity: all 9 session.ts functions have JSDoc with prototype line citations verified against actual source. `app.css` contains every required token group from the spec. AGPL-3.0 header present on `app.css` and `main.ts`. The `clearChordAt` function (9th, beyond the 8 specified) is in-scope additive work anticipated by step 04.4's spec for `ProgressionChips.svelte`.
+**Next action:** Dev proceeds to step 04.3
+
+---
+
+## Step 04.3 — Header and Transport components
+
+**Date:** 2026-06-08
+**Commit(s):** see below
+**Iteration:** 1 of 1
+
+### Completed
+
+- Created `src/ui/Header.svelte` — ports `<header class="glass">` (prototype lines 358–395 HTML, CSS lines 68–98):
+  - Brand: `꩜` glyph, `h1` "Orbifold", `.tag` "geometría sonora".
+  - View-toggle: `.seg#viewSeg` with two buttons (`data-view="harmony"`, `data-view="rhythm"`). Active state driven by `$sessionStore.view`. On click: `sessionStore.update(s => ({ ...s, view }))`.
+  - Key selector: three `<select>` elements for `melRoot` (12 note names, 0–11), `melMode` (8 modes), `melOctave` (2/3/4). On change: calls `setHarmonyKey(root, mode, octave)`.
+  - Spacer `.sp` (flex: 1). Mic button deferred.
+  - `NOTE_NAMES` array defined inline (prototype line 592).
+- Created `src/ui/Transport.svelte` — ports `<footer class="glass">` (prototype lines 484–513 HTML, CSS lines 180–222):
+  - Now-playing pill: `.now#nowPlaying` with pulsing `.dot`, `.nlbl` "sonando", `.nval` shows `nowPlaying.label ?? 'silencio'`. `.live` class when `source !== null`.
+  - Engine buttons: `▶ Ritmo` (`.ebtn.rhythm`), `▶ Armonía` (`.ebtn.harmony`), `▶ Sesión` (`.play-session`). Wire to `playGroove()` / `playProgression()` / `playSession()`.
+  - Silence: `.tbtn.warm#hushBtn` → `hushAll()`.
+  - BPM slider: `input#cps` range min `0.166` max `1.166` step `0.001`. Readout `.bpm#bpmReadout` shows `$sessionStore.bpm`. Conversion: `cps * 240 = bpm`.
+  - Tap-tempo: `.taptempo#tapBtn`. Local `tapTimes[]`. Gap > 2 s resets. Keeps last 6. Flashes `.flash` class for 90 ms. Computes `setBpm(Math.round(60000/avg))`. Space-bar listener via `document.addEventListener('keydown', ...)` on mount/destroy; guard against `INPUT|TEXTAREA|SELECT` focus.
+  - Progression chips area deferred to step 04.4.
+- Updated `src/app/App.svelte`:
+  - Added imports for `Header` and `Transport`.
+  - Wrapped layout: `<Header />` above `#stage`; `<Transport />` below `#stage` (above temporary panel).
+  - Changed `#stage` CSS from `position:fixed; top:0; left:0; width:100%; height:100%` to `position:relative; flex:1; margin:10px 12px; border-radius:22px; overflow:hidden; min-height:0` to integrate into the `#app` flex column.
+  - Temporary transport panel retained (removed in step 04.5 per spec).
+- Did NOT modify any render scene files.
+- Prettier formatting applied on new Svelte files.
+
+### Prototype parity
+
+- `Header.svelte` — HTML structure: prototype lines 358–395. CSS: prototype lines 68–98. `NOTE_NAMES` array: prototype line 592. View-toggle data attributes: prototype lines 365–368. Mode options: prototype lines 373–382.
+- `Transport.svelte` — HTML structure: prototype lines 484–513. CSS: prototype lines 180–222. BPM conversion (`cpsToBpm`/`bpmToCps`): prototype lines 644–645. BPM slider input handler: prototype line 669. Tap-tempo `registerTap()`: prototype lines 672–691 (gap > 2 s, keep last 6, flash 90 ms, space-bar guard).
+- `#stage` flex layout: prototype line 106 (`position:relative; flex:1; margin:10px 12px; border-radius:22px; overflow:hidden`).
+
+### Files touched
+
+- `src/ui/Header.svelte` — created
+- `src/ui/Transport.svelte` — created
+- `src/app/App.svelte` — imports added; `<Header />` and `<Transport />` inserted; `#stage` CSS changed to flex:1
+- `docs/orbifold-v1/handoffs/phase-04-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+- **A-04-01** — `Header.svelte` renders brand glyph + "Orbifold" + "geometría sonora" tag; view-toggle `.seg#viewSeg` with two buttons; active class driven by `$sessionStore.view`. Clicking a view button calls `sessionStore.update(s => ({ ...s, view }))` which will switch the PIXI scene (store subscription in App.svelte already calls `setView(state.view)`). Covered for live-system verification in step 04.6.
+- **A-04-02** — `Transport.svelte` `.now.live` class driven by `$sessionStore.nowPlaying.source !== null`; `.nval` reflects `nowPlaying.label`. Covered for live-system verification in step 04.6.
+- **A-04-03** — Engine buttons bound to `playGroove()`, `playProgression()`, `playSession()`, `hushAll()`. Covered for live-system verification in step 04.6.
+- **A-04-04** — BPM slider + `registerTap()` with correct prototype algorithm. Covered for live-system verification in step 04.6.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint clean; Prettier formatted both Svelte files).
+- `pnpm test` — 119 tests pass (5 files; no regressions).
+- Visual check: `pnpm dev` — Header renders at top with brand, view-toggle, and key selector; Transport renders at bottom with engine buttons, BPM slider, now-playing pill, and TAP button; `#stage` with PIXI canvas fills the middle flex slot; old temporary transport panel still visible below Transport (will be removed in step 04.5).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Behavior | Test type | Covered? |
+|---|---|---|---|
+| A-04-01 | Header brand + view-toggle + key-selector render; view-toggle switches PIXI scene | live-system | Partial — component built; live-system verification in step 04.6 |
+| A-04-02 | Now-playing pill label and pulsing dot; resets on hush | live-system | Partial — component built; live-system verification in step 04.6 |
+| A-04-03 | Engine buttons call transport actions and update nowPlaying | live-system | Partial — component built; live-system verification in step 04.6 |
+| A-04-04 | BPM slider + tap-tempo (button + space-bar) | live-system | Partial — component built; live-system verification in step 04.6 |
+| A-04-05 | Progression chips drag/tap/remove | live-system | Not yet (step 04.4) |
+| A-04-06 | Chord-mode toggle | live-system | Not yet (step 04.4) |
+| A-04-07 | Euclidean controls | live-system | Not yet (step 04.4) |
+| A-04-08 | Morph toggle | live-system | Not yet (step 04.4) |
+| A-04-09 | Code drawer | live-system | Not yet (step 04.4) |
+| A-04-10 | HUD + legend | live-system | Not yet (step 04.5) |
+| A-04-11 | Tooltip | live-system | Not yet (step 04.5) |
+| A-04-12 | Layer overlay glass styling | live-system | Not yet (step 04.5) |
+| A-04-13 | All A-03 IDs covered | unit | Confirmed — 119 tests pass (no regressions) |
+| A-04-14 | Gate commands exit 0 | unit + proxy:static-analysis | Partial — tsc 0 errors, lint 0 errors, 119 tests; build deferred to step 04.6 |
+
+### Decisions made (if any)
+
+- `#stage` CSS changed from `position:fixed` to `flex:1` within `#app` flex column. This was anticipated in the inventory (§Risks: "#stage becomes a proper flex-column layout"). PIXI `resizeTo: stageEl` continues to work correctly since `stageEl` fills the flex slot.
+
+### Proposed Decisions Register entries (if any)
+
+None — no new architectural decisions beyond those already documented.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/ui/Header.svelte` — created (178 lines).
+- `src/ui/Transport.svelte` — created (414 lines).
+- `src/app/App.svelte` — 3 changes: two new component imports, two new component usages, `#stage` CSS updated.
+- 119 tests still passing.
+- `tsc --noEmit` 0 errors; `pnpm lint` 0 errors.
+
+### Next-step context (only if non-obvious)
+
+Step 04.4 creates `ProgressionChips.svelte`, `HarmonyControls.svelte`, `RhythmControls.svelte`, and `CodeDrawer.svelte`. The chips area slot in `Transport.svelte` is intentionally empty — `ProgressionChips` will be imported in `App.svelte` and placed inside the footer layout area (or the Transport component can be refactored to accept it as a slot if the Planner prefers; spec says it goes in the footer area).
