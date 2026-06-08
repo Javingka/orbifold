@@ -63,6 +63,7 @@ import {
   miniAllStrings,
 } from '@strudel/web';
 import type { Cyclist } from '@strudel/web';
+import { anchorVisualPhase } from '../state/phase-anchor.js';
 
 // ── Module-level state ────────────────────────────────────────────────────────
 // Mirrors prototype globals (lines 582–585), scoped to this module.
@@ -171,11 +172,13 @@ export async function runNow(
   try {
     await evaluate(bare);
     _currentCode = bare;
+    anchorVisualPhase();
     return { ok: true };
   } catch {
     try {
       await evaluate(bare);
       _currentCode = bare;
+      anchorVisualPhase();
       return { ok: true };
     } catch (e2) {
       const msg = e2 instanceof Error ? e2.message : String(e2);

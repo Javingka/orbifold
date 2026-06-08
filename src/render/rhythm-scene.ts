@@ -10,13 +10,14 @@
 //   onStageHover():        reference/orbifold.html lines 1336–1341
 //   nearestLayer():        reference/orbifold.html lines 1319–1324
 // OD-1 resolution: DOM overlay in App.svelte positioned via pointer coordinates.
-// OD-4 resolution: module-local _sessionStart, reset when nowPlaying.source changes.
+// Visual phase anchor: shared module (phase-anchor.ts), reset in strudel runNow().
 
 import * as PIXI from 'pixi.js';
 import { get } from 'svelte/store';
 
 import { layerAudible } from '../core/rhythm/layers.js';
 import type { RhythmLayer } from '../core/rhythm/layers.js';
+import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
 import { sessionStore, requeueLive } from '../state/session.js';
 import type { SessionState } from '../state/session.js';
 import { getStageRefs } from './stage.js';
@@ -88,15 +89,6 @@ let _rMorph = 0;
 
 /** Target for morph easing. Prototype: `rLayoutTarget`. */
 let _rLayoutTarget = 0;
-
-/**
- * Session start for playhead phase computation.
- * OD-4 resolution: module-local, reset when nowPlaying.source changes.
- */
-let _sessionStart = performance.now();
-
-/** Previous nowPlaying source for change detection. */
-let _prevNowPlayingSource: string | null = null;
 
 /** Hovered layer index for DOM overlay positioning. -1 = none. */
 let _hoveredLayerIndex = -1;
@@ -241,19 +233,10 @@ export function buildRhythmScene(state: SessionState): void {
  * Update layer label muted/solo state without full geometry rebuild.
  * Called by App.svelte's store subscription when rhythm changes.
  *
- * Also handles OD-4: resets _sessionStart when nowPlaying.source changes.
- *
  * @param state - Current SessionState.
  */
 export function updateRhythmDynamic(state: SessionState): void {
   _layers = state.rhythm.layers;
-
-  // OD-4: reset _sessionStart when source activates
-  const src = state.nowPlaying.source;
-  if (src !== null && src !== _prevNowPlayingSource) {
-    _sessionStart = performance.now();
-  }
-  _prevNowPlayingSource = src;
 
   // Update label fill colors for muted state
   _layerLabels.forEach((lab, li) => {
@@ -273,7 +256,7 @@ export function updateRhythmDynamic(state: SessionState): void {
  * Prototype: tickRhythm(phase), lines 1146–1215.
  *
  * NOTE: The `delta` parameter is the PIXI ticker dimensionless scalar.
- * Phase is computed internally from performance.now() and _sessionStart.
+ * Phase is computed from performance.now() and getVisualPhaseAnchor() (reset in runNow).
  *
  * @param _delta - PIXI ticker delta (not used directly; phase is time-based).
  */
@@ -330,7 +313,7 @@ export function tickRhythm(_delta: number): void {
   const bpm = state.bpm > 0 ? state.bpm : 120; // Defect 3 fix: guard against bpm=0/NaN
   const barMs = (60000 / bpm) * 4;
   const now = performance.now();
-  const phase = ((now - _sessionStart) % barMs) / barMs; // 0..1 per bar
+  const phase = ((now - getVisualPhaseAnchor()) % barMs) / barMs; // 0..1 per bar
 
   // Fresh source read: deliberately re-read nowPlaying.source from the store rather
   // than relying on state captured earlier. This ensures that even if the store

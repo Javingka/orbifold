@@ -24,6 +24,7 @@ import { nrLabel } from '../core/theory/neo-riemannian.js';
 import type { NRLabel } from '../core/theory/neo-riemannian.js';
 import { minimalVoiceLeading } from '../core/theory/voice-leading.js';
 import type { VoiceLeadingResult } from '../core/theory/voice-leading.js';
+import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
 import { sessionStore, playChord, requeueLive } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
@@ -84,16 +85,6 @@ let _lastPick: { rootPc: number; qual: string; cx: number; cy: number } | null =
 
 /** Traveling particle position along voice-leading path [0..1). Prototype: `particle`. */
 let _particle = 0;
-
-/**
- * Session start timestamp for bar-phase computation.
- * OD-4 resolution: module-local, reset when nowPlaying.source changes to active.
- * Prototype: `sessionStart` global, reset in runNow/queueForNextCycle (lines 616, 623).
- */
-let _sessionStart = performance.now();
-
-/** Track the previous nowPlaying source to detect source changes. */
-let _prevNowPlayingSource: string | null = null;
 
 /** Current view, kept in sync with sessionStore.view for the ticker dispatch. */
 let _currentView: 'harmony' | 'rhythm' = 'harmony';
@@ -302,13 +293,6 @@ export function updateTonnetzDynamic(state: SessionState): void {
   const refs = getStageRefs();
   const { hNRL } = refs;
   const progression = state.harmony.progression;
-
-  // ── OD-4 resolution: reset _sessionStart when source activates ────────────
-  const src = state.nowPlaying.source;
-  if (src !== null && src !== _prevNowPlayingSource) {
-    _sessionStart = performance.now();
-  }
-  _prevNowPlayingSource = src;
 
   // ── Sync view for ticker dispatch ─────────────────────────────────────────
   if (state.view === 'harmony' || state.view === 'rhythm') {
@@ -573,7 +557,7 @@ export function tickHarmony(delta: number): void {
   const bpm = state.bpm;
   // barMs = duration of one 4/4 bar in milliseconds
   const barMs = (60000 / bpm) * 4;
-  const phase = ((now - _sessionStart) % barMs) / barMs; // 0..1 per bar
+  const phase = ((now - getVisualPhaseAnchor()) % barMs) / barMs; // 0..1 per bar
 
   // ── Advance particle — prototype line 1079 ────────────────────────────────
   _particle = (_particle + delta * 0.012) % 1;
@@ -621,7 +605,7 @@ export function tickHarmony(delta: number): void {
   // ── Active chord pulse — prototype lines 1106–1120 ────────────────────────
   let activeIdx = -1;
   if (prog.length > 0) {
-    activeIdx = Math.floor((now - _sessionStart) / barMs) % prog.length;
+    activeIdx = Math.floor((now - getVisualPhaseAnchor()) / barMs) % prog.length;
   }
 
   let highlightHintCx: number | undefined;
