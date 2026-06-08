@@ -424,8 +424,8 @@ export function tickRhythm(_delta: number): void {
     const p1 = { x: lerp(radP1.x, linP1.x, m), y: lerp(radP1.y, linP1.y, m) };
     const p2 = { x: lerp(radP2.x, linP2.x, m), y: lerp(radP2.y, linP2.y, m) };
 
-    // Draw playhead line — prototype line 1202: lineStyle(2, 0xffffff, 0.18)
-    rDyn.lineStyle(2, 0xffffff, 0.18);
+    // Draw playhead line — prototype line 1202; accent at 0.55 for visibility.
+    rDyn.lineStyle(2, COL.accent, 0.55);
     rDyn.moveTo(p1.x, p1.y);
     rDyn.lineTo(p2.x, p2.y);
 

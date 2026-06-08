@@ -115,12 +115,8 @@
           },
         ],
       },
-      // Minimal default harmony: C major one-chord progression.
-      // rootPc=0 (C), qual='maj', gain=0.6 (prototype default lines 758–763).
-      harmony: {
-        ...s.harmony,
-        progression: [{ rootPc: 0, qual: 'maj' as const, gain: 0.6 }],
-      },
+      // Harmony progression stays empty on load — prototype melState.progression:[] (line 717).
+      // No phantom Tonnetz highlight until the user picks a chord.
     }));
 
     prevLayerCount = get(sessionStore).rhythm.layers.length;
@@ -162,8 +158,6 @@
     registerTicker(app);
 
     // ── Step 03.4: initial dynamic state after build ───────────────────────
-    // Call updateTonnetzDynamic once to establish _lastPick / NR / suggestions
-    // from the seeded progression (C major chord).
     updateTonnetzDynamic(get(sessionStore));
 
     // ── Step 03.4: store subscription for reactive updates ─────────────────

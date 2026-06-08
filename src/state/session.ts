@@ -69,6 +69,10 @@ export interface Chord {
   rootPc: number; // 0–11 (pitch class)
   qual: Quality; // 'maj' | 'min' | 'dim' | 'aug'
   gain: number; // 0–1.2; default 0.6
+  /** Tonnetz centroid x when picked; disambiguates wrapped chord instances. Prototype: ch.cx */
+  cx?: number;
+  /** Tonnetz centroid y when picked; disambiguates wrapped chord instances. Prototype: ch.cy */
+  cy?: number;
 }
 
 /**

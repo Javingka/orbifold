@@ -132,6 +132,33 @@ function pointInTri(px: number, py: number, tri: RenderTri): boolean {
   return u >= 0 && v >= 0 && w >= 0;
 }
 
+/**
+ * Resolve the RenderTri for a progression chord.
+ * Prototype stores `tri` on each chord; the port stores cx/cy anchors instead.
+ * When the Tonnetz wraps, many triangles share rootPc:qual — pick by stored centroid,
+ * or fall back to proximity to the previous chord in the path.
+ */
+function findRenderTriForChord(ch: Chord, hintCx?: number, hintCy?: number): RenderTri | null {
+  const cands = _renderTris.filter((t) => t.rootPc === ch.rootPc && t.qual === ch.qual);
+  if (cands.length === 0) return null;
+  if (cands.length === 1) return cands[0];
+
+  const anchorCx = ch.cx ?? hintCx;
+  const anchorCy = ch.cy ?? hintCy;
+  if (anchorCx == null || anchorCy == null) return cands[0];
+
+  let best = cands[0];
+  let bestD = Infinity;
+  for (const t of cands) {
+    const d = Math.hypot(t.cx - anchorCx, t.cy - anchorCy);
+    if (d < bestD) {
+      bestD = d;
+      best = t;
+    }
+  }
+  return best;
+}
+
 // ── buildTonnetz ─────────────────────────────────────────────────────────────
 
 /**
@@ -290,23 +317,9 @@ export function updateTonnetzDynamic(state: SessionState): void {
   // ── Extract last picked chord — prototype: lastPick (line 1232) ───────────
   if (progression.length > 0) {
     const last = progression[progression.length - 1];
-    // Find the matching RenderTri (closest to previous _lastPick centroid if
-    // multiple triangles share the same rootPc:qual — Tonnetz wraps).
-    let sel: RenderTri | null = null;
-    let bd = Infinity;
-    const prevCx = _lastPick !== null ? _lastPick.cx : null;
-    const prevCy = _lastPick !== null ? _lastPick.cy : null;
-    for (const t of _renderTris) {
-      if (t.rootPc === last.rootPc && t.qual === last.qual) {
-        // If we have a previous centroid, pick the closest matching tri.
-        // Otherwise just take the first match.
-        const d = prevCx !== null && prevCy !== null ? Math.hypot(t.cx - prevCx, t.cy - prevCy) : 0;
-        if (sel === null || d < bd) {
-          bd = d;
-          sel = t;
-        }
-      }
-    }
+    const prevCx = _lastPick !== null ? _lastPick.cx : undefined;
+    const prevCy = _lastPick !== null ? _lastPick.cy : undefined;
+    const sel = findRenderTriForChord(last, prevCx, prevCy);
     if (sel !== null) {
       _lastPick = { rootPc: sel.rootPc, qual: sel.qual, cx: sel.cx, cy: sel.cy };
     }
@@ -468,7 +481,7 @@ export function onStagePointerDown(e: PointerEvent): void {
  * @param state - Current SessionState (passed to avoid redundant get() calls).
  */
 function pickChord(tri: RenderTri, state: SessionState): void {
-  const newChord: Chord = { rootPc: tri.rootPc, qual: tri.qual, gain: 0.6 };
+  const newChord: Chord = { rootPc: tri.rootPc, qual: tri.qual, gain: 0.6, cx: tri.cx, cy: tri.cy };
 
   // ── Compute voice-leading before appending — prototype lines 1363–1370 ────
   // `Chord` stores {rootPc, qual, gain} only; pcs are derived via chordPcs().
@@ -538,21 +551,15 @@ export function tickHarmony(delta: number): void {
   // ── Voice-leading path on hPath — prototype lines 1091–1103 ──────────────
   // Map each progression Chord to its centroid via _renderTris.
   const centroids: { cx: number; cy: number }[] = [];
+  let pathHintCx: number | undefined;
+  let pathHintCy: number | undefined;
   for (const ch of prog) {
-    // Find closest matching RenderTri
-    let bestT: RenderTri | null = null;
-    let bestD = Infinity;
-    for (const t of _renderTris) {
-      if (t.rootPc === ch.rootPc && t.qual === ch.qual) {
-        // Use _lastPick proximity as tiebreaker; here just take first
-        const d = bestT !== null ? Math.hypot(t.cx - bestT.cx, t.cy - bestT.cy) : Infinity;
-        if (bestT === null || d < bestD) {
-          bestD = 0; // First match wins (consistent with pick order)
-          bestT = t;
-        }
-      }
+    const tri = findRenderTriForChord(ch, pathHintCx, pathHintCy);
+    if (tri !== null) {
+      centroids.push({ cx: tri.cx, cy: tri.cy });
+      pathHintCx = tri.cx;
+      pathHintCy = tri.cy;
     }
-    if (bestT !== null) centroids.push({ cx: bestT.cx, cy: bestT.cy });
   }
 
   if (centroids.length >= 1) {
@@ -587,16 +594,13 @@ export function tickHarmony(delta: number): void {
     activeIdx = Math.floor((now - _sessionStart) / barMs) % prog.length;
   }
 
+  let highlightHintCx: number | undefined;
+  let highlightHintCy: number | undefined;
   prog.forEach((ch, idx) => {
-    // Find matching RenderTri for this chord
-    let tri: RenderTri | null = null;
-    for (const t of _renderTris) {
-      if (t.rootPc === ch.rootPc && t.qual === ch.qual) {
-        tri = t;
-        break;
-      }
-    }
+    const tri = findRenderTriForChord(ch, highlightHintCx, highlightHintCy);
     if (tri === null) return;
+    highlightHintCx = tri.cx;
+    highlightHintCy = tri.cy;
 
     const isActive = idx === activeIdx;
     const pulse = isActive ? 0.5 + 0.35 * Math.sin(phase * Math.PI * 2) : 0.22;
