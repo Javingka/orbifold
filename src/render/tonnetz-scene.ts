@@ -19,13 +19,14 @@ import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { SCALE_INTERVALS } from '../core/theory/scales.js';
 import type { Mode } from '../core/theory/scales.js';
 import { computeDiatonic } from '../core/theory/scales.js';
-import { chordPcs } from '../core/theory/chords.js';
+import { chordPcs, chordLabel } from '../core/theory/chords.js';
 import { nrLabel } from '../core/theory/neo-riemannian.js';
 import type { NRLabel } from '../core/theory/neo-riemannian.js';
 import { minimalVoiceLeading } from '../core/theory/voice-leading.js';
 import type { VoiceLeadingResult } from '../core/theory/voice-leading.js';
 import { sessionStore, playChord, requeueLive } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
+import { showHud } from '../state/hud.js';
 import { getStageRefs } from './stage.js';
 import { COL, FUNC_COL, FONT_SERIF, FONT_SANS } from './theme.js';
 import { tickRhythm as _tickRhythmImpl } from './rhythm-scene.js';
@@ -487,6 +488,7 @@ function pickChord(tri: RenderTri, state: SessionState): void {
   // `Chord` stores {rootPc, qual, gain} only; pcs are derived via chordPcs().
   // `RenderTri` extends TonnetzTriangle which carries pcs: number[].
   const prevProg = state.harmony.progression;
+  const newLabel = chordLabel(tri.rootPc, tri.qual);
   if (prevProg.length > 0) {
     const prev = prevProg[prevProg.length - 1];
     const prevPcsArr = chordPcs(prev.rootPc, prev.qual);
@@ -496,9 +498,37 @@ function pickChord(tri: RenderTri, state: SessionState): void {
         [prevPcsArr[0], prevPcsArr[1], prevPcsArr[2]],
         [newPcsArr[0], newPcsArr[1], newPcsArr[2]]
       );
+      // ── Write to HUD store — replaces prototype showHud() DOM writes ──────
+      // Prototype lines 1366–1367: showHud(`${prev.label} → ${ch.label}`, ...)
+      // Voice moves: accent-colored <span class="mv"> for each semitone delta.
+      // Prototype line 1367: `voces: ${vl.moves.map(m=>(m>0?'+':'')+m).join('  ')}  ·  Σ`
+      const prevLabel = chordLabel(prev.rootPc, prev.qual);
+      const movesHtml = _lastVL.moves
+        .map((m) => `<span class="mv">${m > 0 ? '+' : ''}${m}</span>`)
+        .join('  ');
+      const sigma = _lastVL.size;
+      showHud(
+        `${prevLabel} → ${newLabel}`,
+        `voces: ${movesHtml}  ·  Σ ${sigma} semitono${sigma === 1 ? '' : 's'}`
+      );
+    } else {
+      _lastVL = null;
+      // Fallback HUD when pcs don't align (should not occur for standard triads).
+      showHud(
+        newLabel,
+        tri.info ? `${tri.info.roman} · ${tri.info.func.label}` : 'acorde cromático'
+      );
     }
   } else {
     _lastVL = null;
+    // ── First chord pick: show chord name + diatonic function ────────────────
+    // Prototype line 1369: showHud(ch.label, `${tri.info.roman} · ...`)
+    showHud(
+      newLabel,
+      tri.info
+        ? `${tri.info.roman} · ${tri.info.func.label}`
+        : 'acorde cromático (fuera de la clave)'
+    );
   }
 
   // ── Append to sessionStore progression — prototype line 1372 ─────────────

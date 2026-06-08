@@ -326,7 +326,7 @@ Step 04.4 creates `ProgressionChips.svelte`, `HarmonyControls.svelte`, `RhythmCo
 - `src/ui/RhythmControls.svelte` — created
 - `src/ui/CodeDrawer.svelte` — created
 - `src/ui/Transport.svelte` — added `<slot />` inside footer
-- `src/app/App.svelte` — added component imports and usages; HarmonyControls + RhythmControls inside `#stage`; ProgressionChips via Transport slot; CodeDrawer fixed overlay
+- `src/app/App.svelte` — added component imports and usages; HarmonyControls + RhythmControls inside `#stage`; ProgressionChips via Transport slot; CodeDrawer after Transport
 - `docs/orbifold-v1/handoffs/phase-04-handoff.md` — this entry
 
 ### Validation evidence (per Acceptance ID)
@@ -391,3 +391,121 @@ None — no new architectural decisions introduced in this step.
 ### Next-step context (only if non-obvious)
 
 Step 04.5 creates `Hud.svelte`, `Legend.svelte`, `Tooltip.svelte`; creates `src/state/hud.ts`; updates layer-control overlay styling in App.svelte; and removes the temporary transport panel (the `<div class="transport-panel">` block and all associated imports/functions in App.svelte). The `morphTarget` variable and `handleMorphToggle` function in App.svelte can be safely removed in step 04.5 since `RhythmControls.svelte` now owns those. The `setMorphTarget` import in App.svelte can also be removed once the temp panel is gone (the only remaining `setMorphTarget` caller will be `RhythmControls.svelte`).
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-08. Iteration: 1 of 5.
+**Reason:** All 8 standard checklist items and the prototype parity item pass. Commit scope is clean: 4 new Svelte components + Transport slot addition + App.svelte integration + handoff, all within step 04.4 spec scope; render scene files untouched; temporary transport panel correctly preserved per spec. Commit message format matches the required pattern. Acceptance Coverage Table covers all 14 A-04 IDs correctly: A-04-05 through A-04-09 Partial with live-system deferral to step 04.6, A-04-10 through A-04-12 Not Yet (step 04.5), A-04-01 through A-04-04 re-confirmed Partial from step 04.3, A-04-13 confirmed via 119 tests, A-04-14 Partial with build deferred to step 04.6. No live-system IDs claimed as covered. Register respected: no new deps, exact-version pinning intact. Reversibility intact: four new components are purely additive; temp panel coexists without conflict; 119 tests pass. Prototype parity: all four components carry explicit prototype line citations covering HTML, CSS, and JS logic ranges — verified against actual source code; drag constants (threshold 3px/step 0.006/clamp [0,1.2]) match spec and prototype exactly; KNOWN_PATTERNS map matches prototype lines 844–846; slide transition cubic-bezier and timing match prototype lines 240–242; CodeDrawer OD-2 (local state) correctly honored. AGPL-3.0 headers present on all four new files. Two minor toolchain issues (ESLint catch binding, Prettier placeholder quoting) were resolved inline and documented. The dual-`morphTarget` coexistence in App.svelte and RhythmControls.svelte is acknowledged, non-conflicting, and correctly scheduled for cleanup in step 04.5.
+**Next action:** Dev proceeds to step 04.5
+
+---
+
+## Step 04.5 — Hud, Legend, Tooltip, LayerCtl styling; remove temp transport panel
+
+**Date:** 2026-06-08
+**Commit(s):** see below
+**Iteration:** 1 of 1
+
+### Completed
+
+- Created `src/state/hud.ts` — `HudState` interface, `DEFAULT_HUD_STATE`, `hudStore` writable, `showHud(title, sub)` helper with 4 200 ms auto-hide timer. Replaces prototype DOM writes `hudTitle.textContent` / `hudSub.innerHTML` (lines 1380–1382). The `hint` field carries the default `#stageHint` text (prototype line 423).
+- Updated `src/render/tonnetz-scene.ts` — added imports for `chordLabel` (from `core/theory/chords.ts`) and `showHud` (from `state/hud.ts`). Updated `pickChord()` to call `showHud(title, sub)` replacing the planned prototype DOM writes (lines 1366–1369). Voice-move detail string uses `<span class="mv">` HTML spans for accent-colored deltas (prototype line 117). First-pick shows chord name + roman/function; subsequent picks show transition `"${prev} → ${new}"` + voice moves + Σ.
+- Created `src/ui/Hud.svelte` — ports `.hud#hud` (prototype HTML lines 409–412, CSS lines 111–117). Props: `title`, `sub`, `visible`. Uses `{@html sub}` for the voice-leading detail (to render `<span class="mv">`). `.show` class driven by `visible` prop. Scoped `.mv` style via `:global(.mv)`.
+- Created `src/ui/Legend.svelte` — ports `.legend#legend` (prototype HTML lines 414–421, CSS lines 122–127). Reads `$sessionStore.view`; shown only in harmony view via Svelte `{#if}`. Four tonal-function color squares + separator + triangle glyph + PLR label. All colors via CSS custom properties (`var(--tonic)`, `--subdom`, `--dom`).
+- Created `src/ui/Tooltip.svelte` — ports `#tip` global tooltip (prototype HTML line 576, CSS lines 339–344, JS lines 2128–2148). Single `<div id="tip">` at `position:fixed; z-index:60`. `mouseover`/`mouseout` listeners on `document` via `onMount`/`onDestroy`. `place(el)` positions above the element, clamped to viewport (prototype lines 2131–2138). `.show` class applied via `classList.add/remove` directly on the element (CSS transition 0.12s, prototype line 344).
+- Updated `src/app/App.svelte`:
+  - Added imports: `hudStore` from `state/hud.ts`; `Hud`, `Legend`, `Tooltip` from `src/ui/`.
+  - Removed imports: `initAudio`, `playGroove`, `playProgression`, `playSession`, `hushAll`, `setBpm` from `session.ts` (no longer used by App.svelte directly — owned by Transport/RhythmControls); `setMorphTarget` from `rhythm-scene.ts`.
+  - Removed variables: `morphTarget: 0|1`.
+  - Removed functions: `handleBpmInput`, `handleMorphToggle`, `handleViewToggle`.
+  - Removed the entire `<div class="transport-panel">` block and all its children.
+  - Removed the `.transport-panel`, `.transport-label`, `.now-playing` style rules.
+  - Added `<Hud>`, `<Legend>`, and `.hint` div inside `<div id="stage">`.
+  - Added `<Tooltip />` after `<CodeDrawer />` (outside the flex flow, position:fixed).
+  - Updated `.layer-ctl` CSS to match prototype `#layerCtl` glass styling (prototype CSS lines 328–337): `background: rgba(12,15,22,.92)`, `border: var(--stroke)`, `border-radius: 11px`, `backdrop-filter: blur(8px)`, `transform: translate(-50%,-140%)`.
+  - Updated layer-ctl buttons to 26×26px, font 12px 700, `color: var(--muted)` base (prototype line 332–334).
+  - Added `data-a="solo"`, `data-a="mute"`, `data-a="del"` attributes to layer-ctl buttons.
+  - Added `.on` class binding to Solo/Mute buttons from `$sessionStore.rhythm.layers[hoveredLayerIndex]?.solo/muted` (prototype lines 335–336).
+  - Solo `.on`: `background: var(--subdom); color: #0b0d12` (prototype line 335).
+  - Mute `.on`: `background: var(--dom); color: #0b0d12` (prototype line 336).
+  - Delete hover: `background: rgba(232,123,172,.4); border-color: var(--dom)` (prototype line 337).
+
+### Prototype parity
+
+- **HUD** — `showHud(title, sub)` matches prototype lines 1379–1385: same title/sub content format; 4 200 ms auto-hide; `.show` class applied/removed. Voice-leading detail format (`voces: +N  N  · Σ N semitono/s`) matches prototype lines 1366–1367. First-pick HUD shows `ch.label + roman/func.label` (prototype line 1369). `{@html sub}` used in Hud.svelte to render `<span class="mv">` accent spans (prototype CSS line 117).
+- **Legend** — HTML structure: prototype lines 414–421. CSS: prototype lines 122–127. Shown/hidden by `view === 'harmony'` — prototype hides with `.legend.hide` class (line 125); port uses Svelte `{#if}`.
+- **Tooltip** — JS: prototype lines 2128–2148 (IIFE with `mouseover`/`mouseout`, `closest('[data-tip]')`, `place()` viewport clamping, `.show` class, `relatedTarget` guard). CSS: prototype lines 339–344.
+- **LayerCtl styling** — CSS: prototype lines 328–337 (`background: rgba(12,15,22,.92)`, `border:var(--stroke)`, `border-radius:11px`, `backdrop-filter:blur(8px)`, `transform:translate(-50%,-140%)`, button 26×26px, solo/mute `.on` tonal-function colors, del hover warm).
+- **Stage hint** — prototype CSS lines 119–120 (`position:absolute; bottom:16px; left:16px; font-size:11.5px; color:var(--faint); font-family:'IBM Plex Mono'`). Text: prototype line 423.
+
+### Files touched
+
+- `src/state/hud.ts` — created
+- `src/render/tonnetz-scene.ts` — added `showHud` import + `chordLabel` import; updated `pickChord` to call `showHud`
+- `src/ui/Hud.svelte` — created
+- `src/ui/Legend.svelte` — created
+- `src/ui/Tooltip.svelte` — created
+- `src/app/App.svelte` — temp transport panel removed; new component imports/usages; layer-ctl glass styling; `morphTarget`/`handleMorphToggle`/`handleViewToggle`/`handleBpmInput` removed
+- `docs/orbifold-v1/handoffs/phase-04-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+- **A-04-10** — `Hud.svelte` built; `showHud` called in `pickChord` with correct title/sub format (voice-leading Σ, accent spans). `Legend.svelte` shows in harmony view, hides in rhythm view via `{#if}`. Live-system verification in step 04.6.
+- **A-04-11** — `Tooltip.svelte` built; `mouseover`/`mouseout` delegation on `document`, `closest('[data-tip]')`, viewport-clamped `place()`, `.show` class management. Live-system verification in step 04.6.
+- **A-04-12** — Layer-ctl `.layer-ctl` CSS updated to prototype `#layerCtl` glass spec; solo/mute `.on` class bindings from store layer state; del hover style. Live-system verification in step 04.6.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint clean; Prettier ran on `tonnetz-scene.ts`, all other new files passed unchanged).
+- `pnpm test` — 119 tests pass (5 files; no regressions).
+- `pnpm build` — 0 errors (chunk-size warning for Strudel bundle is pre-existing, not introduced by this step).
+- Visual check: `pnpm dev` — temporary transport panel is gone; HUD, Legend, stage hint, and layer-ctl overlays render inside `#stage`; Tooltip renders as `<div id="tip">` in the document; PIXI canvas and all prior UI components intact.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Behavior | Test type | Covered? |
+|---|---|---|---|
+| A-04-01 | Header brand + view-toggle + key-selector render; view-toggle switches PIXI scene | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-02 | Now-playing pill label and pulsing dot; resets on hush | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-03 | Engine buttons call transport actions and update nowPlaying | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-04 | BPM slider + tap-tempo (button + space-bar) | live-system | Partial — built in step 04.3; live-system verification in step 04.6 |
+| A-04-05 | Progression chips drag/tap/remove behavior | live-system | Partial — ProgressionChips.svelte built (step 04.4); live-system verification in step 04.6 |
+| A-04-06 | Chord-mode toggle updates chordMode | live-system | Partial — HarmonyControls.svelte built (step 04.4); live-system verification in step 04.6 |
+| A-04-07 | Euclidean controls (k/n/r readouts, preview, add-orbit, add-empty) | live-system | Partial — RhythmControls.svelte built (step 04.4); live-system verification in step 04.6 |
+| A-04-08 | Morph toggle radial↔linear (A-03-06 preserved) | live-system | Partial — RhythmControls.svelte built (step 04.4); live-system verification in step 04.6 |
+| A-04-09 | Code drawer open/close + execute/queue | live-system | Partial — CodeDrawer.svelte built (step 04.4); live-system verification in step 04.6 |
+| A-04-10 | HUD voice-leading after chord pick; legend visibility | live-system | Partial — Hud.svelte + Legend.svelte built; showHud wired in pickChord; live-system verification in step 04.6 |
+| A-04-11 | Tooltip on `[data-tip]` elements | live-system | Partial — Tooltip.svelte built with prototype JS logic; live-system verification in step 04.6 |
+| A-04-12 | Layer overlay glass styling + solo/mute active colors | live-system | Partial — layer-ctl CSS updated to prototype spec; .on bindings from store; live-system verification in step 04.6 |
+| A-04-13 | All A-03 IDs covered | unit | Confirmed — 119 tests pass (no regressions) |
+| A-04-14 | Gate commands exit 0 | unit + proxy:static-analysis | Confirmed — tsc 0 errors, lint 0 errors, 119 tests, build exit 0 |
+
+### Decisions made (if any)
+
+- `hudStore` placed in a dedicated `src/state/hud.ts` (not inlined into `session.ts`) per the ADR trigger in phase-04.md §ADR Triggers. Rationale: HUD state is ephemeral/presentational and should not be in scope for Phase 07 session persistence. This is documented in the file header.
+- `Legend.svelte` uses Svelte `{#if}` to show/hide (rather than prototype's CSS `.legend.hide` class) — equivalent behavior, idiomatic Svelte pattern.
+- `Tooltip.svelte` uses `mouseover`/`mouseout` (same as prototype) rather than `pointermove` — matches exact prototype event model (lines 2140–2146).
+
+### Proposed Decisions Register entries (if any)
+
+- "hudStore is ephemeral: not included in Phase 07 persistence scope" — low stakes; informational. The relevant note is already in `src/state/hud.ts` file header. Pilot may add to Register if desired.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/state/hud.ts` — created.
+- `src/render/tonnetz-scene.ts` — `showHud` + `chordLabel` added; `pickChord` writes to `hudStore`.
+- `src/ui/Hud.svelte` — created.
+- `src/ui/Legend.svelte` — created.
+- `src/ui/Tooltip.svelte` — created.
+- `src/app/App.svelte` — temp transport panel removed; 3 new components integrated; layer-ctl glass styling applied; unused imports/vars/functions cleaned up.
+- 119 tests still passing.
+- `tsc --noEmit` 0 errors; `pnpm lint` 0 errors; `pnpm build` exit 0.
+
+### Next-step context (only if non-obvious)
+
+Step 04.6 is operability verification: run all gate commands and perform the 14-point prototype-parity smoke test. All UI components are now in place. Any defects found in smoke testing must be fixed and re-verified in step 04.6 before declaring phase complete.

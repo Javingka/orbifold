@@ -4,26 +4,21 @@
   Phase 03 step 03.5: rhythm scene, radial↔linear morph, hover controls, full store wiring.
   Phase 04 step 04.3: Header and Transport components added; #stage layout changed to flex:1.
   Phase 04 step 04.4: ProgressionChips, HarmonyControls, RhythmControls, CodeDrawer added.
-  Phase 04 step 04.5 will remove the temporary transport panel.
+  Phase 04 step 04.5: Hud, Legend, Tooltip added; layer-ctl glass styling; temp transport removed.
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import {
-    sessionStore,
-    initAudio,
-    playGroove,
-    playProgression,
-    playSession,
-    hushAll,
-    setBpm,
-    requeueLive,
-  } from '../state/session.js';
+  import { sessionStore, requeueLive } from '../state/session.js';
+  import { hudStore } from '../state/hud.js';
   import Header from '../ui/Header.svelte';
   import Transport from '../ui/Transport.svelte';
   import ProgressionChips from '../ui/ProgressionChips.svelte';
   import HarmonyControls from '../ui/HarmonyControls.svelte';
   import RhythmControls from '../ui/RhythmControls.svelte';
   import CodeDrawer from '../ui/CodeDrawer.svelte';
+  import Hud from '../ui/Hud.svelte';
+  import Legend from '../ui/Legend.svelte';
+  import Tooltip from '../ui/Tooltip.svelte';
   import { get } from 'svelte/store';
   import { initStage, onResize, setView } from '../render/stage.js';
   import {
@@ -40,7 +35,6 @@
     onStagePointerMove,
     getHoveredLayerIndex,
     getLayerLabelPos,
-    setMorphTarget,
   } from '../render/rhythm-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -97,24 +91,12 @@
     }
   }
 
-  // Current morph target for the button toggle.
-  let morphTarget: 0 | 1 = 0;
-
   // Track previous layer count to detect when to do a full rebuild vs dynamic update.
   let prevLayerCount = 0;
 
-  // ── TEMPORARY TRANSPORT UI (Phase 02 only) ──────────────────────────────
-  // These buttons are minimal wires for step 02.4 and step 02.5 smoke-testing.
-  // Phase 04 will replace this entire block with the full Svelte UI.
-
-  // Seed the store with audible defaults on first load.
-  // DEFAULT_SESSION_STATE has empty layers and progression (spec §02.2).
-  // We seed here rather than mutating the constant to keep the type clean.
   onMount(async () => {
     // Phase 04: start with empty session (no default rhythm seed).
     // Prototype melState.progression:[] (line 717), rhythmLayers:[] (line 815).
-    // The temporary 4-on-the-floor BD seed used in Phase 02/03 smoke tests is
-    // removed here per Phase 04 spec (step 04.2). Users add layers via RhythmControls.
     prevLayerCount = get(sessionStore).rhythm.layers.length;
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
@@ -179,13 +161,6 @@
         // Only label/mute state changed: dynamic update
         updateRhythmDynamic(state);
       }
-
-      // Update BPM label if BPM changed: trigger rebuild
-      // (buildRhythmScene recreates the BPM label with current state.bpm)
-      // This is handled above via updateRhythmDynamic which updates label state;
-      // the BPM label text is set once during buildRhythmScene and would need
-      // a rebuild to change. For now we rebuild on any state change that would
-      // affect the label (a future optimization can detect BPM change specifically).
     });
 
     // ── Canvas pointer routing ─────────────────────────────────────────────
@@ -249,13 +224,6 @@
     }
   });
 
-  function handleBpmInput(event: Event) {
-    const target = event.target as HTMLInputElement;
-    setBpm(Number(target.value));
-    // Rebuild rhythm scene to update the BPM label
-    buildRhythmScene(get(sessionStore));
-  }
-
   // ── Layer overlay button handlers ────────────────────────────────────────
   // OD-1 resolution: DOM overlay with solo/mute/delete buttons.
   // Prototype: wireLayerCtl() lines 1343–1350.
@@ -296,22 +264,6 @@
     buildRhythmScene(get(sessionStore));
     requeueLive();
   }
-
-  // ── Morph toggle ─────────────────────────────────────────────────────────
-  // A-03-06: temporary button to trigger radial↔linear morph.
-  function handleMorphToggle() {
-    morphTarget = morphTarget === 0 ? 1 : 0;
-    setMorphTarget(morphTarget);
-  }
-
-  // ── Temporary view switch helper ─────────────────────────────────────────
-  // Allows toggling between harmony and rhythm view for testing A-03-05.
-  function handleViewToggle() {
-    sessionStore.update((s) => ({
-      ...s,
-      view: s.view === 'harmony' ? 'rhythm' : 'harmony',
-    }));
-  }
 </script>
 
 <!--
@@ -323,8 +275,8 @@
 <!--
   OD-3 resolution: div#stage is the PIXI mount target.
   Phase 04 step 04.3: changed from position:fixed full-screen to flex:1 within #app.
-  Phase 04 step 04.4: HarmonyControls and RhythmControls overlays placed inside #stage
-    (position:absolute; prototype .orbit-ctl CSS lines 316–319).
+  Phase 04 step 04.4: HarmonyControls and RhythmControls overlays placed inside #stage.
+  Phase 04 step 04.5: Hud, Legend, Tooltip overlays added inside #stage.
   PIXI's resizeTo tracks this div. The <canvas> is appended inside by initStage.
 -->
 <div id="stage" bind:this={stageEl}>
@@ -341,14 +293,34 @@
     position:absolute inside #stage (prototype .orbit-ctl lines 316–319).
   -->
   <RhythmControls />
+
+  <!--
+    Voice-leading HUD: top-left of #stage, shown after each chord pick.
+    Prototype: .hud#hud (lines 409–412, CSS lines 111–117).
+    Props driven by $hudStore (written by tonnetz-scene.ts pickChord).
+  -->
+  <Hud title={$hudStore.title} sub={$hudStore.sub} visible={$hudStore.visible} />
+
+  <!--
+    Tonal-function color legend: top-right of #stage, harmony view only.
+    Prototype: .legend#legend (lines 414–421, CSS lines 122–127).
+    Internally reads $sessionStore.view to show/hide itself.
+  -->
+  <Legend />
+
+  <!--
+    Stage hint: bottom-left of #stage, static instructional text.
+    Prototype: .hint#stageHint (line 423, CSS lines 119–120).
+  -->
+  <div class="hint">{$hudStore.hint}</div>
 </div>
 
 <!--
   DOM overlay for layer controls (OD-1 resolution).
   Shown when hoveredLayerIndex >= 0 (a rhythm layer is near the pointer).
   Positioned near the pointer via overlayX / overlayY.
-  Prototype: div#layerCtl (lines 1325–1334 DOM overlay approach).
-  Phase 04 will absorb this into the full Svelte UI.
+  Prototype: div#layerCtl (lines 328–337, CSS lines 328–337).
+  Phase 04 step 04.5: updated to match prototype #layerCtl glass styling.
 -->
 {#if hoveredLayerIndex >= 0}
   <div
@@ -362,9 +334,30 @@
     role="toolbar"
     aria-label="Layer controls"
   >
-    <button on:click={handleLayerSolo}>Solo</button>
-    <button on:click={handleLayerMute}>Mute</button>
-    <button on:click={handleLayerDelete}>Del</button>
+    <!--
+      Solo button: active state when layer.solo === true.
+      Prototype: button[data-a="solo"].on { background:var(--subdom); color:#0b0d12 } (line 335).
+    -->
+    <button
+      class:on={$sessionStore.rhythm.layers[hoveredLayerIndex]?.solo === true}
+      data-a="solo"
+      title="sonar sola (solo)"
+      on:click={handleLayerSolo}>S</button
+    >
+    <!--
+      Mute button: active state when layer.muted === true.
+      Prototype: button[data-a="mute"].on { background:var(--dom); color:#0b0d12 } (line 336).
+    -->
+    <button
+      class:on={$sessionStore.rhythm.layers[hoveredLayerIndex]?.muted === true}
+      data-a="mute"
+      title="silenciar (mute)"
+      on:click={handleLayerMute}>M</button
+    >
+    <!--
+      Delete button: prototype line 337 hover → rgba(232,123,172,.4).
+    -->
+    <button data-a="del" title="eliminar órbita" on:click={handleLayerDelete}>🗑</button>
   </div>
 {/if}
 
@@ -385,49 +378,12 @@
 -->
 <CodeDrawer />
 
-<!-- TEMPORARY TRANSPORT PANEL — Phase 02 only; replaced in Phase 04.5 -->
-<div class="transport-panel">
-  <p class="transport-label">Orbifold — transport (Phase 02 temp UI)</p>
-
-  <!-- User-gesture guard: must be clicked first to init AudioContext -->
-  <button on:click={() => void initAudio()}>Init audio</button>
-
-  <!-- Play buttons -->
-  <button on:click={() => void playGroove()}>▶ Groove</button>
-  <button on:click={() => void playProgression()}>▶ Progresión</button>
-  <button on:click={() => void playSession()}>▶ Sesión</button>
-  <button on:click={() => void hushAll()}>■ Silencio</button>
-
-  <!-- BPM control: range 40–280, step 1, default 120 -->
-  <label>
-    BPM:
-    <input
-      type="number"
-      min="40"
-      max="280"
-      step="1"
-      value={$sessionStore.bpm}
-      on:input={handleBpmInput}
-    />
-  </label>
-
-  <!-- View toggle: harmony ↔ rhythm (temporary, for A-03-05 verification) -->
-  <button on:click={handleViewToggle}>
-    Vista: {$sessionStore.view === 'harmony' ? 'Harmony → Rhythm' : 'Rhythm → Harmony'}
-  </button>
-
-  <!-- Morph toggle: radial ↔ linear (A-03-06) -->
-  {#if $sessionStore.view === 'rhythm'}
-    <button on:click={handleMorphToggle}>
-      Morph: {morphTarget === 0 ? 'Radial → Linear' : 'Linear → Radial'}
-    </button>
-  {/if}
-
-  <!-- Now-playing label (reactive — shows what is currently audible) -->
-  <p class="now-playing">
-    Ahora: {$sessionStore.nowPlaying.label ?? 'silencio'}
-  </p>
-</div>
+<!--
+  Global tooltip: tracks [data-tip] elements across the whole document.
+  Prototype: <div id="tip"></div> (line 576) + tooltip JS (lines 2128–2148).
+  position:fixed z-index:60 — renders above all other elements.
+-->
+<Tooltip />
 
 <style>
   /*
@@ -447,64 +403,94 @@
   }
 
   /*
-   * DOM overlay for layer controls (OD-1 resolution).
-   * position: fixed so it tracks pointer coordinates in viewport space.
-   * z-index: 2 — above stage (0) and transport panel (1).
-   * Prototype: div#layerCtl uses position:absolute within div#stage.
-   * Port uses fixed positioning with pointer clientX/clientY for simplicity.
+   * Stage hint: bottom-left of #stage, static instructional text.
+   * Prototype CSS lines 119–120: position:absolute, pointer-events:none.
    */
-  .layer-ctl {
-    position: fixed;
+  .hint {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    font-size: 11.5px;
+    color: var(--faint);
+    font-family: 'IBM Plex Mono', monospace;
+    max-width: 50%;
+    pointer-events: none;
     z-index: 2;
-    background: rgba(11, 13, 18, 0.9);
-    border: 1px solid #39404f;
-    border-radius: 6px;
-    padding: 4px 8px;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    pointer-events: all;
-  }
-
-  .layer-ctl button {
-    background: #232734;
-    border: 1px solid #39404f;
-    color: #cfd6e6;
-    font-family: system-ui, sans-serif;
-    font-size: 0.75rem;
-    padding: 2px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
-  .layer-ctl button:hover {
-    background: #39404f;
   }
 
   /*
-   * Transport panel floats above the PIXI canvas.
-   * position: relative with z-index: 1 renders it on top of #stage (z-index: 0).
-   * Phase 04 will replace this layout entirely.
+   * Layer-control overlay glass styling.
+   * Phase 04 step 04.5: updated to match prototype #layerCtl (CSS lines 328–337).
+   * position: fixed — tracks viewport coords (overlayX/overlayY).
+   * transform: translate(-50%,-140%) matches prototype line 328 (centers above label).
    */
-  .transport-panel {
-    position: relative;
-    z-index: 1;
-    font-family: system-ui, sans-serif;
-    padding: 1rem;
+  .layer-ctl {
+    position: fixed;
+    z-index: 7;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 11px;
+    background: rgba(12, 15, 22, 0.92);
+    border: 1px solid var(--stroke);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    transform: translate(-50%, -140%);
+    pointer-events: all;
+  }
+
+  /*
+   * Layer-control buttons base style.
+   * Prototype: #layerCtl button (CSS lines 332–334).
+   * width:26px; height:26px; border-radius:7px; font-size:12px; font-weight:700.
+   */
+  .layer-ctl button {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    border: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    display: flex;
     align-items: center;
+    justify-content: center;
+    padding: 0;
   }
-  .transport-label {
-    width: 100%;
-    margin: 0;
-    font-size: 0.75rem;
-    color: #888;
+
+  .layer-ctl button:hover {
+    color: var(--text);
   }
-  .now-playing {
-    width: 100%;
-    margin: 0;
-    font-size: 0.875rem;
+
+  /*
+   * Solo active state: subdom background.
+   * Prototype line 335: #layerCtl button[data-a="solo"].on { color:#0b0d12; background:var(--subdom) }
+   */
+  .layer-ctl button[data-a='solo'].on {
+    color: #0b0d12;
+    background: var(--subdom);
+    border-color: var(--subdom);
+  }
+
+  /*
+   * Mute active state: dom background.
+   * Prototype line 336: #layerCtl button[data-a="mute"].on { color:#0b0d12; background:var(--dom) }
+   */
+  .layer-ctl button[data-a='mute'].on {
+    color: #0b0d12;
+    background: var(--dom);
+    border-color: var(--dom);
+  }
+
+  /*
+   * Delete button hover: pink/warm background.
+   * Prototype line 337: #layerCtl button[data-a="del"]:hover { background:rgba(232,123,172,.4) }
+   */
+  .layer-ctl button[data-a='del']:hover {
+    color: #fff;
+    background: rgba(232, 123, 172, 0.4);
+    border-color: var(--dom);
   }
 </style>
