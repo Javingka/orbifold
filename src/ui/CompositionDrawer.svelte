@@ -70,6 +70,7 @@
     removeBlockFromTrack,
     setBlockBars,
     reorderBlockInTrack,
+    moveBlockBetweenTracks,
     playComposition,
     pauseComposition,
     stopComposition,
@@ -305,6 +306,13 @@
   let dragging = false;
 
   /**
+   * The track index the pointer is currently hovering over during a drag.
+   * -1 when not dragging or pointer is not over any lane.
+   * Drives the `.drag-over` CSS class on `.tl-lane` elements.
+   */
+  let dragOverTrackIndex = -1;
+
+  /**
    * Initiate drag on a block body.
    * Prototype lines 2027–2030.
    */
@@ -337,18 +345,33 @@
   }
 
   /**
-   * Translate dragged block visually.
-   * Prototype line 2031.
+   * Translate dragged block visually and detect cross-track hover.
+   * Prototype line 2031 (horizontal translate).
+   * Extended: detect which .tl-lane the pointer is over for vertical drop.
    */
   function handleBlockPointerMove(e: PointerEvent): void {
     const el = e.currentTarget as HTMLElement;
     if (!dragging || dragEl !== el) return;
     el.style.transform = `translateX(${e.clientX - dragMx}px)`;
+
+    // Detect which .tl-lane the pointer is hovering over.
+    // Temporarily hide the dragged element so elementFromPoint can see the lane beneath.
+    el.style.pointerEvents = 'none';
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    el.style.pointerEvents = '';
+    const lane = under !== null ? (under.closest('.tl-lane') as HTMLElement | null) : null;
+    if (lane !== null && lane.dataset.tklane !== undefined) {
+      dragOverTrackIndex = Number(lane.dataset.tklane);
+    } else {
+      dragOverTrackIndex = -1;
+    }
   }
 
   /**
-   * Commit drag: compute target index, call reorderBlockInTrack.
-   * Prototype lines 2032–2039.
+   * Commit drag: compute target track and index, call reorderBlockInTrack or
+   * moveBlockBetweenTracks depending on whether the drop is within the same
+   * track or across tracks.
+   * Prototype lines 2032–2039 (within-track reorder; cross-track is extended behavior).
    */
   function handleBlockPointerUp(e: PointerEvent): void {
     const el = e.currentTarget as HTMLElement;
@@ -363,37 +386,63 @@
       // ignore
     }
 
-    const ti = dragTrackIndex;
-    const ri = dragRefIndex;
-    const startBar = Number(el.dataset.st);
-    const state = $sessionStore;
-    const refs = state.composition.tracks[ti]?.blocks ?? [];
-    const ref = refs[ri];
-    if (!ref) {
-      dragTrackIndex = -1;
-      dragRefIndex = -1;
-      dragEl = null;
-      return;
-    }
+    const srcTi = dragTrackIndex;
+    const srcRi = dragRefIndex;
+    const dstTi = dragOverTrackIndex >= 0 ? dragOverTrackIndex : srcTi;
 
-    // Compute target index based on drop position.
-    // Prototype lines 2034–2037:
-    //   center = startBar*PPB + (e.clientX-mx) + (ref.bars*PPB)/2
-    const center = startBar * PPB + (e.clientX - dragMx) + (ref.bars * PPB) / 2;
-    let acc2 = 0;
-    let newIdx = refs.length;
-    for (let i = 0; i < refs.length; i++) {
-      const w = refs[i].bars * PPB;
-      if (center < acc2 + w / 2) {
-        newIdx = i;
-        break;
-      }
-      acc2 += w;
-    }
-    reorderBlockInTrack(ti, ri, newIdx);
+    // Clear drag-over highlight.
+    dragOverTrackIndex = -1;
     dragTrackIndex = -1;
     dragRefIndex = -1;
     dragEl = null;
+
+    const state = $sessionStore;
+    const srcRefs = state.composition.tracks[srcTi]?.blocks ?? [];
+    const ref = srcRefs[srcRi];
+    if (!ref) return;
+
+    if (dstTi !== srcTi) {
+      // Cross-track drop: determine insertion position in the destination track.
+      // Use the horizontal pointer position relative to the scroll container to
+      // find the bar position, then map to a ref index in the destination track.
+      const dstRefs = state.composition.tracks[dstTi]?.blocks ?? [];
+      // Find lane element for dst track to compute scroll offset.
+      const laneEl =
+        scrollEl !== null
+          ? (scrollEl.querySelector(`.tl-lane[data-tklane="${dstTi}"]`) as HTMLElement | null)
+          : null;
+      const laneRect = laneEl !== null ? laneEl.getBoundingClientRect() : null;
+      const scrollLeft = scrollEl !== null ? scrollEl.scrollLeft : 0;
+      // pointerX relative to the inner scroll content (accounts for scrolling).
+      const pointerBarPos = laneRect !== null ? (e.clientX - laneRect.left + scrollLeft) / PPB : 0;
+      let acc3 = 0;
+      let newIdx = dstRefs.length;
+      for (let i = 0; i < dstRefs.length; i++) {
+        if (pointerBarPos < acc3 + dstRefs[i].bars / 2) {
+          newIdx = i;
+          break;
+        }
+        acc3 += dstRefs[i].bars;
+      }
+      moveBlockBetweenTracks(srcTi, srcRi, dstTi, newIdx);
+    } else {
+      // Same-track reorder: original prototype logic.
+      // Prototype lines 2034–2037:
+      //   center = startBar*PPB + (e.clientX-mx) + (ref.bars*PPB)/2
+      const startBar = Number(el.dataset.st);
+      const center = startBar * PPB + (e.clientX - dragMx) + (ref.bars * PPB) / 2;
+      let acc2 = 0;
+      let newIdx = srcRefs.length;
+      for (let i = 0; i < srcRefs.length; i++) {
+        const w = srcRefs[i].bars * PPB;
+        if (center < acc2 + w / 2) {
+          newIdx = i;
+          break;
+        }
+        acc2 += w;
+      }
+      reorderBlockInTrack(srcTi, srcRi, newIdx);
+    }
   }
 
   // ── Grip resize state ─────────────────────────────────────────────────────
@@ -694,7 +743,14 @@
               Prototype lines 1997–2050.
             -->
             {#each $sessionStore.composition.tracks as track, ti}
-              <div class="tl-lane">
+              <!-- svelte-ignore a11y-no-static-element-interactions -->
+              <div
+                class="tl-lane"
+                class:drag-over={dragging &&
+                  dragOverTrackIndex === ti &&
+                  dragOverTrackIndex !== dragTrackIndex}
+                data-tklane={ti}
+              >
                 <!--
                   Per-block positioned element.
                   Prototype lines 2005–2041.
@@ -840,6 +896,19 @@
           Prototype line 2051 / 2085. Updated reactively by rAF loop.
         -->
         <span style="font-size:10.5px;color:var(--faint);align-self:center">{compInfo}</span>
+
+        <!--
+          Mini now-playing pill — shown inside the drawer so the user can see
+          what is playing even when the drawer covers the Transport footer.
+          Displayed when source is 'block' or 'composition' (drawer-owned sources).
+          Mirrors the Transport.svelte .now pill structure and .live dot animation.
+        -->
+        {#if $sessionStore.nowPlaying.source === 'block' || $sessionStore.nowPlaying.source === 'composition'}
+          <div class="comp-now-pill" class:live={true}>
+            <span class="comp-now-dot"></span>
+            <span class="comp-now-label">{$sessionStore.nowPlaying.label ?? ''}</span>
+          </div>
+        {/if}
       </div>
     </div>
   </div>
@@ -970,5 +1039,42 @@
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
+  }
+
+  /*
+   * Mini now-playing pill inside the drawer transport row.
+   * Mirrors Transport.svelte .now/.dot styling so the user can see what is
+   * playing even when the drawer covers the footer.
+   */
+  .comp-now-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border-radius: 11px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid var(--stroke);
+    margin-left: auto;
+  }
+
+  .comp-now-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--faint);
+    flex: 0 0 auto;
+  }
+
+  .comp-now-pill.live .comp-now-dot {
+    background: #5bd6a0;
+    box-shadow: 0 0 8px rgba(91, 214, 160, 0.8);
+    animation: pulse 1.2s infinite;
+  }
+
+  .comp-now-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
   }
 </style>

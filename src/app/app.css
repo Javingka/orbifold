@@ -498,6 +498,13 @@ textarea {
   );
 }
 
+/* Drop-target highlight: shown on the destination lane during a cross-track drag. */
+.tl-lane.drag-over {
+  background-color: rgba(138, 160, 255, 0.1);
+  outline: 1px dashed rgba(138, 160, 255, 0.5);
+  outline-offset: -1px;
+}
+
 .tl-block {
   position: absolute;
   top: 7px;

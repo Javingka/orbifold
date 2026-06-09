@@ -962,6 +962,41 @@ export function setBlockBars(trackIndex: number, refIndex: number, bars: number)
 }
 
 /**
+ * Move a block reference from one track to another, inserting at `toRefIndex`
+ * within the target track.
+ *
+ * Removes the ref at `fromRefIndex` in `fromTrackIndex` and splices it into
+ * `toTrackIndex` at position `toRefIndex`. If `toRefIndex` is ≥ the target
+ * track's length it is appended at the end.
+ *
+ * No prototype equivalent (cross-track drag was not in prototype; this extends
+ * the drag-to-reorder capability to the vertical axis).
+ *
+ * @param fromTrackIndex - Zero-based source track index.
+ * @param fromRefIndex   - Zero-based index of the block ref in the source track.
+ * @param toTrackIndex   - Zero-based destination track index.
+ * @param toRefIndex     - Desired insertion index within the destination track.
+ */
+export function moveBlockBetweenTracks(
+  fromTrackIndex: number,
+  fromRefIndex: number,
+  toTrackIndex: number,
+  toRefIndex: number
+): void {
+  sessionStore.update((s) => {
+    const tracks = s.composition.tracks.map((t) => ({ ...t, blocks: [...t.blocks] }));
+    const srcTrack = tracks[fromTrackIndex];
+    const dstTrack = tracks[toTrackIndex];
+    if (!srcTrack || !dstTrack) return s;
+    const [ref] = srcTrack.blocks.splice(fromRefIndex, 1);
+    if (!ref) return s;
+    const clampedIdx = Math.max(0, Math.min(toRefIndex, dstTrack.blocks.length));
+    dstTrack.blocks.splice(clampedIdx, 0, ref);
+    return { ...s, composition: { ...s.composition, tracks } };
+  });
+}
+
+/**
  * Reorder a block reference within a track by moving it from one index to another.
  *
  * Implements the drag-to-reorder behavior: splices the ref out of `fromIndex`

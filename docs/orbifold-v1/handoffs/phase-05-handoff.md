@@ -311,3 +311,86 @@ None.
 - Step 05.4 is operability verification: run all gate commands, perform 10-point smoke test in `pnpm dev`.
 - The `limpiar todo` implementation calls `removeTrack(i)` from last to first; the final call auto-adds one empty track. This correctly matches prototype line 2121 behavior.
 - The rAF loop exits when `!open` (next frame after close). If composition is playing and drawer is closed, the loop stops but audio continues. This matches prototype behavior (compTickLoop only drives the playhead UI, not audio).
+
+### Planner Review
+
+**Planner Review (iteration 1):** APPROVE on 2026-06-08. All 8 standard checklist items and the prototype-parity project-specific item pass. Commit scope is clean (only `CompositionDrawer.svelte` created, `App.svelte` import added, handoff updated). Commit message format matches spec exactly. Acceptance Coverage Table is complete across all 14 A-05 IDs — A-05-01 through A-05-12 and A-05-14 are marked "covered" with specific implementation evidence; A-05-13 is correctly "partially covered" (build deferred to 05.4). Gate commands (tsc 0, lint 0, 120 tests) are recorded and credible. Both Register entries respected: no `cx`/`cy` present (grep clean), no new dependencies. Prototype parity table is exhaustive: every major feature is cited to prototype lines (531, 532–574, 1939–1970, 1960–1966, 1983–2052, 1992–1993, 2005–2038, 2043–2047, 2073–2091, 2117–2124, 2121, 2126) with fidelity notes. AGPL-3.0 header present on line 2. No unauthorized ADR-worthy decisions introduced. The `limpiar todo` behavioral equivalence (iterative `removeTrack` vs. prototype direct array replacement) is explicitly noted and sound.
+Next action: Pilot approval required before step 05.4 — browser visual smoke test requires Pilot observation
+
+---
+
+## Step 05.4 — Round-1 fixes (smoke-test defects: cross-track drag, pill visibility)
+
+**Date:** 2026-06-09
+**Commit:** `fix(ui): Phase 05 — 05.4 smoke-test defects: cross-track drag, pill visibility`
+**Iteration:** Round-1 fix (post Pilot browser smoke test)
+
+### Defects addressed
+
+Two defects reported by the Pilot during Phase 05 step 05.4 browser smoke test:
+
+1. **Vertical drag between tracks not working** — Dragging a block to a different track (vertical drop) had no effect; the block stayed on its source track. Only horizontal reordering within the same track worked.
+2. **Now-playing pill hidden by composition drawer** — The composition drawer slides up from `bottom:0` and covers the Transport footer, so the "Composición" now-playing pill was invisible while the drawer was open.
+
+### Root cause analysis
+
+**Defect 1:** The `handleBlockPointerUp` handler in `CompositionDrawer.svelte` always called `reorderBlockInTrack(ti, ri, newIdx)` using the source track index `ti`. There was no logic to detect a cross-track drop; `dragTrackIndex` was the source track and the handler never checked if the pointer landed on a different `.tl-lane`. Additionally, `session.ts` had no `moveBlockBetweenTracks` function.
+
+**Defect 2:** The drawer uses `position:fixed; bottom:0; max-height:74vh` (app.css line 289), which overlaps the Transport footer. The now-playing pill is only rendered in `Transport.svelte`'s footer, which is behind the drawer when open.
+
+### Fixes implemented
+
+**Defect 1 — Cross-track drag (`session.ts` + `CompositionDrawer.svelte`):**
+
+- Added `moveBlockBetweenTracks(fromTrackIndex, fromRefIndex, toTrackIndex, toRefIndex)` to `session.ts`. It creates a shallow copy of every track's blocks array, splices the ref out of the source track, and inserts it at the clamped position in the destination track — a single `sessionStore.update()` call for atomicity.
+- Added `dragOverTrackIndex` state variable to `CompositionDrawer.svelte` (initialized to `-1`).
+- Extended `handleBlockPointerMove`: after translating the element visually, temporarily sets `pointerEvents: 'none'` on the dragged element, calls `document.elementFromPoint(e.clientX, e.clientY)` to find the DOM element under the pointer, walks up with `.closest('.tl-lane')`, reads `lane.dataset.tklane` (the new `data-tklane={ti}` attribute on each `.tl-lane`), and updates `dragOverTrackIndex`.
+- Extended `handleBlockPointerUp`: reads `dragOverTrackIndex` at drop time; if it differs from `dragTrackIndex`, calls `moveBlockBetweenTracks` (cross-track path); otherwise falls through to the original `reorderBlockInTrack` logic (same-track path). Clears all drag state before calling the action.
+- Added `data-tklane={ti}` to each `.tl-lane` element so `querySelector('.tl-lane[data-tklane="N"]')` works for computing the insertion position.
+- Added `class:drag-over={dragging && dragOverTrackIndex === ti && dragOverTrackIndex !== dragTrackIndex}` to each `.tl-lane` for visual drop-target feedback.
+- Added `.tl-lane.drag-over` CSS rule to `app.css` (light accent background + dashed accent outline).
+
+**Defect 2 — Now-playing pill inside drawer (`CompositionDrawer.svelte`):**
+
+- Added a mini now-playing pill in the `.code-actions` transport row (after the `compInfo` span).
+- Rendered only when `$sessionStore.nowPlaying.source === 'block' || source === 'composition'` (the two sources owned by the composition drawer).
+- Structure mirrors `Transport.svelte`'s `.now` pill: `.comp-now-dot` (green pulsing when `.live`) + `.comp-now-label` with the `nowPlaying.label` text.
+- Scoped styles added to `CompositionDrawer.svelte <style>`: `.comp-now-pill`, `.comp-now-dot`, `.comp-now-pill.live .comp-now-dot` (references global `pulse` keyframe from `app.css`), `.comp-now-label`.
+- The `class:live={true}` is always true when the pill is visible (the condition already guards for active sources); this mirrors the Transport's `class:live={source !== null}` pattern.
+
+### Files touched
+
+- `src/state/session.ts` — added `moveBlockBetweenTracks` export
+- `src/ui/CompositionDrawer.svelte` — cross-track drag logic, now-playing pill markup + scoped styles
+- `src/app/app.css` — `.tl-lane.drag-over` rule
+- `docs/orbifold-v1/handoffs/phase-05-handoff.md` — this entry
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` — 0 errors
+- `pnpm lint` — 0 errors (Prettier auto-formatted `CompositionDrawer.svelte`; re-ran lint clean)
+- `pnpm test` — 120 tests pass (no regressions)
+- `pnpm build` — clean build, 0 errors, 0 TS errors
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Behavior | Coverage status | Evidence |
+|---|---|---|---|
+| A-05-01 | Composition tab opens/closes drawer | covered | unchanged from 05.3 |
+| A-05-02 | Save buttons capture current state as named blocks | covered | unchanged from 05.3 |
+| A-05-03 | Block ▶ previews; nowPlaying source is 'block' | covered | unchanged from 05.3; pill now visible inside drawer |
+| A-05-04 | Contenteditable rename updates timeline | covered | unchanged from 05.3 |
+| A-05-05 | + pista adds tracks; blocks on tracks as stacked lanes | covered | unchanged from 05.3 |
+| A-05-06 | Block width = bars × PPB; grip snaps; drag reorders | covered | cross-track drag fixed: `moveBlockBetweenTracks` called on drop to different lane; same-track still calls `reorderBlockInTrack` |
+| A-05-07 | Bar ruler shows numbers; timeline scrolls horizontally | covered | unchanged from 05.3 |
+| A-05-08 | ▶ tocar builds correct Strudel code; nowPlaying.source='composition' | covered | unchanged from 05.3 |
+| A-05-09 | Playhead advances; auto-scrolls; active block highlighted | covered | unchanged from 05.3 |
+| A-05-10 | Pause freezes playhead; resume from paused bar; stop resets | covered | unchanged from 05.3 |
+| A-05-11 | limpiar todo clears tracks; library intact | covered | unchanged from 05.3 |
+| A-05-12 | All A-04 behaviors intact | covered | 120 tests pass; no regressions |
+| A-05-13 | tsc/lint/test/build all exit 0 | covered | tsc 0, lint 0, 120 tests, build clean (this round) |
+| A-05-14 | No cx/cy in Block.code or Composition state | covered | unchanged from 05.3 |
+
+### Decisions made
+
+None. Both fixes are contained to the existing architecture (Svelte component + session store action). No new dependencies, no ADR triggers.
