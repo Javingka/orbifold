@@ -192,4 +192,6 @@ None.
 
 ### Planner Review
 
-(pending)
+**Planner Review (iteration 1):** REVISE on 2026-06-08. See `docs/orbifold-v1/reviews/phase-05-step-05.2-review-1.md`. Two ADRs required by the phase spec were not filed: ADR 0008 (composition timing state module) and ADR 0009 (ephemeral ID counters). All source code and gate results accepted as-is.
+
+**REVISE iteration 2 (2026-06-08):** Created `docs/adr/0008-composition-timing-state-module.md` and `docs/adr/0009-composition-id-counters-ephemeral.md`. No source code changed. Gate results remain valid (tsc 0, lint 0, 120 tests). All items in the review's "What to fix" section addressed; all items in "What NOT to change" left untouched.
