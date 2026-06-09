@@ -160,6 +160,15 @@ describe('rhythmLayerToStrudelLine', () => {
     expect(rhythmLayerToStrudelLine(layer)).toBe('  s("hh(5,8)")');
   });
 
+  it('euclidean runtime layer with visible steps → explicit 16-step audio string', () => {
+    const layer: RhythmLayer = {
+      sound: 'hh',
+      euclid: '2,8',
+      steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+    };
+    expect(rhythmLayerToStrudelLine(layer)).toBe('  s("hh ~ ~ ~ hh ~ ~ ~ hh ~ ~ ~ hh ~ ~ ~")');
+  });
+
   it('explicit-steps layer with two hits → correct token string', () => {
     // steps = [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0] → bd ~ ~ ~ ~ ~ ~ ~ bd ~ ~ ~ ~ ~ ~ ~
     const steps = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0];

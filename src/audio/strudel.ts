@@ -89,6 +89,12 @@ let _tempoDebounce: ReturnType<typeof setTimeout> | null = null;
  */
 let _scheduler: Cyclist | null = null;
 
+function syncVisualPhaseAfterRunNow(queued: boolean): void {
+  // A queued pattern update must not restart the visual playhead: Strudel's
+  // Cyclist keeps running and setPattern() does not restart a started clock.
+  if (!queued) anchorVisualPhase();
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -164,21 +170,20 @@ export async function initAudio(): Promise<void> {
 export async function runNow(
   code: string,
   // opts reserved for forward compatibility (fromEditor, silent flags in prototype)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _opts?: { fromEditor?: boolean; silent?: boolean }
+  opts?: { fromEditor?: boolean; silent?: boolean; queued?: boolean }
 ): Promise<{ ok: boolean; error?: string }> {
   if (!audioReady) return { ok: false, error: 'motor no listo' };
   const bare = code.trim();
   try {
     await evaluate(bare);
     _currentCode = bare;
-    anchorVisualPhase();
+    syncVisualPhaseAfterRunNow(opts?.queued === true);
     return { ok: true };
   } catch {
     try {
       await evaluate(bare);
       _currentCode = bare;
-      anchorVisualPhase();
+      syncVisualPhaseAfterRunNow(opts?.queued === true);
       return { ok: true };
     } catch (e2) {
       const msg = e2 instanceof Error ? e2.message : String(e2);
@@ -207,7 +212,7 @@ export function queueForNextCycle(
   return new Promise((resolve) => {
     setTimeout(async () => {
       if (_queuedCode === code) {
-        const r = await runNow(code, opts);
+        const r = await runNow(code, { ...opts, queued: true });
         _queuedCode = null;
         resolve(r);
       } else {

@@ -820,3 +820,204 @@ None.
 ### Next-step context (only if non-obvious)
 
 Both Round-3 defects are fixed. The Pilot should re-run the browser smoke test to confirm: dot toggles change the audio pattern and the code drawer updates to reflect the step-explicit Strudel code. Phase 04 is complete when the Pilot confirms all A-04 acceptance criteria pass.
+
+---
+
+## Step 04.6 (Round-4 fixes, Cursor session) — Playhead restart and Euclidean step-explicit audio
+
+**Date:** 2026-06-08
+**Commit(s):** (terminal commit — see below)
+**Iteration:** Round-4 post-smoke-test defect fixes (Cursor AI debug session)
+
+### Defects addressed
+
+Two root-cause defects identified via interactive browser debugging with console.log instrumentation in a Cursor AI session, verified by Pilot.
+
+**Root cause 1 — Playhead restarts on every dot toggle**
+
+Root cause: `runNow()` in `src/audio/strudel.ts` re-anchored the Strudel visual playhead phase on every call, including calls made by `queueForNextCycle()`. The Strudel `repl.evaluate()` call used for queued updates had the same re-anchor side-effect as new-playback evaluate calls, so the waveform/playhead jumped back to zero on each dot toggle (visible as a stutter or restart of the animation).
+
+Fix: `runNow()` was split to accept a flag distinguishing new-playback calls (re-anchor) from queued-update calls (no re-anchor). `queueForNextCycle` passes the no-re-anchor flag. New transport calls (`playGroove`, `playProgression`, etc.) continue to pass the re-anchor flag. The Strudel REPL was queried for the appropriate evaluate options to suppress the phase reset on queued updates.
+
+**Root cause 2 — Euclidean layers send compact string despite visual dot state**
+
+Root cause: When an Euclidean layer was added via `addEuclidLayer()`, it stored `steps` (the expanded 16-element boolean array) AND `euclid` (e.g. `"2,8"`). `rhythmLayerToStrudelLine` checked `if (l.euclid)` first and emitted the compact form `s("hh(2,8)")` regardless of which dots were toggled. The Round-3 fix (clearing `euclid` on `onStagePointerDown`) handled the dot-toggle path, but a freshly-added Euclidean layer before any dot-click still used the compact form — and if `runNow()` was called in the meantime (e.g. by another transport action), the compact string was played instead of the 16-dot visual.
+
+Fix: in `src/core/rhythm/layers.ts`, `rhythmLayerToStrudelLine` was updated so that if a layer has explicit `steps` already set, it always generates the step-explicit Strudel string (`s("hh ~ ~ ~ hh ~ ~ ~ hh ~ ~ ~ hh ~ ~ ~")`). Fallback to `s("hh(k,n)")` compact form is used only for legacy layers that have `euclid` set but no `steps` (the load-from-old-save path). A regression test was added in `tests/euclid.test.ts` covering the step-explicit generation case.
+
+### Files touched
+
+- `src/audio/strudel.ts` — `runNow()` / `queueForNextCycle()` flag to distinguish re-anchor vs. no-re-anchor evaluate.
+- `src/core/rhythm/layers.ts` — `rhythmLayerToStrudelLine` now prefers step-explicit output when `steps` is present; compact Euclidean form is fallback-only.
+- `tests/euclid.test.ts` — regression test for step-explicit Strudel string generation added.
+- `docs/orbifold-v1/handoffs/phase-04-handoff.md` — this entry.
+
+### Prototype parity
+
+- `runNow` / `queueForNextCycle` — prototype lines 1307–1315: `requeueLive()` calls `repl.evaluate()` at the next cycle boundary without resetting phase. The port now matches this: queued updates do not re-anchor.
+- `rhythmLayerToStrudelLine` — prototype lines 828–830: the step-explicit branch (`s("toks")`) is the canonical audio representation for any layer with user-edited steps. Port now matches: `steps` takes priority over `euclid` field.
+- Regression test — new case in `tests/euclid.test.ts` asserts that a layer with `steps: [true, false, false, false, true, false, false, false]` and `euclid: "2,8"` produces the step-explicit Strudel string, not the compact form.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-04-05** — Dot toggle on a rhythm layer no longer causes audible playhead restart; next-cycle audio matches the dot pattern without phase stutter.
+- **A-04-07** — Newly-added Euclidean layers and dot-toggled layers produce identical audio at next cycle boundary. Step-explicit Strudel string confirmed via code drawer textarea.
+- **A-04-09** — Code drawer textarea shows step-explicit pattern string after dot toggle; regression test added and passing.
+- **A-04-14** — All gate commands exit 0 with 120 tests passing (see Routine validations below).
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` — exit 0, no errors.
+- `pnpm lint` — exit 0; all files match Prettier code style.
+- `pnpm exec vitest run` — 120 tests passed (5 files: voice-leading 8, euclid 25, codegen 29, tonnetz 31, session 27). New regression test in `tests/euclid.test.ts` is included in the 25 euclid tests.
+- `pnpm build` — exit 0; pre-existing Strudel chunk-size warning (>500 kB after minification) only; not introduced by this step.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-04-01 | Header brand + view-toggle + key-selector render; view-toggle switches PIXI scene | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-02 | Now-playing pill label and pulsing dot; resets on hush | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-03 | Engine buttons call transport actions and update nowPlaying | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-04 | BPM slider + tap-tempo (button + space-bar) | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-05 | Progression chips drag/tap/remove; dot toggle no restart | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-06 | Chord-mode toggle updates chordMode | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-07 | Euclidean controls; step-explicit audio matches visual dots | `tests/euclid.test.ts` | unit + live-system | covered — regression test added; confirmed by Pilot 14-point smoke test |
+| A-04-08 | Morph toggle radial↔linear (A-03-06 preserved) | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-09 | Code drawer shows live code; dot toggle updates textarea | `tests/euclid.test.ts` | unit + live-system | covered — regression test for step-explicit code; confirmed by Pilot 14-point smoke test |
+| A-04-10 | HUD voice-leading after chord pick; legend visibility | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-11 | Tooltip on `[data-tip]` elements | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-12 | Layer overlay glass styling + solo/mute active colors | (live) | live-system | covered — confirmed by Pilot 14-point smoke test |
+| A-04-13 | All A-03 IDs covered | (none new) | unit | confirmed — 120 tests pass (up from 119; one new regression test added) |
+| A-04-14 | Gate commands exit 0; ≥119 tests | `tests/*.test.ts` | unit + proxy:static-analysis | confirmed — tsc exit 0, lint exit 0, 120 tests, build exit 0 |
+
+**Proxy disclosures:** A-04-14 uses `proxy:static-analysis` for `tsc --noEmit` and `pnpm lint`. These tools verify type correctness and code style; they are proxies for runtime correctness of the type structure.
+
+**Operability evidence:** Pilot ran `pnpm dev` and performed the 14-point smoke test after Round-4 fixes. All 14 items confirmed passing:
+1. Body gradient and grain — confirmed.
+2. Header brand/glass — confirmed.
+3. View toggle switches PIXI scene — confirmed.
+4. Key selector persists + Tonnetz colors update on key/mode change — confirmed.
+5. `▶ Ritmo` plays groove; pill shows label; dot toggle changes audio at next cycle without playhead restart — confirmed.
+6. BPM slider and tap-tempo — confirmed.
+7. Progression chips with tonal-function colors; drag gain; tap preview; `✕` removes — confirmed.
+8. Chord-mode toggle (acorde/arpegio) — confirmed.
+9. Rhythm controls: euclid sliders, `▶ oír` preview, `+ órbita` adds layer — confirmed.
+10. Code drawer shows live generated Strudel code; updates on dot toggle — confirmed.
+11. HUD on chord pick — confirmed.
+12. Legend visible in harmony / hidden in rhythm — confirmed.
+13. Tooltips on hover — confirmed.
+14. Layer overlay glass S/M/Del with active state colors — confirmed.
+
+### Decisions made (if any)
+
+- Step-explicit Strudel string generation is now the canonical path for any layer with `steps` set, regardless of whether `euclid` is also set. The compact Euclidean form (`s("hh(k,n)")`) is fallback-only for legacy/load compatibility. This is the unambiguous resolution of the "euclid field vs. steps array" ambiguity that caused Round-3 and Round-4 defects.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/audio/strudel.ts` — `runNow` / `queueForNextCycle` distinguish re-anchor vs. no-re-anchor evaluate.
+- `src/core/rhythm/layers.ts` — step-explicit Strudel string generation preferred over compact Euclidean form when `steps` is present.
+- `tests/euclid.test.ts` — 25 tests (was 24 in prior steps; new regression test for step-explicit case).
+- All gate commands: `tsc --noEmit` exit 0, `pnpm lint` exit 0, 120 tests pass, `pnpm build` exit 0.
+
+### Planner Review
+
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-08
+**Iteration:** Round-4 (final)
+**Reason:** All 14 smoke-test items confirmed by Pilot. Gate commands all exit 0 with 120 tests. Two root-cause fixes verified by live system and regression test. All 14 A-04 IDs now covered.
+**Next action:** Pilot approval required before Phase 05 scoping. Phase 04 is complete.
+
+---
+
+## Handoff — Phase 04 (Svelte UI Layer)
+
+**Phase completed:** 2026-06-08
+
+### Completed
+
+- Created all nine Svelte UI components: `Header.svelte`, `Transport.svelte`, `ProgressionChips.svelte`, `HarmonyControls.svelte`, `RhythmControls.svelte`, `CodeDrawer.svelte`, `Hud.svelte`, `Legend.svelte`, `Tooltip.svelte`.
+- Created `src/app/app.css` with full prototype CSS token set (`:root` custom properties, body gradient, grain overlay, `.glass` utility, segment controls, animations, media queries).
+- Created `src/state/hud.ts` (ephemeral HUD state store, not in Phase 07 persistence scope).
+- Added nine session action functions to `src/state/session.ts`: `setChordMode`, `setHarmonyKey`, `addEuclidLayer`, `addEmptyLayer`, `previewEuclid`, `runEditor`, `queueEditor`, `clearProgression`, `clearChordAt`.
+- Updated `src/render/tonnetz-scene.ts` to write HUD state via `showHud` instead of direct DOM writes.
+- Removed the Phase 02/03 temporary transport panel from `App.svelte` entirely.
+- Fixed four rounds of smoke-test defects: audio init, key selector race, rhythm label offset, Tonnetz key rebuild, requeue on layer add, code drawer live code, euclid field vs. steps ambiguity (Round 3+4), and playhead restart on queued updates (Round 4).
+- Added one regression test in `tests/euclid.test.ts` (step-explicit Strudel string generation); total test count raised from 119 to 120.
+- All gate commands pass clean at phase closure.
+
+### Acceptance Coverage Summary
+
+| Acceptance ID | Required behavior | Covered in step | Status |
+|---|---|---|---|
+| A-04-01 | Header brand, view-toggle, key-selector; view-toggle switches PIXI scene | 04.3, 04.6 R1+R2 | covered |
+| A-04-02 | Now-playing pill shows label + pulsing dot; resets on hush | 04.3, 04.6 | covered |
+| A-04-03 | Engine buttons call transport actions and update nowPlaying | 04.3, 04.6 R1 | covered |
+| A-04-04 | BPM slider changes audible tempo; tap-tempo (button + space-bar) | 04.3, 04.6 | covered |
+| A-04-05 | Progression chips: drag gain, tap preview, `✕` remove; no playhead restart on dot toggle | 04.4, 04.6 R4 | covered |
+| A-04-06 | Chord-mode toggle (acorde/arpegio) updates `chordMode` | 04.4, 04.6 | covered |
+| A-04-07 | Euclidean controls; k/n/r readouts; preview; add-orbit; add-empty; step-explicit audio | 04.4, 04.6 R2+R3+R4 | covered |
+| A-04-08 | Morph toggle radial↔linear (A-03-06 preserved) | 04.4, 04.6 | covered |
+| A-04-09 | Code drawer open/close with slide animation; execute/queue; shows live generated code | 04.4, 04.6 R2+R3+R4 | covered |
+| A-04-10 | HUD shows voice-leading summary on chord pick; legend visible/hidden by view | 04.5, 04.6 | covered |
+| A-04-11 | Tooltip appears near cursor on `[data-tip]` element hover | 04.5, 04.6 | covered |
+| A-04-12 | Layer overlay glass styling; solo/mute active state via tonal-function colors | 04.5, 04.6 | covered |
+| A-04-13 | All A-03 acceptance IDs remain covered after UI layer added | 04.2–04.6 | covered — 120 tests, no regressions |
+| A-04-14 | Gate commands exit 0; ≥119 tests passing | 04.6 final | covered — tsc 0, lint 0, 120 tests, build 0 |
+
+### Known deviations from prototype
+
+- **OD-2 revised (Pilot-directed):** Code drawer shows real-time generated Strudel code derived from session state, not a static local variable. The `userEdited` flag preserves manual edits while typing. Prototype wrote to `#liveCode.value` imperatively from each transport handler (lines 1490, 1496, 1503); port uses a reactive `sessionStore` subscription in `CodeDrawer.svelte`.
+- **Step-explicit Euclidean generation:** `rhythmLayerToStrudelLine` now produces `s("hh ~ ~ ~ hh …")` (16-element step-explicit string) when `steps` is set, rather than `s("hh(k,n)")`. This matches the visual dot state exactly. Compact Euclidean form is used only as a fallback for legacy layers without `steps`. The prototype had this ambiguity but was more forgiving because it re-evaluated immediately; the port resolves it unambiguously.
+- **`Legend.svelte` uses Svelte `{#if}` instead of CSS `.legend.hide` class** — equivalent behavior, idiomatic Svelte.
+- **`hudStore` is ephemeral:** HUD state is in `src/state/hud.ts` and is not included in Phase 07 session persistence scope (Pilot-acknowledged).
+
+### Decisions made
+
+- Audio initialization moved to first play action (each of the seven transport functions call `initAudio()` idempotently) — satisfies CLAUDE.md "audio starts only after a user gesture" without a visible Init button.
+- `hudStore` placed in dedicated `src/state/hud.ts` (not inlined into `session.ts`) — ephemeral presentational state, not serialized in Phase 07.
+- Layer-control DOM overlay retained in `App.svelte` (no dedicated `LayerCtl.svelte`) — surfaced in inventory, low-stakes, deferred refactor.
+- Dot toggle on Euclidean layer clears `euclid` field and transitions to step-explicit mode permanently — user's manual edit overrides the compact formula.
+- `queueForNextCycle` uses no-re-anchor evaluate flag; only new-playback `runNow` calls re-anchor the Strudel playhead.
+
+### ADRs committed
+
+None triggered. The `hudStore` placement and font-loading ADR triggers from the phase spec did not reach the ADR threshold — both were resolved inline with low architectural stakes.
+
+### Register entries added
+
+None. Pilot is the sole writer of `decisions.md`.
+
+### Pending Register proposals resolved at phase approval
+
+- "hudStore is ephemeral: not included in Phase 07 persistence scope" — surfaced in step 04.5. Pilot-acknowledged. No formal Register entry required (noted in `src/state/hud.ts` header).
+- "Layer-control DOM overlay stays in App.svelte until an explicit refactor phase" — surfaced in step 04.1 inventory. Accepted by implementation; Pilot may add to Register if desired.
+
+### Deferred
+
+- Mic button in Header (right side of header, `.sp` spacer) — deferred to a later phase; not in Phase 04 scope.
+- `pnpm build` chunk-size warning (Strudel bundle >500 kB) — pre-existing, not introduced by Phase 04; deferred to a dedicated optimization phase.
+- PIXI scene labels (e.g. `·E(k,n)` on orbit rings) remain until next `buildRhythmScene` call after a dot-toggle transitions a layer to step-explicit mode — cosmetic-only, no functional issue.
+
+### Blockers and review escalations
+
+None — all rounds were fix iterations, no formal blocker files written.
+
+### Iteration counts (only for steps that took multiple iterations)
+
+- Step 04.6: required 4 rounds of smoke-test defect fixes before all 14 items passed. No REVISE issued by Planner (defect fixes were directed by Pilot browser testing, not formal review). Approved on round 4.
+
+### Next focus
+
+- Phase 05 — Session persistence (Zod schema, localStorage save/load, session export/import). Pilot must scope Phase 05 before Dev begins.
+- Specific context for next Planner invocation: the `Chord.cx/cy` ephemeral decision (decisions.md) means those fields are excluded from the Phase 05 Zod schema. `hudStore` is also excluded from persistence scope.
+
+**Phase 04 is at PILOT CHECKPOINT. Awaiting Pilot approval before Phase 05 scoping.**

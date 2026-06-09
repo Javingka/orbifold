@@ -45,18 +45,17 @@ export function layerAudible(layer: RhythmLayer, allLayers: RhythmLayer[]): bool
 /**
  * Render a single layer as a Strudel pattern line.
  *
- * Ported from the per-layer body of `rhythmLayerLines` (prototype lines
- * 826–830):
- *   - Euclidean mode: `  s("<sound>(<euclid>)")`
- *   - Explicit-steps mode: `  s("<tok0> <tok1> …")` where each token is the
- *     sound name (hit) or `~` (rest).
+ * Runtime layers always carry the 16 visible `steps`, including layers created
+ * from Euclidean controls. Emitting those steps keeps Strudel audio aligned with
+ * the dots the user sees and toggles. Legacy/test fixtures with no steps fall
+ * back to the compact Euclidean mini-notation.
  *
  * The caller (e.g. `rhythmToStrudel`) is responsible for audibility
  * filtering before calling this function.
  */
 export function rhythmLayerToStrudelLine(layer: RhythmLayer): string {
   const { sound, euclid, steps } = layer;
-  if (euclid) {
+  if (steps.length === 0 && euclid) {
     return `  s("${sound}(${euclid})")`;
   }
   const tokens = steps.map((v) => (v ? sound : '~'));
