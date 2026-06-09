@@ -260,3 +260,371 @@ textarea {
     max-width: 80%;
   }
 }
+
+/* ── Composición / arreglo ───────────────────────────────────────────────── */
+/* Prototype lines 251–314 */
+
+/* Tab button — fixed bottom-right of #codeTab, accent border, uppercase label */
+#compTab {
+  position: fixed;
+  bottom: 14px;
+  left: calc(50% + 130px);
+  transform: translateX(-50%);
+  z-index: 8;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 6px 16px;
+  border-radius: 11px;
+  cursor: pointer;
+  border: 1px solid rgba(138, 160, 255, 0.3);
+}
+
+/* Slide-up drawer */
+#compDrawer {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  z-index: 10;
+  border-radius: 18px 18px 0 0;
+  transform: translateY(108%);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  padding: 14px 16px 16px;
+  max-height: 74vh;
+  overflow: auto;
+}
+
+#compDrawer.open {
+  transform: translateY(0);
+}
+
+/* Two-column grid layout */
+.comp-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.comp-col h4 {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 13px;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.comp-col .sub {
+  font-size: 10.5px;
+  color: var(--faint);
+  margin-bottom: 9px;
+}
+
+.save-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+/* Block library items */
+.blk {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--stroke);
+  margin-bottom: 7px;
+}
+
+.blk .tag {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 7px;
+  flex: 0 0 auto;
+}
+
+.blk .tag.groove {
+  color: var(--accent);
+  background: rgba(138, 160, 255, 0.14);
+}
+
+.blk .tag.armonia {
+  color: var(--tonic);
+  background: rgba(243, 177, 90, 0.14);
+}
+
+.blk .tag.sesion {
+  color: #c89bf5;
+  background: rgba(200, 155, 245, 0.14);
+}
+
+.blk .nm {
+  font-size: 12.5px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 60px;
+}
+
+.blk .mini {
+  font-size: 10px;
+  color: var(--faint);
+  font-family: 'IBM Plex Mono', monospace;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blk button {
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  color: var(--muted);
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.25);
+  flex: 0 0 auto;
+}
+
+.blk button:hover {
+  color: var(--text);
+}
+
+.arr-empty {
+  font-size: 11px;
+  color: var(--faint);
+  font-style: italic;
+}
+
+/* ── DAW-style timeline ──────────────────────────────────────────────────── */
+/* Prototype lines 276–314 */
+
+.timeline {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--stroke);
+  overflow: hidden;
+}
+
+.tl-heads {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.tl-head-ruler {
+  height: 20px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.tl-head {
+  height: 54px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 9px;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.tl-head .tname {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tl-head button {
+  font-size: 11px;
+  color: var(--faint);
+  padding: 2px 5px;
+  border-radius: 6px;
+}
+
+.tl-head button:hover {
+  color: var(--dom);
+}
+
+.tl-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tl-inner {
+  position: relative;
+  min-width: 100%;
+}
+
+.tl-ruler {
+  height: 20px;
+  position: relative;
+  border-bottom: 1px solid var(--stroke);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--ppb, 48px) - 1px),
+    rgba(255, 255, 255, 0.07) calc(var(--ppb, 48px) - 1px),
+    rgba(255, 255, 255, 0.07) var(--ppb, 48px)
+  );
+}
+
+.tl-ruler .bar-num {
+  position: absolute;
+  top: 3px;
+  font-size: 8.5px;
+  color: var(--faint);
+  transform: translateX(3px);
+}
+
+.tl-lane {
+  height: 54px;
+  position: relative;
+  border-bottom: 1px solid var(--stroke);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--ppb, 48px) - 1px),
+    rgba(255, 255, 255, 0.05) calc(var(--ppb, 48px) - 1px),
+    rgba(255, 255, 255, 0.05) var(--ppb, 48px)
+  );
+}
+
+.tl-block {
+  position: absolute;
+  top: 7px;
+  height: 40px;
+  border-radius: 8px;
+  box-sizing: border-box;
+  border: 1px solid;
+  padding: 5px 8px;
+  overflow: hidden;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  user-select: none;
+}
+
+.tl-block .bn {
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-block .bb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.tl-block .bb input {
+  width: 30px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 1px 3px;
+  font-size: 9.5px;
+}
+
+.tl-block .bx {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+}
+
+.tl-block .bx:hover {
+  color: #fff;
+}
+
+.tl-block .grip {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  cursor: ew-resize;
+  border-radius: 0 8px 8px 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16));
+}
+
+.tl-block.groove {
+  background: rgba(138, 160, 255, 0.2);
+  border-color: rgba(138, 160, 255, 0.6);
+  color: #dfe5ff;
+}
+
+.tl-block.armonia {
+  background: rgba(243, 177, 90, 0.2);
+  border-color: rgba(243, 177, 90, 0.6);
+  color: #ffe8c9;
+}
+
+.tl-block.sesion {
+  background: rgba(200, 155, 245, 0.2);
+  border-color: rgba(200, 155, 245, 0.6);
+  color: #f0e2ff;
+}
+
+.tl-block.playing {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 2px 14px rgba(255, 255, 255, 0.4);
+}
+
+.tl-add {
+  position: absolute;
+  top: 14px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+}
+
+.tl-add select {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px dashed var(--stroke);
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 3px 6px;
+  font-size: 10px;
+}
+
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+  display: none;
+  z-index: 5;
+}
+
+.tl-playhead.on {
+  display: block;
+}
+
+.tl-empty {
+  padding: 16px;
+  font-size: 11px;
+  color: var(--faint);
+  font-style: italic;
+}

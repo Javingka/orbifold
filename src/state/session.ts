@@ -32,6 +32,7 @@ import type { RhythmLayer } from '../core/rhythm/layers.js';
 import type { Sound } from '../core/rhythm/layers.js';
 import { bjorklund, rotate, RSTEPS } from '../core/rhythm/euclid.js';
 import type { Composition } from '../core/composition/model.js';
+import { stripComments, buildComposition } from '../core/composition/model.js';
 import {
   chordToStrudel,
   melodyLine,
@@ -39,6 +40,14 @@ import {
   buildSession,
 } from '../core/codegen/strudel.js';
 import { chordLabel } from '../core/theory/chords.js';
+import {
+  getCompState,
+  getCompPausedBars,
+  setCompPlaying,
+  setCompPaused,
+  setCompStopped,
+  compPos,
+} from './composition.js';
 
 // ── Lazy audio loader ──────────────────────────────────────────────────────
 // @strudel/web accesses window at module-evaluation time (dist/index.mjs line
@@ -117,6 +126,7 @@ export interface NowPlaying {
     | 'harmony'
     | 'session'
     | 'chord'
+    | 'block'
     | 'composition'
     | 'preview'
     | 'agent'
@@ -692,4 +702,378 @@ export function clearChordAt(index: number): void {
     },
   }));
   requeueLive();
+}
+
+// ── Step 05.2: Composition action functions ────────────────────────────────
+// Ports the composition library and timeline manipulation from the prototype.
+// Prototype reference: reference/orbifold.html lines 1927–2127.
+//
+// Module-level ID counters (OD-1 resolved: ephemeral, NOT in sessionStore).
+// Prototype: `let blkSeq=1, trkSeq=1;` (line 1933).
+// IDs regenerate on page reload — same as prototype behavior.
+let _blkSeq = 1;
+let _trkSeq = 1;
+
+/**
+ * Save the current engine state as a named block in the composition library.
+ *
+ * Reads the current rhythm/harmony/session code, strips comments, generates a
+ * default name ('Groove N', 'Armonía N', or 'Sesión N'), and pushes a new
+ * `Block` to `composition.blocks`. Uses the module-level `_blkSeq` counter
+ * (OD-1: ephemeral, not persisted). No-op if the derived code is empty.
+ *
+ * Prototype: `addBlock(type)` (lines 1939–1946).
+ *
+ * @param type - 'groove' (rhythm), 'armonia' (harmony), or 'sesion' (full session).
+ */
+export function addBlock(type: 'groove' | 'armonia' | 'sesion'): void {
+  const state = get(sessionStore);
+  let code = '';
+  let defName = '';
+  if (type === 'groove') {
+    code = rhythmCode(state);
+    defName = 'Groove ' + _blkSeq;
+  } else if (type === 'armonia') {
+    const m = harmonyCode(state);
+    code = m ? m.trim() : '';
+    defName = 'Armonía ' + _blkSeq;
+  } else {
+    code = stripComments(sessionCode(state));
+    defName = 'Sesión ' + _blkSeq;
+  }
+  if (!code) return;
+  const block = {
+    id: 'b' + _blkSeq++,
+    name: defName,
+    type,
+    code: stripComments(code),
+    bars: 4,
+  };
+  sessionStore.update((s) => ({
+    ...s,
+    composition: {
+      ...s.composition,
+      blocks: [...s.composition.blocks, block],
+    },
+  }));
+}
+
+/**
+ * Remove a block from the library and all track references.
+ *
+ * Filters `composition.blocks` to remove the matching block, then filters
+ * each track's `blocks` array to remove refs with that `blockId`.
+ *
+ * Prototype: `el.querySelector('[data-a="del"]').onclick` (lines 1963–1966).
+ *
+ * @param blockId - The `id` of the block to remove (e.g. 'b1').
+ */
+export function deleteBlock(blockId: string): void {
+  sessionStore.update((s) => ({
+    ...s,
+    composition: {
+      blocks: s.composition.blocks.filter((b) => b.id !== blockId),
+      tracks: s.composition.tracks.map((t) => ({
+        ...t,
+        blocks: t.blocks.filter((r) => r.blockId !== blockId),
+      })),
+    },
+  }));
+}
+
+/**
+ * Rename a block in the library.
+ *
+ * Finds the block with `blockId` and updates its `name` field.
+ *
+ * Prototype: `.nm contenteditable` input handler (line 1960):
+ *   `el.querySelector('.nm').addEventListener('input', ev => { b.name = ev.target.textContent; renderTimeline(); })`.
+ *
+ * @param blockId - The `id` of the block to rename.
+ * @param name    - The new name string.
+ */
+export function renameBlock(blockId: string, name: string): void {
+  sessionStore.update((s) => ({
+    ...s,
+    composition: {
+      ...s.composition,
+      blocks: s.composition.blocks.map((b) => (b.id === blockId ? { ...b, name } : b)),
+    },
+  }));
+}
+
+/**
+ * Preview a single block's code via `runNow` and set `nowPlaying` to `'block'`.
+ *
+ * Loads the audio module lazily, calls `initAudio()` (idempotent), then
+ * `runNow(block.code)`. Sets nowPlaying label to `'Bloque · <name>'` and
+ * source to `'block'`.
+ *
+ * Prototype: `el.querySelector('[data-a="play"]').onclick` (line 1961):
+ *   `runNow(b.code, {fromEditor:true}); setNowPlaying('Bloque · '+b.name, 'block');`.
+ *
+ * @param blockId - The `id` of the block to preview.
+ */
+export async function playBlockById(blockId: string): Promise<void> {
+  const state = get(sessionStore);
+  const block = state.composition.blocks.find((b) => b.id === blockId);
+  if (!block) return;
+  const a = await getAudio();
+  await a.initAudio();
+  await a.runNow(block.code);
+  setNowPlaying('Bloque · ' + block.name, 'block');
+}
+
+/**
+ * Add a new empty track to the timeline.
+ *
+ * Pushes `{ id: 't' + _trkSeq++, blocks: [] }` to `composition.tracks`.
+ *
+ * Prototype: `document.getElementById('addTrack').onclick` (line 2120):
+ *   `tracks.push({id:'t'+(trkSeq++), blocks:[]}); renderTimeline();`.
+ */
+export function addTrack(): void {
+  const newTrack = { id: 't' + _trkSeq++, blocks: [] as { blockId: string; bars: number }[] };
+  sessionStore.update((s) => ({
+    ...s,
+    composition: {
+      ...s.composition,
+      tracks: [...s.composition.tracks, newTrack],
+    },
+  }));
+}
+
+/**
+ * Remove a track by index. If the removed track was the last one, re-adds a
+ * single empty track so the timeline always has at least one lane.
+ *
+ * Prototype: track head delete button `onclick` (line 2000):
+ *   `tracks.splice(ti,1); if(!tracks.length) tracks.push({id:'t'+(trkSeq++),blocks:[]}); renderTimeline();`.
+ *
+ * @param trackIndex - Zero-based index of the track to remove.
+ */
+export function removeTrack(trackIndex: number): void {
+  sessionStore.update((s) => {
+    const tracks = s.composition.tracks.filter((_, i) => i !== trackIndex);
+    const finalTracks =
+      tracks.length > 0
+        ? tracks
+        : [{ id: 't' + _trkSeq++, blocks: [] as { blockId: string; bars: number }[] }];
+    return {
+      ...s,
+      composition: { ...s.composition, tracks: finalTracks },
+    };
+  });
+}
+
+/**
+ * Add a block reference to an existing track (from the timeline `<select>` drop-down).
+ *
+ * Finds the block by `blockId`, pushes `{ blockId, bars: block.bars }` to the
+ * specified track's `blocks` array.
+ *
+ * Prototype: timeline selector `onchange` handler (line 2047):
+ *   `t.blocks.push({blockId:b.id, bars:b.bars}); renderTimeline();`.
+ *
+ * @param trackIndex - Zero-based index of the target track.
+ * @param blockId    - The `id` of the block to place.
+ */
+export function addBlockToTrack(trackIndex: number, blockId: string): void {
+  sessionStore.update((s) => {
+    const block = s.composition.blocks.find((b) => b.id === blockId);
+    if (!block) return s;
+    const tracks = s.composition.tracks.map((t, i) => {
+      if (i !== trackIndex) return t;
+      return { ...t, blocks: [...t.blocks, { blockId, bars: block.bars }] };
+    });
+    return { ...s, composition: { ...s.composition, tracks } };
+  });
+}
+
+/**
+ * Add a new track pre-populated with a block reference ("↳ pista" button behavior).
+ *
+ * The prototype's `↳ pista` button (line 1962) pushes a NEW track containing
+ * the block — it does NOT add to the last existing track. This function
+ * implements that prototype-exact behavior.
+ *
+ * Prototype: `el.querySelector('[data-a="add"]').onclick` (line 1962):
+ *   `tracks.push({id:'t'+(trkSeq++), blocks:[{blockId:b.id,bars:b.bars}]}); renderTimeline();`.
+ *
+ * @param blockId - The `id` of the block to place in the new track.
+ */
+export function addBlockAsNewTrack(blockId: string): void {
+  sessionStore.update((s) => {
+    const block = s.composition.blocks.find((b) => b.id === blockId);
+    if (!block) return s;
+    const newTrack = {
+      id: 't' + _trkSeq++,
+      blocks: [{ blockId, bars: block.bars }],
+    };
+    return {
+      ...s,
+      composition: {
+        ...s.composition,
+        tracks: [...s.composition.tracks, newTrack],
+      },
+    };
+  });
+}
+
+/**
+ * Remove a block reference from a track by its position index.
+ *
+ * Prototype: `.bx` (✕) click handler (line 2015):
+ *   `t.blocks = t.blocks.filter(r => r !== ref); renderTimeline();`.
+ *
+ * @param trackIndex - Zero-based index of the track.
+ * @param refIndex   - Zero-based index of the block reference within the track.
+ */
+export function removeBlockFromTrack(trackIndex: number, refIndex: number): void {
+  sessionStore.update((s) => {
+    const tracks = s.composition.tracks.map((t, i) => {
+      if (i !== trackIndex) return t;
+      return { ...t, blocks: t.blocks.filter((_, ri) => ri !== refIndex) };
+    });
+    return { ...s, composition: { ...s.composition, tracks } };
+  });
+}
+
+/**
+ * Update the bar count for a positioned block reference, clamped to [1, 64].
+ *
+ * Prototype: input `oninput` handler (lines 2017–2018):
+ *   `ref.bars = Math.max(1, Math.min(64, +ev.target.value || 1));`.
+ *
+ * @param trackIndex - Zero-based index of the track.
+ * @param refIndex   - Zero-based index of the block reference within the track.
+ * @param bars       - New bar count (clamped to [1, 64]).
+ */
+export function setBlockBars(trackIndex: number, refIndex: number, bars: number): void {
+  const clamped = Math.max(1, Math.min(64, bars || 1));
+  sessionStore.update((s) => {
+    const tracks = s.composition.tracks.map((t, i) => {
+      if (i !== trackIndex) return t;
+      const blocks = t.blocks.map((r, ri) => (ri === refIndex ? { ...r, bars: clamped } : r));
+      return { ...t, blocks };
+    });
+    return { ...s, composition: { ...s.composition, tracks } };
+  });
+}
+
+/**
+ * Reorder a block reference within a track by moving it from one index to another.
+ *
+ * Implements the drag-to-reorder behavior: splices the ref out of `fromIndex`
+ * and inserts at `toIndex` (adjusted after the splice).
+ *
+ * Prototype: block `pointerup` handler (lines 2036–2037):
+ *   `const cur = t.blocks.indexOf(ref); t.blocks.splice(cur,1);
+ *    if(newIdx>cur) newIdx--; t.blocks.splice(newIdx, 0, ref);`.
+ *
+ * @param trackIndex - Zero-based index of the track.
+ * @param fromIndex  - Current index of the block reference.
+ * @param toIndex    - Target index (before adjustment).
+ */
+export function reorderBlockInTrack(trackIndex: number, fromIndex: number, toIndex: number): void {
+  sessionStore.update((s) => {
+    const tracks = s.composition.tracks.map((t, i) => {
+      if (i !== trackIndex) return t;
+      const blocks = [...t.blocks];
+      const [ref] = blocks.splice(fromIndex, 1);
+      let dest = toIndex;
+      if (dest > fromIndex) dest--;
+      blocks.splice(dest, 0, ref);
+      return { ...t, blocks };
+    });
+    return { ...s, composition: { ...s.composition, tracks } };
+  });
+}
+
+/**
+ * Play the composition by building the Strudel code and calling `runNow`.
+ *
+ * Handles resume-from-pause: if `compState === 'paused'`, computes an adjusted
+ * `compStart` timestamp so playback resumes from `compPausedBars` without
+ * resetting the playhead to bar 0.
+ *
+ * Side effects:
+ * - Calls `buildComposition(blocks, tracks)` from `core/composition/model.ts`.
+ * - Calls `audio.runNow(code)`.
+ * - Calls `setNowPlaying('Composición', 'composition')`.
+ * - Calls `setCompPlaying(start)` from `composition.ts`.
+ *
+ * Prototype: `playComposition()` (lines 2093–2103).
+ *
+ * @returns Promise that resolves when playback is initiated.
+ */
+export async function playComposition(): Promise<void> {
+  const state = get(sessionStore);
+  const { blocks, tracks } = state.composition;
+  const code = buildComposition(blocks, tracks);
+  if (!code) return;
+  const a = await getAudio();
+  await a.initAudio();
+  // Compute adjusted start: resume from pause position or start fresh.
+  // Prototype lines 2098–2100:
+  //   compStart = (compState==='paused')
+  //     ? performance.now() - compPausedBars*(240000/currentBpm)
+  //     : performance.now();
+  const currentBpm = get(sessionStore).bpm;
+  const start =
+    getCompState() === 'paused'
+      ? performance.now() - getCompPausedBars() * (240000 / currentBpm)
+      : performance.now();
+  setCompPlaying(start);
+  await a.runNow(code);
+  setNowPlaying('Composición', 'composition');
+}
+
+/**
+ * Pause the composition playback.
+ *
+ * Saves the current bar position via `compPos()`, calls `hush()`, transitions
+ * to 'paused' state, and updates the now-playing label to 'Composición · pausa'.
+ *
+ * No-op if `compState !== 'playing'`.
+ *
+ * Prototype: `pauseComposition()` (lines 2104–2110).
+ */
+export async function pauseComposition(): Promise<void> {
+  if (getCompState() !== 'playing') return;
+  const state = get(sessionStore);
+  const { blocks, tracks } = state.composition;
+  // Compute totalBars inline to pass to compPos.
+  let tb = 0;
+  tracks.forEach((t) => {
+    let sum = 0;
+    t.blocks.forEach((ref) => {
+      const b = blocks.find((x) => x.id === ref.blockId);
+      if (b) sum += ref.bars;
+    });
+    if (sum > tb) tb = sum;
+  });
+  const { pos } = compPos(state.bpm, Math.max(tb, 1));
+  setCompPaused(pos);
+  const a = await getAudio();
+  a.hush();
+  // Update nowPlaying label only (keep source = 'composition').
+  sessionStore.update((s) => ({
+    ...s,
+    nowPlaying: { label: 'Composición · pausa', source: 'composition' },
+  }));
+}
+
+/**
+ * Stop the composition playback and reset the playhead to bar 0.
+ *
+ * Calls `hush()`, transitions to 'stopped' state, and clears `nowPlaying`.
+ *
+ * Prototype: `stopComposition()` (lines 2112–2115).
+ */
+export async function stopComposition(): Promise<void> {
+  const a = await getAudio();
+  a.hush();
+  setCompStopped();
+  setNowPlaying(null, null);
 }
