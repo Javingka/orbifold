@@ -16,6 +16,7 @@
   import HarmonyControls from '../ui/HarmonyControls.svelte';
   import RhythmControls from '../ui/RhythmControls.svelte';
   import CodeDrawer from '../ui/CodeDrawer.svelte';
+  import CompositionDrawer from '../ui/CompositionDrawer.svelte';
   import Hud from '../ui/Hud.svelte';
   import Legend from '../ui/Legend.svelte';
   import Tooltip from '../ui/Tooltip.svelte';
@@ -402,6 +403,14 @@
   position:fixed so it renders outside the flex column layout.
 -->
 <CodeDrawer />
+
+<!--
+  Composition drawer: fixed position, slides up from bottom on toggle.
+  Prototype #compTab + #compDrawer (lines 530–574, CSS lines 251–314, JS lines 1927–2127).
+  position:fixed so it renders outside the flex column layout.
+  Tab positioned to the right of the code drawer tab (left: calc(50% + 130px)).
+-->
+<CompositionDrawer />
 
 <!--
   Global tooltip: tracks [data-tip] elements across the whole document.
