@@ -552,7 +552,12 @@ None.
 
 ### Planner Review
 
-(Awaiting Planner review — this is a documentation-only step with no source code changes.)
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-09
+**Iteration:** 1 of 5
+**Reason:** All 9 checklist items pass (8 standard + prototype-parity). Scope matches spec: gate commands run, exact output recorded, 10-point smoke test executed, two defects found and fixed in Round-1, re-verified clean. Commit messages match spec strings for both the fix commit and the terminal verification commit. Acceptance Coverage Table is complete across all 14 A-05 IDs with specific smoke-test item references, proxy disclosures for A-05-13 and A-05-14, and no hand-waved entries. Gate output is exact: tsc (no output, exit 0), lint (ESLint+Prettier clean), test (120 passed across 5 files), build (540 modules, 4 outputs, chunk size warning explicitly noted as non-blocking). Test count (120) meets the ≥120 gate. Decisions Register respected: no new dependencies, no cx/cy in Block type (model.ts grep confirms only "cycle" matches). Both defect fixes (cross-track drag via `moveBlockBetweenTracks` + `document.elementFromPoint`, now-playing pill inside drawer) are correctly characterized as Pilot-confirmed superset/additive improvements with no prototype behavior removed. AGPL-3.0 header verified on `CompositionDrawer.svelte` line 2 and `composition.ts` line 1. No unauthorized ADR-worthy decisions introduced in this step. The phase completion section is present and complete: all 14 A-05 IDs summarized, known deviations documented, ADRs 0008 and 0009 filed, no pending Register proposals, no deferrals, iteration history accurate. Phase 05 is complete.
+**Pending Register proposals (Pilot decides at phase approval):** None — no new Register proposals surfaced during Phase 05.
+**Next action:** Pilot checkpoint 5 — Pilot reviews Phase 05 handoff and approves before Phase 06 scoping
 
 ---
 

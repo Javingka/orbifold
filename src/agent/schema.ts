@@ -1,4 +1,152 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — Zod schema: { rhythm?, harmony?, note? } constrained to UI model.
-// TODO: Phase 6
-export {};
+// Validates agent JSON output against the types the UI can apply.
+// Phase 06 step 06.2.
+//
+// Schema constants mirror prototype lines 1670–1673 (SK_SOUNDS, SK_MODES, SK_QUAL).
+
+import { z } from 'zod';
+
+// ── Version ────────────────────────────────────────────────────────────────
+
+/** Schema version constant; bump if the shape changes in a future phase. */
+export const SCHEMA_VERSION = 1;
+
+// ── Constants (prototype lines 1670–1673) ─────────────────────────────────
+
+const SK_SOUNDS = ['bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht'] as const;
+const SK_MODES = [
+  'major',
+  'minor',
+  'dorian',
+  'phrygian',
+  'lydian',
+  'mixolydian',
+  'locrian',
+  'harmonic:minor',
+] as const;
+const SK_QUAL = ['maj', 'min', 'dim', 'aug'] as const;
+
+// ── RhythmLayer — steps OR euclid variant (exactly one) ───────────────────
+
+/**
+ * Steps-variant: explicit 16-step array of 0/1 values.
+ * `steps` must be exactly 16 elements.
+ *
+ * Prototype §7: `steps` = 16 integers 0/1.
+ */
+const RhythmLayerStepsSchema = z.object({
+  sound: z.enum(SK_SOUNDS),
+  steps: z
+    .array(z.union([z.literal(0), z.literal(1)]))
+    .length(16, 'steps must be exactly 16 entries'),
+});
+
+/**
+ * Euclid-variant: Euclidean rhythm parameters.
+ * Constraints: k ∈ [1,16], n ∈ [2,16], rot ∈ [0, n-1].
+ *
+ * Prototype §7: `euclid {k:1..16, n:2..16, rot:0..n-1}`.
+ */
+const RhythmLayerEuclidSchema = z
+  .object({
+    sound: z.enum(SK_SOUNDS),
+    euclid: z.object({
+      k: z.number().int().min(1).max(16),
+      n: z.number().int().min(2).max(16),
+      rot: z.number().int().min(0).max(15),
+    }),
+  })
+  .superRefine((val, ctx) => {
+    if (val.euclid.rot > val.euclid.n - 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.too_big,
+        maximum: val.euclid.n - 1,
+        type: 'number',
+        inclusive: true,
+        message: `rot must be ≤ n-1 (got rot=${val.euclid.rot}, n=${val.euclid.n})`,
+        path: ['euclid', 'rot'],
+      });
+    }
+  });
+
+/**
+ * A single rhythm layer: exactly one of `steps` (16-element array) or
+ * `euclid` ({k,n,rot}) — not both, not neither.
+ *
+ * Prototype §7 and constants lines 1670–1673.
+ */
+export const RhythmLayerSchema = z.union([RhythmLayerStepsSchema, RhythmLayerEuclidSchema]);
+
+// ── RhythmSpec ─────────────────────────────────────────────────────────────
+
+/**
+ * Full rhythm specification: 1–6 layers.
+ *
+ * Prototype §7: layers array; limits match UI capability.
+ */
+export const RhythmSpecSchema = z.object({
+  layers: z.array(RhythmLayerSchema).min(1).max(6),
+});
+
+// ── HarmonyChord ───────────────────────────────────────────────────────────
+
+/**
+ * A single chord in the progression: root note name and quality.
+ * `gain` is optional (defaults to 0.6 in apply.ts, prototype line 1714).
+ *
+ * Prototype §7: `quality ∈ {maj,min,dim,aug}`.
+ */
+export const HarmonyChordSchema = z.object({
+  root: z.string(),
+  quality: z.enum(SK_QUAL),
+  gain: z.number().min(0).max(1.2).optional(),
+});
+
+// ── HarmonySpec ────────────────────────────────────────────────────────────
+
+/**
+ * Full harmony specification: optional key, mode, octave, and chord progression.
+ * All fields are optional; apply.ts only updates fields that are present.
+ *
+ * Prototype §7: `mode` (8 modes); `octave 2..5`; progression = ordered chords.
+ */
+export const HarmonySpecSchema = z.object({
+  root: z.string().optional(),
+  mode: z.enum(SK_MODES).optional(),
+  octave: z.number().int().min(2).max(5).optional(),
+  progression: z.array(HarmonyChordSchema).min(1).max(8).optional(),
+});
+
+// ── AgentOutput ────────────────────────────────────────────────────────────
+
+/**
+ * The top-level schema for agent JSON output.
+ * At least one of `rhythm` or `harmony` must be present.
+ * `note` is an optional freetext annotation (≤300 chars).
+ *
+ * Prototype §7 and tryApplySkill (lines 1725–1738): if neither rhythm nor
+ * harmony is present the skill is rejected (returns null).
+ */
+export const AgentOutputSchema = z
+  .object({
+    rhythm: RhythmSpecSchema.optional(),
+    harmony: HarmonySpecSchema.optional(),
+    note: z.string().max(300).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.rhythm === undefined && val.harmony === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'AgentOutput must have at least one of: rhythm, harmony',
+      });
+    }
+  });
+
+// ── Inferred TypeScript types ──────────────────────────────────────────────
+
+export type RhythmLayer = z.infer<typeof RhythmLayerSchema>;
+export type RhythmSpec = z.infer<typeof RhythmSpecSchema>;
+export type HarmonyChord = z.infer<typeof HarmonyChordSchema>;
+export type HarmonySpec = z.infer<typeof HarmonySpecSchema>;
+export type AgentOutput = z.infer<typeof AgentOutputSchema>;
