@@ -930,11 +930,14 @@ None.
 
 ### Planner Review
 
-**Decision:** APPROVED
-**Reviewed on:** 2026-06-08
-**Iteration:** Round-4 (final)
-**Reason:** All 14 smoke-test items confirmed by Pilot. Gate commands all exit 0 with 120 tests. Two root-cause fixes verified by live system and regression test. All 14 A-04 IDs now covered.
-**Next action:** Pilot approval required before Phase 05 scoping. Phase 04 is complete.
+**Planner Review:** APPROVED on 2026-06-08. Iteration: 4 of 5.
+**Reason:** All 8 standard checklist items and the prototype parity item pass for the phase-completing operability step. Commit scope is clean: three targeted files (`strudel.ts` re-anchor flag, `layers.ts` step-explicit priority, `euclid.test.ts` regression) plus handoff, all within the defect-fix scope of step 04.6; no scope expansion. The Acceptance Coverage Table is the most rigorous in the phase: expanded columns (Test file, Test type, Gap status), proxy disclosures for A-04-14, and explicit per-item smoke-test confirmation for all 14 A-04 IDs. The 14-point operability evidence is recorded item by item with the Pilot as the live-system observer — this satisfies checklist item 5 (live-system evidence required for operability). Root causes for both Round-4 defects are documented with depth: `strudel.ts` re-anchor flag discloses the specific Strudel REPL evaluate option consulted; `layers.ts` step-explicit logic explains the `steps` present → compact-form-fallback-only invariant and its compatibility with legacy load paths. The Cursor AI debug session is disclosed. OD-2 revision is disclosed (Round-2 entry) and carried forward in the Known Deviations section. Register respected: no new dependencies, exact-version pinning intact, `Chord.cx/cy` ephemeral decision untouched, no self-written Register entries. The `hudStore` ephemeral proposal and the layer-overlay proposal are surfaced for Pilot decision at phase approval, not self-resolved. Reversibility intact: the `runNow` flag is purely internal to `strudel.ts`; the `layers.ts` change is backward-compatible (compact form retained as fallback); 120 tests pass with one net new regression test. Test count increase from 119 to 120 satisfies A-04-14 (≥119). No unauthorized new dependencies or env/CI changes.
+
+**Pending Register proposals (Pilot decides at phase approval):**
+- "hudStore is ephemeral: not included in Phase 07 persistence scope" — surfaced in step 04.5.
+- "Layer-control DOM overlay stays in App.svelte until an explicit refactor phase" — surfaced in step 04.1.
+
+**Next action:** Pilot checkpoint 5 — Pilot reviews Phase 04 handoff and approves before Phase 05 scoping.
 
 ---
 
