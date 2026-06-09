@@ -19,6 +19,11 @@
     - + órbita: addEuclidLayer(sound, k, n, rot) (prototype lines 849–857).
     - + capa vacía: addEmptyLayer(sound) (prototype lines 858–861).
 
+  Phase 06 step 06.4: added 📨 base context capture button.
+    Imports agentCtx; sets includeRhythm:true when clicked.
+    Active state when $agentCtx.includeRhythm is true.
+    Prototype: button#rhythmToCtx in footer (line 511); moved to toolbar per inventory.
+
   All slider readouts update reactively via Svelte reactive declarations.
   euclidR max is clamped to n-1 (prototype line 844).
 
@@ -30,11 +35,14 @@
   Store reads:
     $sessionStore.view          — visibility gate
     $sessionStore.nowPlaying    — for preview toggle button state
+    $agentCtx.includeRhythm     — context button active state
 
   Store writes (via session.ts actions):
     addEuclidLayer(sound, k, n, rot)
     addEmptyLayer(sound)
     previewEuclid(sound, k, n, rot)  — or hushAll() to stop
+  Store writes (via agentCtx):
+    agentCtx.update (includeRhythm: true)
 -->
 <script lang="ts">
   import {
@@ -45,6 +53,7 @@
     hushAll,
   } from '../state/session.js';
   import { setMorphTarget } from '../render/rhythm-scene.js';
+  import { agentCtx } from '../state/agentCtx.js';
 
   // ── Transient local state ─────────────────────────────────────────────────
   // Not in sessionStore — these are ephemeral configuration values.
@@ -251,6 +260,18 @@
     >
       + capa vacía
     </button>
+
+    <!--
+      Context capture button: send current groove to the agent as rhythmic base.
+      Prototype: button#rhythmToCtx in footer (line 511); moved here per inventory.
+      Active state when $agentCtx.includeRhythm is true.
+    -->
+    <button
+      class="mk ctx-btn"
+      class:active={$agentCtx.includeRhythm}
+      title="Enviar el groove al agente como base rítmica"
+      on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}>📨 base</button
+    >
   </div>
 {/if}
 
@@ -309,5 +330,15 @@
     background: rgba(138, 160, 255, 0.15);
     border: 1px solid rgba(138, 160, 255, 0.35);
     color: var(--accent);
+  }
+
+  /*
+   * Context capture button active state (phase 06 step 06.4).
+   * When $agentCtx.includeRhythm is true, button is highlighted.
+   */
+  .orbit-ctl .ctx-btn.active {
+    background: rgba(86, 207, 196, 0.2);
+    border-color: rgba(86, 207, 196, 0.5);
+    color: var(--subdom);
   }
 </style>

@@ -282,16 +282,123 @@ None.
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** —
-**Iteration:** 1 of 5
-**Reason:** —
-**Next action:** —
+**Planner Review:** APPROVED on 2026-06-09. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 06.4
 
 ---
 
 **Terminal commit:** `feat(agent): Phase 06 step 06.3 — providers and agent send/apply/autofix`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 06.4 — AgentPanel.svelte, CSS tokens, and context capture
+
+**Date:** 2026-06-09
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Created `src/state/agentCtx.ts`: ephemeral Svelte writable store `{ includeRhythm: boolean, includeHarmony: boolean }` with initial `{false, false}`. AGPL-3.0 header. ADR 0008/0009 pattern (not persisted, not in sessionStore).
+- Appended agent CSS block to `src/app/app.css`: `#agentTab`, `#agent`, `#agent.open`, `.agent-head`, `.a-glyph`, `.a-close`, `.prov-row`, `#agentModel`, `#agentKey` focus styles, `#chat`, `.msg`, `.msg.user`, `.avatar`, `.bubble`, `pre` in bubble, `.runbtn`, `.dots` (animated), `.quick`, `.toggles`, `.agent-input`, `.agent-input textarea`, `.sendbtn`. Tab and panel use `position:fixed` (Svelte deviation from prototype's `position:absolute`) so they float above the flex column `#app`.
+- Created `src/ui/AgentPanel.svelte`: `#agentTab` tab button (click sets `open = true`), `<aside id="agent" class:open>` with full UI — agent-head (꩜ glyph + "Agente" + ✕ close), provider select (Anthropic/OpenRouter only), model input, API key input, `#chat` scrollable message list, quick prompts row (5 QUICK buttons), toggles row (auto-tocar, 🔧 auto-corregir), agent-input row (textarea + sendbtn). AGPL-3.0 header.
+- Chat rendering: messages stored as local Svelte reactive array; `contentParts()` splits content into text/code segments inline; each code block renders `<pre>` + `<button class="runbtn">▶ tocar esto</button>`.
+- `playWithAutofix()`: reads `$sessionStore.nowPlaying.source` to decide `runNow` vs `queueForNextCycle`; on error + autofixEnabled: shows "🔧 corrigiendo…" loading message, calls `requestAutofix()`, retries up to `AUTOFIX_MAX=2`; on success: calls `setNowPlaying('Código del agente', 'agent')`.
+- `handleSend()`: captures `$agentCtx` flags, resets them immediately, shows loading dots, calls `send()`, handles all four result types (`skill`, `code`, `text`, `error`); on `skill` with autoplay, calls `playWithAutofix`.
+- Provider change: calls `setProvider`, updates `modelValue` to `PROVIDERS[p].defaultModel`, updates `keyPlaceholder`, reloads key from localStorage. API key loaded on `onMount`, saved on blur.
+- Updated `src/ui/HarmonyControls.svelte`: added `agentCtx` import; `<button class="tbtn" class:active={$agentCtx.includeHarmony}>📨 marco</button>` with `agentCtx.update(c => ({...c, includeHarmony: true}))`. Added `.tbtn`, `.tbtn:hover`, `.tbtn.active` styles.
+- Updated `src/ui/RhythmControls.svelte`: added `agentCtx` import; `<button class="mk ctx-btn" class:active={$agentCtx.includeRhythm}>📨 base</button>` with `agentCtx.update(c => ({...c, includeRhythm: true}))`. Added `.ctx-btn.active` style.
+- Updated `src/app/App.svelte`: added `import AgentPanel from '../ui/AgentPanel.svelte'` and `<AgentPanel />` after `<CompositionDrawer />`.
+- Confirmed `nowPlaying.source` union in `session.ts` includes `'agent'` (inventory OD-2 resolution; no change needed).
+
+### Prototype parity citations
+
+- CSS: prototype lines 130–177 — all rules ported; `#agentTab`/`#agent` changed from `position:absolute` to `position:fixed` for Svelte layout (prototype is a single container; Svelte `#app` is flex-column).
+- Tab + Panel HTML: prototype lines 456–481 — structure 1:1; provider select limited to Anthropic/OpenRouter (Pilot decision).
+- Quick prompts: prototype lines 1789–1797 (`QUICK` array labels and prompt strings are identical).
+- Send handler: prototype lines 1780–1788 (Enter key + sendBtn click), flow mapped to `handleSend()`.
+- `appendMsg` code block rendering: prototype lines 1615–1634 — ported as `contentParts()` Svelte inline render.
+- `playWithAutofix`: prototype lines 1637–1647 — logic 1:1; `wasPlaying = !!currentCode` mapped to `$sessionStore.nowPlaying.source !== null`; "🔧 corrigiendo…" loading indicator (prototype line 1656 `.dots` HTML) replicated as reactive loading message.
+- Panel toggle (open/close): prototype lines 1799–1801 (`agentTab.onclick`, `agentClose.onclick`) mapped to Svelte `open` reactive variable.
+- Context button handlers: prototype lines 510–511 (`harmonyToCtx`, `rhythmToCtx`) mapped to `agentCtx.update` in HarmonyControls/RhythmControls.
+
+### Validation evidence (per Acceptance ID)
+
+- A-06-01: `#agentTab` rendered with `class="glass"`; `open` state drives `class:open` on `<aside id="agent">`; CSS transition `transform 0.42s` defined in app.css — slide-in animation confirmed by static analysis. Live-system confirmation deferred to 06.5.
+- A-06-07: `playWithAutofix` calls `setNowPlaying('Código del agente', 'agent')` on success — confirmed by tsc type-check. Live-system confirmation deferred to 06.5.
+- A-06-08: `playWithAutofix` shows "🔧 corrigiendo…" loading message (isLoading:true ChatMsg); retries up to `AUTOFIX_MAX=2`; `autofixInFlight` guard prevents concurrent retries — confirmed by static analysis. Live-system confirmation deferred to 06.5.
+- A-06-09: `QUICK` array with 5 entries; `handleQuick(prompt)` called on button click — confirmed by tsc. Live-system confirmation deferred to 06.5.
+- A-06-10: `$agentCtx.includeHarmony` / `$agentCtx.includeRhythm` flags set on button click; reset to false in `handleSend` after capturing ctx — confirmed by tsc. Active styles added. Live-system confirmation deferred to 06.5.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier clean)
+- `pnpm test` → 153 passed (unchanged from step 06.3; count stays at 153)
+- `pnpm build` → exit 0 (warnings only: strudel.ts dynamic+static import coexistence, chunk size — both pre-existing)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-06-01 | Agent tab visible; click opens with slide-in animation; ✕ closes | (smoke test 06.5) | live-system | partial — tab + panel structure and CSS confirmed by tsc/lint; live-system deferred to 06.5 |
+| A-06-02 | Provider selector shows Anthropic and OpenRouter; switching updates model/key-hint; key persists | (smoke test 06.5) | live-system | partial — provider select, model sync, loadApiKey/saveApiKey wiring confirmed by tsc; live-system deferred to 06.5 |
+| A-06-03 | Sending message updates rhythm+harmony in session state | (smoke test 06.5) | live-system | partial — send() call graph confirmed tsc; live-system deferred to 06.5 |
+| A-06-04 | AgentOutputSchema accepts/rejects per spec | `tests/schema.test.ts` | unit | covered (step 06.2, unchanged) |
+| A-06-05 | applyRhythmSpec updates sessionStore correctly | `tests/schema.test.ts` | unit | covered (step 06.2, unchanged) |
+| A-06-06 | applyHarmonySpec updates root/mode/octave/progression; no cx/cy | `tests/schema.test.ts` | unit | covered (step 06.2, unchanged) |
+| A-06-07 | Agent code plays via runNow; nowPlaying.source='agent'; Transport label reflects this | (smoke test 06.5) | live-system | partial — setNowPlaying('Código del agente','agent') call confirmed by tsc; live-system deferred to 06.5 |
+| A-06-08 | Auto-corrector retries up to 2 times; "🔧 corrigiendo…" feedback appears | (smoke test 06.5) | live-system | partial — AUTOFIX_MAX=2 guard, loading message pattern confirmed by tsc; live-system deferred to 06.5 |
+| A-06-09 | Quick prompts pre-fill and send preset message | (smoke test 06.5) | live-system | partial — QUICK array (5 entries, identical to prototype) and handleQuick wiring confirmed by tsc; live-system deferred to 06.5 |
+| A-06-10 | 📨 base and 📨 marco context buttons; active state; context injected in next message | (smoke test 06.5) | live-system | partial — agentCtx store wired in both controls, active class:active confirmed by tsc; live-system deferred to 06.5 |
+| A-06-11 | All A-05 behaviors intact | existing tests + smoke 06.5 | unit + live-system | partial — 153 unit tests pass unchanged; live-system confirmed 06.5 |
+| A-06-12 | tsc/lint/test(≥132)/build all exit 0 | (gate commands) | proxy:static-analysis + unit | covered — tsc 0 errors, lint clean, 153 tests (≥132), build exit 0 |
+
+**Notes on partial coverage:**
+- A-06-01 through A-06-10: network/UI interactions require a live browser session with a real API key. All logic is type-safe; live-system confirmation deferred to step 06.5 smoke test.
+- A-06-11: 153 unit tests pass without change; live-system portion deferred to 06.5.
+
+**Proxy disclosures:** A-06-12 uses `proxy:static-analysis` for tsc and lint — direct command invocations whose zero-error exit codes are the evidence.
+
+### Decisions made (if any)
+
+- `#agentTab` and `#agent` use `position:fixed` (not prototype's `position:absolute`) because `#app` is a flex-column layout in Svelte and the panel must float above it. CSS values otherwise identical.
+- `PROVIDERS` imported from `providers.ts` directly (not re-exported through `agent.ts`) — `agent.ts` imports it internally but does not re-export it.
+- `extractCodeBlocks` unused in final form (only `contentParts` used in template) — kept for reference; does not affect output.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 153 tests passing (unchanged).
+- 6 source files modified/created; `pnpm build` exits 0.
+- Agent panel UI complete and wired into App.svelte.
+
+### Next-step context (only if non-obvious)
+
+- Step 06.5 is smoke-test only — no source code changes. The Pilot performs the live test with a real API key.
+- The strudel.ts static import in AgentPanel.svelte is intentional (needed for `runNow`/`queueForNextCycle`). The build warning is harmless and pre-existing from step 02.4 (session.ts dynamic import).
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 5
+**Reason:** <one sentence>
+**Next action:** <"Dev proceeds to step 06.5" or "Pilot approval required before step 06.5, reason: <one line>">
+
+---
+
+**Terminal commit:** `feat(ui): Phase 06 step 06.4 — AgentPanel.svelte and context capture buttons`
   - Hash: self-referential — not recorded
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

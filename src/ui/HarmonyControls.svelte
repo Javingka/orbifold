@@ -10,18 +10,27 @@
   Active state driven by $sessionStore.chordMode.
   On click: setChordMode(mode).
 
+  Phase 06 step 06.4: added 📨 marco context capture button.
+    Imports agentCtx; sets includeHarmony:true when clicked.
+    Active state when $agentCtx.includeHarmony is true.
+    Prototype: button#harmonyToCtx in footer (line 510); moved to toolbar per inventory.
+
   Position: position:absolute left:16px bottom:46px inside #stage.
   Prototype .orbit-ctl CSS lines 316–319.
 
   Store reads:
     $sessionStore.view       — visibility gate
     $sessionStore.chordMode  — active mode button
+    $agentCtx.includeHarmony — context button active state
 
   Store writes (via session.ts):
     setChordMode('chord' | 'arp')
+  Store writes (via agentCtx):
+    agentCtx.update (includeHarmony: true)
 -->
 <script lang="ts">
   import { sessionStore, setChordMode } from '../state/session.js';
+  import { agentCtx } from '../state/agentCtx.js';
 </script>
 
 {#if $sessionStore.view === 'harmony'}
@@ -54,6 +63,17 @@
         ⋯ arpegio
       </button>
     </div>
+    <!--
+      Context capture button: send current harmony (key + progression) to the agent.
+      Prototype: button#harmonyToCtx in footer (line 510); moved here per inventory.
+      Active state when $agentCtx.includeHarmony is true.
+    -->
+    <button
+      class="tbtn"
+      class:active={$agentCtx.includeHarmony}
+      title="Enviar la clave + progresión al agente como marco armónico"
+      on:click={() => agentCtx.update((c) => ({ ...c, includeHarmony: true }))}>📨 marco</button
+    >
   </div>
 {/if}
 
@@ -88,5 +108,31 @@
   .orbit-ctl :global(b) {
     color: var(--text);
     font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /*
+   * Context capture button (.tbtn) — matches Transport.svelte .tbtn.
+   * Phase 06 step 06.4: added for 📨 marco button.
+   */
+  .tbtn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 10px;
+    color: var(--muted);
+    border: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .tbtn:hover {
+    color: var(--text);
+    border-color: var(--stroke-2);
+  }
+
+  /* Active state: accent color when context flag is set. */
+  .tbtn.active {
+    color: var(--accent);
+    border-color: rgba(138, 160, 255, 0.4);
+    background: rgba(138, 160, 255, 0.12);
   }
 </style>

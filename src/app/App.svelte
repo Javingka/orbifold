@@ -17,6 +17,7 @@
   import RhythmControls from '../ui/RhythmControls.svelte';
   import CodeDrawer from '../ui/CodeDrawer.svelte';
   import CompositionDrawer from '../ui/CompositionDrawer.svelte';
+  import AgentPanel from '../ui/AgentPanel.svelte';
   import Hud from '../ui/Hud.svelte';
   import Legend from '../ui/Legend.svelte';
   import Tooltip from '../ui/Tooltip.svelte';
@@ -411,6 +412,13 @@
   Tab positioned to the right of the code drawer tab (left: calc(50% + 130px)).
 -->
 <CompositionDrawer />
+
+<!--
+  Agent panel: tab + slide-in aside, fixed position relative to viewport.
+  Prototype #agentTab + #agent (HTML lines 456–481, CSS lines 130–177).
+  Phase 06 step 06.4.
+-->
+<AgentPanel />
 
 <!--
   Global tooltip: tracks [data-tip] elements across the whole document.
