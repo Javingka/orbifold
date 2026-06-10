@@ -20,9 +20,11 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 ## Current initiative
 
-**Name:** `orbifold-v1`
-**Goal:** Migrate the single-file prototype into a professional, statically-deployable Svelte + PIXI + Strudel app, phase by phase per `ORBIFOLD_KICKOFF.md` §8 (Phases 0–8), preserving prototype behavior.
-**Started:** 2026-06-05
+**Name:** `orbifold-v2`
+**Goal:** Post-migration product/UX refinements on the live app. Phase 01 — UX quick-wins (hide harmony-only top-bar selectors in Rhythm mode; reposition the Composición / Código Strudel drawer tabs so they don't overlap the Transport). Phase 02 — variable chord duration: a finer-grained, segmented progression timeline letting each chord occupy a variable span instead of a fixed 1-cycle slot (needs an ADR on the Strudel construction, verified against live docs; must respect the no-`.fast`/`.slow` invariant).
+**Started:** 2026-06-10
+
+**Previous initiative:** `orbifold-v1` (Phases 0–8, complete) — migrated the single-file prototype into the statically-deployable Svelte + PIXI + Strudel app now in production. Its folder `docs/orbifold-v1/` is retained as the migration record.
 
 When this initiative is complete, archive its folder and start a new one.
 
@@ -44,7 +46,7 @@ When this initiative is complete, archive its folder and start a new one.
 ### Branch and commit
 
 - Main branch: `main`
-- Initiative branch pattern: `orbifold-v1/phase-NN`
+- Initiative branch pattern: `orbifold-v2/phase-NN` (current initiative; prior was `orbifold-v1/phase-NN`)
 - Commit format: `<type>(<scope>): Phase NN step NN.N — <description>` (types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`)
 - PR convention: one PR (or one merge commit) per phase, with its acceptance criteria verified, without breaking prior phases.
 
