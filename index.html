@@ -34,7 +34,10 @@
       if (location.search.includes('enter=1')) {
         localStorage.setItem('orbifold.visited', '1');
         history.replaceState(null, '', location.pathname + location.hash);
-      } else if (!localStorage.getItem('orbifold.visited') && !location.hash.startsWith('#session=')) {
+      } else if (
+        !localStorage.getItem('orbifold.visited') &&
+        !location.hash.startsWith('#session=')
+      ) {
         location.replace('./landing.html');
       }
     </script>
