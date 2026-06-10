@@ -132,6 +132,10 @@
   <!-- Spacer: pushes right-side controls to the right. Prototype: .sp (line 388). -->
   <div class="sp"></div>
 
+  <a href="./tutorial.html" class="tutorial-link" target="_blank" rel="noopener" title="Guía de uso"
+    >Tutorial</a
+  >
+
   <!--
     Right side: mic button deferred to a later phase (not in Phase 04 scope).
     Prototype: #micBtn (lines 390–393) — deferred.
@@ -184,5 +188,24 @@
   /* Spacer: pushes right side. Prototype line 77. */
   .sp {
     flex: 1;
+  }
+
+  .tutorial-link {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+
+  .tutorial-link:hover {
+    color: var(--text);
+    border-color: var(--stroke);
   }
 </style>

@@ -27,6 +27,13 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Albert+Sans:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
     />
+    <!-- First-visit redirect: send new users to the landing page. -->
+    <!-- Skip redirect if a share URL (#session=...) was followed directly. -->
+    <script>
+      if (!localStorage.getItem('orbifold.visited') && !location.hash.startsWith('#session=')) {
+        location.replace('./landing.html');
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

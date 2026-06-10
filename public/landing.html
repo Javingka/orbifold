@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Albert+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Orbifold — geometría sonora</title>
+<meta name="description" content="Orbifold convierte la geometría de la música en un instrumento que se toca con la vista y suena de verdad en tu navegador.">
+<style>
+  html{ scroll-behavior:smooth; }
+  body{ margin:0;
+    background:
+      radial-gradient(1200px 720px at 72% -8%, rgba(138,160,255,0.13), transparent 60%),
+      radial-gradient(1000px 760px at 6% 4%, rgba(232,123,172,0.07), transparent 55%),
+      radial-gradient(900px 700px at 95% 102%, rgba(86,207,196,0.06), transparent 55%),
+      linear-gradient(180deg,#0e1118,#070809 62%);
+    background-attachment:fixed; color:#eaedf4;
+    font-family:'Albert Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  body::after{ content:""; position:fixed; inset:0; pointer-events:none; z-index:1; opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  ::selection{ background:rgba(138,160,255,.3); }
+  ::-webkit-scrollbar{ width:11px; } ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.09); border-radius:8px; }
+  @keyframes hpulse{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.42)} }
+  @keyframes flow{ to{stroke-dashoffset:-14} }
+  @keyframes spin{ to{transform:rotate(360deg)} }
+  @keyframes floaty{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+  @media (prefers-reduced-motion: reduce){ *{animation:none!important} html{scroll-behavior:auto} }
+</style>
+</helmet>
+
+<div style="position:relative; z-index:2; min-height:100vh;">
+
+  <!-- ── TOP BAR ─────────────────────────────────────────── -->
+  <div style="position:sticky; top:0; z-index:50; backdrop-filter:blur(16px) saturate(140%); -webkit-backdrop-filter:blur(16px) saturate(140%); background:rgba(7,8,9,0.55); border-bottom:1px solid rgba(255,255,255,0.06);">
+    <div style="max-width:1180px; margin:0 auto; padding:13px 28px; display:flex; align-items:center; gap:14px;">
+      <span style="font-size:22px; color:#8aa0ff; line-height:1;">꩜</span>
+      <span style="font-family:'Fraunces',serif; font-weight:500; font-size:20px; letter-spacing:.01em;">Orbifold</span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">geometría sonora</span>
+      <div style="flex:1;"></div>
+      <a href="#como" style="font-size:13px; white-space:nowrap; color:#9097a6; text-decoration:none; padding:8px 6px;">cómo funciona</a>
+      <a href="./tutorial.html" style="font-size:13px; white-space:nowrap; color:#9097a6; text-decoration:none; padding:8px 6px;">tutorial</a>
+      <a href="./" onclick="localStorage.setItem('orbifold.visited','1')" style="display:inline-flex; align-items:center; gap:8px; padding:9px 18px; border-radius:12px; font-weight:700; font-size:13.5px; white-space:nowrap; color:#0b0c10; text-decoration:none; background:linear-gradient(135deg,#aab8ff,#8aa0ff 55%,#c89bf5); box-shadow:0 5px 18px rgba(138,160,255,.32), inset 0 1px 0 rgba(255,255,255,.4);">Entrar&nbsp;▶</a>
+    </div>
+  </div>
+
+  <!-- ── HERO ────────────────────────────────────────────── -->
+  <section style="max-width:1180px; margin:0 auto; padding:64px 28px 86px; min-height:calc(86vh - 64px); display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); align-items:center; gap:48px;">
+    <div data-reveal>
+      <div style="display:inline-flex; align-items:center; gap:10px; white-space:nowrap; font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:.18em; text-transform:uppercase; color:#9097a6; border:1px solid rgba(255,255,255,.1); background:rgba(0,0,0,.25); padding:7px 14px; border-radius:30px; margin-bottom:26px;">
+        <span style="color:#8aa0ff;">꩜</span> composición por geometría musical
+      </div>
+      <h1 style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(40px,6vw,76px); line-height:1.02; letter-spacing:-.01em; margin:0 0 22px;">
+        Los acordes son <span style="color:#f3b15a;">lugares</span>.<br>Las melodías, <span style="font-style:italic; color:#8aa0ff;">caminos</span>.
+      </h1>
+      <p style="font-size:clamp(16px,1.6vw,19px); line-height:1.6; color:#b6bccb; max-width:30em; margin:0 0 32px;">
+        Orbifold convierte la geometría de la música —el <em>orbifold</em> de Tymoczko— en un instrumento que se toca con la vista y suena de verdad en tu navegador. Eliges acordes recorriendo su forma; los ritmos giran como órbitas.
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
+        <a href="./" onclick="localStorage.setItem('orbifold.visited','1')" style="display:inline-flex; align-items:center; gap:10px; padding:15px 28px; border-radius:14px; font-weight:700; font-size:15px; color:#0b0c10; text-decoration:none; background:linear-gradient(135deg,#aab8ff,#8aa0ff 55%,#c89bf5); box-shadow:0 8px 26px rgba(138,160,255,.36), inset 0 1px 0 rgba(255,255,255,.4);">Entrar al orbifold ▶</a>
+        <a href="#como" style="display:inline-flex; align-items:center; gap:9px; padding:15px 24px; border-radius:14px; font-weight:600; font-size:15px; color:#eaedf4; text-decoration:none; border:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.28);">cómo funciona ↓</a>
+      </div>
+      <div style="margin-top:26px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#5b6172; letter-spacing:.04em;">
+        corre en el navegador · audio por Strudel · trae tu propia clave de IA
+      </div>
+    </div>
+
+    <div data-reveal style="display:flex; justify-content:center;">
+      <div style="position:relative; width:100%; max-width:560px; padding:18px; border-radius:26px; background:rgba(20,23,30,0.5); backdrop-filter:blur(24px) saturate(150%); -webkit-backdrop-filter:blur(24px) saturate(150%); border:1px solid rgba(255,255,255,0.085); box-shadow:0 18px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);">
+        <div style="position:absolute; top:14px; left:16px; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:#5b6172;">tonnetz · voice-leading</div>
+        <div style="animation:floaty 9s ease-in-out infinite;">{{ heroVisual }}</div>
+        <div style="display:flex; gap:16px; justify-content:center; margin-top:6px; font-size:11px; color:#9097a6; font-family:'IBM Plex Mono',monospace;">
+          <span style="display:flex; align-items:center; gap:6px;"><i style="width:9px;height:9px;border-radius:3px;background:#f3b15a;display:inline-block;"></i>tónica</span>
+          <span style="display:flex; align-items:center; gap:6px;"><i style="width:9px;height:9px;border-radius:3px;background:#56cfc4;display:inline-block;"></i>subdom.</span>
+          <span style="display:flex; align-items:center; gap:6px;"><i style="width:9px;height:9px;border-radius:3px;background:#e87bac;display:inline-block;"></i>dominante</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── LA IDEA ─────────────────────────────────────────── -->
+  <section style="max-width:1080px; margin:0 auto; padding:80px 28px;">
+    <div data-reveal style="display:flex; align-items:center; gap:11px; margin-bottom:26px;">
+      <span style="width:10px;height:10px;border-radius:3px;background:#8aa0ff;display:inline-block;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">01 — la idea</span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:44px; align-items:center;">
+      <div data-reveal>
+        <h2 style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(28px,3.6vw,46px); line-height:1.08; margin:0 0 20px;">La teoría musical, hecha espacio.</h2>
+        <p style="font-size:17px; line-height:1.65; color:#b6bccb; margin:0 0 16px;">
+          En <em>«The Geometry of Musical Chords»</em>, Dmitri Tymoczko mostró que cada acorde es un <strong style="color:#eaedf4;">punto</strong> en un espacio curvo llamado <em>orbifold</em>. Pasar de un acorde a otro es trazar un <strong style="color:#8aa0ff;">camino</strong>: cuanto más corto, más suave es el <em>voice-leading</em>.
+        </p>
+        <p style="font-size:17px; line-height:1.65; color:#b6bccb; margin:0;">
+          Orbifold te entrega ese mapa. No memorizas reglas: <strong style="color:#eaedf4;">te mueves por la forma</strong> y escuchas adónde va.
+        </p>
+        <div style="margin-top:24px;">{{ ideaMotif }}</div>
+      </div>
+      <div data-reveal style="display:flex; flex-direction:column; gap:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#5b6172; margin-bottom:2px;">los tres colores que verás</div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 20px; border-radius:16px; background:rgba(20,23,30,0.56); border:1px solid rgba(243,177,90,.28);">
+          <span style="width:14px;height:14px;border-radius:50%;background:#f3b15a;box-shadow:0 0 16px rgba(243,177,90,.6);flex:0 0 auto;"></span>
+          <div><div style="font-family:'Fraunces',serif; font-size:18px;">Tónica</div><div style="font-size:13px; color:#9097a6;">el reposo — la casa a la que todo vuelve</div></div>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 20px; border-radius:16px; background:rgba(20,23,30,0.56); border:1px solid rgba(86,207,196,.28);">
+          <span style="width:14px;height:14px;border-radius:50%;background:#56cfc4;box-shadow:0 0 16px rgba(86,207,196,.6);flex:0 0 auto;"></span>
+          <div><div style="font-family:'Fraunces',serif; font-size:18px;">Subdominante</div><div style="font-size:13px; color:#9097a6;">el impulso — se aleja y abre el paisaje</div></div>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 20px; border-radius:16px; background:rgba(20,23,30,0.56); border:1px solid rgba(232,123,172,.28);">
+          <span style="width:14px;height:14px;border-radius:50%;background:#e87bac;box-shadow:0 0 16px rgba(232,123,172,.6);flex:0 0 auto;"></span>
+          <div><div style="font-family:'Fraunces',serif; font-size:18px;">Dominante</div><div style="font-size:13px; color:#9097a6;">la tensión — quiere resolver a casa</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DOS ESPACIOS ────────────────────────────────────── -->
+  <section style="max-width:1080px; margin:0 auto; padding:80px 28px;">
+    <div data-reveal style="display:flex; align-items:center; gap:11px; margin-bottom:14px;">
+      <span style="width:10px;height:10px;border-radius:3px;background:#8aa0ff;display:inline-block;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">02 — dos espacios, un lenguaje</span>
+    </div>
+    <h2 data-reveal style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(28px,3.6vw,46px); line-height:1.08; margin:0 0 38px; max-width:16em;">Armonía y ritmo viven en la misma geometría.</h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:24px;">
+      <div data-reveal style="padding:30px; border-radius:22px; background:rgba(20,23,30,0.56); backdrop-filter:blur(24px); border:1px solid rgba(243,177,90,.26); box-shadow:0 12px 44px rgba(0,0,0,.4);">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:8px;">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#f3b15a; margin-bottom:8px;">vista · armonía</div>
+            <h3 style="font-family:'Fraunces',serif; font-weight:400; font-size:26px; margin:0;">El Tonnetz</h3>
+          </div>
+          <div style="flex:0 0 auto;">{{ harmonyMotif }}</div>
+        </div>
+        <p style="font-size:15px; line-height:1.6; color:#b6bccb; margin:14px 0 0;">
+          Cada triángulo es un acorde: <span style="color:#eaedf4;">▲ mayor</span>, <span style="color:#eaedf4;">▼ menor</span>. Toca uno y aparecen sus vecinos <strong style="color:#8aa0ff;">P · L · R</strong> —las tres transformaciones que mueven una sola voz— y el camino mínimo hacia cada uno.
+        </p>
+      </div>
+      <div data-reveal style="padding:30px; border-radius:22px; background:rgba(20,23,30,0.56); backdrop-filter:blur(24px); border:1px solid rgba(86,207,196,.26); box-shadow:0 12px 44px rgba(0,0,0,.4);">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:8px;">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#56cfc4; margin-bottom:8px;">vista · ritmo</div>
+            <h3 style="font-family:'Fraunces',serif; font-weight:400; font-size:26px; margin:0;">Las órbitas</h3>
+          </div>
+          <div style="flex:0 0 auto;">{{ rhythmMotif }}</div>
+        </div>
+        <p style="font-size:15px; line-height:1.6; color:#b6bccb; margin:14px 0 0;">
+          Los ciclos son órbitas que giran. Dibuja ritmos <strong style="color:#56cfc4;">euclidianos</strong> —<span style="font-family:'IBM Plex Mono',monospace;">E(k,n)</span>: k golpes repartidos lo más parejo posible en n pasos— y míralos como reloj radial o pista lineal.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CÓMO SE USA ─────────────────────────────────────── -->
+  <section id="como" style="max-width:920px; margin:0 auto; padding:80px 28px; scroll-margin-top:80px;">
+    <div data-reveal style="display:flex; align-items:center; gap:11px; margin-bottom:14px;">
+      <span style="width:10px;height:10px;border-radius:3px;background:#8aa0ff;display:inline-block;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">03 — cómo se usa</span>
+    </div>
+    <h2 data-reveal style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(28px,3.6vw,46px); line-height:1.08; margin:0 0 30px;">De una clave en blanco a una sesión que suena.</h2>
+    <div data-reveal>
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="6">
+        <div style="display:flex; gap:24px; align-items:flex-start; padding:22px 0; border-top:1px solid rgba(255,255,255,0.08);">
+          <div style="font-family:'Fraunces',serif; font-weight:400; font-size:42px; line-height:1; color:{{ s.color }}; min-width:62px; opacity:.95;">{{ s.num }}</div>
+          <div>
+            <div style="font-family:'Fraunces',serif; font-size:21px; margin-bottom:6px;">{{ s.title }}</div>
+            <p style="font-size:15.5px; line-height:1.6; color:#9097a6; margin:0; max-width:44em;">{{ s.body }}</p>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ── AGENTE IA ───────────────────────────────────────── -->
+  <section style="max-width:1080px; margin:0 auto; padding:80px 28px;">
+    <div data-reveal style="display:flex; align-items:center; gap:11px; margin-bottom:26px;">
+      <span style="width:10px;height:10px;border-radius:3px;background:#8aa0ff;display:inline-block;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">04 — co-compositor IA</span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:44px; align-items:center;">
+      <div data-reveal>
+        <h2 style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(28px,3.6vw,44px); line-height:1.1; margin:0 0 18px;">Pídele una variación. La escuchas al instante.</h2>
+        <p style="font-size:16.5px; line-height:1.65; color:#b6bccb; margin:0 0 16px;">
+          Un agente integrado conoce tu clave, tu progresión y tu groove. Pídele un acompañamiento, otra voz o una vuelta distinta y responde con <strong style="color:#8aa0ff;">código Strudel</strong> que puedes ejecutar con un clic.
+        </p>
+        <p style="font-size:15px; line-height:1.6; color:#9097a6; margin:0;">
+          Trae tu propia clave —OpenRouter, Anthropic u OpenAI— y elige tu modelo. Con <em>auto-tocar</em> suena solo; con <em>auto-corregir</em>, si el código falla, el agente lo arregla.
+        </p>
+      </div>
+      <div data-reveal style="border-radius:20px; background:rgba(20,23,30,0.6); backdrop-filter:blur(24px); border:1px solid rgba(255,255,255,0.09); box-shadow:0 14px 50px rgba(0,0,0,.5); overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:9px; padding:13px 16px; border-bottom:1px solid rgba(255,255,255,0.07);">
+          <span style="color:#8aa0ff; font-size:15px;">꩜</span><b style="font-family:'Fraunces',serif; font-weight:500; font-size:15px;">Co-compositor</b>
+        </div>
+        <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+          <div style="align-self:flex-end; max-width:84%; font-size:13px; line-height:1.5; padding:9px 13px; border-radius:13px; background:rgba(138,160,255,.12); border:1px solid rgba(138,160,255,.25);">acompaña la progresión con un Rhodes cálido, en arpegio suave</div>
+          <div style="align-self:flex-start; max-width:90%; font-size:13px; line-height:1.5; padding:9px 13px; border-radius:13px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);">
+            Listo — pads de Rhodes en arpegio sobre tus acordes:
+            <pre style="font-family:'IBM Plex Mono',monospace; font-size:11px; background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.08); border-radius:9px; padding:9px 10px; margin:8px 0 6px; overflow-x:auto; white-space:pre-wrap; color:#bcd;">note("&lt;c4 eb4 g4>")
+  .arp("up").s("epiano")
+  .room(.4).gain(.7)</pre>
+            <span style="display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; padding:5px 11px; border-radius:9px; background:rgba(138,160,255,.16); border:1px solid rgba(138,160,255,.4); color:#8aa0ff;">▶ ejecutar</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── QUÉ ES STRUDEL ──────────────────────────────────── -->
+  <section style="max-width:1080px; margin:0 auto; padding:80px 28px;">
+    <div data-reveal style="display:flex; align-items:center; gap:11px; margin-bottom:26px;">
+      <span style="width:10px;height:10px;border-radius:3px;background:#8aa0ff;display:inline-block;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">05 — el motor</span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:44px; align-items:center;">
+      <div data-reveal>
+        <h2 style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(28px,3.6vw,46px); line-height:1.08; margin:0 0 18px;">¿Qué es <span style="color:#8aa0ff;">Strudel</span>?</h2>
+        <p style="font-size:17px; line-height:1.65; color:#b6bccb; margin:0 0 16px;">
+          Strudel es el <strong style="color:#eaedf4;">motor de audio</strong> que está detrás de Orbifold: un entorno de <em>live-coding</em> musical, escrito en JavaScript, que corre íntegramente en tu navegador —sin instalar nada—. Es el puerto libre de <em>TidalCycles</em>, el lenguaje de música algorítmica por patrones.
+        </p>
+        <p style="font-size:16px; line-height:1.65; color:#b6bccb; margin:0 0 28px;">
+          Cada gesto que haces sobre la geometría —un acorde en el Tonnetz, una órbita euclidiana— se traduce a un patrón de Strudel y <strong style="color:#eaedf4;">se sintetiza en tiempo real</strong>. Así es como los ritmos y las armonías que ves dejan de ser un dibujo y se convierten en sonido.
+        </p>
+        <a href="https://strudel.cc" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:10px; padding:14px 24px; border-radius:14px; font-weight:600; font-size:15px; color:#eaedf4; text-decoration:none; border:1px solid rgba(138,160,255,.32); background:rgba(138,160,255,.1);">
+          <span style="color:#8aa0ff;">↗</span> Conoce Strudel · strudel.cc
+        </a>
+      </div>
+      <div data-reveal style="display:flex; flex-direction:column; gap:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#5b6172; margin-bottom:2px;">por qué Strudel</div>
+        <div style="display:flex; align-items:flex-start; gap:16px; padding:18px 20px; border-radius:16px; background:rgba(20,23,30,0.56); border:1px solid rgba(138,160,255,.24);">
+          <span style="width:14px;height:14px;border-radius:4px;background:#8aa0ff;box-shadow:0 0 16px rgba(138,160,255,.6);flex:0 0 auto;margin-top:4px;"></span>
+          <div><div style="font-family:'Fraunces',serif; font-size:18px;">Música por patrones</div><div style="font-size:13.5px; line-height:1.55; color:#9097a6;">ritmo y armonía se describen como ciclos que se transforman y combinan</div></div>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:16px; padding:18px 20px; border-radius:16px; background:rgba(20,23,30,0.56); border:1px solid rgba(86,207,196,.24);">
+          <span style="width:14px;height:14px;border-radius:4px;background:#56cfc4;box-shadow:0 0 16px rgba(86,207,196,.6);flex:0 0 auto;margin-top:4px;"></span>
+          <div><div style="font-family:'Fraunces',serif; font-size:18px;">100% en el navegador</div><div style="font-size:13.5px; line-height:1.55; color:#9097a6;">síntesis en tiempo real con la Web Audio API, sin servidores ni plugins</div></div>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:16px; padding:18px 20px; border-radius:16px; background:rgba(20,23,30,0.56); border:1px solid rgba(232,123,172,.24);">
+          <span style="width:14px;height:14px;border-radius:4px;background:#e87bac;box-shadow:0 0 16px rgba(232,123,172,.6);flex:0 0 auto;margin-top:4px;"></span>
+          <div><div style="font-family:'Fraunces',serif; font-size:18px;">Software libre</div><div style="font-size:13.5px; line-height:1.55; color:#9097a6;">proyecto open-source bajo licencia AGPL-3.0, hecho por la comunidad</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SUENA DE VERDAD ─────────────────────────────────── -->
+  <section style="max-width:1080px; margin:0 auto; padding:80px 28px;">
+    <div data-reveal style="display:flex; align-items:center; gap:11px; margin-bottom:26px;">
+      <span style="width:10px;height:10px;border-radius:3px;background:#8aa0ff;display:inline-block;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">06 — suena de verdad</span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:44px; align-items:center;">
+      <div data-reveal style="border-radius:18px; background:rgba(10,12,18,0.85); border:1px solid rgba(255,255,255,0.09); box-shadow:0 14px 50px rgba(0,0,0,.5); overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.07);">
+          <b style="font-size:13px;">código Strudel</b>
+          <span style="font-size:10.5px; color:#5b6172;">lo que suena ahora — edítalo y ejecútalo</span>
+        </div>
+        <pre style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; line-height:1.7; margin:0; padding:18px; color:#cdd7ff; overflow-x:auto;">stack(
+  s(<span style="color:#56cfc4;">"bd ~ sd ~"</span>).bank(<span style="color:#f3b15a;">"RolandTR909"</span>),
+  s(<span style="color:#56cfc4;">"hh*8"</span>).gain(.6),
+  note(<span style="color:#e87bac;">"&lt;c eb g f>"</span>)
+    .s(<span style="color:#f3b15a;">"sawtooth"</span>).lpf(800)
+).cps(0.5)</pre>
+        <div style="display:flex; gap:10px; padding:12px 16px; border-top:1px solid rgba(255,255,255,0.07);">
+          <span style="font-size:12px; font-weight:600; color:#9097a6; border:1px solid rgba(255,255,255,.12); padding:7px 13px; border-radius:11px;">▶ ejecutar (ahora)</span>
+          <span style="font-size:12px; font-weight:600; color:#9097a6; border:1px solid rgba(255,255,255,.12); padding:7px 13px; border-radius:11px;">↻ encolar (próximo ciclo)</span>
+        </div>
+      </div>
+      <div data-reveal>
+        <h2 style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(28px,3.6vw,44px); line-height:1.1; margin:0 0 18px;">No es una maqueta. Es un patch en vivo.</h2>
+        <p style="font-size:16.5px; line-height:1.65; color:#b6bccb; margin:0 0 16px;">
+          Todo lo que tocas se traduce a <strong style="color:#8aa0ff;">Strudel</strong>, el lenguaje de live-coding musical. Abre el cajón de código y verás exactamente qué suena.
+        </p>
+        <p style="font-size:15px; line-height:1.6; color:#9097a6; margin:0;">
+          Cambia un número, ejecútalo y escucha el resultado sin parar la música —o encólalo para que entre limpio en el próximo ciclo. El groove y la armonía pueden sonar solos o juntos en una misma <em>sesión</em>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA FINAL ───────────────────────────────────────── -->
+  <section data-reveal style="max-width:1080px; margin:0 auto; padding:40px 28px 90px;">
+    <div style="position:relative; overflow:hidden; border-radius:28px; padding:clamp(40px,6vw,72px) 32px; text-align:center; background:radial-gradient(700px 400px at 50% -20%, rgba(138,160,255,0.16), transparent 65%), rgba(18,21,28,0.6); border:1px solid rgba(255,255,255,0.1); box-shadow:0 18px 60px rgba(0,0,0,.5);">
+      <div style="font-size:34px; color:#8aa0ff; margin-bottom:14px;">꩜</div>
+      <h2 style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(30px,4.2vw,54px); line-height:1.06; margin:0 0 18px;">Entra y muévete por el sonido.</h2>
+      <p style="font-size:17px; color:#b6bccb; max-width:30em; margin:0 auto 30px;">Sin instalar nada. Elige una clave, toca un triángulo y deja que la geometría te lleve.</p>
+      <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap;">
+        <a href="./" onclick="localStorage.setItem('orbifold.visited','1')" style="display:inline-flex; align-items:center; gap:10px; padding:16px 34px; border-radius:14px; font-weight:700; font-size:16px; color:#0b0c10; text-decoration:none; background:linear-gradient(135deg,#aab8ff,#8aa0ff 55%,#c89bf5); box-shadow:0 8px 28px rgba(138,160,255,.4), inset 0 1px 0 rgba(255,255,255,.4);">Entrar al orbifold ▶</a>
+        <a href="./tutorial.html" style="display:inline-flex; align-items:center; gap:10px; padding:16px 28px; border-radius:14px; font-weight:600; font-size:15px; color:#eaedf4; text-decoration:none; border:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.28);">Ver tutorial →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FOOTER ──────────────────────────────────────────── -->
+  <footer style="border-top:1px solid rgba(255,255,255,0.07); padding:34px 28px 48px;">
+    <div style="max-width:1080px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; align-items:start;">
+      <div style="display:flex; align-items:baseline; gap:10px;">
+        <span style="font-size:20px; color:#8aa0ff;">꩜</span>
+        <span style="font-family:'Fraunces',serif; font-weight:500; font-size:18px;">Orbifold</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#5b6172;">geometría sonora</span>
+      </div>
+      <div style="font-size:12.5px; line-height:1.7; color:#9097a6; font-family:'IBM Plex Mono',monospace;">
+        Motor de audio: <a href="https://strudel.cc" style="color:#8aa0ff; text-decoration:none;">Strudel</a> (AGPL-3.0)<br>
+        Visualización: PIXI.js · WebGL<br>
+        Inspirado en «The Geometry of Musical Chords», D. Tymoczko<br>
+        <a href="./tutorial.html" style="color:#8aa0ff; text-decoration:none;">Tutorial de uso →</a>
+      </div>
+      <div style="font-size:11.5px; line-height:1.6; color:#5b6172;">
+        Strudel es software libre bajo AGPL-3.0. Si distribuyes esta aplicación, debe publicarse bajo la misma licencia.
+      </div>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const h = React.createElement;
+    const amber='#f3b15a', teal='#56cfc4', pink='#e87bac', accent='#8aa0ff';
+
+    // ── HERO: Tonnetz lattice + voice-leading path ──
+    const cols=7, rows=6, dx=78, dy=66, ox=46, oy=42;
+    const N=[];
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      N.push({ x: ox + c*dx + (r%2?dx/2:0), y: oy + r*dy });
+    }
+    const edges=[];
+    for(let i=0;i<N.length;i++) for(let j=i+1;j<N.length;j++){
+      const d=Math.hypot(N[i].x-N[j].x, N[i].y-N[j].y);
+      if(d < dx*1.08) edges.push([N[i],N[j]]);
+    }
+    const lineEls = edges.map((e,i)=> h('line',{key:'e'+i, x1:e[0].x, y1:e[0].y, x2:e[1].x, y2:e[1].y, stroke:'rgba(255,255,255,0.07)', strokeWidth:1}));
+    const dotEls = N.map((p,i)=> h('circle',{key:'n'+i, cx:p.x, cy:p.y, r:2.4, fill:'rgba(255,255,255,0.16)'}));
+
+    const fNodes=[
+      {x:202,y:174,c:amber,  d:0},
+      {x:280,y:174,c:accent, d:.85},
+      {x:319,y:240,c:teal,   d:1.7},
+      {x:241,y:240,c:pink,   d:2.55},
+    ];
+    const fEls = [];
+    fNodes.forEach((p,i)=>{
+      fEls.push(h('circle',{key:'h'+i, cx:p.x, cy:p.y, r:18, fill:p.c, opacity:.16, style:{transformBox:'fill-box', transformOrigin:'center', animation:`hpulse 3.6s ${p.d}s ease-in-out infinite`}}));
+      fEls.push(h('circle',{key:'c'+i, cx:p.x, cy:p.y, r:6.5, fill:p.c, style:{filter:`drop-shadow(0 0 8px ${p.c})`}}));
+    });
+
+    const pathD='M202 174 L280 174 L319 240 L241 240';
+    const glowPath = h('path',{d:pathD, fill:'none', stroke:accent, strokeWidth:7, strokeLinejoin:'round', strokeLinecap:'round', opacity:.12});
+    const vlPath = h('path',{d:pathD, fill:'none', stroke:accent, strokeWidth:2.5, strokeLinejoin:'round', strokeLinecap:'round', strokeDasharray:'5 9', opacity:.95, style:{animation:'flow 1.2s linear infinite'}});
+    const travel = h('circle',{r:4.5, fill:'#dde4ff', style:{filter:`drop-shadow(0 0 6px ${accent})`}},
+      h('animateMotion',{dur:'7s', repeatCount:'indefinite', path:pathD+' L202 174', rotate:'auto'})
+    );
+
+    const heroVisual = h('svg',{viewBox:'0 0 620 440', width:'100%', style:{display:'block', overflow:'visible'}},
+      h('g',{}, lineEls), h('g',{}, dotEls), glowPath, vlPath, h('g',{}, fEls), travel
+    );
+
+    // ── IDEA motif: punto → punto = camino ──
+    const imp=[{x:30,y:62,c:amber},{x:104,y:30,c:teal},{x:178,y:66,c:pink}];
+    const imPath='M30 62 L104 30 L178 66';
+    const ideaMotif = h('svg',{viewBox:'0 0 208 96', width:'100%', style:{maxWidth:'280px', overflow:'visible'}},
+      h('path',{d:imPath, fill:'none', stroke:accent, strokeWidth:2, strokeDasharray:'4 7', strokeLinecap:'round', style:{animation:'flow 1.1s linear infinite'}}),
+      ...imp.flatMap((p,i)=>[
+        h('circle',{key:'a'+i, cx:p.x, cy:p.y, r:13, fill:p.c, opacity:.16}),
+        h('circle',{key:'b'+i, cx:p.x, cy:p.y, r:6, fill:p.c, style:{filter:`drop-shadow(0 0 6px ${p.c})`}}),
+      ])
+    );
+
+    // ── HARMONY motif: two triangles + P·L·R ──
+    const T={x:68,y:34}, Lf={x:32,y:86}, Rt={x:104,y:86}, B={x:68,y:138};
+    const tri=(a,b,c,fill,stroke)=>h('polygon',{points:`${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y}`, fill, stroke, strokeWidth:1.5, strokeLinejoin:'round'});
+    const harmonyMotif = h('svg',{viewBox:'0 0 136 172', width:'100%', style:{maxWidth:'118px'}},
+      tri(T,Lf,Rt,'rgba(243,177,90,0.14)','rgba(243,177,90,0.55)'),
+      tri(Lf,Rt,B,'rgba(232,123,172,0.14)','rgba(232,123,172,0.55)'),
+      [T,Lf,Rt,B].map((p,i)=>h('circle',{key:'p'+i, cx:p.x, cy:p.y, r:4, fill:'#eaedf4'})),
+      h('text',{x:68,y:70, fill:amber, fontSize:14, textAnchor:'middle', fontFamily:'serif'},'▲'),
+      h('text',{x:68,y:118, fill:pink, fontSize:14, textAnchor:'middle', fontFamily:'serif'},'▼'),
+      h('text',{x:42,y:58, fill:'#9097a6', fontSize:10, textAnchor:'middle', fontFamily:'monospace'},'L'),
+      h('text',{x:94,y:58, fill:'#9097a6', fontSize:10, textAnchor:'middle', fontFamily:'monospace'},'P'),
+      h('text',{x:118,y:90, fill:'#9097a6', fontSize:10, textAnchor:'middle', fontFamily:'monospace'},'R')
+    );
+
+    // ── RHYTHM motif: euclidean orbit E(3,8) + rotating playhead ──
+    const cx=64, cy=66, R=44, stepsN=8;
+    const onset=new Set([0,3,6]);
+    const stepEls=[];
+    for(let k=0;k<stepsN;k++){
+      const a=-Math.PI/2 + k*2*Math.PI/stepsN;
+      const x=cx+R*Math.cos(a), y=cy+R*Math.sin(a);
+      const on=onset.has(k);
+      stepEls.push(h('circle',{key:'s'+k, cx:x, cy:y, r:on?6:3, fill:on?teal:'rgba(255,255,255,0.18)', style:on?{filter:`drop-shadow(0 0 6px ${teal})`}:undefined}));
+    }
+    const playhead = h('g',{style:{transformBox:'view-box', transformOrigin:`${cx}px ${cy}px`, animation:'spin 4.5s linear infinite'}},
+      h('line',{x1:cx, y1:cy, x2:cx, y2:cy-R-7, stroke:accent, strokeWidth:2, strokeLinecap:'round', opacity:.85}),
+      h('circle',{cx:cx, cy:cy-R-7, r:3.5, fill:'#dde4ff', style:{filter:`drop-shadow(0 0 5px ${accent})`}})
+    );
+    const rhythmMotif = h('svg',{viewBox:'0 0 128 136', width:'100%', style:{maxWidth:'118px'}},
+      h('circle',{cx, cy, r:R, fill:'none', stroke:'rgba(255,255,255,0.12)', strokeWidth:1}),
+      ...stepEls, playhead,
+      h('circle',{cx, cy, r:2.5, fill:'#5b6172'})
+    );
+
+    // ── steps ──
+    const steps=[
+      {num:'01', color:amber,  title:'Elige tu clave', body:'Fija la raíz y el modo —mayor, menor, dórico, frigio, lidio…—. Todo lo que construyas vive dentro de esa tonalidad.'},
+      {num:'02', color:accent, title:'Toca la geometría', body:'En la vista Armonía, cada triángulo es un acorde: ▲ mayor, ▼ menor. Al elegir uno ves sus vecinos P·L·R y el voice-leading mínimo hacia ellos.'},
+      {num:'03', color:teal,   title:'Arma tu progresión', body:'Los acordes que tocas caen como fichas en la barra inferior. Arrástralas, reordénalas o súbelas y bájalas de grado.'},
+      {num:'04', color:pink,   title:'Cambia a Ritmo', body:'Dibuja órbitas euclidianas E(k,n): k golpes repartidos en n pasos, con rotación. Visualízalas como reloj radial o pista lineal.'},
+      {num:'05', color:amber,  title:'Pulsa ▶ Sesión', body:'Ritmo y armonía se combinan en un solo stack de Strudel y suenan juntos, en tempo. O escucha cada motor por separado.'},
+      {num:'06', color:accent, title:'Pide ayuda o edita el código', body:'El co-compositor IA propone variaciones que suenan al instante; o abre el cajón de código Strudel y modifícalo en vivo.'},
+    ];
+
+    return { heroVisual, ideaMotif, harmonyMotif, rhythmMotif, steps };
+  }
+
+  componentDidMount(){
+    try{
+      if(!('IntersectionObserver' in window)) return;
+      const els = Array.from(document.querySelectorAll('[data-reveal]'));
+      const io = new IntersectionObserver((ents)=>{
+        ents.forEach(e=>{ if(e.isIntersecting){ e.target.style.opacity='1'; e.target.style.transform='none'; io.unobserve(e.target); } });
+      },{ threshold:0.1, rootMargin:'0px 0px -6% 0px' });
+      els.forEach(el=>{
+        el.style.willChange='opacity, transform';
+        el.style.transition='opacity .7s cubic-bezier(.22,1,.36,1), transform .7s cubic-bezier(.22,1,.36,1)';
+        requestAnimationFrame(()=>{
+          el.style.opacity='0'; el.style.transform='translateY(24px)';
+          io.observe(el);
+        });
+      });
+      setTimeout(()=>els.forEach(el=>{ el.style.opacity='1'; el.style.transform='none'; }), 1600);
+    }catch(e){
+      document.querySelectorAll('[data-reveal]').forEach(el=>{ el.style.opacity='1'; el.style.transform='none'; });
+    }
+  }
+}
+</script>
+</body>
+</html>
