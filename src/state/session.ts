@@ -27,6 +27,7 @@
 
 import { writable, get } from 'svelte/store';
 
+import type { SavedSession } from '../lib/persistence.js';
 import type { Quality } from '../core/theory/chords.js';
 import type { RhythmLayer } from '../core/rhythm/layers.js';
 import type { Sound } from '../core/rhythm/layers.js';
@@ -1023,6 +1024,67 @@ export function reorderBlockInTrack(trackIndex: number, fromIndex: number, toInd
     });
     return { ...s, composition: { ...s.composition, tracks } };
   });
+}
+
+// ── Step 07.2: session load from persistence ───────────────────────────────
+
+/**
+ * Apply a validated SavedSession to the store, assigning fresh block/track IDs.
+ *
+ * Uses module-level _blkSeq/_trkSeq (ADR 0009: ephemeral, not persisted).
+ * Rebuilds Track.blocks[].blockId from SavedBlockRef.blockIndex → new block ID.
+ * Out-of-range blockIndex refs (corrupt data) are silently skipped.
+ * Resets nowPlaying to { label: null, source: null }.
+ *
+ * @param saved - Validated SavedSession from loadSavedSession() or decodeSession().
+ */
+export function applyLoadedSession(saved: SavedSession): void {
+  const newBlocks = saved.composition.blocks.map((b) => ({
+    id: 'b' + _blkSeq++,
+    name: b.name,
+    type: b.type,
+    code: b.code,
+    bars: b.bars,
+  }));
+
+  const newTracks = saved.composition.tracks.map((t) => ({
+    id: 't' + _trkSeq++,
+    blocks: t.blockRefs
+      .map((ref) => {
+        const block = newBlocks[ref.blockIndex];
+        if (!block) return null; // guard: out-of-range blockIndex
+        return { blockId: block.id, bars: ref.bars };
+      })
+      .filter((r): r is { blockId: string; bars: number } => r !== null),
+  }));
+
+  sessionStore.update((s) => ({
+    ...s,
+    bpm: saved.bpm,
+    view: saved.view,
+    chordMode: saved.chordMode,
+    harmony: {
+      root: saved.harmony.root,
+      mode: saved.harmony.mode,
+      octave: saved.harmony.octave,
+      progression: saved.harmony.progression.map((ch) => ({
+        rootPc: ch.rootPc,
+        qual: ch.qual,
+        gain: ch.gain,
+      })),
+    },
+    rhythm: {
+      layers: saved.rhythm.layers.map((l) => {
+        const layer: RhythmLayer = { sound: l.sound, steps: [...l.steps] };
+        if (l.euclid !== undefined) layer.euclid = l.euclid;
+        if (l.muted !== undefined) layer.muted = l.muted;
+        if (l.solo !== undefined) layer.solo = l.solo;
+        return layer;
+      }),
+    },
+    composition: { blocks: newBlocks, tracks: newTracks },
+    nowPlaying: { label: null, source: null },
+  }));
 }
 
 /**

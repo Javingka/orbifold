@@ -1,0 +1,377 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Orbifold — persistence tests: schema validation, serialize/deserialize,
+//             encode/decode, localStorage helpers, applyLoadedSession.
+// Phase 07 step 07.2.
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { get } from 'svelte/store';
+
+import {
+  SavedSessionSchema,
+  serializeSession,
+  deserializeSession,
+  encodeSession,
+  decodeSession,
+  saveSession,
+  loadSavedSession,
+  listSavedSessions,
+  deleteSession,
+  PERSISTENCE_KEY_PREFIX,
+  SESSION_SCHEMA_VERSION,
+  type SavedSession,
+} from '../src/lib/persistence.js';
+import { applyLoadedSession, sessionStore, DEFAULT_SESSION_STATE } from '../src/state/session.js';
+import type { SessionState } from '../src/state/session.js';
+
+// ── localStorage mock ──────────────────────────────────────────────────────
+
+function makeLocalStorageMock() {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string): string | null => store.get(key) ?? null,
+    setItem: (key: string, value: string): void => {
+      store.set(key, value);
+    },
+    removeItem: (key: string): void => {
+      store.delete(key);
+    },
+    clear: (): void => {
+      store.clear();
+    },
+  };
+}
+
+beforeEach(() => {
+  vi.stubGlobal('localStorage', makeLocalStorageMock());
+  // Reset store to known default state before each test
+  sessionStore.set({
+    bpm: DEFAULT_SESSION_STATE.bpm,
+    view: DEFAULT_SESSION_STATE.view,
+    chordMode: DEFAULT_SESSION_STATE.chordMode,
+    harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: [] },
+    rhythm: { layers: [] },
+    composition: { blocks: [], tracks: [] },
+    nowPlaying: { label: null, source: null },
+  });
+});
+
+// ── Test fixtures ──────────────────────────────────────────────────────────
+
+const MINIMAL_SAVED: SavedSession = {
+  version: 1,
+  bpm: 120,
+  view: 'harmony',
+  chordMode: 'chord',
+  harmony: { root: 0, mode: 'major', octave: 3, progression: [] },
+  rhythm: { layers: [] },
+  composition: { blocks: [], tracks: [] },
+};
+
+const FULL_SAVED: SavedSession = {
+  version: 1,
+  bpm: 140,
+  view: 'rhythm',
+  chordMode: 'arp',
+  harmony: {
+    root: 5,
+    mode: 'minor',
+    octave: 4,
+    progression: [
+      { rootPc: 5, qual: 'min', gain: 0.6 },
+      { rootPc: 0, qual: 'maj', gain: 0.8 },
+    ],
+  },
+  rhythm: {
+    layers: [
+      { sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+      {
+        sound: 'hh',
+        steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        euclid: '8,16',
+        muted: false,
+      },
+    ],
+  },
+  composition: {
+    blocks: [
+      { name: 'Groove A', type: 'groove', code: 's("bd")', bars: 4 },
+      { name: 'Groove B', type: 'groove', code: 's("hh")', bars: 2 },
+    ],
+    tracks: [
+      {
+        blockRefs: [
+          { blockIndex: 0, bars: 4 },
+          { blockIndex: 1, bars: 2 },
+        ],
+      },
+      { blockRefs: [{ blockIndex: 1, bars: 2 }] },
+    ],
+  },
+};
+
+// Runtime state with cx/cy on first chord, active nowPlaying, and real IDs
+const FULL_STATE: SessionState = {
+  bpm: 140,
+  view: 'rhythm',
+  chordMode: 'arp',
+  harmony: {
+    root: 5,
+    mode: 'minor',
+    octave: 4,
+    progression: [
+      { rootPc: 5, qual: 'min', gain: 0.6, cx: 100, cy: 200 }, // cx/cy must be stripped
+      { rootPc: 0, qual: 'maj', gain: 0.8 },
+    ],
+  },
+  rhythm: {
+    layers: [
+      { sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+      {
+        sound: 'hh',
+        steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        euclid: '8,16',
+        muted: false,
+      },
+    ],
+  },
+  composition: {
+    blocks: [
+      { id: 'b10', name: 'Groove A', type: 'groove', code: 's("bd")', bars: 4 },
+      { id: 'b11', name: 'Groove B', type: 'groove', code: 's("hh")', bars: 2 },
+    ],
+    tracks: [
+      {
+        id: 't5',
+        blocks: [
+          { blockId: 'b10', bars: 4 },
+          { blockId: 'b11', bars: 2 },
+        ],
+      },
+      { id: 't6', blocks: [{ blockId: 'b11', bars: 2 }] },
+    ],
+  },
+  nowPlaying: { label: 'Ritmo · groove', source: 'rhythm' },
+};
+
+// ── SavedSessionSchema validation ──────────────────────────────────────────
+
+describe('SavedSessionSchema', () => {
+  it('accepts a minimal valid payload', () => {
+    expect(() => SavedSessionSchema.parse(MINIMAL_SAVED)).not.toThrow();
+  });
+
+  it('accepts a full valid payload with all optional fields', () => {
+    expect(SavedSessionSchema.safeParse(FULL_SAVED).success).toBe(true);
+  });
+
+  it('rejects version 2 (wrong literal)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 2 }).success).toBe(false);
+  });
+
+  it('rejects bpm below 40', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, bpm: 39 }).success).toBe(false);
+  });
+
+  it('rejects bpm above 280', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, bpm: 281 }).success).toBe(false);
+  });
+
+  it('silently strips cx/cy from chord fields (Zod strips unknown keys by default)', () => {
+    const withCxCy = {
+      ...MINIMAL_SAVED,
+      harmony: {
+        ...MINIMAL_SAVED.harmony,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6, cx: 100, cy: 200 }],
+      },
+    };
+    const result = SavedSessionSchema.safeParse(withCxCy);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const chord = result.data.harmony.progression[0];
+      expect(chord).not.toHaveProperty('cx');
+      expect(chord).not.toHaveProperty('cy');
+      expect(chord.rootPc).toBe(0);
+    }
+  });
+});
+
+// ── serializeSession ───────────────────────────────────────────────────────
+
+describe('serializeSession', () => {
+  it('excludes nowPlaying from serialized output', () => {
+    const saved = serializeSession(FULL_STATE);
+    expect(saved).not.toHaveProperty('nowPlaying');
+  });
+
+  it('excludes cx/cy from serialized chords', () => {
+    const saved = serializeSession(FULL_STATE);
+    const chord = saved.harmony.progression[0];
+    expect(chord).not.toHaveProperty('cx');
+    expect(chord).not.toHaveProperty('cy');
+    expect(chord.rootPc).toBe(5);
+    expect(chord.gain).toBe(0.6);
+  });
+
+  it('excludes block IDs from composition blocks', () => {
+    const saved = serializeSession(FULL_STATE);
+    saved.composition.blocks.forEach((b) => {
+      expect(b).not.toHaveProperty('id');
+    });
+  });
+
+  it('converts track block refs to blockIndex integers (not blockId strings)', () => {
+    const saved = serializeSession(FULL_STATE);
+    // t5 references b10 (index 0, bars 4) and b11 (index 1, bars 2)
+    expect(saved.composition.tracks[0].blockRefs[0]).toEqual({ blockIndex: 0, bars: 4 });
+    expect(saved.composition.tracks[0].blockRefs[1]).toEqual({ blockIndex: 1, bars: 2 });
+    // t6 references b11 (index 1, bars 2)
+    expect(saved.composition.tracks[1].blockRefs[0]).toEqual({ blockIndex: 1, bars: 2 });
+  });
+
+  it('sets version to SESSION_SCHEMA_VERSION', () => {
+    const saved = serializeSession(FULL_STATE);
+    expect(saved.version).toBe(SESSION_SCHEMA_VERSION);
+  });
+});
+
+// ── serializeSession + deserializeSession roundtrip ───────────────────────
+
+describe('serialize → deserialize roundtrip', () => {
+  it('preserves bpm, view, and chordMode', () => {
+    const back = deserializeSession(serializeSession(FULL_STATE));
+    expect(back.bpm).toBe(140);
+    expect(back.view).toBe('rhythm');
+    expect(back.chordMode).toBe('arp');
+  });
+
+  it('preserves harmony root, mode, octave, and progression (without cx/cy)', () => {
+    const back = deserializeSession(serializeSession(FULL_STATE));
+    expect(back.harmony.root).toBe(5);
+    expect(back.harmony.mode).toBe('minor');
+    expect(back.harmony.octave).toBe(4);
+    expect(back.harmony.progression).toHaveLength(2);
+    expect(back.harmony.progression[0]).toEqual({ rootPc: 5, qual: 'min', gain: 0.6 });
+    expect(back.harmony.progression[1]).toEqual({ rootPc: 0, qual: 'maj', gain: 0.8 });
+  });
+
+  it('preserves rhythm layers including optional fields', () => {
+    const back = deserializeSession(serializeSession(FULL_STATE));
+    expect(back.rhythm.layers).toHaveLength(2);
+    expect(back.rhythm.layers[0].sound).toBe('bd');
+    expect(back.rhythm.layers[0].steps).toHaveLength(16);
+    expect(back.rhythm.layers[1].euclid).toBe('8,16');
+    expect(back.rhythm.layers[1].muted).toBe(false);
+  });
+
+  it('preserves composition block fields (without ids)', () => {
+    const back = deserializeSession(serializeSession(FULL_STATE));
+    expect(back.composition.blocks).toHaveLength(2);
+    expect(back.composition.blocks[0].name).toBe('Groove A');
+    expect(back.composition.blocks[0].code).toBe('s("bd")');
+    expect(back.composition.blocks[0].bars).toBe(4);
+    expect(back.composition.blocks[0].type).toBe('groove');
+  });
+});
+
+// ── encodeSession + decodeSession roundtrip ───────────────────────────────
+
+describe('encodeSession / decodeSession', () => {
+  it('roundtrip: decoded value equals the serialized input', () => {
+    const encoded = encodeSession(FULL_STATE);
+    const decoded = decodeSession(encoded);
+    expect(decoded).not.toBeNull();
+    expect(decoded).toEqual(serializeSession(FULL_STATE));
+  });
+
+  it('decodeSession returns null for a corrupt / non-base64 string', () => {
+    expect(decodeSession('not!!valid!!base64')).toBeNull();
+  });
+
+  it('decodeSession returns null when the decoded JSON fails schema validation', () => {
+    const badPayload = btoa(encodeURIComponent(JSON.stringify({ version: 99, bpm: 120 })));
+    expect(decodeSession(badPayload)).toBeNull();
+  });
+});
+
+// ── applyLoadedSession ─────────────────────────────────────────────────────
+
+describe('applyLoadedSession', () => {
+  it('assigns fresh block IDs matching the counter pattern', () => {
+    applyLoadedSession(FULL_SAVED);
+    const state = get(sessionStore);
+    state.composition.blocks.forEach((b) => {
+      expect(b.id).toMatch(/^b\d+$/);
+    });
+  });
+
+  it('assigns fresh track IDs matching the counter pattern', () => {
+    applyLoadedSession(FULL_SAVED);
+    const state = get(sessionStore);
+    state.composition.tracks.forEach((t) => {
+      expect(t.id).toMatch(/^t\d+$/);
+    });
+  });
+
+  it('rebuilds track blockId refs to match newly assigned block IDs (not blockIndex numbers)', () => {
+    applyLoadedSession(FULL_SAVED);
+    const state = get(sessionStore);
+    const b0id = state.composition.blocks[0].id;
+    const b1id = state.composition.blocks[1].id;
+    // track 0 references blockIndex 0 (bars 4) and blockIndex 1 (bars 2)
+    expect(state.composition.tracks[0].blocks[0].blockId).toBe(b0id);
+    expect(state.composition.tracks[0].blocks[1].blockId).toBe(b1id);
+    // track 1 references blockIndex 1 (bars 2)
+    expect(state.composition.tracks[1].blocks[0].blockId).toBe(b1id);
+  });
+
+  it('resets nowPlaying to null after loading', () => {
+    sessionStore.update((s) => ({ ...s, nowPlaying: { label: 'Ritmo', source: 'rhythm' } }));
+    applyLoadedSession(MINIMAL_SAVED);
+    const state = get(sessionStore);
+    expect(state.nowPlaying.label).toBeNull();
+    expect(state.nowPlaying.source).toBeNull();
+  });
+
+  it('restores bpm, view, harmony, and rhythm from saved session', () => {
+    applyLoadedSession(FULL_SAVED);
+    const state = get(sessionStore);
+    expect(state.bpm).toBe(140);
+    expect(state.view).toBe('rhythm');
+    expect(state.harmony.mode).toBe('minor');
+    expect(state.harmony.root).toBe(5);
+    expect(state.rhythm.layers).toHaveLength(2);
+    expect(state.rhythm.layers[1].euclid).toBe('8,16');
+  });
+});
+
+// ── localStorage helpers ───────────────────────────────────────────────────
+
+describe('saveSession / listSavedSessions / loadSavedSession / deleteSession', () => {
+  it('saveSession + listSavedSessions + loadSavedSession roundtrip', () => {
+    saveSession('test-session', FULL_STATE);
+    const list = listSavedSessions();
+    expect(list).toContain('test-session');
+    const loaded = loadSavedSession('test-session');
+    expect(loaded).not.toBeNull();
+    expect(loaded?.bpm).toBe(140);
+    expect(loaded?.harmony.root).toBe(5);
+    expect(loaded?.version).toBe(1);
+  });
+
+  it('loadSavedSession returns null for an unknown session name', () => {
+    expect(loadSavedSession('no-such-session')).toBeNull();
+  });
+
+  it('deleteSession removes the session from the list and makes it unloadable', () => {
+    saveSession('to-delete', FULL_STATE);
+    expect(listSavedSessions()).toContain('to-delete');
+    deleteSession('to-delete');
+    expect(listSavedSessions()).not.toContain('to-delete');
+    expect(loadSavedSession('to-delete')).toBeNull();
+  });
+
+  it('PERSISTENCE_KEY_PREFIX is used as the localStorage key prefix', () => {
+    saveSession('my-session', FULL_STATE);
+    expect(localStorage.getItem(PERSISTENCE_KEY_PREFIX + 'my-session')).not.toBeNull();
+  });
+});
