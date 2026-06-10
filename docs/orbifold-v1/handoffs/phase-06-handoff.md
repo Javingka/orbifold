@@ -569,11 +569,13 @@ None.
 
 ### Planner Review
 
-**Decision:** APPROVE
-**Reviewed on:** 2026-06-09
-**Iteration:** 1 of 5
-**Reason:** All 10 Pilot smoke-test items CONFIRMED; all 4 gate commands exit 0; all 12 A-06 Acceptance IDs covered in the table with specific smoke-test item references and unit test evidence.
-**Next action:** Pilot checkpoint 5 — Pilot reviews Phase 06 handoff and approves before Phase 07 scoping
+**Planner Review:** APPROVED on 2026-06-09. Iteration: 1 of 5.
+All 12 A-06 Acceptance IDs covered with specific smoke-test item references and unit test evidence; all 4 gate commands exit 0; 10-point smoke test fully CONFIRMED; all prior checklist items pass; no Register conflicts; no unauthorized dependencies; prototype parity citations present in all code-porting steps.
+
+**Pending Register proposals (Pilot decides at phase approval):**
+None.
+
+**Next action:** Pilot approval required before Phase 07 scoping, reason: phase complete — mandatory Pilot checkpoint at phase boundary.
 
 ---
 
