@@ -224,4 +224,224 @@ None.
 
 ### Planner Review
 
-(pending)
+**Planner Review:** APPROVED on 2026-06-10. Iteration: 1 of 5.
+All 8 checklist items pass. `vite.config.ts` confirmed: `base: '/orbifold/'` present inside `defineConfig` with the custom-domain comment on the preceding line. `.github/workflows/deploy.yml` confirmed: trigger `push: branches: [main]`; workflow-level permissions `contents: read` / `pages: write` / `id-token: write`; concurrency `group: pages` / `cancel-in-progress: true`; all 11 steps in required order with exact action versions (`checkout@v4`, `setup-node@v4`, `configure-pages@v5`, `upload-pages-artifact@v3`, `deploy-pages@v4`); pnpm installed as `pnpm@9.15.4` (no caret range); `deploy-pages@v4` has `id: deployment`; environment block (`name: github-pages`, `url: ${{ steps.deployment.outputs.page_url }}`) is correctly placed at the job level (GitHub Actions only allows `environment` at job scope, not step scope — spec phrasing was "deploy step" but job-level placement is the correct GitHub Actions syntax). No new package.json entries. All four gate commands confirmed exit 0: tsc, lint, 180 tests, build. `dist/index.html` asset paths confirmed prefixed with `/orbifold/` (two explicit examples cited: `src="/orbifold/assets/index-nlciKjjh.js"` and `href="/orbifold/assets/index-BiFz9YWJ.css"`). A-08-03 and A-08-04 COVERED; A-08-05 and A-08-06 correctly deferred to PILOT. Prototype-parity checklist not applicable (phase spec exemption confirmed).
+**Next action: Dev proceeds to step 08.4**
+
+---
+
+## Step 08.4 — Operability verification
+
+**Date:** 2026-06-10
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v1/decisions.md`, `docs/orbifold-v1/phases/phase-08.md`, `docs/orbifold-v1/handoffs/phase-08-handoff.md` (steps 08.1–08.3 entries).
+- Ran all four gate commands; all exit 0 (see exact output below).
+- Executed 6-point smoke test; items 1–4 CONFIRMED by code/output inspection; items 5–6 marked PILOT.
+- No source code changes; handoff only.
+
+### Files touched
+
+- `docs/orbifold-v1/handoffs/phase-08-handoff.md` — this entry and Phase 08 Completion section appended
+
+### Gate command output (exact)
+
+**`pnpm exec tsc --noEmit`**
+```
+(no output — exit 0)
+```
+
+**`pnpm lint`**
+```
+> orbifold@0.0.1 lint /Users/virtualmachine/Development/personal/Orbifold
+> eslint . && prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+**`pnpm test`**
+```
+> orbifold@0.0.1 test /Users/virtualmachine/Development/personal/Orbifold
+> vitest run
+
+ RUN  v2.1.8 /Users/virtualmachine/Development/personal/Orbifold
+
+ ✓ tests/voice-leading.test.ts (8 tests) 6ms
+ ✓ tests/euclid.test.ts (25 tests) 4ms
+ ✓ tests/codegen.test.ts (29 tests) 4ms
+ ✓ tests/tonnetz.test.ts (31 tests) 5ms
+ ✓ tests/persistence.test.ts (27 tests) 13ms
+ ✓ tests/session.test.ts (27 tests) 9ms
+ ✓ tests/schema.test.ts (33 tests) 11ms
+
+ Test Files  7 passed (7)
+      Tests  180 passed (180)
+   Start at  10:01:31
+   Duration  444ms (transform 359ms, setup 0ms, collect 721ms, tests 51ms, environment 1ms, prepare 478ms)
+```
+
+**`pnpm build`**
+```
+> orbifold@0.0.1 build /Users/virtualmachine/Development/personal/Orbifold
+> vite build
+
+vite v5.4.11 building for production...
+transforming...
+✓ 549 modules transformed.
+[plugin:vite:reporter] [plugin vite:reporter]
+(!) /Users/virtualmachine/Development/personal/Orbifold/src/audio/strudel.ts is dynamically imported
+    by src/state/session.ts but also statically imported by src/ui/AgentPanel.svelte,
+    dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+dist/index.html                     1.63 kB │ gzip:   0.94 kB
+dist/assets/index-BiFz9YWJ.css     27.38 kB │ gzip:   5.68 kB
+dist/assets/index-nlciKjjh.js   1,046.04 kB │ gzip: 330.00 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+...
+✓ built in 1.46s
+```
+
+Exit 0. The chunk-size warning is informational (not an error); it was present before this phase.
+
+### 6-point smoke test record
+
+1. **`pnpm build` exits 0 and `dist/index.html` asset paths begin with `/orbifold/`** — CONFIRMED.
+   `dist/index.html` line 30: `<script type="module" crossorigin src="/orbifold/assets/index-nlciKjjh.js"></script>`
+   `dist/index.html` line 31: `<link rel="stylesheet" crossorigin href="/orbifold/assets/index-BiFz9YWJ.css">`
+   Both `<script src>` and `<link href>` asset paths are prefixed `/orbifold/`.
+
+2. **`.github/workflows/deploy.yml` is valid YAML with all required steps, correct trigger, and required permissions** — CONFIRMED.
+   - Trigger: `on: push: branches: [main]` — present (lines 3–5).
+   - Permissions: `pages: write` (line 8), `id-token: write` (line 9) — both present.
+   - All 11 steps in required order: `checkout@v4`, `setup-node@v4`, `npm install -g pnpm@9.15.4`, `pnpm install --frozen-lockfile`, `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build`, `configure-pages@v5`, `upload-pages-artifact@v3` (with `path: dist`), `deploy-pages@v4` — all present and in correct order.
+
+3. **README.md contains all 7 required sections** — CONFIRMED.
+   - Section 1: `# Orbifold` + tagline on line 3 (title + tagline).
+   - Section 2: `## Live app` + `https://Javingka.github.io/orbifold/` (line 7).
+   - Section 3: `## What it is` (line 9).
+   - Section 4: `## Stack` (line 13).
+   - Section 5: `## Run locally` (line 17) with all 6 exact commands.
+   - Section 6: `## AI Agent` (line 30).
+   - Section 7: `## License` (line 34).
+
+4. **LICENSE first line is "GNU AFFERO GENERAL PUBLIC LICENSE"** — CONFIRMED.
+   LICENSE line 1: `                    GNU AFFERO GENERAL PUBLIC LICENSE` — exact match.
+
+5. **[PILOT] Push to main → GitHub Actions runs green → app loads at `https://Javingka.github.io/orbifold/`** — PILOT ACTION REQUIRED.
+   Before pushing, enable GitHub Pages in repo settings: Settings → Pages → Source: GitHub Actions.
+
+6. **[PILOT] At live URL: canvas renders, audio starts after gesture, agent panel accepts key, share URL round-trips** — PILOT ACTION REQUIRED.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-08-01** (README complete): All 7 sections confirmed in file inspection (smoke item 3).
+- **A-08-02** (LICENSE full AGPL-3.0): First line confirmed "GNU AFFERO GENERAL PUBLIC LICENSE" (smoke item 4).
+- **A-08-03** (GitHub Actions workflow): All 11 steps, correct trigger and permissions confirmed (smoke item 2).
+- **A-08-04** (`dist/index.html` `/orbifold/`-prefixed paths): Both `<script>` and `<link>` paths confirmed prefixed (smoke item 1).
+- **A-08-05** (Production URL loads app): PILOT — requires live deployment.
+- **A-08-06** (Full end-to-end functionality at production URL): PILOT — requires live deployment.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Criterion | Status | Evidence |
+|---|---|---|---|
+| A-08-01 | README complete with all 7 sections | COVERED | Smoke item 3 — all 7 sections confirmed present in README.md |
+| A-08-02 | LICENSE is full AGPL-3.0 text | COVERED | Smoke item 4 — first line "GNU AFFERO GENERAL PUBLIC LICENSE" confirmed |
+| A-08-03 | GitHub Actions workflow quality gates + Pages deploy | COVERED | Smoke item 2 — all 11 steps, correct trigger/permissions verified in deploy.yml |
+| A-08-04 | `pnpm build` produces `/orbifold/`-prefixed asset paths | COVERED | Smoke item 1 — `dist/index.html` script and stylesheet paths both `/orbifold/assets/…` |
+| A-08-05 | Production URL loads app after push to main | PILOT | Requires Pilot to enable GitHub Pages and push to main |
+| A-08-06 | App fully functional at production URL end-to-end | PILOT | Requires Pilot live-browser confirmation after deployment |
+
+### Decisions made (if any)
+
+None.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 180 tests passing (unchanged across all of Phase 08).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `dist/` produced with `/orbifold/`-prefixed asset paths.
+- `.github/workflows/deploy.yml` present and verified.
+- README.md and LICENSE complete and verified.
+- No source code changes in this step.
+
+### Next-step context (only if non-obvious)
+
+- Pilot one-time setup before first deployment: Settings → Pages → Source: GitHub Actions.
+- Pilot pushes `main` to trigger the workflow and confirms items 5–6.
+
+---
+
+## Phase 08 Completion
+
+**Date:** 2026-06-10
+**Steps completed:** 08.1, 08.2, 08.3, 08.4
+
+### What was delivered
+
+Phase 08 completes the `orbifold-v1` initiative with publication infrastructure:
+
+- **Step 08.1 (Inventory):** Audited README, LICENSE, `vite.config.ts`, and `.github/` to identify gaps. Confirmed LICENSE was already full AGPL-3.0; identified missing README sections and missing `base` config and CI workflow.
+- **Step 08.2 (README + LICENSE):** Rewrote `README.md` to the 7-section spec (title/tagline, live app URL, what it is, stack, run locally, AI agent, license). LICENSE confirmed complete; not modified.
+- **Step 08.3 (Vite base path + CI/CD):** Added `base: '/orbifold/'` to `vite.config.ts` (with custom-domain fallback comment). Created `.github/workflows/deploy.yml` with the full pipeline: trigger on push to `main`, quality gates (tsc/lint/test/build), then GitHub Pages deployment via `actions/deploy-pages@v4`. All action versions are exact. pnpm version is `pnpm@9.15.4`.
+- **Step 08.4 (Operability verification):** All four gate commands pass; all local smoke items 1–4 confirmed. Items 5–6 require Pilot live deployment.
+
+### Test count
+
+180 tests across 7 test files — unchanged from Phase 07 close. No tests added or removed in Phase 08 (documentation/deployment phase).
+
+### Gate commands table
+
+| Command | Result |
+|---|---|
+| `pnpm exec tsc --noEmit` | Exit 0 — no errors |
+| `pnpm lint` | Exit 0 — "All matched files use Prettier code style!" |
+| `pnpm test` | Exit 0 — 180 tests passed (7 files, 444ms) |
+| `pnpm build` | Exit 0 — `dist/` produced, 1.46s |
+
+### Acceptance coverage summary
+
+| Acceptance ID | Criterion | Status |
+|---|---|---|
+| A-08-01 | README complete with all 7 sections | COVERED |
+| A-08-02 | LICENSE is full AGPL-3.0 text | COVERED |
+| A-08-03 | GitHub Actions workflow quality gates + Pages deploy | COVERED |
+| A-08-04 | `pnpm build` produces `/orbifold/`-prefixed asset paths | COVERED |
+| A-08-05 | Production URL loads app after push to main | PILOT — pending live deployment |
+| A-08-06 | App fully functional at production URL end-to-end | PILOT — pending live deployment |
+
+### Partial coverage carried forward
+
+- **A-08-05** and **A-08-06** require the Pilot to: (1) enable GitHub Pages in repo settings (Settings → Pages → Source: GitHub Actions — one-time setup), (2) push `main` to trigger the `build-and-deploy` workflow, and (3) confirm the app is accessible and functional at `https://Javingka.github.io/orbifold/`.
+
+### Initiative summary
+
+The `orbifold-v1` initiative is now functionally complete. All 8 phases (00–08) have been executed:
+
+- **Phase 00:** Vite + TypeScript + Svelte + PixiJS v7 + Strudel scaffold, all quality gates green.
+- **Phase 01:** Tonnetz geometry engine (`tonnetz.ts`) with P·L·R, voice-leading, Euclidean rhythms — pure-engine, tested.
+- **Phase 02:** Strudel integration — audio engine, rhythm/harmony codegen, `setcps` tempo fix (ADR 0005).
+- **Phase 03:** PIXI Tonnetz renderer — canvas with navigable chord geometry.
+- **Phase 04:** Svelte UI shell — transport, sidebar, tonal-function colors.
+- **Phase 05:** Session persistence — Zod schema, save/load, share URL.
+- **Phase 06:** AI Agent — schema, providers, apply/autofix, AgentPanel.
+- **Phase 07:** Composition timeline — DAW arrange, track stack, silence padding.
+- **Phase 08:** Publication — complete README, verified LICENSE, Vite base path, GitHub Actions CI/CD.
+
+Upon Pilot confirmation of A-08-05 and A-08-06, the `orbifold-v1` initiative is fully done and ready for archival.
