@@ -272,10 +272,109 @@ None.
 
 ### Planner Review
 
-(To be filled by Planner in review mode)
+**Planner Review:** APPROVED on 2026-06-09. Iteration: 1 of 5.
+All spec requirements implemented exactly (prefix check, decode, conditional apply, silent ignore on null, replaceState after success); tsc/lint/tests all pass (180); no new files, CSS, or dependencies.
+
+**Next action:** Dev proceeds to step 07.4
 
 ---
 
 **Terminal commit:** `feat(persistence): Phase 07 step 07.3 — URL session restore on app mount`
-  - Hash: self-referential — not recorded
-  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+  - Hash: 76483e0
+  - Note: Hash recorded post-commit.
+
+---
+
+## Step 07.4 — PersistencePanel.svelte, persistence CSS, App.svelte wiring
+
+**Date:** 2026-06-09
+**Commit(s):** 6af2c87
+**Iteration:** 1 of 5
+
+### Completed
+
+- Appended persistence CSS to `src/app/app.css` (after line 928):
+  - `#sessionsBtn` — fixed bottom-right button (40×40px, glass accent border, z-index:8).
+  - `#sessionsPanel` — fixed right-side slide-in panel (300px wide, full-height, glass blur, translateX(100%) → translateX(0) on `.open`).
+  - `.sess-head`, `.sess-close`, `.sess-input-row`, `.sess-list`, `.sess-list-empty`, `.sess-item`, `.sess-name`, `.sess-actions`, `.share-url-row`, `.share-feedback` — full panel layout following existing token conventions (`var(--stroke)`, `var(--accent)`, `var(--subdom)`, `var(--muted)`, `var(--text)`, `var(--glass-blur)`).
+- Created `src/ui/PersistencePanel.svelte` with AGPL-3.0 header:
+  - `let open = false` local panel state.
+  - `openPanel()`: calls `listSavedSessions()` to populate `sessions`, sets `open = true`.
+  - `handleSave()`: calls `saveSession(name, get(sessionStore))`; refreshes list; clears `saveName`.
+  - `handleLoad(name)`: calls `loadSavedSession(name)` → if non-null calls `applyLoadedSession(saved)`; closes panel.
+  - `handleDelete(name)`: calls `deleteSession(name)`; refreshes list.
+  - `handleShare()`: calls `encodeSession(get(sessionStore))`, constructs URL with `#session=` hash, copies via `navigator.clipboard.writeText`; sets `shareFeedback = '✓ Copiado'` for 2 seconds.
+  - Template: `<button id="sessionsBtn">`, `<div id="sessionsPanel" class:open>` with header/save-row/list/share-row.
+- Updated `src/app/App.svelte`: added `import PersistencePanel` and `<PersistencePanel />` after `<AgentPanel />`.
+- Ran `pnpm exec prettier --write src/ui/PersistencePanel.svelte` to fix formatting; lint passes clean.
+
+### Files touched
+
+- `src/app/app.css` — appended persistence CSS (179 new lines)
+- `src/ui/PersistencePanel.svelte` — created (new file)
+- `src/app/App.svelte` — 1 import line + 4-line component mount
+- `docs/orbifold-v1/handoffs/phase-07-handoff.md` — this entry
+
+### Prototype parity citations
+
+Not applicable — Phase 07 is new functionality; no prototype equivalent.
+
+### Validation evidence (per Acceptance ID)
+
+- A-07-07: `PersistencePanel.svelte` implements save row (input + "💾 Guardar"), session list (`{#each sessions}` → `.sess-item` with "▶" load and "🗑" delete), refreshes list on open/save/delete. Live-system confirmation deferred to 07.5.
+- A-07-08: `handleShare()` constructs `#session=<encoded>` URL, copies via `navigator.clipboard.writeText`, shows "✓ Copiado" feedback for 2 seconds. Live-system confirmation deferred to 07.5.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors, all files Prettier-clean
+- `pnpm test` → 180 passed (unchanged from step 07.3)
+- `pnpm build` → exit 0 (dist built successfully, 1.39s)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-07-01 | Schema validates/rejects correctly | `tests/persistence.test.ts` | unit | covered (step 07.2) |
+| A-07-02 | serializeSession excludes ephemeral fields | `tests/persistence.test.ts` | unit | covered (step 07.2) |
+| A-07-03 | Roundtrip with fresh IDs | `tests/persistence.test.ts` | unit | covered (step 07.2) |
+| A-07-04 | localStorage roundtrip | `tests/persistence.test.ts` | unit | covered (step 07.2) |
+| A-07-05 | encode/decode roundtrip | `tests/persistence.test.ts` | unit | covered (step 07.2) |
+| A-07-06 | URL `#session=` reconstructs session; hash cleared | smoke test 07.5 | live-system | partial — wired in App.svelte; live-system deferred to 07.5 |
+| A-07-07 | Sesiones panel: save/list/load/delete | smoke test 07.5 | live-system | partial — component implemented; live-system deferred to 07.5 |
+| A-07-08 | Share URL copies; shows "✓ Copiado" feedback | smoke test 07.5 | live-system | partial — component implemented; live-system deferred to 07.5 |
+| A-07-09 | All A-06 behaviors intact | existing tests + smoke 07.5 | unit + live-system | partial — 180 unit tests pass; live-system confirmed 07.5 |
+| A-07-10 | tsc/lint/test(≥165)/build all exit 0 | gate commands | proxy:static-analysis + unit | covered — tsc/lint/test(180)/build all confirmed this step |
+
+**Proxy disclosures:** A-07-10 uses `proxy:static-analysis` for tsc and lint; build exit code confirmed by running `pnpm build` above.
+
+### Decisions made (if any)
+
+- `sessions` list is populated on `openPanel()` (on demand) rather than reactively via a store subscription — sufficient for the MVP since the panel only shows stale data if the user saves from another window while the panel is open, which is not a supported use case.
+- `handleShare()` uses `void navigator.clipboard.writeText(...).then(...)` — non-blocking; if clipboard is unavailable (HTTP contexts), the feedback simply never shows. No error alert added (MVP scope).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 180 tests passing (unchanged).
+- `src/ui/PersistencePanel.svelte` created.
+- `src/app/app.css` extended with persistence CSS.
+- `src/app/App.svelte` mounts `<PersistencePanel />`.
+- `pnpm build` exits 0.
+
+### Next-step context (only if non-obvious)
+
+Step 07.5 is the operability verification step — run all four gate commands in sequence, then perform the 10-point Pilot smoke test in `pnpm dev`. The critical live-system tests are A-07-06 (URL round-trip), A-07-07 (save/load/delete), A-07-08 (share + clipboard feedback).
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-09. Iteration: 1 of 5.
+All spec deliverables present and verified: AGPL-3.0 header confirmed in PersistencePanel.svelte; all CSS uses only defined tokens (--stroke, --stroke-2, --text, --muted, --subdom, --dom, --accent, --glass-blur); all four handlers (save, load, delete, share + "✓ Copiado" feedback) implemented exactly per spec; App.svelte mounts `<PersistencePanel />` at line 445, after `<AgentPanel />` at line 439; A-07-07 and A-07-08 correctly marked partial with live-system deferred to 07.5; A-07-10 now fully covered with build confirmed; tsc/lint/test(180)/build all exit 0; no new dependencies introduced.
+**Next action:** Dev proceeds to step 07.5
