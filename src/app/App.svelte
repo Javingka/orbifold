@@ -19,6 +19,7 @@
   import CodeDrawer from '../ui/CodeDrawer.svelte';
   import CompositionDrawer from '../ui/CompositionDrawer.svelte';
   import AgentPanel from '../ui/AgentPanel.svelte';
+  import PersistencePanel from '../ui/PersistencePanel.svelte';
   import Hud from '../ui/Hud.svelte';
   import Legend from '../ui/Legend.svelte';
   import Tooltip from '../ui/Tooltip.svelte';
@@ -436,6 +437,12 @@
   Phase 06 step 06.4.
 -->
 <AgentPanel />
+
+<!--
+  Persistence panel: floating button + slide-in panel for save/load/share.
+  Phase 07 step 07.4.
+-->
+<PersistencePanel />
 
 <!--
   Global tooltip: tracks [data-tip] elements across the whole document.
