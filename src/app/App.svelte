@@ -13,7 +13,7 @@
   import { hudStore } from '../state/hud.js';
   import Header from '../ui/Header.svelte';
   import Transport from '../ui/Transport.svelte';
-  import ProgressionChips from '../ui/ProgressionChips.svelte';
+  import ProgressionStrip from '../ui/ProgressionStrip.svelte';
   import HarmonyControls from '../ui/HarmonyControls.svelte';
   import RhythmControls from '../ui/RhythmControls.svelte';
   import CodeDrawer from '../ui/CodeDrawer.svelte';
@@ -411,9 +411,11 @@
   Replaces the prototype <footer class="glass"> (lines 484–513).
   Includes now-playing pill, engine buttons, BPM slider, and tap-tempo.
   Phase 04 step 04.4: ProgressionChips inserted via slot (prototype .prog lines 505–508).
+  Phase 01 step 01.3: ProgressionStrip replaces ProgressionChips in the Transport slot.
+    ProgressionChips is kept (not deleted) per Pilot invariant; only mounting changed.
 -->
 <Transport>
-  <ProgressionChips />
+  <ProgressionStrip />
 </Transport>
 
 <!--

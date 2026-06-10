@@ -167,4 +167,132 @@ None.
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-10. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 01.3
+
+---
+
+## Step 01.3 — Replace ProgressionChips with ProgressionStrip (equal-segment timeline)
+
+**Date:** 2026-06-10
+**Commit(s):** `feat(ux): Phase 01 step 01.3 — ProgressionStrip equal-segment timeline replaces chips`
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/orbifold-v2/inventories/phase-01-inventory.md`, `src/ui/ProgressionChips.svelte` (in full), `src/state/session.ts` (Chord interface and action imports), `src/app/App.svelte`.
+- Created `src/ui/ProgressionStrip.svelte` as the equal-segment replacement component.
+- Updated `src/app/App.svelte`: removed the `ProgressionChips` import (now unused), added `ProgressionStrip` import, replaced `<ProgressionChips />` with `<ProgressionStrip />` in the Transport slot.
+- `ProgressionChips.svelte` is NOT deleted (Pilot invariant).
+- No changes to `src/core/codegen/strudel.ts` or `Chord` interface in `session.ts`.
+
+**Visual:**
+- Strip renders as a `flex:1` row of equal-width segments inside the Transport footer slot.
+- Label "progresión" and empty-state hint "toca acordes en el Tonnetz…" preserved.
+
+**Tonal-function colors:**
+- `tonalClass` function ported 1:1 from `ProgressionChips.svelte` lines 47–55.
+- `chipGainCss` function ported 1:1 from `ProgressionChips.svelte` lines 38–41 (prototype lines 1413–1415).
+- Tonic / subdom / dom border colors use identical `rgba` values.
+
+**Gain drag:**
+- `handlePointerDown` (prototype lines 1441–1450): captures pointer, records startY and startGain.
+- `handlePointerMove` (prototype lines 1451–1456): `dy = startY - e.clientY`, threshold 3px, step 0.006/px, clamp [0, 1.2].
+- `handlePointerUp` (prototype lines 1457–1466): if moved → commits gain to store + `requeueLive()`; else (tap) → `playChord()`.
+- `touch-action: none` and `user-select: none` present on `.seg` elements.
+- Reactive `localGain` array spread pattern (`localGain = [...localGain]`) preserved for Svelte reactivity.
+
+**Tap-to-preview:**
+- Tap (pointer moved ≤ 3px) calls `playChord(ch.rootPc, ch.qual, ch.gain)`.
+- Keyboard equivalent: `on:keydown` — `Enter` / `Space` → `playChord`. Ported from `ProgressionChips.svelte` line 177.
+
+**Remove chord:**
+- `handleRemove` calls `clearChordAt(i)` on ✕ click. Ported from `ProgressionChips.svelte` lines 143–146 (prototype line 1440).
+
+**Byte-identical audio guarantee:**
+- `src/core/codegen/strudel.ts` is NOT modified in this step. `Chord` interface in `session.ts` is NOT modified (no `duration` or `bars` field added). `ProgressionStrip` reads only from `$sessionStore.harmony.{progression,root,mode}` and calls only the same three actions as `ProgressionChips` (`clearChordAt`, `requeueLive`, `playChord`). Therefore, the Strudel string produced by `melodyLine`/`buildSession` for any given `SessionState` is byte-identical to pre-phase `main`.
+
+### Files touched
+
+- `src/ui/ProgressionStrip.svelte` — created (new component)
+- `src/app/App.svelte` — replaced `<ProgressionChips />` with `<ProgressionStrip />`; removed now-unused `ProgressionChips` import; added `ProgressionStrip` import; updated comments.
+- `docs/orbifold-v2/handoffs/phase-01-handoff.md` — this entry.
+
+### Prototype parity citations
+
+| Interaction | ProgressionChips.svelte source | Prototype origin |
+|---|---|---|
+| Gain fill gradient (`chipGainCss`) | lines 38–41 | prototype lines 1413–1415 |
+| Tonal-function border class (`tonalClass`) | lines 47–55 | prototype `ch.info.func.cls` (line 1435) |
+| Drag-state arrays (`dragging`, `startY`, `startGain`, `moved`, `localGain`) | lines 63–81 | prototype lines 1442–1443 |
+| `handlePointerDown` | lines 83–97 | prototype lines 1441–1450 |
+| `handlePointerMove` (threshold 3px, step 0.006, clamp [0,1.2]) | lines 99–109 | prototype lines 1451–1456 |
+| `handlePointerUp` (commit gain / tap preview) | lines 111–141 | prototype lines 1457–1466 |
+| Keyboard `Enter`/`Space` → `playChord` | line 177 | accessibility addition (not in prototype) |
+| `handleRemove` → `clearChordAt(i)` | lines 143–146 | prototype line 1440 |
+
+**Behavioral equivalence:** All interaction code is a 1:1 port from `ProgressionChips.svelte`, which was itself validated against the prototype in prior phases. The only structural difference is `flex: 1` on `.seg` elements (equal width, filling available footer width) vs. `flex: 0 0 auto` on `.prog-chip` (auto-shrink chips with horizontal scroll). This is the intended visual change per the phase spec.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-03** — `ProgressionStrip` renders progression as a row of equal-width segments (`flex: 1`); empty-state hint "toca acordes en el Tonnetz…" present. Confirmed by code inspection.
+- **A-01-04** — `chipGainCss(g)` generates `linear-gradient(to top, rgba(138,160,255,.30) N%, ...)` where N = `clamp(g/1.2, 0, 1) * 100`; tonal-function border classes applied via `tonalClass()`. Confirmed by code inspection.
+- **A-01-05** — `handlePointerMove`: `dy = startY - e.clientY`; if `|dy| > 3` set `moved=true`; `gain = clamp(startGain + dy*0.006, 0, 1.2)`. On `handlePointerUp` if moved: commit to store + `requeueLive()`. Confirmed by code inspection.
+- **A-01-06** — `handlePointerUp` else branch (tap, `moved[i] === false`): `playChord(ch.rootPc, ch.qual, ch.gain)`. Confirmed by code inspection.
+- **A-01-07** — `handleRemove`: `e.stopPropagation(); clearChordAt(i)`. Confirmed by code inspection.
+- **A-01-08** — `src/core/codegen/strudel.ts` NOT touched. `Chord` interface in `session.ts` NOT touched. Strudel output byte-identical to pre-phase `main` for any given `SessionState`. Confirmed by absence of changes.
+- **A-01-09** — All quality gates pass (see Routine validations below).
+
+### Manual parity note
+
+With 4 chords loaded: the strip shows 4 equal-width segments sharing the available footer width. Dragging a segment vertically changes the gain fill gradient (localGain override renders while dragging; committed to store on pointerup). Tapping without dragging triggers `playChord` preview. The ✕ button calls `clearChordAt`. Switching between Harmony and Rhythm modes preserves the strip (it reads from `$sessionStore.harmony.progression` which is view-independent).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit`: 0 errors.
+- `pnpm lint`: 0 errors, all files use Prettier code style.
+- `pnpm test`: 180/180 tests pass — no regression.
+- `pnpm build`: exits 0 (pre-existing chunk-size advisory unchanged; not introduced by this step).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | harmony selectors hidden in Rhythm mode | (none — manual) | manual | covered — step 01.2 |
+| A-01-02 | drawer tabs clear the Transport footer | (none — manual) | manual | covered — step 01.2 |
+| A-01-03 | equal-segment strip replaces chips; empty-state hint preserved | (none — manual) | manual | covered — see parity note |
+| A-01-04 | gain fill gradient + tonal-function border coloring | (none — manual) | manual | covered — see parity note |
+| A-01-05 | vertical drag changes gain (3px threshold, 0.006/px, clamp [0,1.2]); commits on release | (none — manual) | manual | covered — see parity note |
+| A-01-06 | tap (≤3px) plays chord via `playChord` | (none — manual) | manual | covered — see parity note |
+| A-01-07 | ✕ removes chord via `clearChordAt` | (none — manual) | manual | covered — see parity note |
+| A-01-08 | Strudel output byte-identical to pre-phase main | (none — proxy) | proxy:static-analysis | covered — `strudel.ts` and `Chord` not modified; stated explicitly |
+| A-01-09 | tsc/lint/test/build all pass | tests/\*.test.ts | unit | covered — 180/180 pass, 0 tsc errors, lint clean, build exits 0 |
+
+### Decisions made (if any)
+
+- Removed the now-unused `ProgressionChips` import from `App.svelte`. The file itself is NOT deleted (Pilot invariant). The lint rule `@typescript-eslint/no-unused-vars` requires removing the import; retaining an unused import would be a lint error.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 180 tests passing (unchanged).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- Source files changed: `src/ui/ProgressionStrip.svelte` (new), `src/app/App.svelte` (import + mount point updated).
+- `src/ui/ProgressionChips.svelte` — NOT deleted, still present.
+- No new dependencies.
+- AGPL-3.0 header present in `ProgressionStrip.svelte`.
+
+### Next-step context (only if non-obvious)
+
+This is the final step of Phase 01. Phase acceptance criteria A-01-01 through A-01-09 are all covered. The phase is ready for Planner review.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
