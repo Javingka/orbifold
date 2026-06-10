@@ -1,26 +1,36 @@
-# ꩜ Orbifold
+# Orbifold
 
-A web-based live-coding music instrument built on [Strudel](https://strudel.cc), with a PIXI/WebGL interface and a sober "Apple"-like aesthetic. It organizes music with Tymoczko's chord geometry: a navigable Tonnetz, neo-Riemannian P·L·R transformations, minimal voice-leading, and Euclidean rhythms — plus a DAW-style composition timeline and an AI agent that creates rhythm/harmony and updates the UI.
+Orbifold — a web-based live-coding music instrument built on Strudel, with a PIXI/WebGL Tonnetz interface and Tymoczko chord geometry.
 
-For musicians and the curious — no coding required. The code is optional and visible (pedagogical).
+## Live app
+
+[https://Javingka.github.io/orbifold/](https://Javingka.github.io/orbifold/)
+
+## What it is
+
+Orbifold is built on [Strudel](https://strudel.cc) (a JavaScript port of TidalCycles) and renders a navigable Tonnetz with neo-Riemannian P·L·R transformations, Euclidean rhythms, and minimal voice-leading via Tymoczko's chord geometry. It includes a DAW-style composition timeline for arranging patterns and an AI agent that generates rhythm and harmony using your own API key — no Orbifold account required. No coding experience is needed; the live code is visible and pedagogical throughout.
 
 ## Stack
 
 Vite · TypeScript (strict) · Svelte · PixiJS v7 · Strudel (`@strudel/web`) · Vitest · ESLint + Prettier.
 
-## Development
+## Run locally
 
 ```sh
 pnpm install              # install dependencies
-pnpm dev                  # start the Vite dev server
+pnpm dev                  # start the Vite dev server (http://localhost:5173/orbifold/)
 pnpm build                # produce a static dist/
 pnpm test                 # run Vitest
 pnpm lint                 # ESLint + Prettier check
 pnpm exec tsc --noEmit    # typecheck
 ```
 
-Audio starts only after a user gesture, and the app must be served over HTTP(S) — browser audio does not start from `file://`.
+Note: audio requires HTTP(S). The app will not produce sound when opened from a `file://` URL.
+
+## AI Agent
+
+Open the Agent panel by clicking the robot icon in the toolbar. Enter your API key for OpenRouter, OpenAI, or Anthropic. The key is stored only in your browser's `localStorage` — it never leaves your device and no server is involved. Close the panel to dismiss it; clear site data to remove the stored key.
 
 ## License
 
-[AGPL-3.0](LICENSE), inherited from Strudel. If you distribute this app, the source must be available under AGPL-3.0.
+AGPL-3.0, inherited from Strudel. If you distribute this app, the source code must be available under the same license. See `LICENSE`.
