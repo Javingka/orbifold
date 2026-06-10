@@ -523,11 +523,13 @@ Phase 07 delivered full session persistence for the Orbifold app:
 | A-07-03 | covered (unit) |
 | A-07-04 | covered (unit) |
 | A-07-05 | covered (unit) |
-| A-07-06 | PILOT live-browser |
-| A-07-07 | covered (code) + PILOT live-browser |
-| A-07-08 | PILOT live-browser |
-| A-07-09 | covered (unit) + PILOT live-browser |
+| A-07-06 | covered (unit + Pilot live-browser CONFIRMED 2026-06-10) |
+| A-07-07 | covered (unit + Pilot live-browser CONFIRMED 2026-06-10) |
+| A-07-08 | covered (Pilot live-browser CONFIRMED 2026-06-10) |
+| A-07-09 | covered (unit + Pilot live-browser CONFIRMED 2026-06-10) |
 | A-07-10 | covered |
+
+**Pilot live-browser confirmation (2026-06-10):** Smoke items 6, 7, and 9 all CONFIRMED by Pilot.
 
 ### Test count
 
@@ -545,5 +547,4 @@ Phase 07 delivered full session persistence for the Orbifold app:
 
 ### Partial coverage carried forward
 
-- **A-07-06, A-07-08**: live-system only — require Pilot to open a `#session=` URL in a browser tab and verify clipboard copy. No unit test equivalent possible without a browser.
-- **A-07-07, A-07-09**: unit portion covered; live-browser rendering aspect deferred to Pilot smoke test.
+None. All A-07 IDs fully covered (unit + Pilot live-browser).
