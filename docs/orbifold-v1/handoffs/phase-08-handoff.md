@@ -147,4 +147,81 @@ None.
 
 ### Planner Review
 
-**Planner Review:** pending.
+**Planner Review:** APPROVED on 2026-06-10. Iteration: 1 of 5.
+All 8 checklist items pass. README contains all 7 required sections in order with no emojis in headings; title+tagline text matches spec exactly; live app URL is `https://Javingka.github.io/orbifold/`; all 6 run-locally commands present; AI agent section covers bring-your-own-key and localStorage storage; license section matches spec verbatim. LICENSE first line confirmed "GNU AFFERO GENERAL PUBLIC LICENSE" (full 661-line AGPL-3.0 text, unmodified). tsc/lint/test all confirmed exit 0; 180 tests passing. Acceptance Coverage Table correctly maps A-08-01 and A-08-02 as COVERED, and correctly defers A-08-03 through A-08-06 to later steps. No source code touched. Prototype-parity checklist not applicable (phase spec exemption confirmed).
+**Next action: Dev proceeds to step 08.3**
+
+---
+
+## Step 08.3 — Vite base path and GitHub Actions CI/CD workflow
+
+**Date:** 2026-06-10
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v1/decisions.md`, `docs/orbifold-v1/phases/phase-08.md`, `docs/orbifold-v1/inventories/phase-08-inventory.md`, `docs/orbifold-v1/handoffs/phase-08-handoff.md` (steps 08.1–08.2 entries), `vite.config.ts`, `package.json`.
+- Added `base: '/orbifold/'` to `vite.config.ts` inside `defineConfig`, with the comment `// base: '/' — use this instead if deploying to a custom domain at the root` on the line above.
+- Created `.github/workflows/deploy.yml` with the full CI/CD pipeline: trigger on push to `main`; workflow-level permissions (`contents: read`, `pages: write`, `id-token: write`); concurrency group `pages` with `cancel-in-progress: true`; single job `build-and-deploy` on `ubuntu-latest`; all 11 steps in required order; deploy-pages step has `id: deployment` and environment `name: github-pages` / `url: ${{ steps.deployment.outputs.page_url }}`; all action versions are exact (`@v4`, `@v4`, `@v5`, `@v3`, `@v4`); pnpm installed as `pnpm@9.15.4` via `npm install -g`.
+- No new npm runtime or devDependencies introduced.
+- All four gate commands pass (see validation evidence below).
+
+### Files touched
+
+- `vite.config.ts` — added `base: '/orbifold/'` and explanatory comment
+- `.github/workflows/deploy.yml` — created (new file; new directory)
+- `docs/orbifold-v1/handoffs/phase-08-handoff.md` — this entry appended
+
+### Validation evidence (per Acceptance ID)
+
+- **A-08-03** (GitHub Actions workflow): `.github/workflows/deploy.yml` created and verified — trigger `push: branches: [main]`; permissions include `pages: write` and `id-token: write`; all 11 steps present in required order (checkout, setup-node, pnpm install, tsc, lint, test, build, configure-pages, upload-artifact, deploy-pages); exact action versions used; environment block on deploy-pages step.
+- **A-08-04** (`dist/index.html` asset paths prefixed `/orbifold/`): `pnpm build` exit 0; inspection of `dist/index.html` confirms `src="/orbifold/assets/index-nlciKjjh.js"` and `href="/orbifold/assets/index-BiFz9YWJ.css"` — both asset paths correctly prefixed.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` — exit 0 (no errors; vite.config.ts type-checks clean).
+- `pnpm lint` — exit 0; "All matched files use Prettier code style!"
+- `pnpm test` — 180 tests passed across 7 test files (454ms duration).
+- `pnpm build` — exit 0; `dist/index.html` asset paths verified prefixed with `/orbifold/`.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Criterion | Status | Evidence |
+|---|---|---|---|
+| A-08-01 | README complete with all 7 sections | COVERED (step 08.2) | README.md rewritten with all 7 sections in required order |
+| A-08-02 | LICENSE is full AGPL-3.0 text | COVERED (step 08.2) | Confirmed 661 lines, Version 3, 19 November 2007; not modified |
+| A-08-03 | GitHub Actions workflow quality gates + Pages deploy | COVERED | `.github/workflows/deploy.yml` created; all 11 steps verified; exact action versions; correct permissions and environment block |
+| A-08-04 | `pnpm build` produces `/orbifold/`-prefixed asset paths | COVERED | `dist/index.html` confirmed: `src="/orbifold/assets/..."`, `href="/orbifold/assets/..."` |
+| A-08-05 | Production URL loads app after push to main | NOT YET — step 08.4 (PILOT) | |
+| A-08-06 | App fully functional at production URL end-to-end | NOT YET — step 08.4 (PILOT) | |
+
+### Decisions made (if any)
+
+- pnpm version `pnpm@9.15.4` used in CI (as pre-resolved in step 08.1 inventory; no new decision needed).
+- AGPL-3.0 header not added to `deploy.yml` — YAML workflow files are CI configuration, not source code; phase spec explicitly exempts them.
+
+### Proposed Decisions Register entries (if any)
+
+None — the ADR Trigger in the phase spec (GitHub Pages vs. custom domain base path) is for a future Pilot decision if a custom domain is adopted. No ADR is warranted now; the comment in `vite.config.ts` documents the migration path.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 180 tests passing (unchanged).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `pnpm build` now produces `dist/` with `/orbifold/`-prefixed asset paths.
+- `pnpm dev` now serves from `http://localhost:5173/orbifold/` (not `http://localhost:5173/`).
+- `.github/workflows/deploy.yml` is present and well-formed.
+
+### Next-step context (only if non-obvious)
+
+- Step 08.4 (operability verification): run all four gate commands and record exact output; inspect `dist/index.html`; verify workflow YAML; inspect README and LICENSE; mark items 5–6 as PILOT (require live deployment).
+- Pilot one-time setup required before first deployment: enable GitHub Pages in repo settings → Settings → Pages → Source: GitHub Actions. This must be confirmed in the step 08.4 handoff.
+
+### Planner Review
+
+(pending)
