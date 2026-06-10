@@ -378,3 +378,172 @@ Step 07.5 is the operability verification step — run all four gate commands in
 **Planner Review:** APPROVED on 2026-06-09. Iteration: 1 of 5.
 All spec deliverables present and verified: AGPL-3.0 header confirmed in PersistencePanel.svelte; all CSS uses only defined tokens (--stroke, --stroke-2, --text, --muted, --subdom, --dom, --accent, --glass-blur); all four handlers (save, load, delete, share + "✓ Copiado" feedback) implemented exactly per spec; App.svelte mounts `<PersistencePanel />` at line 445, after `<AgentPanel />` at line 439; A-07-07 and A-07-08 correctly marked partial with live-system deferred to 07.5; A-07-10 now fully covered with build confirmed; tsc/lint/test(180)/build all exit 0; no new dependencies introduced.
 **Next action:** Dev proceeds to step 07.5
+
+---
+
+**Terminal commit:** `feat(ui): Phase 07 step 07.4 — PersistencePanel.svelte, persistence CSS, App.svelte wiring`
+  - Hash: 6af2c87
+
+---
+
+## Step 07.5 — Operability verification
+
+**Date:** 2026-06-09
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Ran all four gate commands; all exit 0 (output recorded below).
+- Performed code-inspection verification for smoke-test items that do not require live browser interaction (items 1–5).
+- Items 6–9 require Pilot live-browser verification in `pnpm dev` (Checkpoint 5 — phase-complete handoff review).
+- Appended Phase 07 Completion section to this handoff.
+
+### Gate command output
+
+```
+pnpm exec tsc --noEmit   → (no output, exit 0)
+pnpm lint                → "All matched files use Prettier code style!" exit 0
+pnpm test                → 7 test files, 180 tests passed, exit 0
+pnpm build               → ✓ built in 1.37s, exit 0
+                           (chunk-size warning is pre-existing from Phase 06 — not a Phase 07 regression)
+```
+
+### Smoke-test record (phase-07.md §07.5 10-point list)
+
+Phase spec: "the Pilot performs this" — items requiring live browser interaction are marked **[PILOT]**.
+
+1. `💾` button (id=sessionsBtn) rendered by PersistencePanel.svelte with `position:fixed; bottom:24px; right:14px; z-index:8`. Click sets `open=true`; class:open triggers CSS `translateX(0)` slide-in. ✕ button calls `closePanel()` → `open=false`. **CONFIRMED (code review)**
+2. Save input bound to `saveName`; "💾 Guardar" calls `handleSave()` → `saveSession(name, get(sessionStore))` → `refreshList()`. Session name appears in `{#each sessions}`. **CONFIRMED (code review + unit tests A-07-04)**
+3. "▶" calls `handleLoad(name)` → `loadSavedSession(name)` → `applyLoadedSession(saved)` → `sessionStore.update`. Store update triggers App.svelte reactive subscription → scenes rebuild. **CONFIRMED (code review + unit tests A-07-03)**
+4. "🗑" calls `handleDelete(name)` → `deleteSession(name)` → `refreshList()`. **CONFIRMED (code review + unit tests A-07-04)**
+5. `saveSession` writes to `localStorage`; browser localStorage persists across page reloads by spec. `listSavedSessions` reads from the same key on subsequent calls. **CONFIRMED (code review + unit tests A-07-04)**
+6. `handleShare()` constructs URL, calls `navigator.clipboard.writeText(url)`, sets `shareFeedback = '✓ Copiado'` for 2 s. **[PILOT] — requires live browser (clipboard API unavailable headlessly)**
+7. URL `#session=<encoded>` consumed in App.svelte `onMount` → `decodeSession` → `applyLoadedSession` → `replaceState`. **[PILOT] — requires navigating to the URL in a browser tab**
+8. `applyLoadedSession` resets `nowPlaying: { label: null, source: null }`. **CONFIRMED (code review + unit test "resets nowPlaying to null after loading")**
+9. Composition blocks and tracks round-trip through `serializeSession` (blockId→blockIndex) and `applyLoadedSession` (blockIndex→fresh blockId). **CONFIRMED (unit tests A-07-03: "rebuilds track blockId refs to match newly assigned block IDs")**; blocks/tracks visible in CompositionDrawer after load. **[PILOT] — CompositionDrawer rendering deferred to live browser**
+10. All Phase 06 components (AgentPanel, Tonnetz, rhythm, transport, CompositionDrawer) are unchanged — no files modified except App.svelte (import + 4-line mount), app.css (append-only), and new PersistencePanel.svelte. **CONFIRMED (code review); 180 unit tests unchanged (153 Phase 06 tests still green)**
+
+**Items requiring Pilot live-browser confirmation:** 6, 7, 9 (CompositionDrawer rendering aspect).
+
+### Files touched
+
+- `docs/orbifold-v1/handoffs/phase-07-handoff.md` — this entry
+
+### Prototype parity citations
+
+Not applicable — Phase 07 is new functionality.
+
+### Validation evidence (per Acceptance ID)
+
+See Acceptance Coverage Table below.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → exit 0
+- `pnpm lint` → exit 0
+- `pnpm test` → 180 passed (≥165 threshold)
+- `pnpm build` → exit 0
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test / evidence | Test type | Gap status |
+|---|---|---|---|---|
+| A-07-01 | Schema validates/rejects correctly | `tests/persistence.test.ts` SavedSessionSchema (6 tests) | unit | covered |
+| A-07-02 | serializeSession excludes ephemeral fields | `tests/persistence.test.ts` serializeSession (5 tests) | unit | covered |
+| A-07-03 | Roundtrip with fresh IDs | `tests/persistence.test.ts` roundtrip + applyLoadedSession (9 tests) | unit | covered |
+| A-07-04 | localStorage roundtrip | `tests/persistence.test.ts` localStorage helpers (4 tests) | unit | covered |
+| A-07-05 | encode/decode roundtrip | `tests/persistence.test.ts` encode/decode (3 tests) | unit | covered |
+| A-07-06 | URL `#session=` reconstructs session; hash cleared | smoke item 7 — Pilot live browser | live-system | PILOT required |
+| A-07-07 | Sesiones panel: save/list/load/delete | smoke items 1–4 — code review + unit tests + Pilot browser | code-review + unit + live-system | covered (code) + PILOT for UI |
+| A-07-08 | Share URL copies; shows "✓ Copiado" feedback | smoke item 6 — Pilot live browser | live-system | PILOT required |
+| A-07-09 | All A-06 behaviors intact | 180 unit tests pass (153 Phase 06 tests unchanged); smoke item 10 | unit + live-system | covered (unit); PILOT for live |
+| A-07-10 | tsc/lint/test(≥165)/build all exit 0 | Gate commands: all exit 0; 180 tests ≥ 165 | proxy:static-analysis + unit | covered |
+
+**Proxy disclosures:** A-07-10 uses `proxy:static-analysis` for tsc and lint.
+
+### Decisions made (if any)
+
+None.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 180 tests passing.
+- All four gate commands exit 0.
+- Phase 07 feature complete; live-system items 6, 7, 9 require Pilot browser confirmation.
+
+### Next-step context (only if non-obvious)
+
+This is Checkpoint 5 (phase complete). Pilot reviews this handoff, performs live-browser verification of smoke items 6, 7, and 9 in `pnpm dev`, then approves or requests changes.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-09. Iteration: 1 of 5.
+All 4 gate commands recorded with exact output and confirmed exit 0 (tsc: no output; lint: "All matched files use Prettier code style!"; test: 180 passed in 7 files; build: 1.37s). Smoke items 1–5 and 8 and 10 confirmed by code review and unit tests with specific citations; items 6, 7, and the browser-rendering aspect of 9 correctly designated PILOT per the spec's own "the Pilot performs this" language — this is correct protocol, not a coverage gap. Acceptance Coverage Table complete for all 10 IDs with no silently missing entry; A-07-10 fully covered; partial coverage for A-07-06 and A-07-08 (live-system only, no unit equivalent possible) documented in the Phase 07 Completion "Partial coverage carried forward" section. No Register conflicts; no new dependencies; reversibility intact (app.css and App.svelte changes are additive/append-only; 153 prior tests unchanged).
+**Next action:** Pilot Checkpoint 5 — review phase-07 handoff and perform live-browser smoke test items 6, 7, 9 in pnpm dev before approving phase close.
+
+---
+
+**Terminal commit:** `feat(persistence): Phase 07 step 07.5 — operability verification and phase-07 completion handoff`
+  - Hash: (see git log)
+
+---
+
+## Phase 07 Completion
+
+**Date:** 2026-06-09
+**Completed by:** Dev (Claude Sonnet 4.6)
+**Pilot approval:** Pending Checkpoint 5
+
+### Summary
+
+Phase 07 delivered full session persistence for the Orbifold app:
+
+- **`src/lib/persistence.ts`** — versioned Zod schema (`SavedSessionSchema` v1), `serializeSession`/`deserializeSession`, `encodeSession`/`decodeSession` (btoa/URL-safe base64), and localStorage helpers (`saveSession`, `loadSavedSession`, `listSavedSessions`, `deleteSession`).
+- **`src/state/session.ts`** — `applyLoadedSession` export that re-assigns fresh block/track IDs via module-private counters (ADR 0009 compliant) and rebuilds track blockId refs.
+- **`src/app/App.svelte`** — URL session restore on `onMount` (`#session=` hash → decodeSession → applyLoadedSession → replaceState).
+- **`src/ui/PersistencePanel.svelte`** — save/load/delete panel + "📤 Compartir URL" share button with "✓ Copiado" feedback.
+- **`src/app/app.css`** — persistence panel CSS using project token conventions.
+- **`tests/persistence.test.ts`** — 27 unit tests covering all schema, serialize, deserialize, roundtrip, localStorage, and applyLoadedSession behaviors.
+
+### Acceptance coverage at phase close
+
+| ID | Status |
+|---|---|
+| A-07-01 | covered (unit) |
+| A-07-02 | covered (unit) |
+| A-07-03 | covered (unit) |
+| A-07-04 | covered (unit) |
+| A-07-05 | covered (unit) |
+| A-07-06 | PILOT live-browser |
+| A-07-07 | covered (code) + PILOT live-browser |
+| A-07-08 | PILOT live-browser |
+| A-07-09 | covered (unit) + PILOT live-browser |
+| A-07-10 | covered |
+
+### Test count
+
+- Phase 07 start: 153 tests
+- Phase 07 end: 180 tests (+27)
+
+### Gate commands at phase close
+
+| Command | Result |
+|---|---|
+| `pnpm exec tsc --noEmit` | exit 0 |
+| `pnpm lint` | exit 0 |
+| `pnpm test` | 180 passed |
+| `pnpm build` | exit 0 |
+
+### Partial coverage carried forward
+
+- **A-07-06, A-07-08**: live-system only — require Pilot to open a `#session=` URL in a browser tab and verify clipboard copy. No unit test equivalent possible without a browser.
+- **A-07-07, A-07-09**: unit portion covered; live-browser rendering aspect deferred to Pilot smoke test.
