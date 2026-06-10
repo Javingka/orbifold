@@ -264,10 +264,15 @@ textarea {
 /* ── Composición / arreglo ───────────────────────────────────────────────── */
 /* Prototype lines 251–314 */
 
-/* Tab button — fixed bottom-right of #codeTab, accent border, uppercase label */
+/*
+ * Tab button — fixed bottom-right of #codeTab, accent border, uppercase label.
+ * bottom: 90px — clears the Transport footer (approx. 68–80 px at 1440 wide,
+ * up to ~104 px with progression strip on narrow viewports; 90 px is a safe
+ * clearance for the common single-row footer case). OD-01 resolution: option 1.
+ */
 #compTab {
   position: fixed;
-  bottom: 14px;
+  bottom: 90px;
   left: calc(50% + 130px);
   transform: translateX(-50%);
   z-index: 8;

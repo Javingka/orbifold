@@ -190,11 +190,14 @@
 <style>
   /*
    * Tab button: fixed at bottom-center. Prototype CSS line 237.
-   * Position: fixed; bottom 14px; centered via left:50% + translateX(-50%).
+   * Position: fixed; centered via left:50% + translateX(-50%).
+   * bottom: 90px — clears the Transport footer (approx. 68–80 px at 1440 wide,
+   * up to ~104 px with progression strip on narrow viewports; 90 px is a safe
+   * clearance for the common single-row footer case). OD-01 resolution: option 1.
    */
   #codeTab {
     position: fixed;
-    bottom: 14px;
+    bottom: 90px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 8;

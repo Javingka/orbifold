@@ -93,41 +93,45 @@
     Key selector: root pitch-class, mode, octave.
     Prototype: .field with #melRoot / #melMode / #melOctave selects (lines 370–386).
     On change calls setHarmonyKey(root, mode, octave) (session.ts step 04.2).
+    Step 01.2: hidden in all non-harmony views (Rhythm / Composition / Session).
+    The view-toggle (#viewSeg) above must never be hidden.
   -->
-  <div class="field">
-    <span>clave</span>
+  {#if $sessionStore.view === 'harmony'}
+    <div class="field">
+      <span>clave</span>
 
-    <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
-    <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
-    <select id="melRoot" value={String($sessionStore.harmony.root)} on:change={handleRootChange}>
-      {#each NOTE_NAMES as name, i}
-        <option value={String(i)}>{name}</option>
-      {/each}
-    </select>
+      <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
+      <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
+      <select id="melRoot" value={String($sessionStore.harmony.root)} on:change={handleRootChange}>
+        {#each NOTE_NAMES as name, i}
+          <option value={String(i)}>{name}</option>
+        {/each}
+      </select>
 
-    <!-- Mode select. Prototype: #melMode (lines 373–382). -->
-    <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
-      <option value="major">mayor</option>
-      <option value="minor">menor</option>
-      <option value="dorian">dórico</option>
-      <option value="phrygian">frigio</option>
-      <option value="lydian">lidio</option>
-      <option value="mixolydian">mixolidio</option>
-      <option value="locrian">locrio</option>
-      <option value="harmonic:minor">menor armónica</option>
-    </select>
+      <!-- Mode select. Prototype: #melMode (lines 373–382). -->
+      <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
+        <option value="major">mayor</option>
+        <option value="minor">menor</option>
+        <option value="dorian">dórico</option>
+        <option value="phrygian">frigio</option>
+        <option value="lydian">lidio</option>
+        <option value="mixolydian">mixolidio</option>
+        <option value="locrian">locrio</option>
+        <option value="harmonic:minor">menor armónica</option>
+      </select>
 
-    <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
-    <select
-      id="melOctave"
-      value={String($sessionStore.harmony.octave)}
-      on:change={handleOctaveChange}
-    >
-      <option value="2">2</option>
-      <option value="3">3</option>
-      <option value="4">4</option>
-    </select>
-  </div>
+      <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
+      <select
+        id="melOctave"
+        value={String($sessionStore.harmony.octave)}
+        on:change={handleOctaveChange}
+      >
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+    </div>
+  {/if}
 
   <!-- Spacer: pushes right-side controls to the right. Prototype: .sp (line 388). -->
   <div class="sp"></div>
