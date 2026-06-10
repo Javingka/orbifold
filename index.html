@@ -28,9 +28,13 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Albert+Sans:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
     />
     <!-- First-visit redirect: send new users to the landing page. -->
-    <!-- Skip redirect if a share URL (#session=...) was followed directly. -->
+    <!-- ?enter=1 is set by landing "Entrar" buttons — marks the user as visited. -->
+    <!-- Skip redirect for share URLs (#session=...) and ?enter=1 arrivals. -->
     <script>
-      if (!localStorage.getItem('orbifold.visited') && !location.hash.startsWith('#session=')) {
+      if (location.search.includes('enter=1')) {
+        localStorage.setItem('orbifold.visited', '1');
+        history.replaceState(null, '', location.pathname + location.hash);
+      } else if (!localStorage.getItem('orbifold.visited') && !location.hash.startsWith('#session=')) {
         location.replace('./landing.html');
       }
     </script>
