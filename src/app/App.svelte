@@ -8,7 +8,8 @@
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { sessionStore, requeueLive } from '../state/session.js';
+  import { sessionStore, requeueLive, applyLoadedSession } from '../state/session.js';
+  import { decodeSession } from '../lib/persistence.js';
   import { hudStore } from '../state/hud.js';
   import Header from '../ui/Header.svelte';
   import Transport from '../ui/Transport.svelte';
@@ -241,6 +242,22 @@
     canvas.addEventListener('pointerleave', () => {
       scheduleHideOverlay();
     });
+
+    // ── Step 07.3: URL session restore ────────────────────────────────────
+    // If the URL contains #session=<encoded>, restore the session from the hash.
+    // Silently ignores stale or malformed hashes (decodeSession returns null).
+    // Hash is cleared from the address bar after a successful load so subsequent
+    // reloads don't re-apply the same session.
+    const HASH_PREFIX = '#session=';
+    const hash = window.location.hash;
+    if (hash.startsWith(HASH_PREFIX)) {
+      const encoded = hash.slice(HASH_PREFIX.length);
+      const saved = decodeSession(encoded);
+      if (saved !== null) {
+        applyLoadedSession(saved);
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
   });
 
   // ── Cleanup ────────────────────────────────────────────────────────────────

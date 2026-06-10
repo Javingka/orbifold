@@ -183,10 +183,99 @@ None.
 
 ### Planner Review
 
-(To be filled by Planner in review mode)
+**Planner Review:** APPROVED on 2026-06-09. Iteration: 1 of 5.
+All 5 in-scope acceptance IDs (A-07-01 through A-07-05) covered by 27 specific unit tests; tsc/lint/test all pass (180 tests, ≥165 threshold); implementation matches spec exactly including schema structure, serialize/deserialize contracts, applyLoadedSession ID assignment and out-of-range guard, and localStorage helpers.
+
+**Next action:** Dev proceeds to step 07.3
 
 ---
 
 **Terminal commit:** `feat(persistence): Phase 07 step 07.2 — session schema, serialize/deserialize, and localStorage helpers`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 07.3 — URL encoding init on app mount
+
+**Date:** 2026-06-09
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `import { applyLoadedSession }` to the existing `session.js` import in `App.svelte`.
+- Added `import { decodeSession }` from `'../lib/persistence.js'` in `App.svelte`.
+- Added URL session restore block at the end of `onMount`, after the canvas pointer routing setup:
+  - Reads `window.location.hash`, checks for `#session=` prefix.
+  - Extracts the encoded string and calls `decodeSession(encoded)`.
+  - If valid (non-null): calls `applyLoadedSession(saved)` then `window.history.replaceState(null, '', window.location.pathname)` to clear the hash.
+  - Silently ignores invalid/stale hashes (decodeSession returns null — no throw, no alert).
+- No new CSS, no new files, no new dependencies.
+
+### Files touched
+
+- `src/app/App.svelte` — added 2 imports + 12-line URL restore block in `onMount`
+- `docs/orbifold-v1/handoffs/phase-07-handoff.md` — this entry
+
+### Prototype parity citations
+
+Not applicable — this phase is new functionality with no prototype equivalent.
+
+### Validation evidence (per Acceptance ID)
+
+- A-07-06: URL restore logic is in place — `window.location.hash` checked, `decodeSession` called, `applyLoadedSession` called on success, hash cleared via `replaceState`. Live-system confirmation deferred to 07.5.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors, all files Prettier-clean
+- `pnpm test` → 180 passed (unchanged from step 07.2)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-07-01 | Schema validates/rejects correctly | `tests/persistence.test.ts` | unit | covered (step 07.2, unchanged) |
+| A-07-02 | serializeSession excludes ephemeral fields | `tests/persistence.test.ts` | unit | covered (step 07.2, unchanged) |
+| A-07-03 | Roundtrip with fresh IDs | `tests/persistence.test.ts` | unit | covered (step 07.2, unchanged) |
+| A-07-04 | localStorage roundtrip | `tests/persistence.test.ts` | unit | covered (step 07.2, unchanged) |
+| A-07-05 | encode/decode roundtrip | `tests/persistence.test.ts` | unit | covered (step 07.2, unchanged) |
+| A-07-06 | URL `#session=<encoded>` reconstructs session; hash cleared | smoke test 07.5 | live-system | partial — logic wired and type-checked; live-system deferred to 07.5 |
+| A-07-07 | Sesiones panel: save/list/load/delete | smoke test 07.5 | live-system | not covered — deferred to 07.4/07.5 |
+| A-07-08 | Share URL copies to clipboard; shows feedback | smoke test 07.5 | live-system | not covered — deferred to 07.4/07.5 |
+| A-07-09 | All A-06 behaviors intact | existing tests + smoke 07.5 | unit + live-system | partial — 180 unit tests pass; live-system confirmed 07.5 |
+| A-07-10 | tsc/lint/test(≥165)/build all exit 0 | gate commands | proxy:static-analysis + unit | partial — tsc/lint/test confirmed (180); build confirmed 07.5 |
+
+**Proxy disclosures:** A-07-10 uses `proxy:static-analysis` for tsc and lint.
+
+### Decisions made (if any)
+
+- URL restore placed at the end of `onMount` (after canvas pointer routing) so the session is applied after PIXI scenes are built and the store subscription is wired — ensuring the store update triggers the reactive scene update immediately.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 180 tests passing (unchanged).
+- `src/app/App.svelte` wired to restore session from `#session=` hash on mount.
+
+### Next-step context (only if non-obvious)
+
+- Step 07.4 adds `PersistencePanel.svelte` which generates the share URL via `encodeSession(get(sessionStore))` and constructs `${window.location.origin}${window.location.pathname}#session=${encoded}`. App.svelte only needs to mount `<PersistencePanel />` — no further URL-related changes needed there.
+
+### Planner Review
+
+(To be filled by Planner in review mode)
+
+---
+
+**Terminal commit:** `feat(persistence): Phase 07 step 07.3 — URL session restore on app mount`
   - Hash: self-referential — not recorded
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
