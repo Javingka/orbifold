@@ -366,3 +366,94 @@ None. The ledger-line algorithm inconsistency in the spec (exact contract vs. ge
 - `pnpm lint` exits 0.
 - `src/core/harmony/staff-map.ts` committed; `tests/harmony/staff-map.test.ts` committed.
 - `src/core/harmony/time-map.ts` not yet written (step 05.5).
+
+**Planner Review:** ESCALATED on 2026-06-11. Iteration: 1 of 5. See blocker file.
+**Next action:** Pilot review required before step 05.5, reason: spec-level defect in ledger-line algorithm requires Pilot decision (see `docs/orbifold-v2/blockers/phase-05-blocker-staff-ledger-line-algorithm.md`)
+
+---
+
+## Step 05.4 — `staff-map.ts` + tests (REVISE — iteration 2)
+
+**Date:** 2026-06-11
+**Commit(s):**
+- `fix(harmony): Phase 05 step 05.4 — diatonic staff coordinate (REVISE, resolves blocker)`
+
+**Iteration:** 2 of 5
+**Note:** This is the REVISE re-execution. The Pilot resolved the ESCALATE blocker (option B — diatonic vertical coordinate), the Planner amended the spec, and this entry replaces the chromatic implementation from iteration 1.
+
+### Completed
+
+- Replaced `src/core/harmony/staff-map.ts` with diatonic implementation:
+  - Exported constants: `TREBLE_STAFF_LINES = [2, 4, 6, 8, 10]`, `STAFF_BOTTOM = 2`, `STAFF_TOP = 10`.
+  - `steps` is now a diatonic integer (C4=0, one unit per letter-name, ±7 per octave). Accidentals do NOT change `steps`.
+  - `DIATONIC_PC = {C:0, D:1, E:2, F:3, G:4, A:5, B:6}`.
+  - `noteToSteps(noteName)` internal helper: `diatonicPc + (octave - 4) * 7`.
+  - `computeLedgerLines(steps)`: below-staff walk from k=0 (STAFF_BOTTOM−2) down by 2 while k≥steps; above-staff walk from k=12 (STAFF_TOP+2) up by 2 while k≤steps; on-staff → `[]`.
+  - `accidental` extracted from note name (`noteName.includes('#') ? '#' : ''`); flat input normalised to `''`.
+  - AGPL-3.0 header. TS strict. No `any`. No non-null assertions. No DOM/PIXI/Svelte imports.
+- Replaced `tests/harmony/staff-map.test.ts` with 73 tests using exact `toEqual` contracts (not `toContain`).
+  - All 13 spec golden cases covered with full `toEqual` object assertions.
+  - Additional cases: B3, A3, G3, F3, E3, D3 (below-staff series), C6 (above-staff), F#4 (on-staff with sharp), Bb3 (flat robustness).
+
+### Prototype parity
+
+`noteToStaffPosition` receives note names in the format produced by `chordVoicing` and `VoiceEvent.noteName`, which use `NOTE_NAMES` from `src/core/theory/pitch.ts` (ported from `reference/orbifold.html` line 592). `NOTE_NAMES` is a sharp-only array; the `accidental` field in `StaffPosition` is `'#'` or `''` for all production voicings. Flat input is handled gracefully (Bb3 → steps=−1, accidental='') per the spec's robustness requirement. No equivalent staff-map logic exists in the prototype (this is new infrastructure); note-name format compatibility is the parity claim.
+
+### Diatonic coordinate rationale
+
+Per the vigent rule in `docs/orbifold-v2/decisions.md` ("Staff vertical coordinate is diatonic, not chromatic"):
+- Diatonic `steps` ensures equidistant staff lines (every 2 diatonic units) and correct sharp placement (F#3 and F3 share `steps=−4`).
+- The `k−=2` ledger walk now walks over real diatonic positions: 0 (C4), −2 (A3), −4 (F3), −6 (D3), −8 (B2) — which are exactly the real treble-clef ledger-line positions.
+- Spaces (odd diatonic steps: B3=−1, G3=−3, E3=−5, C3=−7) correctly get no ledger line at their own position; only the ledger lines walked to above them are included.
+
+### Files touched
+
+- `src/core/harmony/staff-map.ts` — replaced (diatonic implementation)
+- `tests/harmony/staff-map.test.ts` — replaced (toEqual contracts, 73 tests)
+- `docs/orbifold-v2/handoffs/phase-05-handoff.md` — step 05.4 REVISE entry appended
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint + Prettier).
+- `pnpm exec vitest run tests/harmony/staff-map.test.ts` — 73/73 tests pass.
+- `pnpm test` — 294/294 tests pass (221 prior + 73 new; exceeds minimum of 226).
+- `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/staff-map.ts` — 0 matches (A-05-11 maintained).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-05-01 | `computeVoiceTracks([], 3)` returns three tracks with 0 events | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-02 | Single-chord C major → voice-0=C3, voice-1=E3, voice-2=G3 | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-03 | C major → C minor: E3 moves to D#3; C3, G3 unchanged | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-04 | bars=[2, 0.5] → chord-0 startCycle=0, bars=2; chord-1 startCycle=2, bars=0.5 | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-05 | `noteToStaffPosition('C4')` → `{ steps: 0, accidental: '', ledgerLines: [0] }` (diatonic; exact `toEqual`) | `tests/harmony/staff-map.test.ts` | unit | **covered** — toEqual `[0]` |
+| A-05-06 | `noteToStaffPosition('G4')` → `{ steps: 4, accidental: '', ledgerLines: [] }` (diatonic; on-staff) | `tests/harmony/staff-map.test.ts` | unit | **covered** — toEqual `[]` |
+| A-05-07 | `noteToStaffPosition('F#3')` → `{ steps: -4, accidental: '#', ledgerLines: [0, -2, -4] }` (diatonic; exact `toEqual`) | `tests/harmony/staff-map.test.ts` | unit | **covered** — toEqual `[0,-2,-4]` |
+| A-05-08 | `cycleToPosition(0,4,'linear')` → x=0; `(1,4,'linear')` → x=48 | `tests/harmony/time-map.test.ts` | unit | not covered — deferred to step 05.5 |
+| A-05-09 | `cycleToPosition(0,4,'orbital')` → angle=-π/2; `(2,4,'orbital')` → angle=π/2 | `tests/harmony/time-map.test.ts` | unit | not covered — deferred to step 05.5 |
+| A-05-10 | `cycleToPosition` does not produce NaN when totalCycles=0 | `tests/harmony/time-map.test.ts` | unit | not covered — deferred to step 05.5 |
+| A-05-11 | No `src/core/` file imports pixi.js, svelte, or DOM-only modules | grep | proxy:static-analysis | **covered** (0 matches, including new staff-map.ts) |
+| A-05-12 | ADR 0011 committed with Status: Accepted, recording D1–D4 | `docs/adr/0011-harmony-view-architecture.md` | proxy:static-analysis | **covered** (step 05.2) |
+| A-05-13 | All quality gates: tsc 0, lint 0, tests ≥235, build 0 | all | automated | partial — tests at 294 (≥226 required for this step); full gate (≥235, build) deferred to step 05.5 |
+
+### Decisions made (if any)
+
+None — implementation follows the Pilot's vigent rule (diatonic coordinate) and amended spec exactly.
+
+### Proposed Decisions Register entries (if any)
+
+None. The vigent rule ("Staff vertical coordinate is diatonic, not chromatic") is already recorded in `docs/orbifold-v2/decisions.md` by the Pilot.
+
+### Blockers resolved during this step (if any)
+
+`docs/orbifold-v2/blockers/phase-05-blocker-staff-ledger-line-algorithm.md` — Resolution: the Pilot chose Option B (diatonic vertical coordinate). This REVISE re-execution implements that decision. Blocker status: RESOLVED.
+
+### Environment state after this step
+
+- 294 tests passing (10 test files; prior 221 + 73 new).
+- `tsc --noEmit` exits 0.
+- `pnpm lint` exits 0.
+- `src/core/harmony/staff-map.ts` (diatonic) committed; `tests/harmony/staff-map.test.ts` (73 toEqual tests) committed.
+- `src/core/harmony/time-map.ts` not yet written (step 05.5).
