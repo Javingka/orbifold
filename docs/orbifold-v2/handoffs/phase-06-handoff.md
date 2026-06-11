@@ -129,3 +129,87 @@ None.
 ### Next-step context
 
 Step 06.2 writes `docs/adr/0012-rest-data-model.md` — a recording ADR (Status: Accepted, Date: 2026-06-11) for the five locked design decisions (D1–D5). No deliberation required; the spec text in the phase file provides the exact content verbatim (including Consequences section with 6 downstream impacts).
+
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action:** Pilot approval required before step 06.2, reason: step 06.2 is Pilot Checkpoint #2 (ADR authoring — all five D1–D5 decisions must be locked by Pilot before Dev writes ADR 0012).
+
+---
+
+## Step 06.2 — ADR 0012: rest data model + Strudel silence codegen
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- **Terminal commit:** `docs(adr): Phase 06 step 06.2 — ADR 0012 rest data model and silence codegen`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/orbifold-v2/inventories/phase-06-inventory.md`, `docs/adr/0010-variable-chord-duration.md`, `docs/adr/0011-harmony-view-architecture.md`.
+- Wrote `docs/adr/0012-rest-data-model.md` — Status: Accepted, Date: 2026-06-11, Deciders: Pilot (Javier).
+- Five decisions recorded: D1 (`RestSlot` discriminated union), D2 (`arrange()` forced by any rest), D3 (`[bars, silence]` segment format), D4 (no session version bump; agent `SCHEMA_VERSION` → 2), D5 ("Add Rest" button in ProgressionStrip).
+- Consequences section records all six downstream implementation impacts (session.ts, strudel.ts, voice-tracks.ts, persistence.ts, schema.ts, apply.ts).
+- No source code written.
+
+### Files touched
+
+- `docs/adr/0012-rest-data-model.md` — created
+- `docs/orbifold-v2/handoffs/phase-06-handoff.md` — this file (step 06.2 entry appended)
+
+### Validation evidence (per Acceptance ID)
+
+No Acceptance IDs are directly covered by this step (ADR authoring step only — no source code written). ADR 0012 defines the contracts that steps 06.3–06.5 will implement and test.
+
+### Routine validations
+
+No source code written; no build/test/lint runs required for this step.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-06-01 | `melodyLine([{ isRest: true, bars: 2 }], 'chord', 3)` returns `'arrange(\n  [2, silence]\n)'` | `tests/codegen.test.ts` | unit | not covered — deferred to step 06.3 |
+| A-06-02 | Mixed progression `[C maj, rest 1 bar, F maj]` emits `arrange()` with `[1, silence]` at rest position | `tests/codegen.test.ts` | unit | not covered — deferred to step 06.3 |
+| A-06-03 | Chord-only progression all `bars === 1` still emits slowcat `<…>` (regression guard) | `tests/codegen.test.ts` | unit | not covered — deferred to step 06.3 |
+| A-06-04 | `computeVoiceTracks([C maj, rest 1 bar, A min], 3)` → `VoiceRestEvent` at slotIndex 1; A min uses perm `[1,2,0]` (same as direct C maj → A min) | `tests/harmony/voice-tracks.test.ts` | unit | not covered — deferred to step 06.3 |
+| A-06-05 | Session with rest slot round-trips through serialize → JSON → parse → deserialize | `tests/persistence.test.ts` | unit | not covered — deferred to step 06.4 |
+| A-06-06 | Version-1 session JSON (chord-only) parses against updated `SavedSessionSchema` | `tests/persistence.test.ts` | unit | not covered — deferred to step 06.4 |
+| A-06-07 | Agent payload with mixed progression validates; `applyHarmonySpec` produces `[Chord, RestSlot]` in store | `tests/schema.test.ts` | unit | not covered — deferred to step 06.4 |
+| A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | `src/agent/schema.ts` | proxy:static-analysis | not covered — deferred to step 06.4 |
+| A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | `src/ui/ProgressionStrip.svelte` | manual | not covered — deferred to step 06.5 |
+| A-06-10 | "+ rest" button appends `RestSlot`; playing harmony with rest produces silence; Strudel drawer shows `silence` | `src/ui/ProgressionStrip.svelte` + store | live-system | not covered — deferred to step 06.5 |
+| A-06-11 | `tsc 0`, `lint 0`, `pnpm test ≥ 325`, `pnpm build 0` | all | automated | not covered — deferred to step 06.5 |
+
+**Notes on partial coverage:** This step is a documentation-only step (ADR authoring). All eleven Acceptance IDs are deferred to their respective implementation steps (06.3, 06.4, 06.5).
+
+**Proxy disclosures:** A-06-08 uses `proxy:static-analysis` — the value `SCHEMA_VERSION = 2` will be verified by reading `src/agent/schema.ts` line 13 after step 06.4 implementation.
+
+### Decisions made (if any)
+
+None — all five decisions (D1–D5) are pre-locked by the Pilot per the phase spec. This step records them verbatim.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 307 tests passing (unchanged from Phase 05 close and step 06.1).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0 (unchanged).
+- No source code changed.
+- `docs/adr/0012-rest-data-model.md` committed.
+
+### Next-step context
+
+Step 06.3 implements `RestSlot` and `ProgressionSlot` in `session.ts`, updates `melodyLine()` and `buildSession()` in `strudel.ts`, and adds `VoiceRestEvent` + rest branch in `voice-tracks.ts`. All three files have extension points explicitly marked in their Phase 06 comments (confirmed in inventory §7). Callers of `computeVoiceTracks` and `melodyLine` pass chord-only arrays today; the widened `(ChordInput | RestInput)[]` / `ReadonlyArray<HarmonySlotInput>` types maintain subtype compatibility — no callers require updating.
+
+**Planner Review:**
+
+(To be filled by the Planner in review mode.)
