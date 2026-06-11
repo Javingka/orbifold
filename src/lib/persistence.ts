@@ -30,7 +30,7 @@ const SavedChordSchema = z.object({
   rootPc: z.number().int().min(0).max(11),
   qual: z.enum(SK_QUAL),
   gain: z.number().min(0).max(1.2),
-  bars: z.number().min(0.5).max(8).optional(),
+  bars: z.number().min(0.25).max(8).optional(),
 });
 
 const SavedHarmonySchema = z.object({

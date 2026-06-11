@@ -209,3 +209,123 @@ Step 03.3 implements the four changed sites identified in the amendment. It must
 
 **Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
 **Next action:** Dev proceeds to step 03.3.
+
+---
+
+## Step 03.3 — Granularity change: clampBars 0.25, Zod schemas, gesture rounding
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- **Terminal commit:** `feat(harmony): Phase 03 step 03.3 — clampBars 0.25 granularity, Zod schemas, gesture rounding, barsLabel quarters`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0010-variable-chord-duration.md` (including Phase 03 amendment), `src/state/session.ts`, `src/lib/persistence.ts`, `src/agent/schema.ts`, `src/ui/ProgressionStrip.svelte`.
+- Implemented all four targeted changes as specified.
+- Added `barsLabel` as an exported function in `src/state/session.ts` (shared with tests) and imported it into `ProgressionStrip.svelte` (replacing the local copy).
+- Added unit tests in `tests/session.test.ts`: 5 `clampBars` tests (A-03-06), 8 `barsLabel` tests (A-03-07), 3 `SavedChordSchema` backward-compat tests (A-03-08).
+- All four quality gates pass: `tsc --noEmit` 0 errors, `pnpm lint` 0 errors, `pnpm test` 203 passing, `pnpm build` exits 0.
+- AGPL-3.0 headers intact on all touched files.
+- TS strict: no `any`, no `@ts-ignore`.
+
+### Changes made
+
+| Site | Change |
+|---|---|
+| `clampBars()` in `src/state/session.ts` | `Math.round(bars * 2) / 2` → `Math.round(bars * 4) / 4`; lower clamp `0.5` → `0.25`; JSDoc updated |
+| `Chord.bars` JSDoc in `src/state/session.ts` | "multiples of 0.5; min 0.5" → "multiples of 0.25; min 0.25" |
+| `setChordBars` JSDoc in `src/state/session.ts` | Updated clamp range references |
+| `barsLabel()` in `src/state/session.ts` | NEW export: handles ¼×, ½×, ¾×, 1¼×, etc. using lookup table indexed by `Math.round((bars % 1) * 4)` |
+| `SavedChordSchema.bars` in `src/lib/persistence.ts` | `.min(0.5)` → `.min(0.25)` |
+| `HarmonyChordSchema.bars` in `src/agent/schema.ts` | `.min(0.5)` → `.min(0.25)`; JSDoc updated "multiples of 0.5" → "multiples of 0.25" |
+| `handleResizePointerMove` in `src/ui/ProgressionStrip.svelte` | `Math.round(rawBars * 2) / 2` → `Math.round(rawBars * 4) / 4`; lower clamp `0.5` → `0.25` |
+| `barsLabel` import in `src/ui/ProgressionStrip.svelte` | Now imported from `session.ts` (local copy removed) |
+| `tests/session.test.ts` | Added `barsLabel` import, `SavedSessionSchema` import; added 16 new tests |
+
+### Design note: `barsLabel` extracted to `session.ts`
+
+The `barsLabel` function was local to `ProgressionStrip.svelte` (a Svelte component) in Phase 02.
+To make it directly unit-testable without Svelte component infrastructure, it was extracted to
+`src/state/session.ts` as an exported pure function, and `ProgressionStrip.svelte` now imports it.
+This is consistent with the existing pattern (`clampBars` also lives in `session.ts`). No DOM/PIXI
+imports are introduced — the function is pure and Node-safe.
+
+### Prototype parity
+
+No prototype equivalent — this is a new feature introduced in Phase 02 (ADR 0010) and refined in Phase 03 (ADR 0010 amendment). No parity citation required.
+
+### Files touched
+
+- `src/state/session.ts` — `clampBars` rounding + lower bound; `Chord.bars` JSDoc; `setChordBars` JSDoc; `barsLabel` exported function added
+- `src/lib/persistence.ts` — `SavedChordSchema.bars` `.min(0.5)` → `.min(0.25)`
+- `src/agent/schema.ts` — `HarmonyChordSchema.bars` `.min(0.5)` → `.min(0.25)`; JSDoc updated
+- `src/ui/ProgressionStrip.svelte` — `handleResizePointerMove` rounding + lower clamp; `barsLabel` local copy removed, imported from `session.ts`; comment block updated
+- `tests/session.test.ts` — `barsLabel` + `SavedSessionSchema` imports; 16 new tests
+- `docs/orbifold-v2/handoffs/phase-03-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Test name / evidence |
+|---|---|
+| A-03-05 (partial) | `handleResizePointerMove` lower clamp changed from `0.5` to `0.25` — gesture cannot go below 0.25 |
+| A-03-06 | `tests/session.test.ts` › `clampBars — 0.25 granularity`: 5 tests all pass |
+| A-03-07 | `tests/session.test.ts` › `barsLabel — quarter fractions`: 8 tests all pass |
+| A-03-08 | `tests/session.test.ts` › `SavedChordSchema backward-compat`: 3 tests all pass |
+| A-03-11 | `tsc --noEmit` 0 errors, `pnpm lint` 0 errors, `pnpm test` 203 passing (≥192), `pnpm build` exits 0 |
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` — 0 errors
+- `pnpm lint` — 0 errors (ESLint + Prettier both clean)
+- `pnpm test` — 203 passed (187 prior + 16 new); 0 failures; 0 regressions
+- `pnpm build` — exits 0 (1 pre-existing dynamic/static import warning; not new)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | `#sessionsBtn` does not overlap last resize handle | — | manual | not covered — deferred to step 03.4 |
+| A-03-02 | 2-cycle chord visibly ≥2× wider than 1-cycle; 0.25-cycle ≈¼ width | — | manual | not covered — deferred to step 03.4 |
+| A-03-03 | Numbered ruler visible and aligned | — | manual | not covered — deferred to step 03.4 |
+| A-03-04 | Bar lines heavier than beat lines; optional half-bar intermediate | — | manual | not covered — deferred to step 03.4 |
+| A-03-05 | Minimum resize gesture reach is 0.25 | `handleResizePointerMove` clamp | manual+code | partially covered — rounding/clamp changed; full gesture verification deferred to step 03.4 |
+| A-03-06 | `clampBars(0.1)→0.25`, `clampBars(0.25)→0.25`, `clampBars(0.4)→0.5`, `clampBars(8.1)→8` | `tests/session.test.ts` | unit | **covered** |
+| A-03-07 | `barsLabel(0.25)→¼×`, `barsLabel(0.75)→¾×`, `barsLabel(1.25)→1¼×` | `tests/session.test.ts` | unit | **covered** |
+| A-03-08 | Session with `bars: 0.5` loads; `SavedChordSchema.safeParse(...)` succeeds | `tests/session.test.ts` | unit | **covered** |
+| A-03-09 | All strip interactions intact (gain drag, tap-preview, remove, keyboard) | — | manual | not covered — deferred to step 03.4 |
+| A-03-10 | Ruler and segments scroll in sync | — | manual | not covered — deferred to step 03.4 |
+| A-03-11 | All quality gates pass: `tsc --noEmit` 0 errors, `pnpm lint` 0 errors, `pnpm test` ≥192, `pnpm build` exits 0 | all | automated | **covered** (203 tests) |
+
+### Decisions made (if any)
+
+`barsLabel` extracted to `session.ts` as an exported pure function (rather than kept in ProgressionStrip.svelte) to enable direct unit testing in Node/Vitest without Svelte component infrastructure. This is consistent with the existing pattern for `clampBars`.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 203 tests passing (up from 187 — 16 new tests added).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `clampBars` rounds to nearest 0.25 and clamps to [0.25, 8].
+- `SavedChordSchema.bars` and `HarmonyChordSchema.bars` accept 0.25.
+- Resize gesture in `ProgressionStrip.svelte` snaps to 0.25-cycle steps.
+- `barsLabel` returns `¼×`, `½×`, `¾×` for quarter fractions.
+
+### Next-step context (only if non-obvious)
+
+Step 03.4 completes the layout relocation (moving ProgressionStrip to its own row above Transport), absolute grid model (`PX_PER_CYCLE = 48`), hierarchical gridlines, and numbered ruler. The `handleResizePointerMove` function will be updated in step 03.4 to replace the dynamic `pixelsPerBar` computation with the constant `PX_PER_CYCLE`.
+
+### Planner Review
+
+(Filled by the Planner in review mode)

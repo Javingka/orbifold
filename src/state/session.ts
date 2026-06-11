@@ -77,19 +77,47 @@ function getAudio(): Promise<AudioModule> {
 // ── Sub-types ──────────────────────────────────────────────────────────────
 
 /**
- * Round `bars` to the nearest 0.5 then clamp to [0.5, 8].
+ * Round `bars` to the nearest 0.25 then clamp to [0.25, 8].
  *
  * Used by `setChordBars` and `apply.ts` to normalise agent- or drag-supplied
  * values before writing to the store.
  *
  * No prototype equivalent — new feature (Phase 02 ADR 0010).
+ * Phase 03 amendment: granularity changed from 0.5 to 0.25 (ADR 0010 amendment).
  *
  * @param bars - Raw bars value (any number).
- * @returns Clamped value; multiples of 0.5 in [0.5, 8].
+ * @returns Clamped value; multiples of 0.25 in [0.25, 8].
  */
 export function clampBars(bars: number): number {
-  const rounded = Math.round(bars * 2) / 2;
-  return Math.max(0.5, Math.min(8, rounded));
+  const rounded = Math.round(bars * 4) / 4;
+  return Math.max(0.25, Math.min(8, rounded));
+}
+
+/**
+ * Return a human-readable duration label for a non-default bars value.
+ *
+ * Format: ¼× for 0.25, ½× for 0.5, ¾× for 0.75, 1¼× for 1.25, etc.
+ * Returns '' when `bars` is `1` or `undefined` — only shown for non-default
+ * durations, to keep the UI clean for the common case.
+ *
+ * Uses a lookup table `['', '¼', '½', '¾']` indexed by
+ * `Math.round((bars % 1) * 4)` to avoid floating-point fragility.
+ *
+ * No prototype equivalent — new feature (Phase 02 ADR 0010).
+ * Phase 03: extended to handle 0.25-step quarter fractions (ADR 0010 amendment).
+ *
+ * @param bars - Duration in Strudel cycles (multiples of 0.25, range [0.25, 8]).
+ * @returns Label string such as `¼×`, `½×`, `¾×`, `1¼×`, or `''` for 1 / undefined.
+ */
+export function barsLabel(bars: number | undefined): string {
+  if (bars === undefined || bars === 1) return '';
+  // Lookup table indexed by quarter-fraction slot (0=none, 1=¼, 2=½, 3=¾).
+  const FRAC: readonly string[] = ['', '¼', '½', '¾'];
+  const whole = Math.floor(bars);
+  const fracIndex = Math.round((bars % 1) * 4);
+  const fracStr = FRAC[fracIndex] ?? '';
+  const wholeStr = whole > 0 ? String(whole) : '';
+  return wholeStr + fracStr + '×';
 }
 
 /**
@@ -108,8 +136,8 @@ export interface Chord {
   /** Tonnetz centroid y when picked; disambiguates wrapped chord instances. Prototype: ch.cy */
   cy?: number;
   /**
-   * Duration in Strudel cycles (default 1; multiples of 0.5; min 0.5, max 8).
-   * Introduced in Phase 02 — ADR 0010.
+   * Duration in Strudel cycles (default 1; multiples of 0.25; min 0.25, max 8).
+   * Introduced in Phase 02 — ADR 0010. Phase 03: granularity 0.5 → 0.25.
    */
   bars?: number;
 }
@@ -729,7 +757,7 @@ export function clearChordAt(index: number): void {
 /**
  * Update the duration of a chord in the progression.
  *
- * Clamps `bars` via `clampBars()` (nearest 0.5, range [0.5, 8]), writes to
+ * Clamps `bars` via `clampBars()` (nearest 0.25, range [0.25, 8]), writes to
  * `harmony.progression[index].bars`, and calls `requeueLive()` so a running
  * harmony engine picks up the new duration at the next cycle boundary.
  *
@@ -738,7 +766,7 @@ export function clearChordAt(index: number): void {
  * No prototype equivalent — new feature (Phase 02 ADR 0010).
  *
  * @param index - Zero-based index into `harmony.progression`.
- * @param bars  - Desired duration in Strudel cycles (clamped to [0.5, 8], nearest 0.5).
+ * @param bars  - Desired duration in Strudel cycles (clamped to [0.25, 8], nearest 0.25).
  */
 export function setChordBars(index: number, bars: number): void {
   sessionStore.update((s) => {

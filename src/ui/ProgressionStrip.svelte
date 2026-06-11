@@ -41,6 +41,10 @@
                           live, pointerup commits via setChordBars(i, newBars).
     Bar count label:      barsLabel(bars) shown only when bars !== 1 (and defined).
 
+  Phase 03 changes (ADR 0010 amendment — 0.25-beat granularity):
+    barsLabel:            extended to ¼×, ¾× labels for quarter fractions.
+    handleResizePointerMove: rounding 0.5→0.25, lower clamp 0.5→0.25.
+
   Visual differences from chips:
     - Phase 01: flex:1 (equal width) instead of flex:0 0 auto (auto-shrink chips).
     - Phase 02: flex: 0 0 {pct}% (proportional to ch.bars).
@@ -67,6 +71,7 @@
     requeueLive,
     playChord,
     setChordBars,
+    barsLabel,
   } from '../state/session.js';
   import { chordLabel } from '../core/theory/chords.js';
   import { diatonicLookup } from '../core/theory/scales.js';
@@ -94,27 +99,6 @@
     } catch {
       return '';
     }
-  }
-
-  /**
-   * Return a human-readable duration label for a non-default bars value.
-   *
-   * Format: ½× for 0.5, 1× for 1, 1½× for 1.5, 2× for 2, etc.
-   * Returns '' when bars is 1 or undefined — only shown for non-default durations,
-   * to keep the UI clean for the common case.
-   *
-   * No prototype equivalent — new feature (Phase 02 ADR 0010).
-   *
-   * @param bars - Duration in Strudel cycles (multiples of 0.5, range [0.5, 8]).
-   */
-  function barsLabel(bars: number | undefined): string {
-    if (bars === undefined || bars === 1) return '';
-    // Format fraction: whole + optional ½
-    const whole = Math.floor(bars);
-    const frac = bars - whole;
-    const fracStr = frac >= 0.4 ? '½' : '';
-    const wholeStr = whole > 0 ? String(whole) : '';
-    return wholeStr + fracStr + '×';
   }
 
   // ── Per-segment drag state ────────────────────────────────────────────────
@@ -310,10 +294,11 @@
    * Pointer move on .resize-handle: update resizeBars[i] live.
    *
    * deltaBars = dx / pixelsPerBar where pixelsPerBar = segmentsWidth / totalBars.
-   * newBars = nearest 0.5, clamped [0.5, 8].
+   * newBars = nearest 0.25, clamped [0.25, 8].
    * Updates resizeBars[] reactively so the segment reflows while dragging.
    *
    * Phase 02, no prototype equivalent (ADR 0010).
+   * Phase 03: rounding changed from 0.5 to 0.25; lower clamp changed from 0.5 to 0.25.
    */
   function handleResizePointerMove(e: PointerEvent, i: number): void {
     if (!resizeActive[i]) return;
@@ -323,8 +308,8 @@
     const pixelsPerBar = totalBars > 0 ? segWidth / totalBars : segWidth;
     const deltaBars = dx / pixelsPerBar;
     const rawBars = resizeStartBars[i] + deltaBars;
-    // Round to nearest 0.5, clamp [0.5, 8].
-    const newBars = Math.max(0.5, Math.min(8, Math.round(rawBars * 2) / 2));
+    // Round to nearest 0.25, clamp [0.25, 8].
+    const newBars = Math.max(0.25, Math.min(8, Math.round(rawBars * 4) / 4));
     resizeBars[i] = newBars;
     // Trigger reactivity so totalBars and segPct recompute.
     resizeBars = [...resizeBars];

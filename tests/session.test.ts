@@ -27,6 +27,9 @@ import {
 } from '../src/core/codegen/strudel.js';
 import type { RhythmLayer } from '../src/core/rhythm/layers.js';
 
+// Persistence schema — used to verify A-03-08 backward-compatibility.
+import { SavedSessionSchema } from '../src/lib/persistence.js';
+
 // Session store module under test.
 import {
   sessionStore,
@@ -39,6 +42,7 @@ import {
   requeueLive,
   setChordBars,
   clampBars,
+  barsLabel,
 } from '../src/state/session.js';
 import type { SessionState, Chord } from '../src/state/session.js';
 
@@ -397,9 +401,133 @@ describe('setChordBars', () => {
         progression: [{ rootPc: 0, qual: 'maj', gain: 0.6 }],
       },
     });
-    setChordBars(0, 2.3); // nearest 0.5 → 2.5, within [0.5,8]
+    setChordBars(0, 2.3); // nearest 0.25 → 2.25, within [0.25,8]
     const after = get(sessionStore);
     expect(after.harmony.progression[0].bars).toBe(clampBars(2.3));
-    expect(after.harmony.progression[0].bars).toBe(2.5);
+    expect(after.harmony.progression[0].bars).toBe(2.25);
+  });
+});
+
+// ── clampBars — Phase 03 granularity 0.25 (A-03-06) ─────────────────────────
+// Acceptance criterion A-03-06: unit tests for the new 0.25-step clamping.
+
+describe('clampBars — 0.25 granularity (A-03-06)', () => {
+  it('returns 0.25 exactly for input 0.25 (no rounding needed)', () => {
+    expect(clampBars(0.25)).toBe(0.25);
+  });
+
+  it('clamps 0.1 to the minimum 0.25 (below lower bound)', () => {
+    expect(clampBars(0.1)).toBe(0.25);
+  });
+
+  it('rounds 0.3 to 0.25 (nearest 0.25)', () => {
+    // Math.round(0.3 * 4) / 4 = Math.round(1.2) / 4 = 1 / 4 = 0.25
+    expect(clampBars(0.3)).toBe(0.25);
+  });
+
+  it('rounds 0.4 to 0.5 (nearest 0.25)', () => {
+    // Math.round(0.4 * 4) / 4 = Math.round(1.6) / 4 = 2 / 4 = 0.5
+    expect(clampBars(0.4)).toBe(0.5);
+  });
+
+  it('clamps 8.1 to 8 (above upper bound)', () => {
+    expect(clampBars(8.1)).toBe(8);
+  });
+});
+
+// ── barsLabel — Phase 03 quarter fractions (A-03-07) ────────────────────────
+// Acceptance criterion A-03-07: unit tests for the new ¼×, ¾×, etc. labels.
+
+describe('barsLabel — quarter fractions (A-03-07)', () => {
+  it('returns ¼× for 0.25', () => {
+    expect(barsLabel(0.25)).toBe('¼×');
+  });
+
+  it('returns ½× for 0.5 (unchanged from Phase 02)', () => {
+    expect(barsLabel(0.5)).toBe('½×');
+  });
+
+  it('returns ¾× for 0.75', () => {
+    expect(barsLabel(0.75)).toBe('¾×');
+  });
+
+  it('returns 1¼× for 1.25', () => {
+    expect(barsLabel(1.25)).toBe('1¼×');
+  });
+
+  it("returns '' for 1 (default — no label shown)", () => {
+    expect(barsLabel(1)).toBe('');
+  });
+
+  it("returns '' for undefined", () => {
+    expect(barsLabel(undefined)).toBe('');
+  });
+
+  it('returns 2× for 2 (whole-number, no fraction)', () => {
+    expect(barsLabel(2)).toBe('2×');
+  });
+
+  it('returns 1½× for 1.5', () => {
+    expect(barsLabel(1.5)).toBe('1½×');
+  });
+});
+
+// ── SavedChordSchema backward-compat — bars: 0.5 (A-03-08) ──────────────────
+// Acceptance criterion A-03-08: a session saved with bars: 0.5 (the old minimum)
+// must still parse successfully against the updated schema (min is now 0.25).
+
+describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
+  it('safeParse succeeds for a chord with bars: 0.5 (old minimum)', () => {
+    const result = SavedSessionSchema.safeParse({
+      version: 1,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: {
+        root: 0,
+        mode: 'major',
+        octave: 3,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 0.5 }],
+      },
+      rhythm: { layers: [] },
+      composition: { blocks: [], tracks: [] },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('safeParse succeeds for a chord with bars: 0.25 (new minimum)', () => {
+    const result = SavedSessionSchema.safeParse({
+      version: 1,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: {
+        root: 0,
+        mode: 'major',
+        octave: 3,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 0.25 }],
+      },
+      rhythm: { layers: [] },
+      composition: { blocks: [], tracks: [] },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('safeParse succeeds for a chord without bars (backward-compat for old sessions)', () => {
+    const result = SavedSessionSchema.safeParse({
+      version: 1,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: {
+        root: 0,
+        mode: 'major',
+        octave: 3,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6 }],
+      },
+      rhythm: { layers: [] },
+      composition: { blocks: [], tracks: [] },
+    });
+    expect(result.success).toBe(true);
   });
 });
