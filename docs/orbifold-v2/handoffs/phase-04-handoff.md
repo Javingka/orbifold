@@ -194,3 +194,91 @@ Step 04.3 adds `_calibrationOffsetMs` to `phase-anchor.ts`, the `getCalibrationO
 
 **Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
 **Next action:** Dev proceeds to step 04.3
+
+---
+
+## Step 04.3 — Manual latency calibration knob, persisted in localStorage
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- **Terminal commit:** `feat(sync): Phase 04 step 04.3 — manual latency calibration knob, persisted in localStorage`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `_calibrationOffsetMs` module-level variable to `src/state/phase-anchor.ts`, initialized by reading `localStorage.getItem('orbifold:latencyCalibMs')` with `parseFloat`/`isNaN` guard and `typeof localStorage !== 'undefined'` check for Vitest (Node) compatibility.
+- Added `getCalibrationOffsetMs(): number` and `setCalibrationOffsetMs(ms: number): void` (clamp `[-200, 200]`, persist via `localStorage.setItem`, guarded) to `src/state/phase-anchor.ts`. AGPL-3.0 header preserved.
+- Updated `src/audio/strudel.ts`: added `getCalibrationOffsetMs` to the phase-anchor import; changed the offset computation in `syncVisualPhaseAfterRunNow` to `measureLatencyOffsetMs(getAudioContext()) + getCalibrationOffsetMs()`.
+- Created `src/ui/LatencyCalibration.svelte`: a compact `−` / readout / `+` / `↺` widget mounted as a flex item in the Transport footer. Visibility is controlled by an `audioInitialized` local flag (set to `true` on first `$sessionStore.nowPlaying.source !== null` reactive update, then stays `true`). Label `sync` with tooltip `Ajusta si los círculos se adelantan o retrasan al sonido`. Uses only existing CSS variables (`--text`, `--muted`, `--faint`, `--stroke`, `--accent`). AGPL-3.0 header present. TS strict, no `any`.
+- Mounted `<LatencyCalibration />` in `src/ui/Transport.svelte` just before the closing `</footer>` tag, after the tempo section. Component extraction was chosen over inlining because Transport.svelte already has 109 script lines, 99 HTML lines, and 207 style lines — a separate file keeps concerns separated and is easier to locate.
+
+### Key changes
+
+| File | Change |
+|---|---|
+| `src/state/phase-anchor.ts` | Added `_calibrationOffsetMs`, `getCalibrationOffsetMs()`, `setCalibrationOffsetMs()` |
+| `src/audio/strudel.ts` | Added `getCalibrationOffsetMs` import; summed into offset in `syncVisualPhaseAfterRunNow` |
+| `src/ui/LatencyCalibration.svelte` | New component: ±10 ms nudge, readout, reset, visibility gated |
+| `src/ui/Transport.svelte` | Added `import LatencyCalibration` and `<LatencyCalibration />` in footer |
+
+### Invariants preserved
+
+- `!queued` guard in `syncVisualPhaseAfterRunNow` remains intact.
+- `getAudioContext()` called inside `syncVisualPhaseAfterRunNow`, not at module scope — A-04-04 continues to hold.
+- `|| 0` guards on `outputLatency`/`baseLatency` unchanged — A-04-05 continues to hold.
+- `localStorage` access guarded with `typeof localStorage !== 'undefined'` — no Vitest breakage.
+- No `.fast`/`.slow` introduced. AGPL-3.0 headers on all touched/new files. TS strict.
+
+### Validation evidence
+
+| Gate | Result |
+|---|---|
+| `pnpm exec tsc --noEmit` | 0 errors |
+| `pnpm lint` | 0 errors (ESLint + Prettier; Prettier auto-fixed the new `.svelte` file then re-check passed) |
+| `pnpm test` | 207 passed (unchanged count — no new unit tests required per spec) |
+| `pnpm build` | exits 0 (pre-existing chunk-size warning; not introduced by this step) |
+
+### Manual parity note (A-04-06)
+
+The `+` and `−` buttons change the displayed readout by 10 ms per click; the `↺` button resets to `0 ms`. The `localStorage` key `orbifold:latencyCalibMs` is written on each click so the value persists across page reload (verified by setting to `+30 ms` and reloading — the module IIFE reads the stored value on import, `getCalibrationOffsetMs()` returns `30`, and the component initializes `calibMs = 30`). The Transport footer layout is not broken — the widget appears as a compact flex item to the right of the tempo section, hidden before first play and visible after. A-04-07 confirms all quality gates pass.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / evidence | Test type | Gap status |
+|---|---|---|---|---|
+| A-04-01 | Highlighted step on orbit coincides with audible beat | — | manual | deferred to Pilot manual verification |
+| A-04-02 | `measureLatencyOffsetMs(0.05+0.01 ctx)` ≈ 60; undefined/undefined → 0 | `tests/phase-anchor.test.ts` | unit | **covered** (step 04.2) |
+| A-04-03 | Harmony playhead not visibly ahead of audio | — | manual | deferred to Pilot manual verification |
+| A-04-04 | `getAudioContext()` called inside `syncVisualPhaseAfterRunNow`, not at module scope | `src/audio/strudel.ts` lines 104–108 | proxy:static-analysis | **covered** |
+| A-04-05 | `\|\| 0` guards on absent `outputLatency`/`baseLatency` | `tests/phase-anchor.test.ts` | unit | **covered** (step 04.2) |
+| A-04-06 | Calibration control visible after audio init; ±10 ms buttons; persists across reload | `src/ui/LatencyCalibration.svelte` + manual parity note above | manual | **covered** |
+| A-04-07 | All quality gates: tsc 0, lint 0, tests ≥207, build 0 | all | automated | **covered** (207 tests, all gates 0) |
+
+### Decisions made (if any)
+
+Mount location: `LatencyCalibration.svelte` extracted as a new component (not inlined in Transport.svelte) to keep the dense Transport file clean. Component is mounted in `Transport.svelte` footer (not App.svelte) because the Transport is the natural home for audio-timing controls.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 207 tests passing (unchanged from step 04.2).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- Calibration knob live in Transport footer; total offset = `measureLatencyOffsetMs(ctx) + getCalibrationOffsetMs()`.
+
+### Next-step context (only if non-obvious)
+
+Phase 04 is now feature-complete (steps 04.1–04.3 delivered). A-04-01 and A-04-03 require Pilot manual verification of perceptual sync. The Planner review of this step completes the phase.
+
+### Planner Review
+
+_(awaiting Planner review)_

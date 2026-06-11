@@ -64,7 +64,11 @@ import {
   getAudioContext,
 } from '@strudel/web';
 import type { Cyclist } from '@strudel/web';
-import { anchorVisualPhase, measureLatencyOffsetMs } from '../state/phase-anchor.js';
+import {
+  anchorVisualPhase,
+  measureLatencyOffsetMs,
+  getCalibrationOffsetMs,
+} from '../state/phase-anchor.js';
 
 // ── Module-level state ────────────────────────────────────────────────────────
 // Mirrors prototype globals (lines 582–585), scoped to this module.
@@ -101,7 +105,7 @@ function syncVisualPhaseAfterRunNow(queued: boolean): void {
     // suspenders; in practice syncVisualPhaseAfterRunNow is only reachable after
     // audioReady = true, so getAudioContext() returns the live instance).
     try {
-      const offsetMs = measureLatencyOffsetMs(getAudioContext());
+      const offsetMs = measureLatencyOffsetMs(getAudioContext()) + getCalibrationOffsetMs();
       anchorVisualPhase(offsetMs);
     } catch {
       anchorVisualPhase(0);

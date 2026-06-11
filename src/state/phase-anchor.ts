@@ -6,6 +6,15 @@
 
 let _anchorMs = performance.now();
 
+// ── Manual calibration offset (step 04.3) ────────────────────────────────────
+// User-adjustable fine-tune stored in localStorage so it survives page reload.
+// Guards on typeof localStorage !== 'undefined' for Vitest (Node) compatibility.
+let _calibrationOffsetMs: number = (() => {
+  if (typeof localStorage === 'undefined') return 0;
+  const v = parseFloat(localStorage.getItem('orbifold:latencyCalibMs') ?? '');
+  return isNaN(v) ? 0 : v;
+})();
+
 /** Milliseconds since epoch used as t=0 for bar-phase playhead math. */
 export function getVisualPhaseAnchor(): number {
   return _anchorMs;
@@ -51,4 +60,25 @@ export function anchorVisualPhase(offsetMs = 0): void {
  */
 export function measureLatencyOffsetMs(ctx: AudioContext): number {
   return ((ctx.outputLatency || 0) + (ctx.baseLatency || 0)) * 1000;
+}
+
+// ── Calibration offset API (step 04.3) ───────────────────────────────────────
+
+/** Returns the current manual calibration offset in milliseconds. */
+export function getCalibrationOffsetMs(): number {
+  return _calibrationOffsetMs;
+}
+
+/**
+ * Set the manual calibration offset (clamped to [-200, 200] ms).
+ *
+ * Persists the value in localStorage under the key
+ * `'orbifold:latencyCalibMs'` so it survives page reload.
+ * The localStorage write is guarded for Vitest (Node) compatibility.
+ */
+export function setCalibrationOffsetMs(ms: number): void {
+  _calibrationOffsetMs = Math.max(-200, Math.min(200, ms));
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('orbifold:latencyCalibMs', String(_calibrationOffsetMs));
+  }
 }

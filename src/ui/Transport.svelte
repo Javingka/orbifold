@@ -29,6 +29,7 @@
     hushAll,
     setBpm,
   } from '../state/session.js';
+  import LatencyCalibration from './LatencyCalibration.svelte';
 
   // ── BPM conversion helpers ─────────────────────────────────────────────────
   // Prototype: cpsToBpm (line 644), bpmToCps (line 645).
@@ -197,6 +198,9 @@
       TAP
     </button>
   </div>
+
+  <!-- Latency calibration nudge widget (step 04.3). Visible after first play. -->
+  <LatencyCalibration />
 
   <!--
     Progression chips slot (step 04.4): ProgressionChips/ProgressionStrip was
