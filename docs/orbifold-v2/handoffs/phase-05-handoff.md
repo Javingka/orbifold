@@ -548,6 +548,12 @@ Transient issue: apostrophes in `it()` description strings caused esbuild parse 
 - All three harmony engines committed: `voice-tracks.ts`, `staff-map.ts` (diatonic), `time-map.ts`.
 - `src/core/harmony/` contains no DOM/PIXI/Svelte imports (grep: 0 matches).
 
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5. See review file `docs/orbifold-v2/reviews/phase-05-step-05.5-review-1.md`.
+**Next action:** Pilot phase-complete checkpoint
+
+**Pending Register proposals (Pilot decides at phase approval):**
+- PX_PER_CYCLE=48 coordination point — should ADR 0011 Consequence 3 notation suffice, or elevate to a vigent Register entry? Surfaced in step 05.2 (ADR) and step 05.5 (time-map.ts header comment).
+
 ---
 
 ## Phase 05 — Completion
