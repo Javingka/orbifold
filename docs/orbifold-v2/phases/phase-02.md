@@ -73,34 +73,40 @@ CHECKPOINT → Commit message:
 
 ## Step 02.3 — Data model: Chord.bars field and store action setChordBars
 
-PROMPT → Read CLAUDE.md, docs/orbifold-v2/decisions.md, docs/adr/0010-variable-chord-duration.md, `src/state/session.ts` (complete), and `src/lib/persistence.ts` (complete). Add `bars?: number` to the `Chord` interface and add the `setChordBars` store action. Update the persistence Zod schema. Do not touch `src/core/codegen/strudel.ts` or `src/ui/ProgressionStrip.svelte` in this step.
+PROMPT → Read CLAUDE.md, docs/orbifold-v2/decisions.md, docs/adr/0010-variable-chord-duration.md, `src/state/session.ts` (complete), `src/lib/persistence.ts` (complete), `src/agent/schema.ts` (complete), and `src/agent/apply.ts` (complete). Add `bars?: number` to the `Chord` interface, add the `setChordBars` store action, update the persistence Zod schema, and extend the agent schema to support `bars`. Do not touch `src/core/codegen/strudel.ts` or `src/ui/ProgressionStrip.svelte` in this step.
 
 Implementation requirements:
+- **`clampBars` helper** (`src/state/session.ts`): Extract the clamping logic as a named exported pure function `export function clampBars(bars: number): number` — rounds to nearest 0.5 (`Math.round(bars * 2) / 2`) then clamps to `[0.5, 8]`. Used by both `setChordBars` and the agent `apply.ts`.
 - **`Chord` interface** (`src/state/session.ts`): Add `bars?: number` as an optional field. JSDoc: `Duration in Strudel cycles (default 1; multiples of 0.5; min 0.5, max 8). Introduced in Phase 02 — ADR 0010.` Place it after the `cy?` field to minimise diff noise.
-- **`setChordBars` action** (`src/state/session.ts`): New exported function `setChordBars(index: number, bars: number): void`. Clamps `bars` to the nearest multiple of 0.5 in `[0.5, 8]` (round to nearest 0.5: `Math.round(bars * 2) / 2`; then clamp). Updates `harmony.progression[index].bars` in the store via `sessionStore.update`. Calls `requeueLive()` on commit. No-op if `index` is out of range. Include prototype reference comment: `No prototype equivalent — new feature (Phase 02 ADR 0010).`
+- **`setChordBars` action** (`src/state/session.ts`): New exported function `setChordBars(index: number, bars: number): void`. Uses `clampBars(bars)`. Updates `harmony.progression[index].bars` in the store via `sessionStore.update`. Calls `requeueLive()` on commit. No-op if `index` is out of range. Include comment: `No prototype equivalent — new feature (Phase 02 ADR 0010).`
 - **Zod schema** (`src/lib/persistence.ts`): In `SavedChordSchema`, add `bars: z.number().min(0.5).max(8).optional()`. No change to `SESSION_SCHEMA_VERSION` (stays at 1 — additive optional field; existing saved data remains valid per ADR 0010).
-- **`serializeSession`** (`src/lib/persistence.ts`): In the `progression` map, include `...(ch.bars !== undefined ? { bars: ch.bars } : {})` to preserve `bars` when set. Chords where `bars` is `undefined` (the common case) are serialized without the field — existing sessions remain byte-identical.
+- **`serializeSession`** (`src/lib/persistence.ts`): In the `progression` map, include `...(ch.bars !== undefined ? { bars: ch.bars } : {})` to preserve `bars` when set. Chords where `bars` is `undefined` are serialized without the field — existing sessions remain byte-identical.
 - **`applyLoadedSession`** (`src/lib/persistence.ts`): In the `progression.map`, add `...(ch.bars !== undefined ? { bars: ch.bars } : {})` so loaded sessions restore the `bars` value.
-- **`DEFAULT_SESSION_STATE`** (`src/state/session.ts`): No change — the default empty progression `[]` needs no update. The `bars` field defaults to `undefined` (treated as 1 by codegen).
+- **Agent schema** (`src/agent/schema.ts`): In `HarmonyChordSchema`, add `bars: z.number().min(0.5).max(8).optional()`. Add a JSDoc comment on the field: `Duration in Strudel cycles (0.5 = half bar, 1 = one bar, 2 = two bars; multiples of 0.5; default 1).` This allows the AI agent to set chord duration when building a progression.
+- **Agent apply** (`src/agent/apply.ts`): In the mapping from agent chord → `Chord`, add `...(ch.bars !== undefined ? { bars: clampBars(ch.bars) } : {})`. Import `clampBars` from `../state/session.js`. The `clampBars` call here ensures agent-supplied values are always valid even if the LLM produces a non-multiple-of-0.5.
+- **`DEFAULT_SESSION_STATE`** (`src/state/session.ts`): No change — the default empty progression `[]` needs no update.
 - AGPL-3.0 headers intact on all modified files.
-- TS strict: no `any`, no `// @ts-ignore`. `bars` clamping helper may be extracted to a named helper (optional).
+- TS strict: no `any`, no `// @ts-ignore`.
 
 Validation:
 - `pnpm exec tsc --noEmit` — 0 errors.
 - `pnpm lint` — 0 errors.
 - `pnpm test` — all tests pass (count must not regress below 180).
 - `pnpm build` — exits 0.
-- No new tests required for this step (the `Chord` interface change is purely additive; `setChordBars` is a store action that will be exercised by codegen tests in step 02.4).
+- No new tests required for this step (the `Chord` interface change is purely additive; `setChordBars` and agent pass-through will be exercised by codegen tests in step 02.4).
 
 Expected result:
+- `clampBars(bars)` exported from `src/state/session.ts`.
 - `Chord` interface has `bars?: number`.
 - `setChordBars(index, bars)` is exported from `src/state/session.ts`.
 - `SavedChordSchema` validates optional `bars` in `[0.5, 8]`.
 - Serialization round-trips `bars` when set; omits it when undefined.
+- `HarmonyChordSchema` in `src/agent/schema.ts` has optional `bars` field.
+- `apply.ts` maps agent `bars` → `Chord.bars` via `clampBars`.
 - All quality gates pass.
 
 CHECKPOINT → Commit message:
-`feat(harmony): Phase 02 step 02.3 — Chord.bars field, setChordBars action, Zod schema update`
+`feat(harmony): Phase 02 step 02.3 — Chord.bars field, setChordBars action, Zod schema, agent schema`
 
 ---
 
