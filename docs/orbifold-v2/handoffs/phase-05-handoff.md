@@ -172,10 +172,101 @@ None.
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-11
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass; ADR content matches every spec requirement (Status, Date, Deciders, D1–D4 with correct semantics, 5 Consequences including PX_PER_CYCLE coordination and sharp-only note); internally consistent with ADR 0010 and the Decisions Register.
+**Next action:** Dev proceeds to step 05.3
 
-**Decision:**
-**Reviewed on:**
-**Iteration:**
-**Reason:**
-**Next action:**
+---
+
+## Step 05.3 — `voice-tracks.ts` + tests
+
+**Date:** 2026-06-11
+**Commit(s):**
+- `feat(harmony): Phase 05 step 05.3 — voice-tracks engine and tests`
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Created `src/core/harmony/` directory.
+- Created `tests/harmony/` directory.
+- Implemented `src/core/harmony/voice-tracks.ts` with:
+  - Exported types: `VoiceEvent`, `VoiceTrack`.
+  - Local interface `ChordInput` (avoids state/session import).
+  - Internal `parseNote` helper for first-chord octave extraction from `chordVoicing` output.
+  - `computeVoiceTracks(progression, octave)`: empty-progression guard, first-chord assignment from `chordVoicing` (ascending order = voice-0/1/2), subsequent chords via `minimalVoiceLeading` perm → QUAL_INTERVALS[qual][perm[v]] → octave formula + NOTE_NAMES[pc].
+  - AGPL-3.0 header. TS strict. No `any`. No `!` non-null assertions. No DOM/PIXI/Svelte imports.
+  - Phase 06 extension point documented in comments (rest branch location in the loop).
+- Implemented `tests/harmony/voice-tracks.test.ts` with 14 tests covering all seven spec test cases.
+- Fixed lint: replaced `prevPcs!` non-null assertion with `else if (prevPcs !== null)` guard.
+- Fixed Prettier formatting on test file.
+
+### Prototype parity
+
+`computeVoiceTracks` depends on:
+- `minimalVoiceLeading` from `src/core/theory/voice-leading.ts` (ported from `reference/orbifold.html` lines 781–789).
+- `chordVoicing` from `src/core/theory/chords.ts` (ported from `reference/orbifold.html` lines 749–757).
+- `QUAL_INTERVALS` from `src/core/theory/chords.ts` (ported from `reference/orbifold.html` line 742).
+- `NOTE_NAMES` from `src/core/theory/pitch.ts` (ported from `reference/orbifold.html` line 592).
+
+All golden values for P-transform (perm [0,1,2]) and R-transform (perm [1,2,0]) derive from the existing `tests/voice-leading.test.ts` golden assertions, which were originally produced by running the prototype functions in Node. The new tests assert outputs consistent with those golden values: C major → C minor produces D#3 (Eb3 enharmonic, sharp spelling per NOTE_NAMES); C major → A minor with perm [1,2,0] produces C4, E4, A3 (verified by manual calculation in the handoff).
+
+### Key algorithm decisions
+
+1. **`noteName` stores full note string with octave** (e.g., `'C3'`, `'D#3'`) per the spec interface comment. For the first chord, the full string comes from `chordVoicing` directly. For subsequent chords it is constructed as `NOTE_NAMES[pc] + noteOctave`.
+2. **Non-null assertion eliminated**: `prevPcs` starts as `null`; the `else if (prevPcs !== null)` guard is logically equivalent to `i > 0` but satisfies `@typescript-eslint/no-non-null-assertion`.
+3. **`chordPcs` cast**: `chordPcs(rootPc, qual) as [number, number, number]` — `chordPcs` returns `number[]` (per inventory §2); the cast is needed because `minimalVoiceLeading` requires a 3-tuple.
+
+### Files touched
+
+- `src/core/harmony/voice-tracks.ts` — created
+- `tests/harmony/voice-tracks.test.ts` — created
+- `docs/orbifold-v2/handoffs/phase-05-handoff.md` — step 05.3 entry appended
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint + Prettier).
+- `pnpm exec vitest run tests/harmony/voice-tracks.test.ts` — 14/14 tests pass.
+- `pnpm test` — 221/221 tests pass (207 prior + 14 new; exceeds minimum of 214).
+- `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/voice-tracks.ts` — 0 matches (A-05-11 maintained).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-05-01 | `computeVoiceTracks([], 3)` returns three tracks with 0 events | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-02 | Single-chord C major (octave 3) → voice-0=C3, voice-1=E3, voice-2=G3; startCycle=0, bars=1 | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-03 | C major → C minor: voice-1 (E3) moves to D#3 (Eb3 enharmonic); voice-0 (C3) and voice-2 (G3) unchanged | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-04 | bars=[2, 0.5] → chord-0 startCycle=0, bars=2; chord-1 startCycle=2, bars=0.5 | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-05 | `noteToStaffPosition('C4')` → steps=0, ledgerLines contains 0 | `tests/harmony/staff-map.test.ts` | unit | not covered — deferred to step 05.4 |
+| A-05-06 | `noteToStaffPosition('G4')` → steps=7, ledgerLines=[] | `tests/harmony/staff-map.test.ts` | unit | not covered — deferred to step 05.4 |
+| A-05-07 | `noteToStaffPosition('F#3')` → steps=-6, accidental='#', ledgerLines non-empty | `tests/harmony/staff-map.test.ts` | unit | not covered — deferred to step 05.4 |
+| A-05-08 | `cycleToPosition(0,4,'linear')` → x=0; `(1,4,'linear')` → x=48 | `tests/harmony/time-map.test.ts` | unit | not covered — deferred to step 05.5 |
+| A-05-09 | `cycleToPosition(0,4,'orbital')` → angle=-π/2; `(2,4,'orbital')` → angle=π/2 | `tests/harmony/time-map.test.ts` | unit | not covered — deferred to step 05.5 |
+| A-05-10 | `cycleToPosition` does not produce NaN when totalCycles=0 | `tests/harmony/time-map.test.ts` | unit | not covered — deferred to step 05.5 |
+| A-05-11 | No `src/core/` file imports pixi.js, svelte, or DOM-only modules | grep | proxy:static-analysis | **covered** (0 matches, including new voice-tracks.ts) |
+| A-05-12 | ADR 0011 committed with Status: Accepted, recording D1–D4 | `docs/adr/0011-harmony-view-architecture.md` | proxy:static-analysis | **covered** (step 05.2) |
+| A-05-13 | All quality gates: tsc 0, lint 0, tests ≥235, build 0 | all | automated | partial — tests at 221 (≥214 required for this step); full gate (≥235) deferred to step 05.5 |
+
+### Decisions made (if any)
+
+None — implementation follows ADR 0011 D4 exactly.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+Transient lint issue: `@typescript-eslint/no-non-null-assertion` on `prevPcs!`. Resolved by replacing the non-null assertion with an explicit `else if (prevPcs !== null)` guard. No behavioral change.
+
+### Environment state after this step
+
+- 221 tests passing (9 test files, +14 from step 05.3).
+- `tsc --noEmit` exits 0.
+- `pnpm lint` exits 0.
+- `src/core/harmony/voice-tracks.ts` committed; `tests/harmony/voice-tracks.test.ts` committed.
+- `src/core/harmony/staff-map.ts` and `src/core/harmony/time-map.ts` not yet written (steps 05.4 and 05.5).
