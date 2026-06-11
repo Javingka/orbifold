@@ -110,3 +110,72 @@ Step 05.2 writes `docs/adr/0011-harmony-view-architecture.md` — a recording AD
 
 **Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
 **Next action:** Dev proceeds to step 05.2
+
+---
+
+## Step 05.2 — ADR 0011: harmony-view architecture
+
+**Date:** 2026-06-11
+**Commit(s):**
+- **Terminal commit:** `docs(adr): Phase 05 step 05.2 — ADR 0011 harmony-view architecture`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Wrote `docs/adr/0011-harmony-view-architecture.md` with Status: Accepted, Date: 2026-06-11, Deciders: Pilot (Javier).
+- Recorded all four locked Pilot decisions verbatim from the phase spec (D1–D4).
+- No source code written.
+
+### Files touched
+
+- `docs/adr/0011-harmony-view-architecture.md` — created
+- `docs/orbifold-v2/handoffs/phase-05-handoff.md` — step 05.2 entry appended
+
+### Validation evidence (per Acceptance ID)
+
+- **A-05-12:** `docs/adr/0011-harmony-view-architecture.md` exists, has `Status: Accepted`, `Date: 2026-06-11`, `Deciders: Pilot (Javier)`, and sections D1–D4 recording all four harmony-view design decisions.
+
+### Routine validations
+
+No source code written; no build/test/lint runs required for this step.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-05-12 | ADR 0011 committed with Status: Accepted, recording D1–D4 | `docs/adr/0011-harmony-view-architecture.md` | proxy:static-analysis | **covered** |
+
+**Proxy disclosures:** A-05-12 verified by direct inspection of `docs/adr/0011-harmony-view-architecture.md`: Status field reads "Accepted"; Date reads "2026-06-11"; Deciders reads "Pilot (Javier)"; sections D1, D2, D3, D4 present and content-complete.
+
+### Decisions made (if any)
+
+None — recording ADR only. All four decisions are pre-locked by the Pilot.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 207 tests passing (unchanged).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0 (unchanged).
+- No source code changed.
+
+**PILOT CHECKPOINT #2 — ADR.** This step is Pilot Checkpoint #2 (ADR). ADR 0011 is committed and requires Planner review before step 05.3 proceeds.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
