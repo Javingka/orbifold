@@ -189,3 +189,8 @@ None. The floating-point precision issue (`(0.05 + 0.01) * 1000 = 60.00000000000
 ### Next-step context (only if non-obvious)
 
 Step 04.3 adds `_calibrationOffsetMs` to `phase-anchor.ts`, the `getCalibrationOffsetMs`/`setCalibrationOffsetMs` API, updates `syncVisualPhaseAfterRunNow` to sum calibration into the total offset, and adds the Transport nudge control UI. The `!queued` guard and the live `getAudioContext()` call are both already in place — step 04.3 only extends the offset arithmetic.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 04.3
