@@ -157,4 +157,95 @@ None.
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-10. Iteration: 1 of 5.
+**Next action:** Pilot approval required before step 02.3, reason: Pilot Checkpoint #2 — ADR requires Pilot confirmation before implementation proceeds.
+
+---
+
+## Step 02.3 — Data model: Chord.bars field and store action setChordBars
+
+**Date:** 2026-06-10
+**Commit(s):**
+
+- **Terminal commit:** `feat(harmony): Phase 02 step 02.3 — Chord.bars field, setChordBars action, Zod schema, agent schema`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0010-variable-chord-duration.md`, `src/state/session.ts`, `src/lib/persistence.ts`, `src/agent/schema.ts`, `src/agent/apply.ts`.
+- Added `clampBars(bars: number): number` as a named exported pure function in `src/state/session.ts`. Rounds to nearest 0.5 via `Math.round(bars * 2) / 2`, then clamps to `[0.5, 8]`.
+- Added `bars?: number` to the `Chord` interface in `src/state/session.ts` with JSDoc citing Phase 02 ADR 0010. Placed after `cy?` to minimize diff noise.
+- Added `setChordBars(index, bars)` as a new exported function in `src/state/session.ts`. Uses `clampBars`, updates `harmony.progression[index].bars` via `sessionStore.update`, calls `requeueLive()`. No-op if `index` is out of range.
+- Updated `applyLoadedSession` in `src/state/session.ts`: progression map now includes `...(ch.bars !== undefined ? { bars: ch.bars } : {})` so loaded sessions restore `bars`.
+- Added `bars: z.number().min(0.5).max(8).optional()` to `SavedChordSchema` in `src/lib/persistence.ts`. `SESSION_SCHEMA_VERSION` stays at 1 (additive optional field — backward-compatible per ADR 0010).
+- Updated `serializeSession` in `src/lib/persistence.ts`: progression map includes `...(ch.bars !== undefined ? { bars: ch.bars } : {})`. Chords without `bars` serialize without the field — byte-identical to pre-phase saved sessions.
+- Updated `deserializeSession` in `src/lib/persistence.ts`: progression map includes `...(ch.bars !== undefined ? { bars: ch.bars } : {})` for round-trip correctness.
+- Added `bars: z.number().min(0.5).max(8).optional()` to `HarmonyChordSchema` in `src/agent/schema.ts` with JSDoc on the field.
+- Updated `applyHarmonySpec` in `src/agent/apply.ts`: imports `clampBars` from `../state/session.js`; chord build includes `...(c.bars !== undefined ? { bars: clampBars(c.bars) } : {})`.
+- `DEFAULT_SESSION_STATE` is unchanged — empty progression `[]` needs no update.
+- AGPL-3.0 headers intact on all modified files (pre-existing headers, not altered).
+- No new tests required for this step (per spec — `clampBars`/`setChordBars`/agent pass-through will be exercised by codegen tests in step 02.4).
+
+### Files touched
+
+- `src/state/session.ts` — `clampBars` function, `bars?` on `Chord`, `setChordBars` action, `applyLoadedSession` bars pass-through
+- `src/lib/persistence.ts` — `SavedChordSchema` bars field, `serializeSession` bars, `deserializeSession` bars
+- `src/agent/schema.ts` — `HarmonyChordSchema` bars field
+- `src/agent/apply.ts` — `clampBars` import, chord build bars pass-through
+- `docs/orbifold-v2/handoffs/phase-02-handoff.md` — updated (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-02-01:** `Chord.bars?: number` present in interface; `clampBars` enforces [0.5, 8] nearest-0.5; `setChordBars` exported.
+- **A-02-08:** `SavedChordSchema` gains `bars: z.number().min(0.5).max(8).optional()` — existing saved sessions without `bars` parse cleanly (`safeParse` succeeds; `bars` resolves to `undefined`, treated as 1 by codegen).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint + Prettier clean).
+- `pnpm test` — 180 tests pass (count unchanged; no regression).
+- `pnpm build` — exits 0 (pre-existing chunk-size warning, not introduced by this step).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Each chord carries optional `bars` field (multiples of 0.5, min 0.5, max 8, default 1) | — | — | **partially covered** — `Chord.bars` field and `setChordBars`/`clampBars` implemented; full unit coverage deferred to step 02.4 codegen tests |
+| A-02-02 | `melodyLine()` byte-identical when all bars === 1 or undefined | — | — | not covered — deferred to step 02.4 |
+| A-02-03 | `melodyLine()` emits `arrange()` when any chord has bars !== 1 | — | — | not covered — deferred to step 02.4 |
+| A-02-04 | ProgressionStrip renders proportional segment widths | — | manual | not covered — deferred to step 02.5 |
+| A-02-05 | Drag resize handle changes chord bars and calls setChordBars | — | manual | not covered — deferred to step 02.5 |
+| A-02-06 | Resize gesture and gain-drag gesture are fully independent | — | manual | not covered — deferred to step 02.5 |
+| A-02-07 | Prior Phase 01 interactions preserved without regression | — | manual | not covered — deferred to step 02.5 |
+| A-02-08 | Existing saved sessions without `bars` load and play correctly | `tests/persistence.test.ts` | unit (schema safeParse) | **partially covered** — `SavedChordSchema` accepts missing `bars`; full round-trip test deferred to step 02.4 |
+| A-02-09 | All quality gates pass; test count ≥ 184 | all test files | automated | **partially covered** — 180 tests pass; count will reach ≥ 184 after step 02.4 adds codegen tests |
+
+### Decisions made (if any)
+
+- No new decisions beyond ADR 0010 guidance. All implementation choices follow ADR 0010 exactly.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 180 tests passing (unchanged from step 02.2).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `Chord.bars`, `clampBars`, `setChordBars` are now present in the codebase. `melodyLine()` in `src/core/codegen/strudel.ts` does NOT yet consume `bars` — that is step 02.4.
+
+### Next-step context (only if non-obvious)
+
+- Step 02.4 widens `melodyLine()`'s `progression` parameter type to include `bars?: number` and implements the dual-mode codegen logic. It must also add 4 unit tests asserting exact string output for both paths.
+- The `clampBars` export is ready for import in step 02.4's test fixtures.
+
+### Planner Review
+
 (Filled by the Planner in review mode)

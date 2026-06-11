@@ -94,6 +94,8 @@ export const RhythmSpecSchema = z.object({
 /**
  * A single chord in the progression: root note name and quality.
  * `gain` is optional (defaults to 0.6 in apply.ts, prototype line 1714).
+ * `bars` is optional — duration in Strudel cycles (0.5 = half bar, 1 = one bar,
+ * 2 = two bars; multiples of 0.5; default 1). Introduced in Phase 02 — ADR 0010.
  *
  * Prototype §7: `quality ∈ {maj,min,dim,aug}`.
  */
@@ -101,6 +103,8 @@ export const HarmonyChordSchema = z.object({
   root: z.string(),
   quality: z.enum(SK_QUAL),
   gain: z.number().min(0).max(1.2).optional(),
+  /** Duration in Strudel cycles (0.5 = half bar, 1 = one bar, 2 = two bars; multiples of 0.5; default 1). */
+  bars: z.number().min(0.5).max(8).optional(),
 });
 
 // ── HarmonySpec ────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ import { QUAL_INTERVALS } from '../core/theory/chords.js';
 import type { Quality } from '../core/theory/chords.js';
 import type { RhythmLayer, Sound } from '../core/rhythm/layers.js';
 import type { Chord } from '../state/session.js';
-import { sessionStore } from '../state/session.js';
+import { sessionStore, clampBars } from '../state/session.js';
 import type { RhythmSpec, HarmonySpec } from './schema.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -158,6 +158,7 @@ export function applyHarmonySpec(spec: HarmonySpec): void {
           rootPc,
           qual,
           gain: typeof c.gain === 'number' ? c.gain : 0.6, // prototype line 1714
+          ...(c.bars !== undefined ? { bars: clampBars(c.bars) } : {}),
         };
 
         // Suppress unused variable warning — pcs is computed for prototype fidelity

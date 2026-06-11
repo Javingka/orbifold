@@ -30,6 +30,7 @@ const SavedChordSchema = z.object({
   rootPc: z.number().int().min(0).max(11),
   qual: z.enum(SK_QUAL),
   gain: z.number().min(0).max(1.2),
+  bars: z.number().min(0.5).max(8).optional(),
 });
 
 const SavedHarmonySchema = z.object({
@@ -107,6 +108,7 @@ export function serializeSession(state: SessionState): SavedSession {
         qual: ch.qual,
         gain: ch.gain,
         // cx/cy excluded — Decisions Register: render hints ephemeral
+        ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
       })),
     },
     rhythm: {
@@ -166,6 +168,7 @@ export function deserializeSession(saved: SavedSession): Omit<SessionState, 'now
         rootPc: ch.rootPc,
         qual: ch.qual,
         gain: ch.gain,
+        ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
       })),
     },
     rhythm: {

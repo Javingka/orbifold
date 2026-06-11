@@ -77,6 +77,22 @@ function getAudio(): Promise<AudioModule> {
 // ── Sub-types ──────────────────────────────────────────────────────────────
 
 /**
+ * Round `bars` to the nearest 0.5 then clamp to [0.5, 8].
+ *
+ * Used by `setChordBars` and `apply.ts` to normalise agent- or drag-supplied
+ * values before writing to the store.
+ *
+ * No prototype equivalent — new feature (Phase 02 ADR 0010).
+ *
+ * @param bars - Raw bars value (any number).
+ * @returns Clamped value; multiples of 0.5 in [0.5, 8].
+ */
+export function clampBars(bars: number): number {
+  const rounded = Math.round(bars * 2) / 2;
+  return Math.max(0.5, Math.min(8, rounded));
+}
+
+/**
  * A single chord in the progression.
  * `pcs` and `label` are computed by codegen (chordPcs, chordLabel) — NOT stored.
  * `gain` defaults to 0.6 (prototype lines 758–763, melodyLine 765–773).
@@ -91,6 +107,11 @@ export interface Chord {
   cx?: number;
   /** Tonnetz centroid y when picked; disambiguates wrapped chord instances. Prototype: ch.cy */
   cy?: number;
+  /**
+   * Duration in Strudel cycles (default 1; multiples of 0.5; min 0.5, max 8).
+   * Introduced in Phase 02 — ADR 0010.
+   */
+  bars?: number;
 }
 
 /**
@@ -705,6 +726,32 @@ export function clearChordAt(index: number): void {
   requeueLive();
 }
 
+/**
+ * Update the duration of a chord in the progression.
+ *
+ * Clamps `bars` via `clampBars()` (nearest 0.5, range [0.5, 8]), writes to
+ * `harmony.progression[index].bars`, and calls `requeueLive()` so a running
+ * harmony engine picks up the new duration at the next cycle boundary.
+ *
+ * No-op if `index` is out of range.
+ *
+ * No prototype equivalent — new feature (Phase 02 ADR 0010).
+ *
+ * @param index - Zero-based index into `harmony.progression`.
+ * @param bars  - Desired duration in Strudel cycles (clamped to [0.5, 8], nearest 0.5).
+ */
+export function setChordBars(index: number, bars: number): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const clamped = clampBars(bars);
+    const progression = s.harmony.progression.map((ch, i) =>
+      i === index ? { ...ch, bars: clamped } : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
 // ── Step 05.2: Composition action functions ────────────────────────────────
 // Ports the composition library and timeline manipulation from the prototype.
 // Prototype reference: reference/orbifold.html lines 1927–2127.
@@ -1071,6 +1118,7 @@ export function applyLoadedSession(saved: SavedSession): void {
         rootPc: ch.rootPc,
         qual: ch.qual,
         gain: ch.gain,
+        ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
       })),
     },
     rhythm: {
