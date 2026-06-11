@@ -108,3 +108,84 @@ None. The `getAudioContext` ambient declaration gap is a known and scoped task f
 
 **Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
 **Next action:** Dev proceeds to step 04.2
+
+---
+
+## Step 04.2 — Latency-compensated anchor: `measureLatencyOffsetMs` helper and anchor update
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- **Terminal commit:** `fix(sync): Phase 04 step 04.2 — latency-compensated phase anchor, measureLatencyOffsetMs, unit tests`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `getAudioContext(): AudioContext` to the ambient `declare module '@strudel/web'` block in `src/vite-env.d.ts` (the preparatory declaration gap identified in the inventory).
+- Rewrote `src/state/phase-anchor.ts`: updated `anchorVisualPhase(offsetMs = 0)` signature with JSDoc explaining the sign, the shift direction, and the explicit exclusion of scheduler lookahead; added pure exported function `measureLatencyOffsetMs(ctx: AudioContext): number` returning `((ctx.outputLatency || 0) + (ctx.baseLatency || 0)) * 1000`. AGPL-3.0 header preserved.
+- Updated `src/audio/strudel.ts`: added `getAudioContext` to the strudel import list; added `measureLatencyOffsetMs` to the phase-anchor import; updated `syncVisualPhaseAfterRunNow` to call `measureLatencyOffsetMs(getAudioContext())` live inside the function (not at module scope) when `!queued`, with a try/catch fallback to `anchorVisualPhase(0)`.
+- Created `tests/phase-anchor.test.ts` with 4 unit tests covering the nominal case (60 ms), zero case, absent-properties guard, and output-latency-only (Bluetooth) case. Used `toBeCloseTo(60, 10)` for the nominal case due to IEEE 754 floating-point: `(0.05 + 0.01) * 1000 = 60.00000000000001` — the intent is 60 ms and `toBeCloseTo` at 10 decimal places correctly captures it.
+
+### Key changes
+
+| File | Change |
+|---|---|
+| `src/vite-env.d.ts` | Added `getAudioContext(): AudioContext` to ambient `@strudel/web` block |
+| `src/state/phase-anchor.ts` | Added `measureLatencyOffsetMs`; updated `anchorVisualPhase(offsetMs = 0)` |
+| `src/audio/strudel.ts` | Added imports; updated `syncVisualPhaseAfterRunNow` with live offset computation |
+| `tests/phase-anchor.test.ts` | New file: 4 unit tests for `measureLatencyOffsetMs` |
+
+### Invariants preserved
+
+- `!queued` guard in `syncVisualPhaseAfterRunNow` remains intact — anchor is only re-stamped on non-queued (fresh) pattern starts.
+- `getAudioContext()` is called inside `syncVisualPhaseAfterRunNow`, not at module scope — satisfies A-04-04.
+- Scheduler lookahead excluded from offset — satisfies the Pilot decision recorded in inventory §6 and JSDoc.
+- `|| 0` guards on `outputLatency` and `baseLatency` — satisfies A-04-05.
+- No render files touched — all three phase consumers (rhythm-scene:316, tonnetz-scene:560, tonnetz-scene:608) corrected automatically via the shared anchor.
+- AGPL-3.0 headers intact on all touched files; TS strict; no `any` (except the pre-existing `Pattern.prototype as any` in `initAudio`).
+- No `.fast`/`.slow` introduced.
+
+### Validation evidence
+
+| Gate | Result |
+|---|---|
+| `pnpm exec tsc --noEmit` | 0 errors |
+| `pnpm lint` | 0 errors (ESLint + Prettier) |
+| `pnpm test` | 207 passed (203 prior + 4 new) — all pass |
+| `pnpm build` | exits 0 (pre-existing chunk-size warning; not introduced by this step) |
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-04-01 | Highlighted step on orbit coincides with audible beat | — | manual | deferred to manual — Pilot verifies in step 04.4 |
+| A-04-02 | `measureLatencyOffsetMs(0.05+0.01 ctx)` ≈ 60; undefined/undefined → 0 | `tests/phase-anchor.test.ts` | unit | **covered** |
+| A-04-03 | Harmony playhead not visibly ahead of audio | — | manual | deferred to manual — Pilot verifies in step 04.4 |
+| A-04-04 | `getAudioContext()` called inside function, not at module scope | `src/audio/strudel.ts` | proxy:static-analysis | **covered** (call is inside `syncVisualPhaseAfterRunNow`) |
+| A-04-05 | `|| 0` guards on absent `outputLatency`/`baseLatency` | `tests/phase-anchor.test.ts` | unit | **covered** |
+| A-04-06 | Calibration control: ±10 ms buttons, persists across reload | — | manual | deferred to step 04.3 |
+| A-04-07 | All quality gates: tsc 0, lint 0, tests ≥207, build 0 | all | automated | **covered** (207 tests, all gates 0) |
+
+### Decisions made (if any)
+
+None — implementation followed the spec precisely.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None. The floating-point precision issue (`(0.05 + 0.01) * 1000 = 60.00000000000001`) was resolved by using `toBeCloseTo(60, 10)` in the first test — the implementation is correct; the assertion was adjusted to match JavaScript's IEEE 754 arithmetic.
+
+### Environment state after this step
+
+- 207 tests passing (+4 from 203).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `measureLatencyOffsetMs` and updated `anchorVisualPhase(offsetMs)` are live; all three playheads auto-corrected via the shared anchor.
+
+### Next-step context (only if non-obvious)
+
+Step 04.3 adds `_calibrationOffsetMs` to `phase-anchor.ts`, the `getCalibrationOffsetMs`/`setCalibrationOffsetMs` API, updates `syncVisualPhaseAfterRunNow` to sum calibration into the total offset, and adds the Transport nudge control UI. The `!queued` guard and the live `getAudioContext()` call are both already in place — step 04.3 only extends the offset arithmetic.

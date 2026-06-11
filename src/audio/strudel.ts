@@ -61,9 +61,10 @@ import {
   initAudioOnFirstClick,
   registerSynthSounds,
   miniAllStrings,
+  getAudioContext,
 } from '@strudel/web';
 import type { Cyclist } from '@strudel/web';
-import { anchorVisualPhase } from '../state/phase-anchor.js';
+import { anchorVisualPhase, measureLatencyOffsetMs } from '../state/phase-anchor.js';
 
 // ── Module-level state ────────────────────────────────────────────────────────
 // Mirrors prototype globals (lines 582–585), scoped to this module.
@@ -92,7 +93,20 @@ let _scheduler: Cyclist | null = null;
 function syncVisualPhaseAfterRunNow(queued: boolean): void {
   // A queued pattern update must not restart the visual playhead: Strudel's
   // Cyclist keeps running and setPattern() does not restart a started clock.
-  if (!queued) anchorVisualPhase();
+  if (!queued) {
+    // Compute the hardware output latency offset live on each call so device
+    // changes (e.g. switching from wired to Bluetooth mid-session) are reflected.
+    // getAudioContext() is called inside this function — never at module scope —
+    // to satisfy A-04-04. The try/catch guards the pre-init edge case (belt and
+    // suspenders; in practice syncVisualPhaseAfterRunNow is only reachable after
+    // audioReady = true, so getAudioContext() returns the live instance).
+    try {
+      const offsetMs = measureLatencyOffsetMs(getAudioContext());
+      anchorVisualPhase(offsetMs);
+    } catch {
+      anchorVisualPhase(0);
+    }
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

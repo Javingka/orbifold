@@ -62,6 +62,13 @@ declare module '@strudel/web' {
   export function miniAllStrings(): void;
 
   /**
+   * Returns the shared AudioContext used by Strudel (creates a new one if not yet
+   * initialized). Safe to call after initAudio() has completed; calling before init
+   * creates a suspended AudioContext (browser policy), so callers should guard.
+   */
+  export function getAudioContext(): AudioContext;
+
+  /**
    * The base Pattern class (from @strudel/core, re-exported by @strudel/web).
    * We patch Pattern.prototype.play to use _scheduler (the own-scheduler fix).
    * Declared as a class constructor value + interface so TypeScript accepts
