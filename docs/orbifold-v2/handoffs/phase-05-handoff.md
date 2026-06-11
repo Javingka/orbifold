@@ -457,3 +457,153 @@ None. The vigent rule ("Staff vertical coordinate is diatonic, not chromatic") i
 - `pnpm lint` exits 0.
 - `src/core/harmony/staff-map.ts` (diatonic) committed; `tests/harmony/staff-map.test.ts` (73 toEqual tests) committed.
 - `src/core/harmony/time-map.ts` not yet written (step 05.5).
+
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 2 of 5. See review file `docs/orbifold-v2/reviews/phase-05-step-05.4-review-2.md`.
+**Next action:** Dev proceeds to step 05.5
+
+---
+
+## Step 05.5 — `time-map.ts` + tests + quality gates
+
+**Date:** 2026-06-11
+**Commit(s):**
+- `feat(harmony): Phase 05 step 05.5 — time-map engine and tests, phase-05 quality gates`
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0011-harmony-view-architecture.md`, `docs/orbifold-v2/inventories/phase-05-inventory.md`, `src/render/rhythm-scene.ts` (confirmed `-Math.PI / 2` offset convention at line 403: `ang = -Math.PI / 2 + phase * Math.PI * 2`).
+- Created `src/core/harmony/time-map.ts` with:
+  - Exported types: `LinearPosition`, `OrbitalPosition`, `TimePosition` (discriminated union).
+  - Exported constant `PX_PER_CYCLE = 48` (matches `ProgressionStrip.svelte` line 98; ADR 0011 Consequence 3).
+  - Overloaded `cycleToPosition(cycleIndex, totalCycles, mode)` with three overload signatures for type safety.
+  - Linear mode: `{ mode: 'linear', x: cycleIndex * PX_PER_CYCLE }`. `totalCycles` consumed via `void totalCycles` to satisfy lint.
+  - Orbital mode: `{ mode: 'orbital', angle: (cycleIndex / totalCycles) * 2 * Math.PI - Math.PI / 2 }`. Guard: if `totalCycles === 0`, returns angle `- Math.PI / 2` (no NaN).
+  - AGPL-3.0 header. TS strict. No `any`. No DOM/PIXI/Svelte imports.
+- Created `tests/harmony/time-map.test.ts` with 13 tests covering all 9 spec cases plus 4 additional edge/mode-field tests.
+- Fixed transient issue: apostrophes in `it()` description strings caused esbuild parse errors; replaced with ASCII equivalents (`12-oclock`, `3-oclock`).
+- Ran `pnpm exec prettier --write` on `time-map.ts` to resolve Prettier formatting. All lint passes.
+- Ran full quality gate suite — all pass (details below).
+
+### Prototype parity
+
+`time-map.ts` is new infrastructure with no direct prototype equivalent. The `-Math.PI / 2` offset convention is confirmed from `src/render/rhythm-scene.ts` line 403 (`ang = -Math.PI / 2 + phase * Math.PI * 2`), which was ported from `reference/orbifold.html` lines 1146–1215 (the `tickRhythm` function). `PX_PER_CYCLE = 48` was established in Phase 03 step 03.4 and is confirmed at `ProgressionStrip.svelte` line 98. The formula `(cycleIndex / totalCycles) * 2 * Math.PI - Math.PI / 2` is derived from ADR 0011 D1 and is consistent with the rhythm orbit formula — same constant offset, different denominator (totalCycles vs. 1 bar).
+
+### Files touched
+
+- `src/core/harmony/time-map.ts` — created
+- `tests/harmony/time-map.test.ts` — created
+- `docs/orbifold-v2/handoffs/phase-05-handoff.md` — step 05.5 entry appended (this entry)
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint + Prettier).
+- `pnpm exec vitest run tests/harmony/time-map.test.ts` — 13/13 tests pass.
+- `pnpm test` — 307/307 tests pass (294 prior + 13 new; exceeds minimum of 235).
+- `pnpm build` — exits 0 (pre-existing chunk-size warning retained; not a new error).
+- `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` — 0 matches (A-05-11 maintained across all three harmony engines).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-05-01 | `computeVoiceTracks([], 3)` returns three tracks with 0 events | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-02 | Single-chord C major (octave 3) → voice-0=C3, voice-1=E3, voice-2=G3; startCycle=0, bars=1 | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-03 | C major → C minor: voice-1 (E3) moves to D#3 (Eb3 enharmonic); voice-0 (C3) and voice-2 (G3) unchanged | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-04 | bars=[2, 0.5] → chord-0 startCycle=0, bars=2; chord-1 startCycle=2, bars=0.5 | `tests/harmony/voice-tracks.test.ts` | unit | **covered** (step 05.3) |
+| A-05-05 | `noteToStaffPosition('C4')` → `{ steps: 0, accidental: '', ledgerLines: [0] }` (exact toEqual) | `tests/harmony/staff-map.test.ts` | unit | **covered** (step 05.4 REVISE) |
+| A-05-06 | `noteToStaffPosition('G4')` → `{ steps: 4, accidental: '', ledgerLines: [] }` (on-staff) | `tests/harmony/staff-map.test.ts` | unit | **covered** (step 05.4 REVISE) |
+| A-05-07 | `noteToStaffPosition('F#3')` → `{ steps: -4, accidental: '#', ledgerLines: [0, -2, -4] }` (exact toEqual) | `tests/harmony/staff-map.test.ts` | unit | **covered** (step 05.4 REVISE) |
+| A-05-08 | `cycleToPosition(0,4,'linear')` → `{ mode:'linear', x:0 }`; `(1,4,'linear')` → `{ mode:'linear', x:48 }` | `tests/harmony/time-map.test.ts` | unit | **covered** |
+| A-05-09 | `cycleToPosition(0,4,'orbital')` → `{ mode:'orbital', angle:-π/2 }`; `(2,4,'orbital')` → `angle=π/2` | `tests/harmony/time-map.test.ts` | unit | **covered** |
+| A-05-10 | `cycleToPosition(1,0,'orbital')` does not produce NaN; angle = `-Math.PI/2` | `tests/harmony/time-map.test.ts` | unit | **covered** |
+| A-05-11 | No `src/core/` file imports pixi.js, svelte, or DOM-only modules | grep | proxy:static-analysis | **covered** (0 matches across all three harmony engines) |
+| A-05-12 | ADR 0011 committed with Status: Accepted, recording D1–D4 | `docs/adr/0011-harmony-view-architecture.md` | proxy:static-analysis | **covered** (step 05.2) |
+| A-05-13 | `tsc --noEmit` 0 errors; `pnpm lint` 0 errors; `pnpm test` 307 tests (≥235); `pnpm build` exits 0 | all | automated | **covered** |
+
+**Proxy disclosures:**
+- A-05-11: `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches. All three files (`voice-tracks.ts`, `staff-map.ts`, `time-map.ts`) import only from `../theory/*.js` (voice-tracks) or have no imports at all (staff-map, time-map).
+- A-05-12: `docs/adr/0011-harmony-view-architecture.md` — Status: Accepted, Date: 2026-06-11, Deciders: Pilot (Javier), sections D1–D4 present. Verified by direct inspection in step 05.2.
+
+### Decisions made (if any)
+
+None — implementation follows ADR 0011 (D1 orbit period, Consequence 3 PX_PER_CYCLE coordination) exactly.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+Transient issue: apostrophes in `it()` description strings caused esbuild parse errors when using single-quoted JS template literals. Resolved by replacing all `'...'` (apostrophe) characters in test description strings with ASCII equivalents (`-oclock`, `pi/2`). No behavioral change.
+
+### Environment state after this step
+
+- 307 tests passing (11 test files; prior 294 + 13 new from step 05.5).
+- `tsc --noEmit` exits 0.
+- `pnpm lint` exits 0.
+- `pnpm build` exits 0.
+- All three harmony engines committed: `voice-tracks.ts`, `staff-map.ts` (diatonic), `time-map.ts`.
+- `src/core/harmony/` contains no DOM/PIXI/Svelte imports (grep: 0 matches).
+
+---
+
+## Phase 05 — Completion
+
+**Date:** 2026-06-11
+
+### Summary
+
+Phase 05 is complete. All acceptance criteria (A-05-01 through A-05-13) are covered. The phase delivered:
+
+1. **ADR 0011** (`docs/adr/0011-harmony-view-architecture.md`) — Status: Accepted, recording all four locked Pilot design decisions (D1–D4).
+2. **`src/core/harmony/voice-tracks.ts`** — `computeVoiceTracks(progression, octave)` engine with `VoiceEvent`/`VoiceTrack` types, 14 tests in `tests/harmony/voice-tracks.test.ts`.
+3. **`src/core/harmony/staff-map.ts`** (diatonic rewrite resolving blocker) — `noteToStaffPosition(noteName)` engine with diatonic `steps` coordinate, 73 tests in `tests/harmony/staff-map.test.ts` (all using exact `toEqual` contracts).
+4. **`src/core/harmony/time-map.ts`** — `cycleToPosition(cycleIndex, totalCycles, mode)` overloaded engine with `LinearPosition`/`OrbitalPosition`/`TimePosition` types and `PX_PER_CYCLE = 48` constant, 13 tests in `tests/harmony/time-map.test.ts`.
+
+### Phase-level invariant confirmations
+
+- **No DOM/PIXI/Svelte import in `src/core/`:** `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches.
+- **AGPL-3.0 headers:** all three engine files and all three test files carry `// SPDX-License-Identifier: AGPL-3.0-only` as the first line.
+- **Final test count:** 307 (11 test files). Exceeds minimum of 235.
+- **All quality gates:** `tsc --noEmit` 0 errors, `pnpm lint` 0 errors, `pnpm test` 307/307, `pnpm build` exits 0.
+
+### Phase blocker record
+
+One blocker was raised and resolved:
+- `docs/orbifold-v2/blockers/phase-05-blocker-staff-ledger-line-algorithm.md` — spec defect (chromatic vs. diatonic coordinates). Pilot resolved: Option B (diatonic). Planner amended step 05.4 spec. REVISE re-execution delivered the diatonic `staff-map.ts` and 73 replacement tests. Blocker status: RESOLVED.
+
+### Step count
+
+| Step | Description | Tests added | Iteration |
+|---|---|---|---|
+| 05.1 | Inventory | 0 | 1 |
+| 05.2 | ADR 0011 | 0 | 1 |
+| 05.3 | `voice-tracks.ts` + tests | 14 | 1 |
+| 05.4 (iter 1) | `staff-map.ts` (chromatic) — ESCALATED | 35 (replaced) | 1 |
+| 05.4 (iter 2) | `staff-map.ts` (diatonic) — REVISE | 73 | 2 |
+| 05.5 | `time-map.ts` + tests + quality gates | 13 | 1 |
+
+Net new tests from Phase 05: 307 − 207 (Phase 04 close) = 100 new tests.
+
+### Phase-complete Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-05-01 | `computeVoiceTracks([], 3)` → three empty tracks | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-02 | C major octave 3 → voice-0=C3, voice-1=E3, voice-2=G3 | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-03 | C major → C minor: E3 moves to D#3; C3, G3 unchanged | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-04 | bars=[2, 0.5] → startCycle accumulates correctly | `tests/harmony/voice-tracks.test.ts` | unit | **covered** |
+| A-05-05 | `noteToStaffPosition('C4')` → steps=0, ledgerLines=[0] | `tests/harmony/staff-map.test.ts` | unit | **covered** |
+| A-05-06 | `noteToStaffPosition('G4')` → steps=4, ledgerLines=[] | `tests/harmony/staff-map.test.ts` | unit | **covered** |
+| A-05-07 | `noteToStaffPosition('F#3')` → steps=-4, accidental='#', ledgerLines=[0,-2,-4] | `tests/harmony/staff-map.test.ts` | unit | **covered** |
+| A-05-08 | `cycleToPosition(0,4,'linear')` → x=0; `(1,4,'linear')` → x=48 | `tests/harmony/time-map.test.ts` | unit | **covered** |
+| A-05-09 | `cycleToPosition(0,4,'orbital')` → angle=-π/2; `(2,4,'orbital')` → angle=π/2 | `tests/harmony/time-map.test.ts` | unit | **covered** |
+| A-05-10 | `cycleToPosition(1,0,'orbital')` → angle=-π/2, not NaN | `tests/harmony/time-map.test.ts` | unit | **covered** |
+| A-05-11 | No `src/core/` imports pixi.js, svelte, DOM-only | grep | proxy:static-analysis | **covered** |
+| A-05-12 | ADR 0011 accepted, D1–D4 recorded | `docs/adr/0011-harmony-view-architecture.md` | proxy:static-analysis | **covered** |
+| A-05-13 | tsc 0, lint 0, tests 307 (≥235), build 0 | all | automated | **covered** |
+
+**All 13 acceptance criteria: covered. Zero gaps.**
