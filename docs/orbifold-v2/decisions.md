@@ -15,6 +15,16 @@ See `references/decisions-register-convention.md` for entry format.
 **Source:** `docs/orbifold-v2/phases/phase-05.md` step 05.4; `docs/adr/0011-harmony-view-architecture.md` D3.
 **Applies to:** `staff-map.ts` and all harmony-view rendering (Phases 07–08) that consume `StaffPosition`.
 
+---
+
+### PX_PER_CYCLE = 48 is a cross-module coordination point
+
+**Decision:** The absolute pixels-per-cycle grid constant is `48` and is duplicated in `src/core/harmony/time-map.ts` (`PX_PER_CYCLE`) and `src/ui/ProgressionStrip.svelte`. The duplication is deliberate (the pure engine must not import a Svelte module). Any change to one **must** change the other in the **same commit**; the two values must never diverge.
+**Decided:** Phase 05, 2026-06-11
+**Why:** The linear harmony view (Phase 07) and the ProgressionStrip render the progression on the same horizontal timeline; a divergence would misalign the staff/playhead from the duration editor with no compile-time error to catch it. ADR 0011 Consequence 3 documents this; elevated to a vigent rule so future phases cannot silently change one constant.
+**Source:** `docs/adr/0011-harmony-view-architecture.md` Consequence 3.
+**Applies to:** `time-map.ts`, `ProgressionStrip.svelte`, and any future harmony-view layer rendering on the cycle grid.
+
 ## Superseded decisions
 
 (empty)
