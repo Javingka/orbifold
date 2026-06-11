@@ -21,7 +21,17 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 ## Current initiative
 
 **Name:** `orbifold-v2`
-**Goal:** Post-migration product/UX refinements on the live app. Phase 01 — UX quick-wins (hide harmony-only top-bar selectors in Rhythm mode; reposition the Composición / Código Strudel drawer tabs so they don't overlap the Transport). Phase 02 — variable chord duration: a finer-grained, segmented progression timeline letting each chord occupy a variable span instead of a fixed 1-cycle slot (needs an ADR on the Strudel construction, verified against live docs; must respect the no-`.fast`/`.slow` invariant).
+**Goal:** Post-migration product/UX refinements on the live app.
+
+- **Phase 01 (complete)** — UX quick-wins (hide harmony-only top-bar selectors in Rhythm mode; reposition the Composición / Código Strudel drawer tabs so they don't overlap the Transport).
+- **Phase 02 (complete)** — variable chord duration: each chord occupies a variable cycle span via `arrange()` (ADR 0010), with agent control.
+- **Phase 03 (complete)** — ProgressionStrip overhaul: own full-width row above the Transport (fixes the save-button occlusion of the last resize handle), absolute 48px/cycle grid with a numbered bar ruler and hierarchical gridlines, and 0.25-cycle (one-beat) granularity (ADR 0010 amendment).
+- **Phase 04 (planned)** — audio↔visual sync: compensate AudioContext output latency in the shared phase anchor so the rhythm (and harmony/composition) playhead lights up when the sound is heard, not before.
+- **Phase 05 (planned)** — ADR 0011 (harmony-view design) + pure engines in `core/**` with tests: voice-assignment (progression → continuous voice tracks via the minimal-voice-leading permutations), staff mapping (note → treble-clef vertical position + accidental + ledger lines), and time mapping (bars → linear x / orbital angle, aligned to the 48px/cycle grid).
+- **Phase 06 (planned)** — linear harmony view: a treble-clef staff rendering the progression's voices in PIXI, color-coded per voice, with a synced playhead (treble clef + ledger lines; voicings default near C3–G3).
+- **Phase 07 (planned)** — orbital harmony view + morph: concentric voice rings (mirroring the rhythm rails) with a linear↔orbital morph; **one full revolution of the harmony orbit = the whole progression loop**, with bar markers on the ring (the rhythm spins N times per harmony revolution). The ProgressionStrip is kept as the duration/gain editor.
+
+**Confirmed harmony-view design decisions (for ADR 0011, Phase 05):** (1) harmony orbit period = full progression loop with bar marks; (2) keep ProgressionStrip as duration/gain editor; (3) treble clef + ledger lines for register.
 **Started:** 2026-06-10
 
 **Previous initiative:** `orbifold-v1` (Phases 0–8, complete) — migrated the single-file prototype into the statically-deployable Svelte + PIXI + Strudel app now in production. Its folder `docs/orbifold-v1/` is retained as the migration record.
