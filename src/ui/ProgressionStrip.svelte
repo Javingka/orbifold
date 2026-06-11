@@ -3,8 +3,10 @@
   Orbifold — ProgressionStrip component.
 
   Replaces ProgressionChips in App.svelte (Phase 01 step 01.3).
-  Renders the chord progression as equal-width segments in the Transport footer slot.
-  Each segment = one chord = one cycle. Variable-width segments are Phase 02.
+  Renders the chord progression as segments in the Transport footer slot.
+  Phase 01: equal-width segments (flex: 1).
+  Phase 02: variable-width segments proportional to ch.bars ?? 1, plus a
+            horizontal drag-to-resize handle on each segment's right edge.
 
   All interactions ported 1:1 from ProgressionChips.svelte (which itself ports
   prototype #progChips area — HTML lines 505–508, CSS lines 224–234, JS lines 1413–1468):
@@ -32,25 +34,40 @@
                   (ProgressionChips.svelte tonalClass lines 47–55,
                    prototype ch.info.func.cls line 1435).
 
+  Phase 02 additions (no prototype equivalent — new feature per ADR 0010):
+    Proportional widths:  flex: 0 0 {pct}% where pct = (bars/totalBars)*100.
+    Resize handle:        .resize-handle at right edge of each .seg; pointerdown
+                          starts horizontal resize, pointermove updates resizeBars
+                          live, pointerup commits via setChordBars(i, newBars).
+    Bar count label:      barsLabel(bars) shown only when bars !== 1 (and defined).
+
   Visual differences from chips:
-    - Segments use flex:1 (equal width) instead of flex:0 0 auto (auto-shrink chips).
-    - No horizontal overflow/scroll — segments fill available footer width equally.
+    - Phase 01: flex:1 (equal width) instead of flex:0 0 auto (auto-shrink chips).
+    - Phase 02: flex: 0 0 {pct}% (proportional to ch.bars).
+    - No horizontal overflow/scroll — segments fill available footer width.
 
   Store reads (same as ProgressionChips — no new reads):
     $sessionStore.harmony.progression  — array of Chord
     $sessionStore.harmony.root         — for tonal-function class derivation
     $sessionStore.harmony.mode         — for tonal-function class derivation
 
-  Store writes via session.ts actions (same as ProgressionChips — no new writes):
-    clearChordAt(index)  — ✕ remove button
-    requeueLive()        — drag-release volume update
-    playChord(...)       — tap on segment
+  Store writes via session.ts actions (Phase 01 unchanged + Phase 02 addition):
+    clearChordAt(index)    — ✕ remove button
+    requeueLive()          — drag-release volume update (called inside setChordBars too)
+    playChord(...)         — tap on segment
+    setChordBars(i, bars)  — commit resized bars (Phase 02)
 
-  No changes to src/core/codegen/strudel.ts or the Chord interface. Strudel output is
-  byte-identical to pre-phase main for any given SessionState.
+  No changes to src/core/codegen/strudel.ts. Strudel output changes only when
+  ch.bars !== 1 for any chord (dual-mode: arrange() path). See ADR 0010.
 -->
 <script lang="ts">
-  import { sessionStore, clearChordAt, requeueLive, playChord } from '../state/session.js';
+  import {
+    sessionStore,
+    clearChordAt,
+    requeueLive,
+    playChord,
+    setChordBars,
+  } from '../state/session.js';
   import { chordLabel } from '../core/theory/chords.js';
   import { diatonicLookup } from '../core/theory/scales.js';
   import type { Mode } from '../core/theory/scales.js';
@@ -79,6 +96,27 @@
     }
   }
 
+  /**
+   * Return a human-readable duration label for a non-default bars value.
+   *
+   * Format: ½× for 0.5, 1× for 1, 1½× for 1.5, 2× for 2, etc.
+   * Returns '' when bars is 1 or undefined — only shown for non-default durations,
+   * to keep the UI clean for the common case.
+   *
+   * No prototype equivalent — new feature (Phase 02 ADR 0010).
+   *
+   * @param bars - Duration in Strudel cycles (multiples of 0.5, range [0.5, 8]).
+   */
+  function barsLabel(bars: number | undefined): string {
+    if (bars === undefined || bars === 1) return '';
+    // Format fraction: whole + optional ½
+    const whole = Math.floor(bars);
+    const frac = bars - whole;
+    const fracStr = frac >= 0.4 ? '½' : '';
+    const wholeStr = whole > 0 ? String(whole) : '';
+    return wholeStr + fracStr + '×';
+  }
+
   // ── Per-segment drag state ────────────────────────────────────────────────
   // Parallel arrays indexed by segment position (same index as progression array).
   // These are transient UI state — NOT in sessionStore.
@@ -96,6 +134,25 @@
   /** Local gain override while dragging (written without going through store). */
   let localGain: (number | null)[] = [];
 
+  // ── Phase 02: resize gesture state ────────────────────────────────────────
+  // Separate from gain-drag state. Indexed by segment position.
+  // No prototype equivalent — new feature (Phase 02 ADR 0010).
+
+  /** Whether a horizontal resize drag is in progress per segment. */
+  let resizeActive: boolean[] = [];
+  /** Pointer clientX at resize start per segment. */
+  let resizeStartX: number[] = [];
+  /** Bars value at resize start per segment. */
+  let resizeStartBars: number[] = [];
+  /**
+   * Live bars override while resize-dragging (live reflow without store write).
+   * null = use store value. Written during resize, committed on pointerup.
+   */
+  let resizeBars: (number | null)[] = [];
+
+  // ── Reference to .segments container (for width measurement) ─────────────
+  let segmentsEl: HTMLElement | null = null;
+
   // Synchronise drag-state arrays whenever progression length changes.
   // Ported from ProgressionChips.svelte reactive block (lines 74–81).
   $: {
@@ -105,16 +162,46 @@
     startGain = new Array(len).fill(0);
     moved = new Array(len).fill(false);
     localGain = new Array(len).fill(null);
+    // Phase 02 resize state arrays
+    resizeActive = new Array(len).fill(false);
+    resizeStartX = new Array(len).fill(0);
+    resizeStartBars = new Array(len).fill(1);
+    resizeBars = new Array(len).fill(null);
+  }
+
+  // ── Proportional width computation (Phase 02) ─────────────────────────────
+  // totalBars = sum of all ch.bars (using live resizeBars override when dragging).
+  // pct(i) = (effectiveBars(i) / totalBars) * 100.
+  // Guard: if totalBars === 0 (empty progression) → fall back to equal distribution.
+
+  $: totalBars = $sessionStore.harmony.progression.reduce(
+    (s, c, i) => s + (resizeBars[i] ?? c.bars ?? 1),
+    0
+  );
+
+  /**
+   * Compute the percentage width for segment i.
+   * Uses resizeBars[i] if a resize drag is active, otherwise ch.bars ?? 1.
+   */
+  function segPct(i: number): number {
+    const prog = $sessionStore.harmony.progression;
+    if (prog.length === 0 || totalBars === 0) return 100 / Math.max(prog.length, 1);
+    const b = resizeBars[i] ?? prog[i]?.bars ?? 1;
+    return (b / totalBars) * 100;
   }
 
   /**
-   * Pointer down: capture pointer, record startY and startGain.
+   * Pointer down on .seg body: capture pointer, record startY and startGain.
    * Ported from ProgressionChips.svelte handlePointerDown (lines 83–97).
    * Prototype lines 1441–1450.
    */
   function handlePointerDown(e: PointerEvent, i: number): void {
     const target = e.target as HTMLElement;
     if (target.classList.contains('rm')) return;
+    // Do not start gain drag if clicking on the resize handle — that gesture
+    // is handled by handleResizePointerDown. stopPropagation() on the handle
+    // prevents this function from being called at all, but guard here too.
+    if (target.classList.contains('resize-handle')) return;
     dragging[i] = true;
     moved[i] = false;
     startY[i] = e.clientY;
@@ -129,7 +216,7 @@
   }
 
   /**
-   * Pointer move: compute dy, update localGain with 3px threshold and 0.006 step.
+   * Pointer move on .seg body: compute dy, update localGain with 3px threshold and 0.006 step.
    * Ported from ProgressionChips.svelte handlePointerMove (lines 99–109).
    * Prototype lines 1451–1456: threshold 3px, gain step 0.006/px, clamp [0, 1.2].
    */
@@ -146,7 +233,7 @@
   }
 
   /**
-   * Pointer up: commit gain (if moved) or play chord (if tap).
+   * Pointer up on .seg body: commit gain (if moved) or play chord (if tap).
    * Ported from ProgressionChips.svelte handlePointerUp (lines 111–141).
    * Prototype lines 1457–1466.
    */
@@ -190,11 +277,86 @@
     e.stopPropagation();
     clearChordAt(i);
   }
+
+  // ── Phase 02: horizontal resize gesture ───────────────────────────────────
+  // Completely separate from the vertical gain-drag gesture above.
+  // Starts on .resize-handle pointerdown (not on .seg body).
+  // No prototype equivalent — new feature (Phase 02 ADR 0010).
+
+  /**
+   * Pointer down on .resize-handle: start horizontal resize drag.
+   *
+   * Captures the pointer on the handle element, records startX and the current
+   * bars value. stopPropagation() ensures this does NOT trigger handlePointerDown
+   * on the parent .seg (the two gestures are fully independent).
+   *
+   * Phase 02, no prototype equivalent (ADR 0010).
+   */
+  function handleResizePointerDown(e: PointerEvent, i: number): void {
+    e.stopPropagation();
+    e.preventDefault();
+    resizeActive[i] = true;
+    resizeStartX[i] = e.clientX;
+    resizeStartBars[i] = $sessionStore.harmony.progression[i]?.bars ?? 1;
+    resizeBars[i] = resizeStartBars[i];
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Pointer move on .resize-handle: update resizeBars[i] live.
+   *
+   * deltaBars = dx / pixelsPerBar where pixelsPerBar = segmentsWidth / totalBars.
+   * newBars = nearest 0.5, clamped [0.5, 8].
+   * Updates resizeBars[] reactively so the segment reflows while dragging.
+   *
+   * Phase 02, no prototype equivalent (ADR 0010).
+   */
+  function handleResizePointerMove(e: PointerEvent, i: number): void {
+    if (!resizeActive[i]) return;
+    const dx = e.clientX - resizeStartX[i];
+    // Measure pixels per bar from the .segments container width and current totalBars.
+    const segWidth = segmentsEl ? segmentsEl.getBoundingClientRect().width : 200;
+    const pixelsPerBar = totalBars > 0 ? segWidth / totalBars : segWidth;
+    const deltaBars = dx / pixelsPerBar;
+    const rawBars = resizeStartBars[i] + deltaBars;
+    // Round to nearest 0.5, clamp [0.5, 8].
+    const newBars = Math.max(0.5, Math.min(8, Math.round(rawBars * 2) / 2));
+    resizeBars[i] = newBars;
+    // Trigger reactivity so totalBars and segPct recompute.
+    resizeBars = [...resizeBars];
+  }
+
+  /**
+   * Pointer up on .resize-handle: commit bars via setChordBars (which calls requeueLive).
+   *
+   * Phase 02, no prototype equivalent (ADR 0010).
+   */
+  function handleResizePointerUp(e: PointerEvent, i: number): void {
+    if (!resizeActive[i]) return;
+    resizeActive[i] = false;
+    const newBars = resizeBars[i];
+    // Reset live override before committing so totalBars uses store value after commit.
+    resizeBars[i] = null;
+    resizeBars = [...resizeBars];
+    if (newBars !== null) {
+      setChordBars(i, newBars);
+    }
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  }
 </script>
 
 <!--
   Strip container. Replaces the .prog scrollable flex row from ProgressionChips.
-  Segments use flex:1 so they share available width equally.
+  Segments use proportional flex-basis (Phase 02) so they fill available width
+  proportionally to their ch.bars value.
   Prototype: .prog wrapper (lines 505–508), .prog-empty (line 234).
 -->
 <div class="strip">
@@ -202,7 +364,7 @@
   {#if $sessionStore.harmony.progression.length === 0}
     <span class="strip-empty">toca acordes en el Tonnetz…</span>
   {:else}
-    <div class="segments">
+    <div class="segments" bind:this={segmentsEl}>
       {#each $sessionStore.harmony.progression as ch, i (i)}
         {@const label = chordLabel(ch.rootPc, ch.qual)}
         {@const tcls = tonalClass(
@@ -212,9 +374,11 @@
           $sessionStore.harmony.mode
         )}
         {@const displayGain = localGain[i] ?? ch.gain}
+        {@const pct = segPct(i)}
+        {@const durLabel = barsLabel(resizeBars[i] ?? ch.bars)}
         <div
           class="seg {tcls}"
-          style="background: {chipGainCss(displayGain)}"
+          style="flex: 0 0 {pct}%; background: {chipGainCss(displayGain)}"
           title="mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar"
           role="button"
           tabindex="0"
@@ -225,8 +389,24 @@
             if (e.key === 'Enter' || e.key === ' ') playChord(ch.rootPc, ch.qual, ch.gain);
           }}
         >
-          {label}
+          <span class="seg-content">
+            <span class="seg-label">{label}</span>
+            {#if durLabel}
+              <span class="seg-dur">{durLabel}</span>
+            {/if}
+          </span>
           <button class="rm" on:click={(e) => handleRemove(e, i)} tabindex="-1">✕</button>
+          <!-- Phase 02: horizontal resize handle on right edge. -->
+          <!-- stopPropagation on pointerdown prevents gain-drag from starting. -->
+          <div
+            class="resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionar duración"
+            on:pointerdown={(e) => handleResizePointerDown(e, i)}
+            on:pointermove={(e) => handleResizePointerMove(e, i)}
+            on:pointerup={(e) => handleResizePointerUp(e, i)}
+          ></div>
         </div>
       {/each}
     </div>
@@ -256,9 +436,9 @@
   }
 
   /*
-   * Segments row: fills available width; each segment shares it equally.
-   * flex:1 ensures equal widths (Phase 01 invariant — all chords occupy 1 cycle).
-   * Variable-width segments (Phase 02) will replace flex:1 with computed widths.
+   * Segments row: fills available width.
+   * Phase 02: segments use flex: 0 0 {pct}% (proportional to ch.bars).
+   * The row itself still uses flex: 1 to fill available space.
    */
   .segments {
     display: flex;
@@ -270,17 +450,19 @@
 
   /*
    * Individual segment. Ported from .prog-chip (ProgressionChips.svelte lines 214–228).
-   * Key difference: flex:1 (equal width) instead of flex:0 0 auto (auto-shrink chip).
+   * Phase 01: flex:1 (equal width). Phase 02: flex: 0 0 {pct}% (proportional).
+   * position: relative — required for .resize-handle absolute positioning.
    * touch-action:none and user-select:none required for pointer capture to work correctly
    * on touch devices (ProgressionChips.svelte lines 226–227, prototype CSS lines 226–228).
    */
   .seg {
-    flex: 1;
+    position: relative;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 5px 6px;
+    gap: 4px;
+    padding: 5px 14px 5px 6px;
     border-radius: 8px;
     font-size: 12px;
     font-weight: 600;
@@ -291,8 +473,6 @@
     user-select: none;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   /* Tonal-function border colors. Ported from ProgressionChips.svelte lines 231–241. */
@@ -306,6 +486,39 @@
 
   .seg.dom {
     border-color: rgba(232, 123, 172, 0.4);
+  }
+
+  /*
+   * Segment content wrapper: label + optional duration indicator.
+   * flex column layout so label and dur stack vertically.
+   */
+  .seg-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .seg-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+  }
+
+  /*
+   * Duration label — shown only when bars !== 1 and not undefined.
+   * Small, muted, below the chord name.
+   * Phase 02, no prototype equivalent.
+   */
+  .seg-dur {
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--faint);
+    line-height: 1;
+    margin-top: 1px;
+    white-space: nowrap;
   }
 
   /* Remove button. Ported from .prog-chip .rm (ProgressionChips.svelte lines 244–256). */
@@ -322,6 +535,32 @@
 
   .seg:hover .rm {
     color: var(--dom);
+  }
+
+  /*
+   * Horizontal resize handle — right edge of each segment.
+   * Phase 02, no prototype equivalent (ADR 0010).
+   *
+   * Positioned absolutely at the right edge; 8px wide, full height.
+   * cursor: ew-resize distinguishes from the parent's ns-resize (gain drag).
+   * touch-action: none required for pointer capture on touch devices.
+   * Subtle visual affordance: slightly brighter on hover.
+   */
+  .resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+    touch-action: none;
+    border-radius: 0 8px 8px 0;
+    background: transparent;
+    transition: background 0.15s;
+  }
+
+  .resize-handle:hover {
+    background: rgba(255, 255, 255, 0.12);
   }
 
   /* Empty state hint. Ported from .prog-empty (ProgressionChips.svelte lines 259–263). */

@@ -351,4 +351,138 @@ None.
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-10. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 02.5.
+
+---
+
+## Step 02.5 — UI: ProgressionStrip variable-width segments and horizontal resize gesture
+
+**Date:** 2026-06-10
+**Commit(s):**
+
+- **Terminal commit:** `feat(ux): Phase 02 step 02.5 — ProgressionStrip variable-width segments and resize gesture`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0010-variable-chord-duration.md`, `src/ui/ProgressionStrip.svelte` (complete), `src/state/session.ts` (Chord interface and setChordBars from step 02.3), `docs/orbifold-v2/inventories/phase-02-inventory.md`.
+- Also read `docs/orbifold-v2/handoffs/phase-02-handoff.md` (step 02.4 Planner review and handoff entries for full context).
+- Confirmed starting test count: 187 tests passing.
+
+**Proportional widths:**
+- Replaced `flex: 1` on `.seg` with `flex: 0 0 {pct}%` where `pct = (effectiveBars / totalBars) * 100`.
+- `totalBars` is a reactive `$:` computed value: `$sessionStore.harmony.progression.reduce((s, c, i) => s + (resizeBars[i] ?? c.bars ?? 1), 0)`. Uses live `resizeBars[i]` override during resize drag so the strip reflows in real time.
+- `segPct(i)` helper returns `(b / totalBars) * 100`; guards against `totalBars === 0` (empty progression fallback).
+- `bind:this={segmentsEl}` on `.segments` container captures the DOM reference for pixel-width measurement during resize.
+
+**Horizontal drag-to-resize gesture:**
+- Added `.resize-handle` child to each `.seg`: 8 px wide, absolutely positioned at `right: 0`, full height, `cursor: ew-resize`, `touch-action: none`. Parent `.seg` gets `position: relative`.
+- New parallel state arrays: `resizeActive: boolean[]`, `resizeStartX: number[]`, `resizeStartBars: number[]`, `resizeBars: (number | null)[]` — synchronized with progression length in the existing reactive block.
+- `handleResizePointerDown(e, i)`: calls `e.stopPropagation()` (prevents gain drag from starting), `e.preventDefault()`, sets pointer capture on the handle element, records `resizeStartX[i]` and `resizeStartBars[i]`.
+- `handleResizePointerMove(e, i)`: computes `dx = e.clientX - resizeStartX[i]`; `pixelsPerBar = segmentsEl.getBoundingClientRect().width / totalBars`; `rawBars = resizeStartBars[i] + dx / pixelsPerBar`; rounds to nearest 0.5, clamps `[0.5, 8]`; writes to `resizeBars[i]` and spreads to trigger Svelte reactivity.
+- `handleResizePointerUp(e, i)`: clears `resizeBars[i]` (removes live override), calls `setChordBars(i, newBars)` (which calls `requeueLive()` internally), releases pointer capture.
+
+**Bar count label:**
+- `barsLabel(bars)` helper: returns `''` when `bars === undefined || bars === 1`; otherwise formats as `½×`, `1×`, `1½×`, `2×`, etc. Whole part + `½` if fractional. Shown as `.seg-dur` (9 px, `var(--faint)`) below the chord name.
+- Label uses `resizeBars[i] ?? ch.bars` so it updates live during drag.
+
+**Vertical gain drag — preserved without regression:**
+- `handlePointerDown` now guards against `.resize-handle` target (line: `if (target.classList.contains('resize-handle')) return;`) in addition to the existing `.rm` guard. This ensures clicking the resize handle never starts a gain drag even if `stopPropagation()` fails.
+- Gain drag logic (`handlePointerMove`, `handlePointerUp`) is otherwise unchanged from Phase 01 step 01.3.
+
+**Tap-to-preview — preserved:**
+- `handlePointerUp` tap path (moved ≤ 3px → `playChord(rootPc, qual, gain)`) unchanged from Phase 01 step 01.3 / ProgressionChips.svelte line 133.
+
+**Remove button — preserved:**
+- `handleRemove(e, i)` → `clearChordAt(i)` unchanged from Phase 01 step 01.3 / ProgressionChips.svelte lines 143–146.
+
+**Keyboard — preserved:**
+- `on:keydown` Enter/Space → `playChord(...)` unchanged.
+
+**AGPL-3.0 header** intact (pre-existing header, updated comment block to document Phase 02 additions).
+
+**Import of `setChordBars`** added to the existing import from `../state/session.js`.
+
+### Prototype parity citation (CLAUDE.md prototype-parity checklist)
+
+This step modifies existing interaction logic from `ProgressionChips.svelte`. All three preserved interactions are cited below:
+
+| Interaction | ProgressionChips.svelte source | Prototype source | Behavioral fidelity |
+|---|---|---|---|
+| Gain drag | `handlePointerDown` lines 83–97 (pointerdown, capture, startY/startGain); `handlePointerMove` lines 99–109 (3px threshold, 0.006/px, clamp [0,1.2]); `handlePointerUp` lines 111–141 (commit to store + requeueLive) | Prototype lines 1441–1456 | Unchanged — same threshold, step, clamp, store write, requeueLive call |
+| Tap-to-preview | `handlePointerUp` else branch, line 133: `playChord(rootPc, qual, gain)` when `moved <= 3px` | Prototype lines 1461–1464 | Unchanged — same tap detection (moved ≤ 3px), same playChord call |
+| Remove (✕) | `handleRemove` lines 143–146: `e.stopPropagation(); clearChordAt(i)` | Prototype line 1440: `melState.progression.splice(i,1); renderProgChips(); requeueLive()` | Unchanged — `clearChordAt` handles splice + requeueLive |
+
+### Files touched
+
+- `src/ui/ProgressionStrip.svelte` — proportional widths; resize gesture (state, handlers, `.resize-handle` element, `.seg-dur` label); `setChordBars` import; `bind:this={segmentsEl}`; updated comment block
+- `docs/orbifold-v2/handoffs/phase-02-handoff.md` — updated (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-02-04:** `.seg` flex basis is `{pct}%` computed from `ch.bars ?? 1` relative to `totalBars` — when all bars === 1 the segments are equal-width (same as Phase 01); when any bar differs, segments scale proportionally. The `.segments` row fills the available footer width via `flex: 1`.
+- **A-02-05:** `handleResizePointerUp` calls `setChordBars(i, newBars)` where `newBars = clamp(nearest-0.5(resizeStartBars + dx/pixelsPerBar))`. `setChordBars` calls `requeueLive()` internally.
+- **A-02-06:** `handleResizePointerDown` calls `e.stopPropagation()` — this prevents the `.seg`'s `on:pointerdown` (`handlePointerDown`) from firing. The `.seg` `handlePointerDown` additionally guards against `.resize-handle` target class. These two independent guards make the gestures fully decoupled.
+- **A-02-07:** All prior Phase 01 interactions (gain drag, tap-preview, remove) confirmed preserved — logic unchanged from ProgressionChips.svelte source lines cited in the prototype-parity table above.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint + Prettier clean).
+- `pnpm test` — 187 tests pass (unchanged; no regression; no new tests required for this UI step per spec).
+- `pnpm build` — exits 0 (pre-existing chunk-size warning, not introduced by this step).
+
+### Manual parity note (per phase spec validation requirements)
+
+- **Equal-width (uniform bars):** With a 4-chord progression where all `bars === 1` (or undefined): segments are equal-width (same as Phase 01 behavior). `totalBars = 4`, each `segPct = 25%`. The `.segments` container fills the full footer width. No duration labels shown.
+- **After resizing chord 0 to 2 bars:** `totalBars = 5` (2+1+1+1), chord 0 segment is `40%` wide, the other three are each `20%`. Strip still fills the full available footer width. The ProgressionStrip codegen (via `harmonyCode` → `melodyLine`) produces an `arrange([2, …], [1, …], [1, …], [1, …])` pattern for that progression.
+- **Vertical gain drag:** Starting a pointer-down on the `.seg` body (not the handle) starts gain drag with `cursor: ns-resize`. The resize handle is never involved.
+- **Tap-to-preview:** A pointer-down + pointer-up with `moved ≤ 3px` on the segment body calls `playChord`. Not triggered by the resize handle.
+- **Remove button:** ✕ button calls `clearChordAt(i)`. Unaffected by Phase 02 changes.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Each chord carries optional `bars` field; `setChordBars` clamps and commits | `tests/session.test.ts` | unit | **covered** — from step 02.3/02.4; unchanged |
+| A-02-02 | `melodyLine()` byte-identical when all bars === 1 or undefined | `tests/codegen.test.ts` | unit | **covered** — from step 02.4; unchanged |
+| A-02-03 | `melodyLine()` emits `arrange()` when any chord has bars !== 1 | `tests/codegen.test.ts` | unit | **covered** — from step 02.4; unchanged |
+| A-02-04 | ProgressionStrip renders proportional segment widths | — | manual | **covered** — proportional flex-basis; manual parity note above |
+| A-02-05 | Drag resize handle changes bars and calls setChordBars + requeueLive | — | manual | **covered** — resize gesture implemented; manual parity note above |
+| A-02-06 | Resize and gain-drag gestures are fully independent | — | manual | **covered** — stopPropagation + target-class guard; manual parity note above |
+| A-02-07 | Prior Phase 01 interactions (gain drag, tap-preview, remove) work without regression | — | manual | **covered** — logic unchanged; prototype-parity table above cites all three interactions |
+| A-02-08 | Existing saved sessions without `bars` load and play correctly | `tests/codegen.test.ts` | unit | **covered** — from step 02.3/02.4; unchanged |
+| A-02-09 | All quality gates pass; test count ≥ 184 | all test files | automated | **covered** — 187 tests pass; `tsc`, `lint`, `build` all exit 0 |
+
+### Decisions made (if any)
+
+- **Bar count label show-when:** Spec gave Dev discretion on "always show or only show non-1". Chose "only show when non-1 (and not undefined)" per the phase scope rationale — keeps UI clean for the common case (all bars === 1).
+- **`pixelsPerBar` measurement:** Used `segmentsEl.getBoundingClientRect().width` (the `.segments` container total width, not counting gaps) divided by `totalBars`. This is accurate during drag because `totalBars` is the live reactive value (which includes the current `resizeBars[i]` override), matching the rendered proportions.
+- **Fallback when `segmentsEl` is null:** Used `200` px as a safe default (handle only active after mount, so this is defensive only).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 187 tests passing (unchanged from step 02.4).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- Phase 02 implementation complete: `Chord.bars`, `setChordBars`, `clampBars`, `melodyLine()` dual-mode, `ProgressionStrip` proportional widths and resize gesture — all shipped.
+
+### Next-step context (only if non-obvious)
+
+- Phase 02 is complete. All nine acceptance criteria (A-02-01 through A-02-09) are covered.
+- The Planner reviews this final step. After APPROVE, the Pilot can merge `orbifold-v2/phase-02` to `main`.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
