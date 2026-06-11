@@ -107,3 +107,104 @@ None.
 ### Planner Review
 
 (Filled by the Planner in review mode)
+
+---
+
+## Step 03.2 — ADR 0010 amendment: 0.25-beat granularity
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- **Terminal commit:** `docs(adr): Phase 03 step 03.2 — ADR 0010 amendment for 0.25-beat granularity`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+**Pilot Checkpoint:** #2 — ADR being modified. The Planner must APPROVE before step 03.3 (implementation) proceeds.
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/orbifold-v2/inventories/phase-03-inventory.md`, `docs/adr/0010-variable-chord-duration.md` (full), `docs/orbifold-v2/phases/phase-03.md` (step 03.2).
+- Appended an "Amendment — orbifold-v2 / Phase 03" section to `docs/adr/0010-variable-chord-duration.md`.
+- Amendment states: new minimum 0.25 (one beat / quarter note of 4/4), rounding formula change, lower clamp change, backward-compat guarantee, all four changed sites named explicitly.
+- No source code written.
+
+### Amendment summary
+
+| Parameter | Original | Amended |
+| --- | --- | --- |
+| Minimum `bars` | `0.5` | `0.25` |
+| Rounding formula | `Math.round(bars * 2) / 2` | `Math.round(bars * 4) / 4` |
+| Lower clamp | `0.5` | `0.25` |
+| Upper clamp | `8` | `8` (unchanged) |
+| Field name | `bars` | unchanged |
+| `SESSION_SCHEMA_VERSION` | `1` | `1` (unchanged) |
+
+### Four changed sites documented in amendment
+
+1. `clampBars()` in `src/state/session.ts` — rounding + lower clamp + JSDoc.
+2. `SavedChordSchema.bars` in `src/lib/persistence.ts` — `.min(0.5)` → `.min(0.25)`.
+3. `HarmonyChordSchema.bars` in `src/agent/schema.ts` — `.min(0.5)` → `.min(0.25)` + JSDoc.
+4. `handleResizePointerMove` rounding and `barsLabel` in `src/ui/ProgressionStrip.svelte`.
+
+### Backward-compat guarantee (as stated in amendment)
+
+Values `≥ 0.5` are a strict subset of values `≥ 0.25`. All sessions saved before Phase 03 parse correctly against the new schema without a version bump. `SESSION_SCHEMA_VERSION` stays at `1`. Audio output is byte-identical for any session where no chord uses `bars < 0.5`.
+
+### Files touched
+
+- `docs/adr/0010-variable-chord-duration.md` — amendment section appended
+- `docs/orbifold-v2/handoffs/phase-03-handoff.md` — this entry appended
+
+### Validation evidence (per Acceptance ID)
+
+No Acceptance IDs are directly covered by this docs-only step.
+
+### Routine validations (one-liner each, no transcripts)
+
+No source code written; no build/test/lint runs required for this step.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+| --- | --- | --- | --- | --- |
+| A-03-01 | `#sessionsBtn` does not overlap last resize handle | — | manual | not covered — deferred to step 03.4 |
+| A-03-02 | 2-cycle chord visibly ≥2× wider than 1-cycle; 0.25-cycle ≈¼ width | — | manual | not covered — deferred to step 03.4 |
+| A-03-03 | Numbered ruler visible and aligned | — | manual | not covered — deferred to step 03.4 |
+| A-03-04 | Bar lines heavier than beat lines; optional half-bar intermediate | — | manual | not covered — deferred to step 03.4 |
+| A-03-05 | Minimum resize gesture reach is 0.25 | — | manual | not covered — deferred to step 03.3/03.4 |
+| A-03-06 | `clampBars` unit test: 0.1→0.25, 0.25→0.25, 0.4→0.5, 8.1→8 | `tests/session.test.ts` | unit | not covered — deferred to step 03.3 |
+| A-03-07 | `barsLabel` unit test: 0.25→`¼×`, 0.75→`¾×`, 1.25→`1¼×` | `tests/session.test.ts` | unit | not covered — deferred to step 03.3 |
+| A-03-08 | Session with `bars: 0.5` loads and plays; `SavedChordSchema.safeParse` succeeds | `tests/session.test.ts` or `tests/persistence.test.ts` | unit | not covered — deferred to step 03.3 |
+| A-03-09 | All strip interactions intact | — | manual | not covered — deferred to step 03.4 |
+| A-03-10 | Ruler and segments scroll in sync | — | manual | not covered — deferred to step 03.4 |
+| A-03-11 | All quality gates pass | all | automated | not covered — deferred to step 03.3/03.4 |
+
+**Notes on partial coverage:** This is a docs-only step. All Acceptance IDs remain deferred.
+
+### Decisions made (if any)
+
+None — amendment documents Pilot-resolved decisions from the inventory step (OD-03-01: 48 px/cycle confirmed; OD-03-02: half-bar gridline mandatory).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 187 tests passing (unchanged).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0 (unchanged).
+- No source code changed.
+
+### Next-step context (only if non-obvious)
+
+Step 03.3 implements the four changed sites identified in the amendment. It must NOT proceed until the Planner APPROVEs this ADR amendment (Pilot Checkpoint #2).
+
+### Planner Review
+
+(Filled by the Planner in review mode)

@@ -120,3 +120,54 @@ The AI agent's `HarmonyChordSchema` in `src/agent/schema.ts` will be extended wi
 ### Session schema version stays at 1
 
 No migration is required. The `bars` field is additive and optional. Existing saved sessions without `bars` load, parse, and produce identical audio output.
+
+---
+
+## Amendment — orbifold-v2 / Phase 03 (step 03.2), 2026-06-11
+
+### Reason
+
+Phase 03 introduces a finer resize granularity in the ProgressionStrip. The original ADR set the minimum chord duration at 0.5 cycles (one half-bar) and rounded to the nearest 0.5. UX testing during the absolute-grid redesign showed that one-beat (0.25-cycle) segments are musically useful and visually viable at `PX_PER_CYCLE = 48` (the 0.25-cycle segment is 12 px wide — narrow but readable with the `¼×` label). The Pilot chose the 0.25 granularity at Phase 03 scoping (design decision D1); it was confirmed at inventory review alongside OD-03-01 (48 px/cycle) and OD-03-02 (mandatory half-bar gridline).
+
+### What changes
+
+| Parameter | Original value | Amended value |
+| --- | --- | --- |
+| Minimum valid `bars` value | `0.5` (one half-bar) | `0.25` (one beat / quarter note of 4/4) |
+| Rounding formula | `Math.round(bars * 2) / 2` | `Math.round(bars * 4) / 4` |
+| Lower clamp bound | `0.5` | `0.25` |
+| Upper clamp bound | `8` | unchanged (`8`) |
+| Field name (`Chord.bars`) | `bars` | unchanged |
+| `SESSION_SCHEMA_VERSION` | `1` | unchanged (`1`) |
+
+### Changed implementation sites
+
+All four sites that enforced the old `0.5` minimum must be updated together:
+
+1. **`clampBars()` in `src/state/session.ts`** — the rounding expression changes from `Math.round(bars * 2) / 2` to `Math.round(bars * 4) / 4`, and the lower clamp changes from `Math.max(0.5, …)` to `Math.max(0.25, …)`. The JSDoc is updated to reflect the new step (0.25) and minimum (0.25).
+
+2. **`SavedChordSchema.bars` in `src/lib/persistence.ts`** — `.min(0.5)` changes to `.min(0.25)`. This is the Zod schema used to parse chord data from `localStorage`-persisted sessions.
+
+3. **`HarmonyChordSchema.bars` in `src/agent/schema.ts`** — `.min(0.5)` changes to `.min(0.25)`. The JSDoc comment "multiples of 0.5; default 1" updates to "multiples of 0.25; default 1". This is the Zod schema used to validate AI-agent-generated chord payloads.
+
+4. **`handleResizePointerMove` in `src/ui/ProgressionStrip.svelte`** — the inline rounding changes from `Math.round(rawBars * 2) / 2` to `Math.round(rawBars * 4) / 4`, and the lower clamp changes from `0.5` to `0.25`. The upper clamp (`8`) is unchanged. Additionally, `pixelsPerBar` becomes the constant `PX_PER_CYCLE = 48` (replacing the dynamic `segWidth / totalBars` computation) as part of the same step's absolute-grid model. The `barsLabel` helper in the same file is extended to produce `¼×`, `½×`, and `¾×` for the new quarter fractions, using a lookup table `['', '¼', '½', '¾']` indexed by `Math.round((bars % 1) * 4)`.
+
+### Backward-compatibility guarantee
+
+The amendment widens the valid range from `[0.5, 8]` to `[0.25, 8]`. Every value that was valid under the original ADR (`≥ 0.5`, rounded to the nearest `0.5`) is also valid under the amendment (still `≥ 0.25`, still a legal multiple of `0.25`). As a result:
+
+- **Sessions saved before Phase 03** (where all `bars` values are `≥ 0.5` or `undefined`) parse correctly against both the old and new schemas — no schema migration is required.
+- **`SESSION_SCHEMA_VERSION` stays at `1`.** Adding or widening an optional field is backward-compatible by definition.
+- **Audio output is byte-identical** for any session where no chord has `bars < 0.5`. The codegen dual-mode condition (`uniformDuration = progression.every(ch => (ch.bars ?? 1) === 1)`) is unaffected; the `arrange()` / slowcat switch logic is unchanged.
+
+### What does not change
+
+- The `arrange()` dual-mode strategy (Decision §2 of the original ADR).
+- The field name `Chord.bars` and its meaning (one Strudel cycle = one bar of 4/4).
+- The upper bound (`8` cycles).
+- All codegen logic in `src/core/codegen/strudel.ts` — this file is untouched by Phase 03.
+- The `Block.bars` integer type in `src/core/composition/model.ts` — unrelated to `Chord.bars`.
+
+### Pilot Checkpoint
+
+This amendment is Pilot Checkpoint #2 for Phase 03. The Planner must review and APPROVE the ADR amendment before step 03.3 (implementation) proceeds.
