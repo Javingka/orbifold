@@ -281,4 +281,5 @@ Phase 04 is now feature-complete (steps 04.1–04.3 delivered). A-04-01 and A-04
 
 ### Planner Review
 
-_(awaiting Planner review)_
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action: Pilot approval required before Phase 05, reason: Phase 04 complete — Pilot Checkpoint #5 (phase approval + perceptual verification of A-04-01 and A-04-03).**
