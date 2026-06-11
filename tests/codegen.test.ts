@@ -128,6 +128,64 @@ describe('melodyLine', () => {
   });
 });
 
+// ── melodyLine — dual-mode (ADR 0010) ─────────────────────────────────────
+// Phase 02 step 02.4: variable chord duration via arrange().
+// Tests 1–4 satisfy A-02-02 (byte-identical uniform path) and A-02-03 (arrange path).
+
+describe('melodyLine — dual-mode (ADR 0010)', () => {
+  // Test 1 — uniform durations: backward compat guarantee (A-02-02)
+  it('Test 1 — uniform durations: emits slowcat form identical to pre-phase main', () => {
+    // Both chords have bars=1 (explicit). Must produce byte-identical output to the
+    // existing slowcat path (A-02-02).
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 1 },
+        { rootPc: 9, qual: 'min', gain: 0.6, bars: 1 },
+      ],
+      'chord',
+      3
+    );
+    // Byte-identical to the pre-phase slowcat form.
+    expect(result).toBe(
+      '  note("<[C3,E3,G3] [A3,C4,E4]>").s("sawtooth").lpf(1200).gain("<0.60 0.60>").room(0.3)'
+    );
+  });
+
+  // Test 2 — mixed durations: arrange() path (A-02-03)
+  it('Test 2 — mixed durations: emits arrange() form with per-chord inline gain', () => {
+    // C major: rootPc=0, maj, octave=3 → [C3,E3,G3], bars=2, gain=0.60
+    // F minor-ish: rootPc=5, min, octave=3 → [F3,G#3,C4], bars=0.5, gain=0.80
+    // NOTE_NAMES uses sharp spellings; pc 8 = G# not Ab.
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 },
+        { rootPc: 5, qual: 'min', gain: 0.8, bars: 0.5 },
+      ],
+      'chord',
+      3
+    );
+    expect(result).toBe(
+      'arrange(\n' +
+        '  [2, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)],\n' +
+        '  [0.5, note("[F3,G#3,C4]").s("sawtooth").lpf(1200).gain(0.80).room(0.3)]\n' +
+        ')'
+    );
+  });
+
+  // Test 3 — single chord bars === 1: uniform path
+  it('Test 3 — single chord with bars === 1 uses slowcat form', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1 }], 'chord', 3);
+    expect(result).toBe('  note("<[C3,E3,G3]>").s("sawtooth").lpf(1200).gain("<0.60>").room(0.3)');
+    // Must NOT contain arrange().
+    expect(result).not.toContain('arrange(');
+  });
+
+  // Test 4 — empty progression: returns '' (unchanged)
+  it('Test 4 — empty progression returns empty string', () => {
+    expect(melodyLine([], 'chord', 3)).toBe('');
+  });
+});
+
 // ── rhythmToStrudel ───────────────────────────────────────────────────────
 // Prototype lines 833–836. Golden via Node execution.
 

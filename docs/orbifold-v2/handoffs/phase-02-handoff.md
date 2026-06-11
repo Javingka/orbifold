@@ -248,4 +248,107 @@ None.
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-10. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 02.4.
+
+---
+
+## Step 02.4 — Codegen: melodyLine() with arrange() for variable durations
+
+**Date:** 2026-06-10
+**Commit(s):**
+
+- **Terminal commit:** `feat(codegen): Phase 02 step 02.4 — melodyLine arrange() for variable chord durations, unit tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0010-variable-chord-duration.md`, `src/core/codegen/strudel.ts`, `src/state/session.ts` (Chord interface from step 02.3).
+- Also read the Planner note from step 02.3 review: "in `setChordBars`, `requeueLive()` is called unconditionally even when the out-of-range guard fires inside the store update callback. This is harmless for audio, but if you can cover the out-of-range no-op path in one of the unit tests in this step, do so."
+- **`melodyLine()` signature widened** (`src/core/codegen/strudel.ts`): `progression` parameter now accepts `ReadonlyArray<{ rootPc: number; qual: Quality; gain?: number | null; bars?: number }>`. Backward-compatible widening — existing callers pass objects without `bars`, which remains valid.
+- **Dual-mode logic implemented (ADR 0010):**
+  - `const uniformDuration = progression.every(ch => (ch.bars ?? 1) === 1)` computed at top.
+  - If `uniformDuration` is `true`: existing `<…>` slowcat form emitted unchanged. Output is byte-identical to pre-phase `main` (A-02-02).
+  - If `uniformDuration` is `false`: `arrange(…)` form emitted with per-chord inline gain (A-02-03).
+- **`arrange()` form:** Each segment is `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)]`. Full output is `arrange(\n${segments.join(',\n')}\n)`.
+- **`buildSession()` parameter type also widened** to match `melodyLine()` signature (the delegation call compiles cleanly).
+- **JSDoc updated** on `melodyLine()` to document dual-mode behavior and cite ADR 0010.
+- **Unit tests added to `tests/codegen.test.ts`:**
+  - Test 1: uniform durations (both bars=1) → slowcat form byte-identical to pre-phase (A-02-02).
+  - Test 2: mixed durations (bars=2 and bars=0.5) → full exact `arrange()` string (A-02-03).
+  - Test 3: single chord with bars=1 → slowcat form (not arrange).
+  - Test 4: empty progression → `''` (unchanged behavior).
+- **Planner bonus coverage (step 02.3 review note):** Added 3 `setChordBars` tests in `tests/session.test.ts`:
+  - Out-of-range index (index === progression.length) is a no-op: store unchanged.
+  - Negative index is a no-op: store unchanged.
+  - Valid index updates bars via `clampBars` (e.g., 2.3 → 2.5).
+- AGPL-3.0 headers intact on all modified files (pre-existing headers, not altered).
+- Engines in `core/**` have NO DOM/PIXI/Svelte imports (invariant confirmed — `strudel.ts` imports only `chords.js` and `layers.js`).
+- TS strict throughout — no `any`, no `// @ts-ignore`.
+
+### Files touched
+
+- `src/core/codegen/strudel.ts` — `melodyLine()` dual-mode implementation and signature widening; `buildSession()` signature widening; JSDoc updated
+- `tests/codegen.test.ts` — 4 new `melodyLine — dual-mode (ADR 0010)` tests added
+- `tests/session.test.ts` — 3 new `setChordBars` tests added (bonus coverage per Planner note); `setChordBars` and `clampBars` added to import
+- `docs/orbifold-v2/handoffs/phase-02-handoff.md` — updated (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-02-02:** Test 1 (`melodyLine — dual-mode` suite) asserts that `melodyLine([{..., bars:1}, {..., bars:1}], 'chord', 3)` produces the exact pre-phase slowcat string — byte-identical guarantee confirmed by Vitest assertion on the full string.
+- **A-02-03:** Test 2 asserts that `melodyLine([{bars:2,...}, {bars:0.5,...}], 'chord', 3)` produces the exact `arrange(\n  [2, ...],\n  [0.5, ...]\n)` string — full string assertion, no substring match.
+- **A-02-01 (partial):** `setChordBars` out-of-range no-op, negative index no-op, and valid-index clamping are now covered by tests in `tests/session.test.ts`. `clampBars` logic is indirectly exercised.
+- **A-02-08:** Uniform path (bars undefined → treated as 1) verified by Test 1 and Test 3 — existing sessions without `bars` field will always take the slowcat path.
+- **A-02-09:** 187 tests pass (180 prior + 7 new: 4 codegen + 3 session). Exceeds the ≥ 184 threshold. `tsc --noEmit` 0 errors, `pnpm lint` 0 errors, `pnpm build` exits 0.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` — 0 errors.
+- `pnpm lint` — 0 errors (ESLint + Prettier clean; ran `pnpm exec prettier --write` on `tests/codegen.test.ts` to fix formatting after initial edit).
+- `pnpm test` — 187 tests pass (7 new tests added; 0 regressions).
+- `pnpm build` — exits 0 (pre-existing chunk-size warning, not introduced by this step).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Each chord carries optional `bars` field (multiples of 0.5, min 0.5, max 8, default 1); `setChordBars` clamps and commits | `tests/session.test.ts` | unit | **covered** — out-of-range no-op, negative-index no-op, and valid-index clamping all tested |
+| A-02-02 | `melodyLine()` byte-identical when all bars === 1 or undefined | `tests/codegen.test.ts` | unit | **covered** — Test 1 (explicit bars=1) and Test 3 (single chord bars=1) assert full string |
+| A-02-03 | `melodyLine()` emits `arrange()` when any chord has bars !== 1 | `tests/codegen.test.ts` | unit | **covered** — Test 2 asserts full exact `arrange(...)` string |
+| A-02-04 | ProgressionStrip renders proportional segment widths | — | manual | not covered — deferred to step 02.5 |
+| A-02-05 | Drag resize handle changes chord bars and calls setChordBars | — | manual | not covered — deferred to step 02.5 |
+| A-02-06 | Resize gesture and gain-drag gesture are fully independent | — | manual | not covered — deferred to step 02.5 |
+| A-02-07 | Prior Phase 01 interactions preserved without regression | — | manual | not covered — deferred to step 02.5 |
+| A-02-08 | Existing saved sessions without `bars` load and play correctly | `tests/codegen.test.ts` | unit | **covered** — Tests 1 and 3 verify bars-absent (undefined) takes slowcat path; Zod schema coverage from step 02.3 still active |
+| A-02-09 | All quality gates pass; test count ≥ 184 | all test files | automated | **covered** — 187 tests pass (≥ 184); `tsc`, `lint`, `build` all exit 0 |
+
+### Decisions made (if any)
+
+- No decisions beyond ADR 0010 guidance.
+- Chose to add 3 `setChordBars` tests (bonus per Planner note) covering the out-of-range no-op path, since the cost is low and it directly addresses the Planner's non-blocking comment.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 187 tests passing.
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `melodyLine()` now emits `arrange()` for variable-duration progressions and slowcat for uniform-duration progressions.
+- `buildSession()` parameter type widened to match.
+
+### Next-step context (only if non-obvious)
+
+- Step 02.5 replaces `flex: 1` in `ProgressionStrip.svelte` with proportional `flex-basis` and adds the horizontal drag-to-resize gesture. `setChordBars` (implemented and tested in 02.3/02.4) is the commit target for the gesture's `pointerup` handler.
+
+### Planner Review
+
 (Filled by the Planner in review mode)

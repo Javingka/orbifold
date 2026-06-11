@@ -37,6 +37,8 @@ import {
   setNowPlaying,
   setBpm,
   requeueLive,
+  setChordBars,
+  clampBars,
 } from '../src/state/session.js';
 import type { SessionState, Chord } from '../src/state/session.js';
 
@@ -348,5 +350,56 @@ describe('requeueLive()', () => {
       nowPlaying: { label: 'Acorde', source: 'chord' },
     });
     expect(requeueLive()).toBeNull();
+  });
+});
+
+// ── setChordBars — out-of-range no-op (Planner review note, step 02.3) ────
+// Verifies that setChordBars silently ignores indices outside the progression
+// bounds, leaving the store unchanged. Also covers clampBars.
+
+describe('setChordBars', () => {
+  it('out-of-range index is a no-op: store unchanged for index === progression.length', () => {
+    // Progression has 1 chord; valid indices are 0 only. Index 1 must be ignored.
+    const initial: SessionState = {
+      ...DEFAULT_SESSION_STATE,
+      harmony: {
+        ...DEFAULT_SESSION_STATE.harmony,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6 }],
+      },
+    };
+    sessionStore.set(initial);
+    const before = get(sessionStore);
+    // Call with out-of-range index — must be a no-op.
+    setChordBars(1, 2);
+    const after = get(sessionStore);
+    expect(after.harmony.progression).toEqual(before.harmony.progression);
+  });
+
+  it('out-of-range negative index is a no-op', () => {
+    const initial: SessionState = {
+      ...DEFAULT_SESSION_STATE,
+      harmony: {
+        ...DEFAULT_SESSION_STATE.harmony,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6 }],
+      },
+    };
+    sessionStore.set(initial);
+    setChordBars(-1, 2);
+    const after = get(sessionStore);
+    expect(after.harmony.progression[0].bars).toBeUndefined();
+  });
+
+  it('valid index updates bars via clampBars', () => {
+    sessionStore.set({
+      ...DEFAULT_SESSION_STATE,
+      harmony: {
+        ...DEFAULT_SESSION_STATE.harmony,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6 }],
+      },
+    });
+    setChordBars(0, 2.3); // nearest 0.5 → 2.5, within [0.5,8]
+    const after = get(sessionStore);
+    expect(after.harmony.progression[0].bars).toBe(clampBars(2.3));
+    expect(after.harmony.progression[0].bars).toBe(2.5);
   });
 });

@@ -57,24 +57,52 @@ export function chordToStrudel(
 /**
  * Generate a Strudel harmony line from a chord progression.
  *
- * Each chord becomes a `[...]` bracket in the `<...>` sequence; gain values
- * are aligned per-chord in a parallel `gain("<g1 g2 …>")`.
+ * **Dual-mode (ADR 0010):**
+ * - Uniform case (all chords have `bars === 1` or `bars === undefined`): emits the
+ *   existing `<…>` slowcat form. Output is byte-identical to pre-Phase-02 `main`.
+ * - Variable case (at least one chord has `bars !== 1`): emits an `arrange(…)` form
+ *   where each chord is an independent segment with its own absolute cycle count and
+ *   inline gain. No `.fast`/`.slow` — duration is expressed via the `numCycles`
+ *   argument to `arrange()`, preserving the `setcps` invariant.
+ *
  * Returns `''` when the progression is empty.
  *
  * Ported from prototype lines 765–773 (with explicit params per OD-2).
+ * Dual-mode extension introduced in Phase 02 — ADR 0010.
  */
 export function melodyLine(
-  progression: ReadonlyArray<{ rootPc: number; qual: Quality; gain?: number | null }>,
+  progression: ReadonlyArray<{
+    rootPc: number;
+    qual: Quality;
+    gain?: number | null;
+    bars?: number;
+  }>,
   chordMode: 'chord' | 'arp',
   octave: number
 ): string {
   if (progression.length === 0) return '';
   const sep = chordMode === 'chord' ? ',' : ' ';
-  const seq = progression
-    .map((ch) => '[' + chordVoicing(ch.rootPc, ch.qual, octave).join(sep) + ']')
-    .join(' ');
-  const gains = progression.map((ch) => (ch.gain == null ? 0.6 : ch.gain).toFixed(2)).join(' ');
-  return `  note("<${seq}>").s("sawtooth").lpf(1200).gain("<${gains}>").room(0.3)`;
+
+  // ADR 0010 dual-mode: use arrange() only when at least one chord has bars !== 1.
+  const uniformDuration = progression.every((ch) => (ch.bars ?? 1) === 1);
+
+  if (uniformDuration) {
+    // Slowcat form — byte-identical to pre-phase main (A-02-02).
+    const seq = progression
+      .map((ch) => '[' + chordVoicing(ch.rootPc, ch.qual, octave).join(sep) + ']')
+      .join(' ');
+    const gains = progression.map((ch) => (ch.gain == null ? 0.6 : ch.gain).toFixed(2)).join(' ');
+    return `  note("<${seq}>").s("sawtooth").lpf(1200).gain("<${gains}>").room(0.3)`;
+  }
+
+  // arrange() form — per-chord inline gain (A-02-03).
+  const segments = progression.map((ch) => {
+    const voicing = chordVoicing(ch.rootPc, ch.qual, octave).join(sep);
+    const g = (ch.gain == null ? 0.6 : ch.gain).toFixed(2);
+    const numCycles = ch.bars ?? 1;
+    return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)]`;
+  });
+  return `arrange(\n${segments.join(',\n')}\n)`;
 }
 
 /**
@@ -111,7 +139,12 @@ export function rhythmToStrudel(
  */
 export function buildSession(
   layers: RhythmLayer[],
-  progression: ReadonlyArray<{ rootPc: number; qual: Quality; gain?: number | null }>,
+  progression: ReadonlyArray<{
+    rootPc: number;
+    qual: Quality;
+    gain?: number | null;
+    bars?: number;
+  }>,
   chordMode: 'chord' | 'arp',
   octave: number
 ): string {
