@@ -199,11 +199,11 @@
   </div>
 
   <!--
-    Progression chips slot (step 04.4).
-    ProgressionChips.svelte is inserted here via Svelte <slot>.
-    The .prog wrapper div (prototype lines 505–508) is inside ProgressionChips.
+    Progression chips slot (step 04.4): ProgressionChips/ProgressionStrip was
+    inserted here via Svelte <slot> until Phase 03 step 03.4, when the strip was
+    relocated to its own .progression-row above the Transport footer in App.svelte.
+    The <slot /> is intentionally removed; no component passes content here.
   -->
-  <slot />
 </footer>
 
 <style>

@@ -407,16 +407,26 @@
 {/if}
 
 <!--
+  Phase 03 step 03.4: ProgressionStrip relocated to its own full-width row above
+  the Transport footer. This clears the #sessionsBtn fixed button (position:fixed;
+  bottom:24px; right:14px) which previously overlapped the strip's rightmost content
+  when the strip was inside the Transport footer.
+  The strip is no longer passed via the Transport <slot>; Transport renders with an
+  empty slot (the <slot /> line in Transport.svelte renders nothing).
+-->
+<div class="progression-row">
+  <ProgressionStrip />
+</div>
+
+<!--
   Phase 04 step 04.3: Transport component at bottom of flex-column layout.
   Replaces the prototype <footer class="glass"> (lines 484–513).
   Includes now-playing pill, engine buttons, BPM slider, and tap-tempo.
   Phase 04 step 04.4: ProgressionChips inserted via slot (prototype .prog lines 505–508).
-  Phase 01 step 01.3: ProgressionStrip replaces ProgressionChips in the Transport slot.
-    ProgressionChips is kept (not deleted) per Pilot invariant; only mounting changed.
+  Phase 01 step 01.3: ProgressionStrip was mounted here via slot; moved to
+    .progression-row above in Phase 03 step 03.4. Transport slot now renders nothing.
 -->
-<Transport>
-  <ProgressionStrip />
-</Transport>
+<Transport />
 
 <!--
   Code drawer: fixed position, slides up from bottom on toggle.
@@ -454,6 +464,22 @@
 <Tooltip />
 
 <style>
+  /*
+   * Phase 03 step 03.4: ProgressionStrip own-row above Transport footer.
+   * Full-width flex row; padding matches Transport footer left/right margin (12px).
+   * box-sizing: border-box ensures padding does not add to the 100% width.
+   * align-items: stretch lets ProgressionStrip fill the row height.
+   * The strip is no longer inside the footer's flex-wrap row, so it no longer
+   * risks being occluded by the #sessionsBtn fixed button.
+   */
+  .progression-row {
+    display: flex;
+    align-items: stretch;
+    padding: 0 12px 4px;
+    box-sizing: border-box;
+    width: 100%;
+  }
+
   /*
    * div#stage: PIXI canvas container.
    * Phase 04 step 04.3: changed from position:fixed full-screen to flex:1 within

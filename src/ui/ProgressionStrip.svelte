@@ -3,10 +3,12 @@
   Orbifold — ProgressionStrip component.
 
   Replaces ProgressionChips in App.svelte (Phase 01 step 01.3).
-  Renders the chord progression as segments in the Transport footer slot.
-  Phase 01: equal-width segments (flex: 1).
+  Phase 01: equal-width segments (flex: 1), rendered inside Transport footer slot.
   Phase 02: variable-width segments proportional to ch.bars ?? 1, plus a
             horizontal drag-to-resize handle on each segment's right edge.
+  Phase 03 step 03.4: absolute pixel-width model (PX_PER_CYCLE = 48 px/cycle),
+            numbered bar ruler, hierarchical gridlines, own-row layout (strip
+            relocated to .progression-row in App.svelte above Transport footer).
 
   All interactions ported 1:1 from ProgressionChips.svelte (which itself ports
   prototype #progChips area — HTML lines 505–508, CSS lines 224–234, JS lines 1413–1468):
@@ -44,11 +46,21 @@
   Phase 03 changes (ADR 0010 amendment — 0.25-beat granularity):
     barsLabel:            extended to ¼×, ¾× labels for quarter fractions.
     handleResizePointerMove: rounding 0.5→0.25, lower clamp 0.5→0.25.
+    Absolute grid:        PX_PER_CYCLE = 48 px per cycle (matches composition
+                          timeline --ppb:48px); segment widths are fixed px, not
+                          proportional %. The strip scrolls horizontally.
+    Numbered ruler:       <div class="ruler"> with <span class="bar-num"> at each
+                          cycle boundary, 1-indexed to match DAW convention.
+    Hierarchical lines:   Beat (0.25-cycle = 12px) and half-bar (0.5-cycle = 24px)
+                          gridlines via stacked CSS repeating-linear-gradient on
+                          each .seg background (gain fill topmost layer).
+    Scroll sync:          Ruler and segments share a .strip-scroll wrapper so they
+                          scroll in sync.
 
   Visual differences from chips:
     - Phase 01: flex:1 (equal width) instead of flex:0 0 auto (auto-shrink chips).
     - Phase 02: flex: 0 0 {pct}% (proportional to ch.bars).
-    - No horizontal overflow/scroll — segments fill available footer width.
+    - Phase 03: fixed pixel width per cycle; strip scrolls horizontally when wide.
 
   Store reads (same as ProgressionChips — no new reads):
     $sessionStore.harmony.progression  — array of Chord
@@ -76,6 +88,14 @@
   import { chordLabel } from '../core/theory/chords.js';
   import { diatonicLookup } from '../core/theory/scales.js';
   import type { Mode } from '../core/theory/scales.js';
+
+  /**
+   * Pixels per Strudel cycle in the absolute-grid model (Phase 03 step 03.4).
+   * Matches the composition timeline --ppb:48px value in app.css (lines 476–482),
+   * making the two timelines visually consistent.
+   * Pilot-confirmed value: OD-03-01 (PX_PER_CYCLE = 48).
+   */
+  const PX_PER_CYCLE = 48;
 
   /**
    * Returns the CSS background gradient for a segment based on its gain.
@@ -153,26 +173,14 @@
     resizeBars = new Array(len).fill(null);
   }
 
-  // ── Proportional width computation (Phase 02) ─────────────────────────────
+  // ── Total bars computation (Phase 02; kept for ruler in Phase 03) ────────────
   // totalBars = sum of all ch.bars (using live resizeBars override when dragging).
-  // pct(i) = (effectiveBars(i) / totalBars) * 100.
-  // Guard: if totalBars === 0 (empty progression) → fall back to equal distribution.
+  // Used by the ruler to determine how many bar markers to render.
 
   $: totalBars = $sessionStore.harmony.progression.reduce(
     (s, c, i) => s + (resizeBars[i] ?? c.bars ?? 1),
     0
   );
-
-  /**
-   * Compute the percentage width for segment i.
-   * Uses resizeBars[i] if a resize drag is active, otherwise ch.bars ?? 1.
-   */
-  function segPct(i: number): number {
-    const prog = $sessionStore.harmony.progression;
-    if (prog.length === 0 || totalBars === 0) return 100 / Math.max(prog.length, 1);
-    const b = resizeBars[i] ?? prog[i]?.bars ?? 1;
-    return (b / totalBars) * 100;
-  }
 
   /**
    * Pointer down on .seg body: capture pointer, record startY and startGain.
@@ -293,25 +301,27 @@
   /**
    * Pointer move on .resize-handle: update resizeBars[i] live.
    *
-   * deltaBars = dx / pixelsPerBar where pixelsPerBar = segmentsWidth / totalBars.
+   * Phase 03 step 03.4: pixelsPerBar is now the constant PX_PER_CYCLE (48), replacing
+   * the previous dynamic segWidth / totalBars computation. In the absolute-grid model
+   * every pixel-to-bar mapping is fixed, so the drag delta is simply dx / PX_PER_CYCLE.
    * newBars = nearest 0.25, clamped [0.25, 8].
    * Updates resizeBars[] reactively so the segment reflows while dragging.
    *
    * Phase 02, no prototype equivalent (ADR 0010).
-   * Phase 03: rounding changed from 0.5 to 0.25; lower clamp changed from 0.5 to 0.25.
+   * Phase 03: rounding changed from 0.5 to 0.25; lower clamp changed from 0.5 to 0.25;
+   *           pixelsPerBar changed from dynamic (segWidth / totalBars) to PX_PER_CYCLE.
    */
   function handleResizePointerMove(e: PointerEvent, i: number): void {
     if (!resizeActive[i]) return;
     const dx = e.clientX - resizeStartX[i];
-    // Measure pixels per bar from the .segments container width and current totalBars.
-    const segWidth = segmentsEl ? segmentsEl.getBoundingClientRect().width : 200;
-    const pixelsPerBar = totalBars > 0 ? segWidth / totalBars : segWidth;
+    // Absolute-grid model: 1 cycle = PX_PER_CYCLE pixels (constant).
+    const pixelsPerBar = PX_PER_CYCLE;
     const deltaBars = dx / pixelsPerBar;
     const rawBars = resizeStartBars[i] + deltaBars;
     // Round to nearest 0.25, clamp [0.25, 8].
     const newBars = Math.max(0.25, Math.min(8, Math.round(rawBars * 4) / 4));
     resizeBars[i] = newBars;
-    // Trigger reactivity so totalBars and segPct recompute.
+    // Trigger reactivity so totalBars recomputes.
     resizeBars = [...resizeBars];
   }
 
@@ -339,9 +349,12 @@
 </script>
 
 <!--
-  Strip container. Replaces the .prog scrollable flex row from ProgressionChips.
-  Segments use proportional flex-basis (Phase 02) so they fill available width
-  proportionally to their ch.bars value.
+  Strip container.
+  Phase 03 step 03.4 layout:
+    .strip: outer flex row — .lbl label (flush left, outside scroll) + .strip-scroll (scrollable).
+    .strip-scroll: shared scroll wrapper for ruler + segments; overflow-x:auto.
+      .ruler: numbered bar marker row (position:relative, height:14px).
+      .segments: absolute-width segment row; scrolls with ruler inside .strip-scroll.
   Prototype: .prog wrapper (lines 505–508), .prog-empty (line 234).
 -->
 <div class="strip">
@@ -349,51 +362,104 @@
   {#if $sessionStore.harmony.progression.length === 0}
     <span class="strip-empty">toca acordes en el Tonnetz…</span>
   {:else}
-    <div class="segments" bind:this={segmentsEl}>
-      {#each $sessionStore.harmony.progression as ch, i (i)}
-        {@const label = chordLabel(ch.rootPc, ch.qual)}
-        {@const tcls = tonalClass(
-          ch.rootPc,
-          ch.qual,
-          $sessionStore.harmony.root,
-          $sessionStore.harmony.mode
-        )}
-        {@const displayGain = localGain[i] ?? ch.gain}
-        {@const pct = segPct(i)}
-        {@const durLabel = barsLabel(resizeBars[i] ?? ch.bars)}
-        <div
-          class="seg {tcls}"
-          style="flex: 0 0 {pct}%; background: {chipGainCss(displayGain)}"
-          title="mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar"
-          role="button"
-          tabindex="0"
-          on:pointerdown={(e) => handlePointerDown(e, i)}
-          on:pointermove={(e) => handlePointerMove(e, i)}
-          on:pointerup={(e) => handlePointerUp(e, i)}
-          on:keydown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') playChord(ch.rootPc, ch.qual, ch.gain);
-          }}
-        >
-          <span class="seg-content">
-            <span class="seg-label">{label}</span>
-            {#if durLabel}
-              <span class="seg-dur">{durLabel}</span>
-            {/if}
-          </span>
-          <button class="rm" on:click={(e) => handleRemove(e, i)} tabindex="-1">✕</button>
-          <!-- Phase 02: horizontal resize handle on right edge. -->
-          <!-- stopPropagation on pointerdown prevents gain-drag from starting. -->
+    <!--
+      Phase 03 step 03.4: shared scroll wrapper ensures ruler and segments
+      scroll in sync (OD-03-02, A-03-10). overflow-x:auto on the wrapper only;
+      ruler and segments are not independently scrollable.
+    -->
+    <div class="strip-scroll">
+      <!--
+        Numbered bar ruler: bar markers at each cycle boundary, 1-indexed.
+        position:relative allows absolute-positioned .bar-num spans.
+        Marker at cycleIndex * PX_PER_CYCLE aligns with segment left edges.
+        Markers range from cycle 1 to Math.ceil(totalBars)+1 (end boundary).
+      -->
+      <div class="ruler">
+        {#each Array.from({ length: Math.ceil(totalBars) + 1 }, (_, k) => k) as cycleIndex}
+          <span class="bar-num" style="left: {cycleIndex * PX_PER_CYCLE}px">{cycleIndex + 1}</span>
+        {/each}
+      </div>
+      <!--
+        Segments row: absolute pixel widths per cycle (PX_PER_CYCLE = 48).
+        A 2-cycle chord = 96px; a 0.25-cycle chord = 12px.
+        Gridlines are rendered via stacked CSS repeating-linear-gradient on each
+        .seg: beat lines every 12px (PX_PER_CYCLE/4), half-bar lines every 24px
+        (PX_PER_CYCLE/2). Gain fill is the topmost background layer.
+        Bar boundaries = the 3px gap between segments + the ruler tick.
+      -->
+      <div class="segments" bind:this={segmentsEl}>
+        {#each $sessionStore.harmony.progression as ch, i (i)}
+          {@const label = chordLabel(ch.rootPc, ch.qual)}
+          {@const tcls = tonalClass(
+            ch.rootPc,
+            ch.qual,
+            $sessionStore.harmony.root,
+            $sessionStore.harmony.mode
+          )}
+          {@const displayGain = localGain[i] ?? ch.gain}
+          {@const segBars = resizeBars[i] ?? ch.bars ?? 1}
+          {@const segPx = segBars * PX_PER_CYCLE}
+          {@const durLabel = barsLabel(resizeBars[i] ?? ch.bars)}
+          <!--
+            Phase 03: width and flex-basis are fixed pixel values (absolute grid).
+            Background: gain fill (topmost) over half-bar gridlines over beat gridlines.
+            Beat lines at 12px intervals (rgba(255,255,255,0.07));
+            Half-bar lines at 24px intervals (rgba(255,255,255,0.13)) — MANDATORY (OD-03-02).
+            The gain gradient is the topmost layer; gridlines show through underneath.
+          -->
           <div
-            class="resize-handle"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Redimensionar duración"
-            on:pointerdown={(e) => handleResizePointerDown(e, i)}
-            on:pointermove={(e) => handleResizePointerMove(e, i)}
-            on:pointerup={(e) => handleResizePointerUp(e, i)}
-          ></div>
-        </div>
-      {/each}
+            class="seg {tcls}"
+            style="
+              width: {segPx}px;
+              flex: 0 0 {segPx}px;
+              background:
+                {chipGainCss(displayGain)},
+                repeating-linear-gradient(
+                  to right,
+                  transparent 0,
+                  transparent calc({PX_PER_CYCLE / 2}px - 1px),
+                  rgba(255,255,255,0.13) calc({PX_PER_CYCLE / 2}px - 1px),
+                  rgba(255,255,255,0.13) {PX_PER_CYCLE / 2}px
+                ),
+                repeating-linear-gradient(
+                  to right,
+                  transparent 0,
+                  transparent calc({PX_PER_CYCLE / 4}px - 1px),
+                  rgba(255,255,255,0.07) calc({PX_PER_CYCLE / 4}px - 1px),
+                  rgba(255,255,255,0.07) {PX_PER_CYCLE / 4}px
+                )
+            "
+            title="mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar"
+            role="button"
+            tabindex="0"
+            on:pointerdown={(e) => handlePointerDown(e, i)}
+            on:pointermove={(e) => handlePointerMove(e, i)}
+            on:pointerup={(e) => handlePointerUp(e, i)}
+            on:keydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') playChord(ch.rootPc, ch.qual, ch.gain);
+            }}
+          >
+            <span class="seg-content">
+              <span class="seg-label">{label}</span>
+              {#if durLabel}
+                <span class="seg-dur">{durLabel}</span>
+              {/if}
+            </span>
+            <button class="rm" on:click={(e) => handleRemove(e, i)} tabindex="-1">✕</button>
+            <!-- Phase 02: horizontal resize handle on right edge. -->
+            <!-- stopPropagation on pointerdown prevents gain-drag from starting. -->
+            <div
+              class="resize-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Redimensionar duración"
+              on:pointerdown={(e) => handleResizePointerDown(e, i)}
+              on:pointermove={(e) => handleResizePointerMove(e, i)}
+              on:pointerup={(e) => handleResizePointerUp(e, i)}
+            ></div>
+          </div>
+        {/each}
+      </div>
     </div>
   {/if}
 </div>
@@ -401,7 +467,9 @@
 <style>
   /*
    * Strip outer container.
-   * Replaces .prog from ProgressionChips. Flex row; lbl + segments side by side.
+   * Phase 03 step 03.4: flex row with .lbl (flush left, outside scroll) + .strip-scroll.
+   * flex:1 and min-width:0 let the strip fill the full .progression-row width.
+   * align-items:center vertically centers the label with the scroll area.
    */
   .strip {
     display: flex;
@@ -418,24 +486,77 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     flex: 0 0 auto;
+    align-self: center;
   }
 
   /*
-   * Segments row: fills available width.
-   * Phase 02: segments use flex: 0 0 {pct}% (proportional to ch.bars).
-   * The row itself still uses flex: 1 to fill available space.
+   * Phase 03 step 03.4: shared scroll wrapper for ruler + segments.
+   * overflow-x:auto enables horizontal scrolling when the total loop is wider
+   * than the viewport. overflow-y:hidden suppresses vertical overflow.
+   * flex:1 and min-width:0 let it fill the remaining strip width after the label.
+   * Ruler and segments are stacked as a flex column inside; they scroll in sync
+   * because they share this single scrolling container (A-03-10).
+   */
+  .strip-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /*
+   * Phase 03 step 03.4: numbered bar ruler above the segments.
+   * position:relative allows absolute-positioned .bar-num spans.
+   * height:14px keeps the ruler compact while providing enough room for the
+   * 8.5px numbers (matching .tl-ruler .bar-num font-size in app.css line 488).
+   */
+  .ruler {
+    position: relative;
+    height: 14px;
+    flex: 0 0 auto;
+  }
+
+  /*
+   * Phase 03 step 03.4: bar number markers.
+   * position:absolute at left: cycleIndex * PX_PER_CYCLE.
+   * translateX(2px) gives a 2px inset so the number doesn't sit exactly on the
+   * left edge of the cycle boundary (matches .tl-ruler .bar-num translateX(3px)
+   * convention in app.css line 490).
+   */
+  .bar-num {
+    position: absolute;
+    top: 1px;
+    font-size: 8.5px;
+    color: var(--faint);
+    transform: translateX(2px);
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /*
+   * Segments row: absolute pixel widths per cycle (Phase 03 step 03.4).
+   * Each .seg has width and flex-basis set via inline style to segBars * PX_PER_CYCLE.
+   * The row does NOT scroll independently — scrolling is handled by .strip-scroll.
+   * overflow:visible allows the ruler and segments to jointly overflow; the parent
+   * .strip-scroll clips and scrolls.
+   * Phase 02: segments used flex: 0 0 {pct}% (proportional, fills container).
+   * Phase 03: segments use fixed px width; strip scrolls when wide.
    */
   .segments {
     display: flex;
-    flex: 1;
-    min-width: 0;
+    flex: 0 0 auto;
     gap: 3px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   /*
    * Individual segment. Ported from .prog-chip (ProgressionChips.svelte lines 214–228).
    * Phase 01: flex:1 (equal width). Phase 02: flex: 0 0 {pct}% (proportional).
+   * Phase 03: width and flex-basis set via inline style (segBars * PX_PER_CYCLE px).
+   * background is set via inline style (gain fill + gridlines stacked layers).
    * position: relative — required for .resize-handle absolute positioning.
    * touch-action:none and user-select:none required for pointer capture to work correctly
    * on touch devices (ProgressionChips.svelte lines 226–227, prototype CSS lines 226–228).
