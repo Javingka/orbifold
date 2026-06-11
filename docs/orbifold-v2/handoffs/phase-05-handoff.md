@@ -107,3 +107,6 @@ None.
 ### Next-step context
 
 Step 05.2 writes `docs/adr/0011-harmony-view-architecture.md` — a recording ADR (Status: Accepted, Date: 2026-06-11) for the four locked harmony-view design decisions. No deliberation required; the spec text in the phase file provides the exact content verbatim.
+
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 05.2
