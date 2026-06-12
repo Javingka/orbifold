@@ -201,7 +201,7 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
 
 **Date:** 2026-06-12
 **Commit(s):** (terminal commit — see below)
-**Iteration:** 1 of 5
+**Iteration:** 2 of 5 (REVISE: remove CodeDrawer.svelte close button + handleClose)
 
 ### Completed
 
@@ -217,6 +217,7 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
   - Simplified `handleClose()` to reset `userEdited` only (open lifecycle now controlled by `{#if}` gate in App.svelte).
   - Replaced `position:fixed + translateY(105%)` scoped CSS with `position:absolute; inset:0; z-index:1` so the component fills `#stage` when mounted.
   - Updated component header comment to document primary-view lifecycle.
+  - **[REVISE — iteration 2]** Removed `<button class="c-close" id="codeClose">✕</button>` from the template and its `.c-close` / `.c-close:hover` CSS rules. Removed `handleClose()` function entirely. In the primary-view `{#if}` lifecycle the button was a misleading affordance — clicking it only reset `userEdited = false` with no visible effect on the view. All three identifiers (`#codeClose`, `handleClose`, `.c-close`) now appear only in comments; `grep -rn "codeClose\|handleClose" src/` returns comment-only lines, zero executable references. ADR 0013 §D2 requirement satisfied: close affordances removed, not hidden.
 
 - **`src/ui/CompositionDrawer.svelte` — elevated to primary view (ADR 0013 D2):**
   - Removed `<button id="compTab">` (the `🎚 composición` tab button) from the template — A-09-08.
@@ -242,7 +243,7 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
 ### Files touched
 
 - `src/ui/Header.svelte` — 4-tab nav; `setView` import; `handleViewChange` widened
-- `src/ui/CodeDrawer.svelte` — `#codeTab` removed; primary-view CSS; `open`/`toggleDrawer` removed
+- `src/ui/CodeDrawer.svelte` — `#codeTab` removed; primary-view CSS; `open`/`toggleDrawer` removed; **[REVISE iteration 2]** `#codeClose` button + `.c-close` CSS + `handleClose()` removed (ADR 0013 §D2)
 - `src/ui/CompositionDrawer.svelte` — `#compTab` removed; close button removed; `handleOpen`/`handleClose` removed; primary-view CSS; `onMount` sets `open=true`
 - `src/app/App.svelte` — `{#if}` gates for composition/code views; rhythm hint branch; canvas pointer routing guard; removed old standalone drawer instances
 - `src/app/app.css` — removed dead `#compTab`/`#compDrawer` global slide CSS
@@ -269,6 +270,14 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
 - `pnpm lint` → 0 errors (ESLint + Prettier clean)
 - `pnpm exec vitest run` → 396 passed, 0 failed (13 test files; same baseline as step 09.3)
 - `pnpm build` → exit 0 (1.44s)
+
+**[REVISE iteration 2 re-validation]**
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier clean)
+- `pnpm exec vitest run` → 396 passed, 0 failed (13 test files; no regressions)
+- `pnpm build` → exit 0 (1.51s)
+- `grep -rn "codeClose\|handleClose" src/` → comment-only lines, 0 executable references
 
 ### Acceptance Coverage Table
 
@@ -299,6 +308,7 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
 - Dead global CSS (`#compTab`, `#compDrawer` slide rules) removed from `app.css` to prevent specificity conflicts with the new scoped CSS. The scoped CSS (with Svelte hash) would win anyway, but removing the dead rules avoids confusion.
 - `open` boolean removed entirely from `CodeDrawer.svelte` (was assigned but never read after removing `toggleDrawer` and `class:open`). Kept as live code only where it produces observable behavior (i.e., not here).
 - `handleOpen()` and `handleClose()` removed from `CompositionDrawer.svelte` (no callers after removing tab button and close button). Removing them is cleaner than keeping dead code that fails lint.
+- **[REVISE iteration 2 — ADR 0013 §D2]** `handleClose()` and the `#codeClose` ✕ button REMOVED (not simplified) from `CodeDrawer.svelte`. Rationale: under the `{#if}` lifecycle the function had no visible effect — it only reset `userEdited = false`. Retaining it and the rendered button was a misleading UI affordance contradicting ADR 0013 §D2's explicit goal of "cleanly severing the old drawer metaphor (tab buttons + close affordances removed, not hidden)." `CompositionDrawer.svelte` had already removed its close button in iteration 1; `CodeDrawer.svelte` was missed. Both components are now consistent: no close affordance remains in either elevated primary view.
 
 ### Proposed Decisions Register entries (if any)
 

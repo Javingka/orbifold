@@ -10,9 +10,10 @@
   {#if $sessionStore.view === 'code'} gate. When mounted, it fills #stage via
   flex:1 layout (replacing the position:fixed + translateY slide mechanism).
 
-  The `open` boolean and slide CSS remain as dead code to avoid scope creep.
-  Per ADR 0013 D2: "The `open` boolean and the slide CSS become vestigial for
-  the primary-view path but may remain in the files as dead code."
+  Step 09.4 REVISE: The ✕ close button (#codeClose) and handleClose() function
+  were removed (ADR 0013 §D2). In the primary-view lifecycle there is no close
+  action — navigation is handled by the 4-tab Header.svelte control. The button
+  was a misleading affordance that only reset userEdited=false with no visible effect.
 
   Textarea #liveCode: 120px height, IBM Plex Mono, placeholder 's("bd hh sd hh")'.
 
@@ -21,7 +22,6 @@
     ↻ encolar (próximo ciclo) → queueEditor(code) [prototype line 526]
 
   Local state:
-    open: boolean — vestigial (the {#if} gate in App.svelte controls visibility)
     currentEditorCode: string — auto-populated from session store when userEdited is false
     userEdited: boolean — true once the user types; false after execute/queue
 
@@ -115,11 +115,9 @@
   // toggleDrawer is vestigial — the primary-view {#if} gate in App.svelte controls
   // mounting/unmounting. Removed to avoid lint errors (@typescript-eslint/no-unused-vars).
 
-  function handleClose(): void {
-    // Reset userEdited: next view-open will show fresh derived code.
-    // (open variable removed in Phase 09 step 09.4 — {#if} gate controls lifecycle.)
-    userEdited = false;
-  }
+  // handleClose() removed in Phase 09 step 09.4 REVISE (ADR 0013 §D2): the close
+  // button was a misleading affordance with no effect under the {#if} lifecycle.
+  // Clicking it only reset userEdited=false; the view did not close. Button removed.
 
   function handleRun(): void {
     void runEditor(currentEditorCode);
@@ -150,7 +148,6 @@
     <b>código Strudel</b>
     <span style="font-size:10.5px;color:var(--faint)">lo que suena ahora — edítalo y ejecútalo</span
     >
-    <button class="c-close" id="codeClose" on:click={handleClose}>✕</button>
   </div>
 
   <!--
@@ -208,20 +205,10 @@
     font-size: 14px;
   }
 
-  .code-head .c-close {
-    margin-left: auto;
-    color: var(--muted);
-    font-size: 18px;
-    padding: 0 6px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    line-height: 1;
-  }
-
-  .code-head .c-close:hover {
-    color: var(--text);
-  }
+  /* .c-close removed in Phase 09 step 09.4 REVISE (ADR 0013 §D2):
+     the close button was a misleading affordance — navigation is handled
+     by the 4-tab Header.svelte control; there is no close action in the
+     primary-view lifecycle. */
 
   /*
    * Textarea. Prototype lines 246–248.
