@@ -302,11 +302,14 @@ export function updateTonnetzDynamic(state: SessionState): void {
   // ── Extract last picked chord — prototype: lastPick (line 1232) ───────────
   if (progression.length > 0) {
     const last = progression[progression.length - 1];
-    const prevCx = _lastPick !== null ? _lastPick.cx : undefined;
-    const prevCy = _lastPick !== null ? _lastPick.cy : undefined;
-    const sel = findRenderTriForChord(last, prevCx, prevCy);
-    if (sel !== null) {
-      _lastPick = { rootPc: sel.rootPc, qual: sel.qual, cx: sel.cx, cy: sel.cy };
+    // Phase 06: skip rest slots — they have no Tonnetz position.
+    if (!('isRest' in last)) {
+      const prevCx = _lastPick !== null ? _lastPick.cx : undefined;
+      const prevCy = _lastPick !== null ? _lastPick.cy : undefined;
+      const sel = findRenderTriForChord(last, prevCx, prevCy);
+      if (sel !== null) {
+        _lastPick = { rootPc: sel.rootPc, qual: sel.qual, cx: sel.cx, cy: sel.cy };
+      }
     }
   } else {
     _lastPick = null;
@@ -473,9 +476,13 @@ function pickChord(tri: RenderTri, state: SessionState): void {
   // `RenderTri` extends TonnetzTriangle which carries pcs: number[].
   const prevProg = state.harmony.progression;
   const newLabel = chordLabel(tri.rootPc, tri.qual);
-  if (prevProg.length > 0) {
-    const prev = prevProg[prevProg.length - 1];
-    const prevPcsArr = chordPcs(prev.rootPc, prev.qual);
+  // Phase 06: find the last chord slot in the progression (skip rest slots).
+  const prevChordSlot = prevProg
+    .slice()
+    .reverse()
+    .find((s) => !('isRest' in s));
+  if (prevChordSlot !== undefined && !('isRest' in prevChordSlot)) {
+    const prevPcsArr = chordPcs(prevChordSlot.rootPc, prevChordSlot.qual);
     const newPcsArr = tri.pcs; // TonnetzTriangle.pcs: number[]
     if (prevPcsArr.length === 3 && newPcsArr.length === 3) {
       _lastVL = minimalVoiceLeading(
@@ -486,7 +493,7 @@ function pickChord(tri: RenderTri, state: SessionState): void {
       // Prototype lines 1366–1367: showHud(`${prev.label} → ${ch.label}`, ...)
       // Voice moves: accent-colored <span class="mv"> for each semitone delta.
       // Prototype line 1367: `voces: ${vl.moves.map(m=>(m>0?'+':'')+m).join('  ')}  ·  Σ`
-      const prevLabel = chordLabel(prev.rootPc, prev.qual);
+      const prevLabel = chordLabel(prevChordSlot.rootPc, prevChordSlot.qual);
       const movesHtml = _lastVL.moves
         .map((m) => `<span class="mv">${m > 0 ? '+' : ''}${m}</span>`)
         .join('  ');
@@ -505,7 +512,7 @@ function pickChord(tri: RenderTri, state: SessionState): void {
     }
   } else {
     _lastVL = null;
-    // ── First chord pick: show chord name + diatonic function ────────────────
+    // ── First chord pick (or all prior slots are rests): show chord name + diatonic function ──
     // Prototype line 1369: showHud(ch.label, `${tri.info.roman} · ...`)
     showHud(
       newLabel,
@@ -564,10 +571,12 @@ export function tickHarmony(delta: number): void {
 
   // ── Voice-leading path on hPath — prototype lines 1091–1103 ──────────────
   // Map each progression Chord to its centroid via _renderTris.
+  // Phase 06: rest slots have no Tonnetz position; skip them.
   const centroids: { cx: number; cy: number }[] = [];
   let pathHintCx: number | undefined;
   let pathHintCy: number | undefined;
   for (const ch of prog) {
+    if ('isRest' in ch) continue; // Phase 06: rest slots have no centroid
     const tri = findRenderTriForChord(ch, pathHintCx, pathHintCy);
     if (tri !== null) {
       centroids.push({ cx: tri.cx, cy: tri.cy });
@@ -611,6 +620,7 @@ export function tickHarmony(delta: number): void {
   let highlightHintCx: number | undefined;
   let highlightHintCy: number | undefined;
   prog.forEach((ch, idx) => {
+    if ('isRest' in ch) return; // Phase 06: rest slots have no Tonnetz position
     const tri = findRenderTriForChord(ch, highlightHintCx, highlightHintCy);
     if (tri === null) return;
     highlightHintCx = tri.cx;

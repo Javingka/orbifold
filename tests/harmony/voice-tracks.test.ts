@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { computeVoiceTracks } from '../../src/core/harmony/voice-tracks.js';
+import type { VoiceRestEvent } from '../../src/core/harmony/voice-tracks.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // A-05-01: empty progression
@@ -205,5 +206,133 @@ describe('computeVoiceTracks — three chords, startCycle accumulation', () => {
     expect(tracks[0].events).toHaveLength(3);
     expect(tracks[1].events).toHaveLength(3);
     expect(tracks[2].events).toHaveLength(3);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Phase 06 — rest-slot support (ADR 0012)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('computeVoiceTracks — rest slot (Phase 06, ADR 0012)', () => {
+  // Single rest slot: three tracks, each with one VoiceRestEvent
+  it('single rest (bars:2) → three tracks each with 1 VoiceRestEvent', () => {
+    const tracks = computeVoiceTracks([{ isRest: true, bars: 2 }], 3);
+    expect(tracks).toHaveLength(3);
+    for (let v = 0; v < 3; v++) {
+      expect(tracks[v].events).toHaveLength(1);
+      const ev = tracks[v].events[0] as VoiceRestEvent;
+      expect(ev.isRest).toBe(true);
+      expect(ev.slotIndex).toBe(0);
+      expect(ev.bars).toBe(2);
+      expect(ev.startCycle).toBe(0);
+    }
+  });
+
+  // A-06-04 partial: [C major, rest bars:1] — track has chord event then rest event
+  it('chord then rest: track-0 has VoiceEvent followed by VoiceRestEvent', () => {
+    const tracks = computeVoiceTracks(
+      [
+        { rootPc: 0, qual: 'maj' },
+        { isRest: true, bars: 1 },
+      ],
+      3
+    );
+    expect(tracks[0].events).toHaveLength(2);
+    // First event is a chord event
+    const ev0 = tracks[0].events[0];
+    expect('isRest' in ev0).toBe(false);
+    // Second event is a rest event
+    const ev1 = tracks[0].events[1] as VoiceRestEvent;
+    expect(ev1.isRest).toBe(true);
+    expect(ev1.slotIndex).toBe(1);
+    expect(ev1.startCycle).toBe(1);
+  });
+
+  // A-06-04: rest does NOT affect prevPcs — voice leading from C major to A minor
+  // through a rest is identical to direct C major → A minor (perm [1,2,0]).
+  it('A-06-04: rest does not affect prevPcs; A minor after rest uses same perm as direct transition', () => {
+    // Direct C major → A minor (no rest)
+    const directTracks = computeVoiceTracks(
+      [
+        { rootPc: 0, qual: 'maj' },
+        { rootPc: 9, qual: 'min' },
+      ],
+      3
+    );
+    // C major → rest → A minor
+    const withRestTracks = computeVoiceTracks(
+      [
+        { rootPc: 0, qual: 'maj' },
+        { isRest: true, bars: 1 },
+        { rootPc: 9, qual: 'min' },
+      ],
+      3
+    );
+
+    // A minor chord is at events[1] in direct, events[2] in withRest
+    const directAmin0 = directTracks[0].events[1];
+    const directAmin1 = directTracks[1].events[1];
+    const directAmin2 = directTracks[2].events[1];
+
+    const restAmin0 = withRestTracks[0].events[2];
+    const restAmin1 = withRestTracks[1].events[2];
+    const restAmin2 = withRestTracks[2].events[2];
+
+    // The note assignments must be identical (perm [1,2,0]: C4, E4, A3)
+    expect('noteName' in directAmin0 && directAmin0.noteName).toBe('C4');
+    expect('noteName' in directAmin1 && directAmin1.noteName).toBe('E4');
+    expect('noteName' in directAmin2 && directAmin2.noteName).toBe('A3');
+
+    expect('noteName' in restAmin0 && restAmin0.noteName).toBe('C4');
+    expect('noteName' in restAmin1 && restAmin1.noteName).toBe('E4');
+    expect('noteName' in restAmin2 && restAmin2.noteName).toBe('A3');
+
+    // Exact equality of chord events (excluding startCycle which differs due to rest)
+    if ('noteName' in directAmin0 && 'noteName' in restAmin0) {
+      expect(directAmin0.noteName).toBe(restAmin0.noteName);
+      expect(directAmin1 && 'noteName' in directAmin1 ? directAmin1.noteName : '').toBe(
+        restAmin1 && 'noteName' in restAmin1 ? restAmin1.noteName : ''
+      );
+      expect(directAmin2 && 'noteName' in directAmin2 ? directAmin2.noteName : '').toBe(
+        restAmin2 && 'noteName' in restAmin2 ? restAmin2.noteName : ''
+      );
+    }
+  });
+
+  // startCycle accumulates correctly across mixed slots
+  it('startCycle accumulates across mixed chord + rest + chord slots', () => {
+    // chord bars:1 (startCycle=0), rest bars:2 (startCycle=1), chord bars:0.5 (startCycle=3)
+    const tracks = computeVoiceTracks(
+      [
+        { rootPc: 0, qual: 'maj', bars: 1 },
+        { isRest: true, bars: 2 },
+        { rootPc: 0, qual: 'min', bars: 0.5 },
+      ],
+      3
+    );
+
+    expect(tracks[0].events).toHaveLength(3);
+
+    // Chord event at slot 0
+    const ev0 = tracks[0].events[0];
+    expect('isRest' in ev0).toBe(false);
+    if (!('isRest' in ev0)) {
+      expect(ev0.startCycle).toBe(0);
+      expect(ev0.bars).toBe(1);
+    }
+
+    // Rest event at slot 1
+    const ev1 = tracks[0].events[1] as VoiceRestEvent;
+    expect(ev1.isRest).toBe(true);
+    expect(ev1.startCycle).toBe(1);
+    expect(ev1.bars).toBe(2);
+
+    // Chord event at slot 2
+    const ev2 = tracks[0].events[2];
+    expect('isRest' in ev2).toBe(false);
+    if (!('isRest' in ev2)) {
+      expect(ev2.startCycle).toBe(3);
+      expect(ev2.bars).toBe(0.5);
+    }
   });
 });

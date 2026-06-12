@@ -8,6 +8,16 @@
 import { type Quality, chordVoicing } from '../theory/chords.js';
 import { type RhythmLayer, layerAudible, rhythmLayerToStrudelLine } from '../rhythm/layers.js';
 
+// ── Local union for harmony slot input ────────────────────────────────────────
+// NOT exported — avoids pulling session.ts (with Svelte-transitive dependencies)
+// into this pure-engine module. CLAUDE.md invariant: src/core/** must have no
+// DOM/PIXI/Svelte imports. Existing callers pass chord-only arrays; the chord
+// structural type is a subtype of HarmonySlotInput, so no callers need updating.
+// Introduced in Phase 06 — ADR 0012 D2.
+type HarmonySlotInput =
+  | { rootPc: number; qual: Quality; gain?: number | null; bars?: number }
+  | { isRest: true; bars?: number };
+
 /**
  * Returns the trimmed pattern string unchanged.
  *
@@ -71,35 +81,45 @@ export function chordToStrudel(
  * Dual-mode extension introduced in Phase 02 — ADR 0010.
  */
 export function melodyLine(
-  progression: ReadonlyArray<{
-    rootPc: number;
-    qual: Quality;
-    gain?: number | null;
-    bars?: number;
-  }>,
+  progression: ReadonlyArray<HarmonySlotInput>,
   chordMode: 'chord' | 'arp',
   octave: number
 ): string {
   if (progression.length === 0) return '';
   const sep = chordMode === 'chord' ? ',' : ' ';
 
-  // ADR 0010 dual-mode: use arrange() only when at least one chord has bars !== 1.
-  const uniformDuration = progression.every((ch) => (ch.bars ?? 1) === 1);
+  // ADR 0010 dual-mode + ADR 0012 rest extension:
+  // use arrange() when any slot is a rest, OR when any chord has bars !== 1.
+  const uniformDuration = progression.every(
+    (slot) => !('isRest' in slot) && ((slot as { bars?: number }).bars ?? 1) === 1
+  );
 
   if (uniformDuration) {
     // Slowcat form — byte-identical to pre-phase main (A-02-02).
-    const seq = progression
+    // Safe to cast: uniformDuration guarantees no rest slots remain.
+    const chordSlots = progression as ReadonlyArray<{
+      rootPc: number;
+      qual: Quality;
+      gain?: number | null;
+      bars?: number;
+    }>;
+    const seq = chordSlots
       .map((ch) => '[' + chordVoicing(ch.rootPc, ch.qual, octave).join(sep) + ']')
       .join(' ');
-    const gains = progression.map((ch) => (ch.gain == null ? 0.6 : ch.gain).toFixed(2)).join(' ');
+    const gains = chordSlots.map((ch) => (ch.gain == null ? 0.6 : ch.gain).toFixed(2)).join(' ');
     return `  note("<${seq}>").s("sawtooth").lpf(1200).gain("<${gains}>").room(0.3)`;
   }
 
-  // arrange() form — per-chord inline gain (A-02-03).
-  const segments = progression.map((ch) => {
-    const voicing = chordVoicing(ch.rootPc, ch.qual, octave).join(sep);
-    const g = (ch.gain == null ? 0.6 : ch.gain).toFixed(2);
-    const numCycles = ch.bars ?? 1;
+  // arrange() form — per-slot inline segment (A-02-03, ADR 0012 D3).
+  const segments = progression.map((slot) => {
+    const numCycles = slot.bars ?? 1;
+    if ('isRest' in slot) {
+      // Rest slot — ADR 0012 D3: [bars, silence] with two leading spaces.
+      return `  [${numCycles}, silence]`;
+    }
+    // Chord slot (unchanged from ADR 0010).
+    const voicing = chordVoicing(slot.rootPc, slot.qual, octave).join(sep);
+    const g = (slot.gain == null ? 0.6 : slot.gain).toFixed(2);
     return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)]`;
   });
   return `arrange(\n${segments.join(',\n')}\n)`;
@@ -139,12 +159,7 @@ export function rhythmToStrudel(
  */
 export function buildSession(
   layers: RhythmLayer[],
-  progression: ReadonlyArray<{
-    rootPc: number;
-    qual: Quality;
-    gain?: number | null;
-    bars?: number;
-  }>,
+  progression: ReadonlyArray<HarmonySlotInput>,
   chordMode: 'chord' | 'arp',
   octave: number
 ): string {

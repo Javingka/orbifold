@@ -186,6 +186,78 @@ describe('melodyLine — dual-mode (ADR 0010)', () => {
   });
 });
 
+// ── melodyLine — rest-slot codegen (Phase 06, ADR 0012) ──────────────────────
+// A-06-01, A-06-02, A-06-03: rest slots force arrange() path; chord-only
+// progressions with all bars===1 still emit slowcat (regression guard).
+
+describe('melodyLine — rest-slot codegen (ADR 0012)', () => {
+  // A-06-01: single rest slot with bars:2
+  it('A-06-01: single rest (bars:2) → arrange() with [2, silence]', () => {
+    expect(melodyLine([{ isRest: true, bars: 2 }], 'chord', 3)).toBe('arrange(\n  [2, silence]\n)');
+  });
+
+  // A-06-01 variant: single rest with default bars (1)
+  it('single rest no bars → arrange() with [1, silence]', () => {
+    expect(melodyLine([{ isRest: true }], 'chord', 3)).toBe('arrange(\n  [1, silence]\n)');
+  });
+
+  // A-06-02: mixed progression [C major, rest 1 bar, F major]
+  it('A-06-02: mixed progression emits arrange() with silence at rest position', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 1 },
+        { isRest: true, bars: 1 },
+        { rootPc: 5, qual: 'maj', gain: 0.6, bars: 1 },
+      ],
+      'chord',
+      3
+    );
+    expect(result).toBe(
+      'arrange(\n' +
+        '  [1, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)],\n' +
+        '  [1, silence],\n' +
+        '  [1, note("[F3,A3,C4]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)]\n' +
+        ')'
+    );
+  });
+
+  // A-06-03: regression guard — chord-only all bars===1 still uses slowcat form
+  it('A-06-03: chord-only progression all bars===1 still emits slowcat form (regression guard)', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', gain: 0.6 }], 'chord', 3);
+    expect(result).toBe('  note("<[C3,E3,G3]>").s("sawtooth").lpf(1200).gain("<0.60>").room(0.3)');
+    expect(result).not.toContain('arrange(');
+  });
+
+  // A-06-03 variant: chord-only no bars field (undefined) still uses slowcat
+  it('A-06-03 variant: chord-only no bars field still emits slowcat form', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6 },
+        { rootPc: 9, qual: 'min', gain: 0.6 },
+      ],
+      'chord',
+      3
+    );
+    expect(result).not.toContain('arrange(');
+    expect(result).toContain('note("<');
+  });
+
+  // Rest forces arrange() even when chord bars===1
+  it('rest slot forces arrange() path even when chord bars===1', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 1 },
+        { isRest: true, bars: 1 },
+      ],
+      'chord',
+      3
+    );
+    expect(result).toContain('arrange(');
+    expect(result).toContain('[1, silence]');
+    expect(result).toContain('[1, note(');
+  });
+});
+
 // ── rhythmToStrudel ───────────────────────────────────────────────────────
 // Prototype lines 833–836. Golden via Node execution.
 

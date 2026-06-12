@@ -245,7 +245,9 @@ function buildContextAddendum(ctx: AgentSendContext): string {
     const scaleName = `${rootName}:${mode}`;
     let progDesc = '(sin progresión)';
     if (progression.length) {
-      progDesc = progression.map((c) => `${NOTE_NAMES[c.rootPc]}${c.qual}`).join(' → ');
+      progDesc = progression
+        .map((c) => ('isRest' in c ? '–' : `${NOTE_NAMES[c.rootPc]}${c.qual}`))
+        .join(' → ');
     }
     addendum += `\n\n[MARCO ARMÓNICO (geometría de acordes; COMPÓN DENTRO de esta clave):\nClave: ${scaleName} (octava ${octave})\nProgresión: ${progDesc}\nPrioriza voice-leadings pequeños entre acordes consecutivos. T=tónica, SD=subdominante, D=dominante.]`;
   }

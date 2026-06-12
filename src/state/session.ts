@@ -143,6 +143,21 @@ export interface Chord {
 }
 
 /**
+ * A silent slot in the progression. Duration follows the same `bars` semantics as `Chord.bars`.
+ * Introduced in Phase 06 — ADR 0012 D1.
+ */
+export interface RestSlot {
+  isRest: true;
+  bars?: number;
+}
+
+/**
+ * A slot in the harmony progression: either a chord or a silent rest.
+ * Introduced in Phase 06 — ADR 0012 D1.
+ */
+export type ProgressionSlot = Chord | RestSlot;
+
+/**
  * Harmony sub-state: root scale / key, octave, and chord progression.
  *
  * Prototype reference: `melState` global (lines 717, usage throughout).
@@ -151,7 +166,7 @@ export interface HarmonyState {
   root: number; // pitch class 0–11; default 0 (C)
   mode: string; // 'major' | 'minor' | other SCALE_INTERVALS keys
   octave: number; // default 3
-  progression: Chord[]; // ordered list; empty = silent
+  progression: ProgressionSlot[]; // ordered list; empty = silent
 }
 
 /**
@@ -455,7 +470,7 @@ function deriveLiveCode(state: SessionState): string | null {
   }
   if (source === 'chord') {
     const ch = state.harmony.progression[state.harmony.progression.length - 1];
-    if (!ch) return null;
+    if (!ch || 'isRest' in ch) return null;
     return chordToStrudel(ch.rootPc, ch.qual, ch.gain, state.chordMode, state.harmony.octave);
   }
   return null;
@@ -503,7 +518,7 @@ export function requeueLive(): string | null {
     // Prototype line 1313: last chord in progression
     const progression = state.harmony.progression;
     const ch = progression[progression.length - 1];
-    if (!ch) return null;
+    if (!ch || 'isRest' in ch) return null;
     const code = chordToStrudel(ch.rootPc, ch.qual, ch.gain, state.chordMode, state.harmony.octave);
     queueLiveCodeIfPlaying(code);
     return code;
@@ -776,6 +791,45 @@ export function setChordBars(index: number, bars: number): void {
       i === index ? { ...ch, bars: clamped } : ch
     );
     return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Append a rest slot with `bars: 1` to the end of the progression.
+ *
+ * Delegates to `addRestAt(progression.length)`.
+ * Calls `requeueLive()` so a running harmony engine picks up the change.
+ *
+ * Introduced in Phase 06 — ADR 0012 D5.
+ */
+export function appendRest(): void {
+  const state = get(sessionStore);
+  addRestAt(state.harmony.progression.length);
+}
+
+/**
+ * Insert a rest slot with `bars: 1` at the given index in the progression.
+ *
+ * Out-of-range index is clamped to `[0, progression.length]`; an index equal to
+ * `progression.length` appends.
+ * Calls `requeueLive()` so a running harmony engine picks up the change.
+ *
+ * Introduced in Phase 06 — ADR 0012 D5.
+ *
+ * @param index - Zero-based position at which to insert the rest slot.
+ */
+export function addRestAt(index: number): void {
+  sessionStore.update((s) => {
+    const progression = s.harmony.progression;
+    const clamped = Math.max(0, Math.min(index, progression.length));
+    const newSlot: RestSlot = { isRest: true as const, bars: 1 };
+    const newProgression = [
+      ...progression.slice(0, clamped),
+      newSlot,
+      ...progression.slice(clamped),
+    ];
+    return { ...s, harmony: { ...s.harmony, progression: newProgression } };
   });
   requeueLive();
 }

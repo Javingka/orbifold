@@ -210,6 +210,132 @@ None.
 
 Step 06.3 implements `RestSlot` and `ProgressionSlot` in `session.ts`, updates `melodyLine()` and `buildSession()` in `strudel.ts`, and adds `VoiceRestEvent` + rest branch in `voice-tracks.ts`. All three files have extension points explicitly marked in their Phase 06 comments (confirmed in inventory §7). Callers of `computeVoiceTracks` and `melodyLine` pass chord-only arrays today; the widened `(ChordInput | RestInput)[]` / `ReadonlyArray<HarmonySlotInput>` types maintain subtype compatibility — no callers require updating.
 
-**Planner Review:**
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 06.3
 
-(To be filled by the Planner in review mode.)
+---
+
+## Step 06.3 — Data model, codegen, and voice-tracks
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- `feat(harmony): Phase 06 step 06.3 — RestSlot data model, silence codegen, voice-tracks gap events`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0012-rest-data-model.md`, `docs/orbifold-v2/inventories/phase-06-inventory.md`, `src/state/session.ts` (complete), `src/core/codegen/strudel.ts` (complete), `src/core/harmony/voice-tracks.ts` (complete).
+
+**`src/state/session.ts` changes:**
+- Added `RestSlot` interface (`isRest: true; bars?: number`) and `ProgressionSlot = Chord | RestSlot` union type, both exported.
+- Changed `HarmonyState.progression` from `Chord[]` to `ProgressionSlot[]`.
+- Added `appendRest()` and `addRestAt(index)` exported store actions. `appendRest` delegates to `addRestAt(progression.length)`. `addRestAt` clamps index to `[0, progression.length]`, splices `{ isRest: true as const, bars: 1 }`, and calls `requeueLive()`.
+- Guarded `deriveLiveCode` source === 'chord' branch: `if (!ch || 'isRest' in ch) return null` before `chordToStrudel` call.
+- Guarded `requeueLive` source === 'chord' branch: same guard.
+- Fixed cascading type errors in `src/agent/agent.ts` (progression description map), `src/lib/persistence.ts` (serialize skips rest slots with `flatMap`; step 06.4 will add `SavedRestSchema`), `src/render/tonnetz-scene.ts` (four locations: `findRenderTriForChord` calls and `prevProg` voice-leading block guarded with `'isRest' in` checks).
+
+**`src/core/codegen/strudel.ts` changes:**
+- Added local `HarmonySlotInput` union type (NOT exported — pure engine invariant).
+- Updated `melodyLine()` signature to `ReadonlyArray<HarmonySlotInput>`.
+- Updated dual-mode condition (ADR 0012 D2): rest slot forces `arrange()` path.
+- Updated `arrange()` segment map (ADR 0012 D3): rest slot emits `  [${bars}, silence]`.
+- Updated `buildSession()` progression parameter type to `ReadonlyArray<HarmonySlotInput>`.
+
+**`src/core/harmony/voice-tracks.ts` changes:**
+- Added `VoiceRestEvent` exported interface: `{ isRest: true; slotIndex: number; bars: number; startCycle: number }`.
+- Changed `VoiceTrack.events` from `VoiceEvent[]` to `(VoiceEvent | VoiceRestEvent)[]`.
+- Added local `RestInput` interface alongside `ChordInput`.
+- Changed `computeVoiceTracks` signature to `(ChordInput | RestInput)[]`.
+- Added rest branch in main loop: appends `VoiceRestEvent` to all three tracks; `prevPcs` NOT updated (ADR 0012 Consequence 3). The "first chord" detection uses `prevPcs === null` sentinel which correctly handles leading rest slots.
+
+**Tests added:**
+- `tests/codegen.test.ts`: 6 new tests in `describe('melodyLine — rest-slot codegen (ADR 0012)')` covering A-06-01, A-06-02, A-06-03 and variants.
+- `tests/harmony/voice-tracks.test.ts`: 4 new tests in `describe('computeVoiceTracks — rest slot (Phase 06, ADR 0012)')` covering single rest, chord+rest, A-06-04 (prevPcs invariant), and startCycle accumulation.
+
+### Files touched
+
+- `src/state/session.ts` — modified (RestSlot, ProgressionSlot, appendRest, addRestAt, deriveLiveCode/requeueLive guards)
+- `src/core/codegen/strudel.ts` — modified (HarmonySlotInput, melodyLine, buildSession)
+- `src/core/harmony/voice-tracks.ts` — modified (VoiceRestEvent, RestInput, VoiceTrack, computeVoiceTracks)
+- `src/agent/agent.ts` — modified (progression description map for rest slots)
+- `src/lib/persistence.ts` — modified (flatMap guard to skip rest slots; full rest support deferred to step 06.4)
+- `src/render/tonnetz-scene.ts` — modified (four 'isRest' in guards)
+- `tests/codegen.test.ts` — extended (6 new rest-slot tests)
+- `tests/harmony/voice-tracks.test.ts` — extended (4 new rest-slot tests)
+- `docs/orbifold-v2/handoffs/phase-06-handoff.md` — this file (step 06.3 entry appended)
+- `docs/orbifold-v2/phases/phase-06.md` — added to commit (first appearance)
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Test / Check | Result |
+|---|---|---|
+| A-06-01 | `melodyLine([{ isRest: true, bars: 2 }], 'chord', 3)` exact string | PASS — `'arrange(\n  [2, silence]\n)'` |
+| A-06-02 | Mixed progression `[C maj, rest 1 bar, F maj]` exact arrange() form | PASS — exact string matches spec |
+| A-06-03 | Chord-only progression all bars===1 still emits slowcat (regression guard) | PASS |
+| A-06-04 | `computeVoiceTracks([C maj, rest 1 bar, A min], 3)` — rest does not affect prevPcs | PASS — voice-0=C4, voice-1=E4, voice-2=A3 same as direct transition |
+
+### Routine validations
+
+```
+pnpm exec tsc --noEmit   → 0 errors
+pnpm lint                → 0 errors (eslint + prettier)
+pnpm exec vitest run tests/codegen.test.ts            → 39 tests pass
+pnpm exec vitest run tests/harmony/voice-tracks.test.ts → 18 tests pass
+pnpm test                → 317 tests pass (11 test files)
+grep no pixi/svelte/DOM imports in pure engine files  → 0 matches
+```
+
+Test count: 317 (was 307; +10 new tests, spec required ≥ 314).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-06-01 | `melodyLine([{ isRest: true, bars: 2 }], 'chord', 3)` returns `'arrange(\n  [2, silence]\n)'` | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-02 | Mixed progression `[C maj, rest 1 bar, F maj]` emits `arrange()` with `[1, silence]` at rest position | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-03 | Chord-only progression all `bars === 1` still emits slowcat `<…>` (regression guard) | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-04 | `computeVoiceTracks([C maj, rest 1 bar, A min], 3)` → `VoiceRestEvent` at slotIndex 1; A min uses perm `[1,2,0]` (same as direct C maj → A min) | `tests/harmony/voice-tracks.test.ts` | unit | COVERED — step 06.3 |
+| A-06-05 | Session with rest slot round-trips through serialize → JSON → parse → deserialize | `tests/persistence.test.ts` | unit | not covered — deferred to step 06.4 |
+| A-06-06 | Version-1 session JSON (chord-only) parses against updated `SavedSessionSchema` | `tests/persistence.test.ts` | unit | not covered — deferred to step 06.4 |
+| A-06-07 | Agent payload with mixed progression validates; `applyHarmonySpec` produces `[Chord, RestSlot]` in store | `tests/schema.test.ts` | unit | not covered — deferred to step 06.4 |
+| A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | `src/agent/schema.ts` | proxy:static-analysis | not covered — deferred to step 06.4 |
+| A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | `src/ui/ProgressionStrip.svelte` | manual | not covered — deferred to step 06.5 |
+| A-06-10 | "+ rest" button appends `RestSlot`; playing harmony with rest produces silence; Strudel drawer shows `silence` | `src/ui/ProgressionStrip.svelte` + store | live-system | not covered — deferred to step 06.5 |
+| A-06-11 | `tsc 0`, `lint 0`, `pnpm test ≥ 325`, `pnpm build 0` | all | automated | partial — tsc 0, lint 0, test 317; build and final count deferred to step 06.5 |
+
+### Decisions made (if any)
+
+One scope extension needed: the type change to `HarmonyState.progression: ProgressionSlot[]` caused cascading type errors in `src/agent/agent.ts`, `src/lib/persistence.ts`, and `src/render/tonnetz-scene.ts`. These files are outside step 06.3's listed target files but required minimal guards to satisfy the `tsc --noEmit` 0-errors validation:
+- `agent.ts`: maps rest slots to `'–'` in the progression description string.
+- `persistence.ts`: uses `flatMap` to skip rest slots in `serializeSession` (step 06.4 will add the full `SavedRestSchema` support; skipping prevents type errors now without data loss for chord-only sessions).
+- `tonnetz-scene.ts`: four locations guard with `'isRest' in ch` before calling chord-specific functions.
+
+These are minimal, non-breaking guards — they do not change behavior for chord-only progressions (the only type in use before this step).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 317 tests passing (+10 from step 06.3).
+- `tsc --noEmit` 0 errors.
+- `pnpm lint` 0 errors.
+- `pnpm build` not run (deferred to step 06.5 quality gate; no structural changes expected to break build).
+- `RestSlot`, `ProgressionSlot`, `appendRest`, `addRestAt` exported from `session.ts`.
+- `melodyLine()` and `buildSession()` accept rest slots.
+- `computeVoiceTracks()` produces `VoiceRestEvent` gap events.
+
+### Next-step context
+
+Step 06.4 implements persistence (`SavedRestSchema`, `SavedHarmonySchema` union update, `serializeSession`/`deserializeSession` rest narrowing), agent schemas (`HarmonyRestSchema`, `SCHEMA_VERSION` bump to 2, `HarmonyChordSchema` union), and `apply.ts` rest detection. The `persistence.ts` `flatMap` guard added in this step will be replaced by the full `SavedRestSchema` logic in step 06.4.
+
+**Planner Review:** pending
+**Next action:** Planner reviews step 06.3

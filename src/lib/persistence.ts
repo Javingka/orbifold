@@ -103,13 +103,20 @@ export function serializeSession(state: SessionState): SavedSession {
       root: state.harmony.root,
       mode: state.harmony.mode as SavedSession['harmony']['mode'],
       octave: state.harmony.octave,
-      progression: state.harmony.progression.map((ch) => ({
-        rootPc: ch.rootPc,
-        qual: ch.qual,
-        gain: ch.gain,
-        // cx/cy excluded — Decisions Register: render hints ephemeral
-        ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
-      })),
+      progression: state.harmony.progression.flatMap((ch) => {
+        // Phase 06: rest slots are not yet serialized (step 06.4 will add SavedRestSchema).
+        // Skip rest slots for now so the schema round-trips chord-only sessions correctly.
+        if ('isRest' in ch) return [];
+        return [
+          {
+            rootPc: ch.rootPc,
+            qual: ch.qual,
+            gain: ch.gain,
+            // cx/cy excluded — Decisions Register: render hints ephemeral
+            ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
+          },
+        ];
+      }),
     },
     rhythm: {
       layers: state.rhythm.layers.map((l) => {
