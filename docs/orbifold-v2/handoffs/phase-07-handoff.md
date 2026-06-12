@@ -237,4 +237,105 @@ Step 07.3 writes `src/render/harmony-staff-scene.ts` — the PIXI rendering laye
 5. `pxPerCycle` must be imported from `time-map.ts` as `PX_PER_CYCLE`; it is NOT hardcoded in `staff-layout.ts`.
 6. `stage.ts` must expose `harmonyLayer` via `getStageRefs()` (add `harmonyLayer: PIXI.Container` to `StageRefs` and return value).
 
-**Next action:** Planner review of step 07.2. After APPROVE, Dev proceeds to step 07.3.
+**Planner Review:** APPROVED on 2026-06-12. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 07.3
+
+---
+
+## Step 07.3 — PIXI harmony staff scene (`src/render/harmony-staff-scene.ts`)
+
+**Date:** 2026-06-12
+**Commit(s):**
+
+- **Terminal commit:** `feat(harmony): Phase 07 step 07.3 — PIXI harmony staff scene`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `harmonyLayer: PIXI.Container` to `StageRefs` interface in `src/render/stage.ts` and included it in the `getStageRefs()` return object. The null-guard for `harmonyLayer` was already present (line 178); only the interface and return value needed updating. This exposes the existing container — no new layer added.
+- Created `src/render/harmony-staff-scene.ts` following the module-level singleton pattern from `rhythm-scene.ts`. AGPL-3.0 header present. PIXI v7 imports only.
+- Exported exactly three public functions: `buildHarmonyStaffScene(state)`, `updateHarmonyStaffDynamic(state)`, `tickHarmonyStaff()`.
+- Staff scene attaches all PIXI objects (`_staffGfx`, `_accidentalContainer`, `_clefText`, `_dynGfx`) as children of `harmonyLayer` obtained via `getStageRefs()`. Existing Tonnetz children are not touched.
+- `buildHarmonyStaffScene` clears previous scene objects, calls `computeVoiceTracks(state.harmony.progression, state.harmony.octave)`, calls `computeStaffLayout(tracks, PX_PER_CYCLE)`, and draws:
+  - Five staff lines (`TREBLE_STAFF_LINES = [2, 4, 6, 8, 10]`) in `COL.faint`, spanning `_staffWidth`.
+  - Filled circle note-heads (radius 4 px) per `NoteHead`, colored by voice (COL.tonic/subdom/dom).
+  - Ledger lines (horizontal segments ±8 px) per `NoteHead.ledgerLines`, same voice color.
+  - Rest glyphs: short thick horizontal line at step-6 (B4, middle staff line) in `COL.faint`.
+  - Treble clef '𝄞' (U+1D11E) as `PIXI.Text` in `FONT_SERIF` at the left edge.
+  - Sharp '#' accidentals as `PIXI.Text` in `FONT_SERIF` positioned left of the note-head center.
+- `staffBaseY = app.screen.height − 60`; `STEP_PX = 10` → `HALF_STEP_PX = 5`; y(step) = `staffBaseY − step × 5`.
+- `updateHarmonyStaffDynamic` redraws the playhead into `_dynGfx`: `playheadX = clamp((now − anchor) / barMs × PX_PER_CYCLE, 0, _staffWidth)`; white line (`0xffffff`) from step 12 top to step −8 bottom.
+- `tickHarmonyStaff` guards on `get(sessionStore).view === 'harmony'` and early-returns otherwise; calls `updateHarmonyStaffDynamic(state)` when in harmony view.
+- `PX_PER_CYCLE` imported from `time-map.ts` — not re-declared (vigent coordination-point rule).
+
+### Files touched
+
+- `src/render/stage.ts` — `StageRefs` interface updated; `getStageRefs()` return updated
+- `src/render/harmony-staff-scene.ts` — created
+- `docs/orbifold-v2/handoffs/phase-07-handoff.md` — step 07.3 entry appended
+
+### Validation evidence (per Acceptance ID)
+
+- **A-07-08:** Five equidistant staff lines at y-coordinates for steps 2, 4, 6, 8, 10 drawn in `COL.faint`. Treble clef '𝄞' positioned at x=2, y = staffBaseY − 55. Visible in harmony view after step 07.4 wires the ticker and build calls.
+- **A-07-09:** Note-heads drawn as filled circles with voice-0 = `COL.tonic` (0xf3b15a), voice-1 = `COL.subdom` (0x56cfc4), voice-2 = `COL.dom` (0xe87bac). Ledger lines drawn in the same voice color. Positions verified via the `computeStaffLayout` engine (A-07-01 through A-07-05 already covered).
+- **A-07-10:** Rest glyphs drawn at `rg.x + NOTE_OFFSET_X` on the middle staff line (step 6). No note-head drawn for rest events.
+- **A-07-11:** Playhead formula `((now − anchor) / barMs) × PX_PER_CYCLE` matches the rhythm-scene pattern; will be verified live in step 07.4/07.5.
+- **A-07-12:** Accidentals drawn as PIXI.Text '#' with `anchor.set(1, 0.5)` positioned left of the note-head at `nx − NOTE_RADIUS − 1`. Natural notes produce no PIXI.Text entry.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier)
+- `pnpm test` → 361 passed (≥ 340; no new tests in this step — scene module is PIXI-dependent and not Vitest-testable)
+- `pnpm build` → exits 0 (551 modules, no new errors; pre-existing chunk-size warning unchanged)
+- `grep -n "PX_PER_CYCLE" src/render/harmony-staff-scene.ts` confirms import from `time-map.ts` at line 39; not re-declared
+- `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches (pure engine invariant maintained)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-07-01 | `computeStaffLayout` empty progression → `{ noteHeads: [], restGlyphs: [], totalWidth: 0 }` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-02 | Single C-major chord at octave 3 → 3 note-heads at x=0, stepY values match `noteToStaffPosition` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-03 | Mixed `[C maj bars:1, rest bars:1, A min bars:2]` → note-heads x=0, rest x=48, note-heads x=96; totalWidth=192 | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-04 | Sharp-containing chord (D major/F#3) → `NoteHead.accidental='#'` for that voice | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-05 | Below-staff chord (C3 voicing) → `NoteHead.ledgerLines` non-empty, matching `noteToStaffPosition` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-06 | No pixi/svelte/DOM imports in `src/core/harmony/` | grep | proxy:static-analysis | covered — grep returns 0 matches |
+| A-07-07 | tsc 0, lint 0, pnpm test ≥ 340, build 0 | all | automated | partial — tsc/lint/test/build all confirmed green (361 ≥ 340); full build re-confirmed in this step |
+| A-07-08 | Five staff lines visible in PIXI canvas with treble clef glyph | manual | manual | implemented in this step; visual verification deferred to step 07.4 wiring |
+| A-07-09 | Colored note-heads at correct positions, per-voice colors, ledger lines | manual | manual | implemented in this step; visual verification deferred to step 07.4 |
+| A-07-10 | Rest glyphs at correct x-positions; no note-head for rest slots | manual | manual | implemented in this step; visual verification deferred to step 07.4 |
+| A-07-11 | White playhead advances, aligned with ProgressionStrip cursor | live-system | live-system | not covered — deferred to step 07.4/07.5 |
+| A-07-12 | Sharp accidentals drawn left of note-head; natural notes show no accidental | manual | manual | implemented in this step; visual verification deferred to step 07.4 |
+
+### Decisions made (if any)
+
+None — all design decisions (voice colors, staff layout region, STEP_PX=10, staffBaseY=height-60) are pre-resolved by the Pilot in the phase spec and inventory.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 361 tests passing (unchanged from step 07.2).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `src/render/harmony-staff-scene.ts` created; `src/render/stage.ts` updated.
+- No Svelte components modified.
+
+### Next-step context
+
+Step 07.4 wires `harmony-staff-scene.ts` into `App.svelte`:
+1. Import and call `buildHarmonyStaffScene(get(sessionStore))` after `buildTonnetz` in `onMount`.
+2. Add to `onResize` callback.
+3. Add `updateHarmonyStaffDynamic(state)` in the store subscription alongside `updateTonnetzDynamic`.
+4. Register `tickHarmonyStaff` via `app.ticker.add(tickHarmonyStaff)` (direct ticker add — `registerTicker` is a one-call dispatcher for harmony/rhythm; staff uses a parallel add).
+5. Add change detection for `progressionLength` and `octave` to trigger `buildHarmonyStaffScene` on structural changes.
+
+**Next action:** Planner review of step 07.3. After APPROVE, Dev proceeds to step 07.4.

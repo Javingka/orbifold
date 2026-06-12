@@ -155,6 +155,7 @@ export function onResize(cb: () => void): void {
 
 export interface StageRefs {
   app: PIXI.Application;
+  harmonyLayer: PIXI.Container;
   hGrid: PIXI.Graphics;
   hPath: PIXI.Graphics;
   hNodes: PIXI.Graphics;
@@ -191,6 +192,7 @@ export function getStageRefs(): StageRefs {
   }
   return {
     app: _app,
+    harmonyLayer,
     hGrid,
     hPath,
     hNodes,
