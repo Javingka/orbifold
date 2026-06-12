@@ -204,6 +204,7 @@ Tie tests: `TIE resolves to lower octave: voice-0 at 3rd chord = E2` and `TIE re
 `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches. Confirmed.
 
 **Quality gates:**
+
 - `pnpm exec tsc --noEmit` → 0 errors
 - `pnpm lint` → 0 errors (ESLint + Prettier)
 - `pnpm exec vitest run` → 385 passed (361 baseline + 24 new); 0 failed
@@ -215,7 +216,7 @@ Two tests in `voice-tracks.test.ts` (C major → A minor "perm [1,2,0] is applie
 ### 08.3 Acceptance Coverage Table
 
 | Acceptance ID | Required behavior | Test file | Test type | Gap status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | A-08-01 | `computeVoiceTracks(prog, octave, 'estricto')` produces the same octave assignment as the pre-phase formula | `tests/harmony/voice-tracks-register.test.ts` | unit | covered |
 | A-08-02 | `computeVoiceTracks(prog, octave, 'suavizado')` produces notes within ±6 semitones of the previous note; tie resolves to lower octave | `tests/harmony/voice-tracks-register.test.ts` | unit | covered |
 | A-08-03 | Default 2-arg call is byte-identical to explicit `'suavizado'` | `tests/harmony/voice-tracks-register.test.ts` | unit | covered |
@@ -225,10 +226,12 @@ Two tests in `voice-tracks.test.ts` (C major → A minor "perm [1,2,0] is applie
 | A-08-07 | All quality gates green | `pnpm exec tsc --noEmit` → 0; `pnpm lint` → 0; `pnpm exec vitest run` → 385 passed; not running `pnpm build` (deferred to 08.7) | automated | partial — build deferred to 08.7 |
 
 **Proxy disclosures:**
+
 - A-08-05 proxy: `persistence.ts` and `agent/schema.ts` confirmed unchanged at step 08.1; no edits in this step. Full static analysis at 08.7.
 - A-08-06 proxy: `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches, run in this step.
 
 **Notes on partial coverage:**
+
 - A-08-07: `pnpm build` is part of the spec's quality gates but is deferred to step 08.7 to avoid redundancy across steps. The three other gates (`tsc`, `lint`, `test`) pass clean.
 
 ### 08.3 Audio-path isolation evidence (required by spec)
@@ -261,15 +264,18 @@ From phase-08-inventory.md §(b): `computeVoiceTracks` output is consumed only b
 Three changes applied to `src/render/harmony-staff-scene.ts`:
 
 **(a) Central staff geometry (ADR 0011 Amendment D5 binding constants):**
+
 - `STEP_PX` changed from `10` to `16`.
 - `HALF_STEP_PX` changed from `5` to `8` (recomputed as `STEP_PX / 2`).
 - `staffBaseY` changed from `app.screen.height - 60` to `app.screen.height / 2 - 6 * HALF_STEP_PX` (= `height / 2 - 48`). This centers step-6 (B4, middle staff line) at the canvas vertical midpoint per ADR 0011 D5.
 
 **(b) Cyclic playhead (ADR 0011 Amendment D6):**
+
 - Replaced `Math.min(Math.max(rawX, 0), _staffWidth)` clamp with `((rawX % _staffWidth) + _staffWidth) % _staffWidth`. The positive-modulo formula handles briefly-negative `rawX` (phase anchor in the future after a re-anchor event).
 - Added `if (_staffWidth <= 0) return;` guard before the modulo expression (replaces the old `if (_staffWidth === 0) return;`).
 
 **(c) `registerMode` wiring (step 08.5 TODO):**
+
 - Added `import type { RegisterMode }` from `voice-tracks.ts`.
 - Reads `state.harmony.registerMode` defensively via a double `as unknown` cast (HarmonyState does not yet carry the field; it will be added in step 08.5). Defaults to `'suavizado'` when the field is `undefined`. A clearly marked `// TODO(step-08.5):` comment explains the interim pattern.
 - `computeVoiceTracks` now receives the `registerMode ?? 'suavizado'` value.
@@ -298,6 +304,7 @@ Three changes applied to `src/render/harmony-staff-scene.ts`:
 `pnpm build` → exit 0. Pre-existing chunk-size warning on `index-BSjaotaw.js` (1,059 kB, gzip 334 kB) is unchanged from prior phases; not introduced by this step.
 
 **Coordinate verification (static analysis):**
+
 - `STEP_PX = 16` at line 60: matches ADR 0011 D5 table exactly.
 - `HALF_STEP_PX = STEP_PX / 2` at line 63: equals 8. Matches ADR 0011 D5 table.
 - `staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` at line 261: equals `height / 2 - 48`. Matches ADR 0011 D5 formula: `app.screen.height / 2 − (6 * HALF_STEP_PX) = height/2 − 48`.
@@ -307,7 +314,9 @@ Three changes applied to `src/render/harmony-staff-scene.ts`:
 - `PX_PER_CYCLE` import at line 46: from `../core/harmony/time-map.js` (vigent coordination-point rule — not redeclared).
 
 **Prototype parity note (PIXI render module — visual equivalence):**
+
 This step does not port new logic from the prototype; it replaces Phase 07 delivery geometry and playhead behavior. The parity note is against Phase 07:
+
 - Phase 07 `staffBaseY = height − 60`: the staff was a bottom strip. Phase 08 `staffBaseY = height / 2 − 48`: the staff is now centered. Observed equivalence is a visual layout change (not a regression), confirmed by the new geometry formula matching ADR 0011 D5 exactly.
 - Phase 07 clamp playhead: the playhead froze at the staff's right edge at the end of a progression loop. Phase 08 modulo playhead: the playhead loops back to x=0 after `_staffWidth` pixels, matching the cyclic nature of the progression. This is the intended correction for A-07-11 / A-08-08.
 - Live visual verification of the centered staff and looping playhead is deferred to Pilot Checkpoint #4 (A-08-08, A-08-10) as the CLI environment cannot render PIXI.
@@ -315,13 +324,14 @@ This step does not port new logic from the prototype; it replaces Phase 07 deliv
 ### 08.4 Acceptance Coverage Table
 
 | Acceptance ID | Required behavior | Source evidence | Test type | Gap status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | A-08-07 | `tsc --noEmit` → 0, `pnpm lint` → 0, `pnpm test` count ≥ 361, `pnpm build` → 0 | All four gates green (tsc: 0 errors; lint: 0; test: 385 passed; build: exit 0) | automated | covered |
 | A-08-08 | Playhead loops back to left edge instead of freezing | `harmony-staff-scene.ts` line 332: `((rawX % _staffWidth) + _staffWidth) % _staffWidth`; guard at line 323; no Math.min/max on playheadX | proxy:static-analysis (live: deferred to Pilot) | proxy-covered — live verification deferred |
 | A-08-09 | `suavizado` produces smooth voice contours | `registerMode ?? 'suavizado'` passed to `computeVoiceTracks` at line 276; suavizado engine already covered by A-08-02 unit tests | proxy:static-analysis | proxy-covered — rendering effect requires live visual verification |
 | A-08-10 | Staff occupies full canvas, centered | `harmony-staff-scene.ts` line 262: `_staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` with `STEP_PX=16` | proxy:static-analysis (visual: deferred to Pilot) | proxy-covered — visual layout deferred |
 
 **Proxy disclosures:**
+
 - A-08-08 proxy: the formula at line 332 implements the exact positive-modulo expression from ADR 0011 D6; guard at line 323 satisfies the `_staffWidth <= 0` spec requirement; confirmed no residual Math.min/Math.max clamp on playheadX. Live looping behavior requires a running PIXI canvas — deferred to Pilot checkpoint.
 - A-08-09 proxy: step 08.3 unit tests (A-08-02) already prove the suavizado smoothing engine produces notes within ±6 semitones; this step wires the mode into the scene call. The visual staff rendering of smooth contour lines requires a running PIXI canvas — deferred to Pilot checkpoint.
 - A-08-10 proxy: the geometry formula `height / 2 − 48` is identical to ADR 0011 D5 binding constant. Visual centering verification requires a running PIXI canvas — deferred to Pilot checkpoint.
@@ -436,7 +446,7 @@ Both `subview` and `registerMode` in `HarmonyState` carry JSDoc comments stating
 ### 08.5 Acceptance Coverage Table
 
 | Acceptance ID | Required behavior | Source evidence | Test type | Gap status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | A-08-05 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts`; changing them does not alter saved blob | `grep` → 0 matches in `agent/schema.ts`; `SavedHarmonySchema` Zod schema unchanged; `serializeSession` does not read `subview`/`registerMode`; `deserializeSession` restores defaults | proxy:static-analysis | covered |
 | A-08-06 | No PIXI/Svelte/DOM imports in `src/core/harmony/` | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches | proxy:static-analysis | covered |
 | A-08-07 | All quality gates green | `tsc`: 0 errors; `lint`: 0; `test`: 385 passed; `build`: exit 0 | automated | covered |
@@ -454,7 +464,7 @@ A-08-09 proxy: The typed `state.harmony.registerMode` read (default `'suavizado'
 
 ### 08.5 Reversibility note
 
-With `subview === 'tonnetz'` (the default on load): `_staffContainer.visible = false`. The staff scene objects (_staffGfx, _accidentalContainer, _clefText, _dynGfx) are added to `_staffContainer` but not rendered (PIXI skips invisible containers entirely). `_tonnetzContainer` (containing all 7 Tonnetz objects) is `visible = true`. The harmonyLayer renders exactly the same Tonnetz scene as in Phase 07. Audio output is byte-identical to pre-Phase-08 state (no audio changes in this step).
+With `subview === 'tonnetz'` (the default on load): `_staffContainer.visible = false`. The staff scene objects (`_staffGfx`, `_accidentalContainer`, `_clefText`, `_dynGfx`) are added to `_staffContainer` but not rendered (PIXI skips invisible containers entirely). `_tonnetzContainer` (containing all 7 Tonnetz objects) is `visible = true`. The harmonyLayer renders exactly the same Tonnetz scene as in Phase 07. Audio output is byte-identical to pre-Phase-08 state (no audio changes in this step).
 
 ### 08.5 Terminal commit
 
@@ -543,11 +553,13 @@ Decision: **Keep as empty shell** (not deleted). `App.svelte` line 373 has `<Har
 The `.orbit-ctl` absolute-positioned overlay div has been removed. No harmony controls overlap the canvas in harmony view. The component renders as an empty Svelte template (comment-only), producing no DOM output.
 
 **Prototype parity note:**
+
 - `setChordMode('chord' | 'arp')`: prototype behavior at lines 449–452 (`.seg2#chordModeSeg` buttons), action is unchanged (`setChordMode` in `session.ts`). Labels "◧ acorde" / "⋯ arpegio" are preserved exactly.
 - `agentCtx.update(c => ({...c, includeHarmony: true}))`: prototype behavior from `button#harmonyToCtx` (line 510), action is unchanged (`agentCtx` store update). Label "📨 marco" preserved.
 - No behavioral changes — controls are relocated, not redesigned.
 
 **Live/visual verification:** deferred to Pilot (CLI cannot render PIXI or open a browser):
+
 - A-08-12: ProgressionStrip cursor visually advances and loops — requires live browser.
 - A-08-13: top bar shows acorde/arpegio/marco in harmony view; canvas has no overlay — requires live browser.
 
@@ -579,6 +591,281 @@ The `.orbit-ctl` absolute-positioned overlay div has been removed. No harmony co
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
 
 ### 08.6 Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+## Step 08.7 — Quality gates + manual acceptance
+
+**Date:** 2026-06-12
+**Iteration:** 1 of 5
+
+### 08.7 Completed
+
+All four quality gates run clean. All static analysis checks from the spec performed and recorded below. Phase-completion summary and manual acceptance checklist produced for Pilot Checkpoint #5.
+
+### 08.7 Files touched
+
+- `docs/orbifold-v2/handoffs/phase-08-handoff.md` (this file — handoff entry + phase-completion summary appended)
+
+### 08.7 Quality gate results (exact output)
+
+#### `pnpm exec tsc --noEmit`
+
+Exit code: **0**
+Output: *(no output — zero errors)*
+
+#### `pnpm lint`
+
+Exit code: **0**
+Output:
+
+```text
+> orbifold@0.0.1 lint
+> eslint . && prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+#### `pnpm exec vitest run`
+
+Exit code: **0**
+
+```text
+ Test Files  13 passed (13)
+      Tests  385 passed (385)
+   Start at  13:11:10
+   Duration  754ms
+```
+
+Breakdown by file:
+
+| Test file | Tests |
+| --- | --- |
+| `tests/harmony/time-map.test.ts` | 13 |
+| `tests/euclid.test.ts` | 25 |
+| `tests/harmony/staff-map.test.ts` | 73 |
+| `tests/harmony/staff-layout.test.ts` | 32 |
+| `tests/harmony/voice-tracks.test.ts` | 18 |
+| `tests/harmony/voice-tracks-register.test.ts` | 24 |
+| `tests/codegen.test.ts` | 39 |
+| `tests/tonnetz.test.ts` | 31 |
+| `tests/session.test.ts` | 46 |
+| `tests/schema.test.ts` | 41 |
+| `tests/persistence.test.ts` | 31 |
+| `tests/voice-leading.test.ts` | 8 |
+| `tests/phase-anchor.test.ts` | 4 |
+| **Total** | **385** |
+
+Baseline before Phase 08: 361. Net gain: +24 (all from step 08.3 voice-tracks-register tests).
+
+#### `pnpm build`
+
+Exit code: **0**
+
+```text
+vite v5.4.11 building for production...
+✓ 555 modules transformed.
+dist/index.html                     2.32 kB │ gzip:   1.25 kB
+dist/assets/index-Z1xAQs6o.css     30.37 kB │ gzip:   6.18 kB
+dist/assets/index-COQsK9Qi.js   1,062.56 kB │ gzip: 335.23 kB
+✓ built in 1.70s
+```
+
+Advisory: pre-existing chunk-size warning (1,062.56 kB > 500 kB); pre-existing stage.ts + strudel.ts dynamic-import advisories. Neither introduced by Phase 08; both present since Phase 07 delivery.
+
+### 08.7 Static analysis checks (per spec 08.7 requirements)
+
+| Check | Command / Verification | Result |
+| --- | --- | --- |
+| No PIXI/Svelte/DOM imports in `src/core/harmony/` | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` | **0 matches** — confirmed |
+| `PX_PER_CYCLE` in `harmony-staff-scene.ts` is imported, not re-declared | Line 45: `import { PX_PER_CYCLE } from '../core/harmony/time-map.js'` | **confirmed import** |
+| `PX_PER_CYCLE` in `ProgressionStrip.svelte` is local const = 48 | Line 119: `const PX_PER_CYCLE = 48;` (not an import from time-map.ts) | **confirmed local const = 48** |
+| `persistence.ts` — `SavedHarmonySchema` has no `subview`/`registerMode` | Lines 46–54: Zod schema has `root`, `mode`, `octave`, `progression` only | **confirmed absent** |
+| `agent/schema.ts` — no `subview`/`registerMode` | `grep -n "subview\|registerMode" src/agent/schema.ts` | **0 matches** |
+| `HarmonyState.subview` carries EPHEMERAL JSDoc | `session.ts` line 188: `"EPHEMERAL — not persisted, not in agent schema."` | **confirmed** |
+| `HarmonyState.registerMode` carries EPHEMERAL JSDoc | `session.ts` line 195: `"EPHEMERAL — not persisted, not in agent schema."` | **confirmed** |
+| AGPL-3.0 header on `voice-tracks.ts` | Line 1: `// SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `harmony-staff-scene.ts` | Line 1: `// SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `stage.ts` | Line 1: `// SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `session.ts` | Line 1: `// SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `persistence.ts` | Line 1: `// SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `Header.svelte` | Line 2: `SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `HarmonyControls.svelte` | Line 2: `SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `ProgressionStrip.svelte` | Line 2: `SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| AGPL-3.0 header on `voice-tracks-register.test.ts` | Line 1: `// SPDX-License-Identifier: AGPL-3.0-only` | **present** |
+| PIXI version still pinned (no caret) | `package.json` line 16: `"pixi.js": "7.4.2"` | **confirmed pinned** |
+| Strudel version still pinned (no caret) | `package.json` line 15: `"@strudel/web": "1.0.3"` | **confirmed pinned** |
+| `registerMode` is visual-only (audio byte-identical) | No `requeueLive()` call in `setRegisterMode` (`session.ts` lines 658–675); audio codegen path (`melodyLine`, `chordToStrudel`) does not import `voice-tracks.ts` | **confirmed visual-only** |
+
+### 08.7 Implementation evidence per acceptance ID (for live/visual items)
+
+The following table cites exact source lines for A-08-08 through A-08-14 where behavior is implemented. Live visual confirmation is deferred to Pilot.
+
+| A-ID | Behavior | Source evidence | Live deferred? |
+| --- | --- | --- | --- |
+| A-08-08 | Playhead loops back to left edge | `harmony-staff-scene.ts` line 327–332: `rawX` computed, then `((rawX % _staffWidth) + _staffWidth) % _staffWidth`; guard `if (_staffWidth <= 0) return` at line 323 | Yes — requires running PIXI canvas |
+| A-08-09 | `suavizado` produces smooth voice contours | `session.ts` default `registerMode: 'suavizado'`; `harmony-staff-scene.ts` passes `state.harmony.registerMode` to `computeVoiceTracks`; engine unit-tested in A-08-02 (voice-tracks-register.test.ts) | Yes — visual contours require running canvas |
+| A-08-10 | Staff occupies full canvas, centered | `harmony-staff-scene.ts` line 60: `STEP_PX = 16`; line 63: `HALF_STEP_PX = STEP_PX / 2` (= 8); line 261: `_staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` (= height/2 − 48) | Yes — visual layout requires running canvas |
+| A-08-11 | Sub-toggle in top bar; ProgressionStrip visible in both | `Header.svelte`: `#subviewSeg` inside `{#if $sessionStore.view === 'harmony'}`; `stage.ts setHarmonySubview`: sets `_tonnetzContainer.visible` / `_staffContainer.visible` exclusively; ProgressionStrip is Svelte DOM — always rendered | Yes — toggle interaction requires browser |
+| A-08-12 | ProgressionStrip cursor loops with progression | `ProgressionStrip.svelte`: `startCursorLoop()` rAF loop, positive-modulo formula, `onDestroy` cleanup; cursor div `pointer-events:none` | Yes — visual loop requires browser |
+| A-08-13 | acorde/arpegio/marco in top bar; no canvas overlap | `Header.svelte`: `#chordModeSeg` + `.marco-btn` in harmony guard; `HarmonyControls.svelte`: empty shell (no DOM output) | Yes — visual layout requires browser |
+| A-08-14 | Default `subview='tonnetz'` matches Phase 07 visual | `stage.ts initStage`: `_tonnetzContainer.visible = true`, `_staffContainer.visible = false`; `DEFAULT_SESSION_STATE.harmony.subview = 'tonnetz'`; `setHarmonySubview('staff')` only called on user action | Yes — visual identity requires browser |
+
+### 08.7 Acceptance Coverage Table (full phase)
+
+This is the authoritative phase-level table covering all 14 acceptance IDs.
+
+| Acceptance ID | Required behavior | Test / evidence | Test type | Gap status |
+| --- | --- | --- | --- | --- |
+| A-08-01 | `computeVoiceTracks(prog, octave, 'estricto')` produces the same octave assignment as the pre-phase formula | `tests/harmony/voice-tracks-register.test.ts`: "A-08-01: voice-0 = C4", "A-08-01: voice-1 = E4", "A-08-01: voice-2 = A3", "A-08-01: three-chord estricto" | unit | **covered** |
+| A-08-02 | `computeVoiceTracks(prog, octave, 'suavizado')` produces notes within ±6 semitones; tie resolves to lower | `tests/harmony/voice-tracks-register.test.ts`: "A-08-02: suavizado voice-1 stays D#3", "A-08-02: suavizado voice-2 stays F#3", "A-08-02: suavizado leap for every voice is <= 6 semitones", TIE tests | unit | **covered** |
+| A-08-03 | Default 2-arg call byte-identical to explicit `'suavizado'` | `tests/harmony/voice-tracks-register.test.ts`: "A-08-03: 2-arg call and suavizado produce identical outputs", "A-08-03: 2-arg default and 3-arg estricto differ" | unit | **covered** |
+| A-08-04 | Rest slot between two chords preserves voice-leading across the gap in both modes | `tests/harmony/voice-tracks-register.test.ts`: "A-08-04 estricto: A minor after rest has same notes as direct A minor", "A-08-04 suavizado: A minor after rest has same notes as direct A minor", "A-08-04: leading rest followed by chord uses estricto anchor" | unit | **covered** |
+| A-08-05 | `registerMode`/`subview` absent from `SavedHarmonySchema` and `agent/schema.ts`; changing them does not alter saved blob | `SavedHarmonySchema` (lines 46–54): fields `root`, `mode`, `octave`, `progression` only; `agent/schema.ts` grep: 0 matches; `serializeSession` does not read these fields | proxy:static-analysis | **covered** |
+| A-08-06 | No PIXI/Svelte/DOM imports in `src/core/harmony/` | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches | proxy:static-analysis | **covered** |
+| A-08-07 | `tsc --noEmit` → 0, `pnpm lint` → 0, `pnpm test` count ≥ 361, `pnpm build` → 0 | tsc: exit 0 (0 errors); lint: exit 0; vitest: 385 passed; build: exit 0 | automated | **covered** |
+| A-08-08 | Playhead loops back to left edge instead of freezing | `harmony-staff-scene.ts` lines 323–332: positive-modulo formula `((rawX % _staffWidth) + _staffWidth) % _staffWidth`; `_staffWidth <= 0` guard; no Math.min/max on playheadX | proxy:static-analysis + live deferred to Pilot | **proxy-covered** |
+| A-08-09 | `suavizado` produces smooth voice contours on staff | `session.ts` default `'suavizado'`; `harmony-staff-scene.ts` passes `state.harmony.registerMode` to engine; unit-tested in A-08-02 | proxy:static-analysis + live deferred to Pilot | **proxy-covered** |
+| A-08-10 | Staff occupies full canvas, centered | `harmony-staff-scene.ts` `STEP_PX=16`, `HALF_STEP_PX=8`, `staffBaseY = height/2 − 48` per ADR D5 | proxy:static-analysis + live deferred to Pilot | **proxy-covered** |
+| A-08-11 | Sub-toggle switches canvas; ProgressionStrip visible in both | `Header.svelte` `#subviewSeg`; `stage.ts setHarmonySubview`; ProgressionStrip is Svelte DOM | proxy:static-analysis + live deferred to Pilot | **proxy-covered** |
+| A-08-12 | ProgressionStrip cursor advances, loops, visible in both subviews | `ProgressionStrip.svelte` `startCursorLoop()` rAF loop; positive-modulo formula; `onDestroy` cleanup | proxy:static-analysis + live deferred to Pilot | **proxy-covered** |
+| A-08-13 | acorde/arpegio/marco in top bar; no canvas overlap | `Header.svelte` `#chordModeSeg` + `.marco-btn`; `HarmonyControls.svelte` empty shell | proxy:static-analysis + live deferred to Pilot | **proxy-covered** |
+| A-08-14 | Default `subview='tonnetz'`: Phase 07 visual identity | `stage.ts initStage` defaults; `DEFAULT_SESSION_STATE.harmony.subview = 'tonnetz'`; `setHarmonySubview('staff')` only on user click | proxy:static-analysis + live deferred to Pilot | **proxy-covered** |
+
+**Proxy disclosures (08.7):**
+
+All seven live/visual items (A-08-08 through A-08-14) require a running browser with a PIXI WebGL canvas. The CLI environment cannot render PIXI. Each is covered by static analysis of the implementing source line(s) in lieu of live visual confirmation. Live verification is deferred to Pilot Checkpoint #5 via the manual acceptance checklist below.
+
+**No unaddressed IDs.** All 14 acceptance IDs have at minimum proxy:static-analysis coverage; A-08-01 through A-08-06 are covered by automated unit tests or static analysis with no residual gap.
+
+**Prior-phase carry-forwards (all closed):**
+
+| Carry-forward | From | Closed by |
+| --- | --- | --- |
+| A-07-08 (staff placement) | Phase 07 | A-08-10 + A-08-11 |
+| A-07-09 (voice register) | Phase 07 | A-08-02, A-08-03, A-08-09 |
+| A-07-11 (cyclic playhead + strip cursor) | Phase 07 | A-08-08 + A-08-12 |
+| A-07-12 (widget overlap) | Phase 07 | A-08-13 |
+
+### 08.7 Manual acceptance checklist for Pilot (Checkpoint #5)
+
+The following items require in-browser verification. Each is a concrete checkable step with expected result.
+
+**Prerequisites:** `pnpm dev` running; open `http://localhost:5173`; navigate to Armonía view; have at least one chord in the progression.
+
+#### A-08-11 and A-08-14 — Sub-toggle
+
+1. On load, confirm the top bar shows "Tonnetz" and "Pentagrama" segmented buttons in the Armonía view. The Tonnetz (hex grid) is visible on the canvas, and the staff is NOT visible. The "Tonnetz" button has the active style.
+   - **Expected:** Tonnetz canvas, staff hidden — identical to Phase 07 visual.
+
+2. Click "Pentagrama". Confirm the Tonnetz grid disappears and the treble-clef staff appears in the center of the canvas. The "Pentagrama" button has the active style.
+   - **Expected:** Staff occupies the full canvas height (not a bottom strip); clef symbol visible at left; voice notes rendered as colored note-heads.
+
+3. Click "Tonnetz". Confirm the Tonnetz grid reappears and the staff disappears.
+   - **Expected:** Tonnetz visual identical to step 1.
+
+4. Confirm the ProgressionStrip is visible (above the Transport) in both Tonnetz and Pentagrama subviews.
+   - **Expected:** ProgressionStrip remains present regardless of subview.
+
+#### A-08-10 — Central staff geometry
+
+1. In the Pentagrama subview, confirm the staff is vertically centered on the canvas (the middle staff line B4 is approximately at canvas midpoint, not near the bottom).
+   - **Expected:** Five staff lines are evenly spaced in the vertical center; with `STEP_PX=16` each gap is 8px; the whole staff occupies roughly 8 × 16 = 128px of the canvas height, centered.
+
+#### A-08-08 — Cyclic playhead on staff
+
+1. Start playback (Transport play button) with at least two chords in the progression. In the Pentagrama subview, observe the vertical playhead line on the staff.
+   - **Expected:** The playhead advances left-to-right across the staff. When it reaches the right edge (end of progression), it wraps back to x=0 and begins advancing again without pausing or freezing at the last note.
+
+#### A-08-09 — suavizado voice contours
+
+1. In the Pentagrama subview with `registerMode = 'suavizado'` (the default), observe the three voice-track lines for a progression with at least two chords that would produce an octave jump in `estricto` mode (e.g., C major → B major).
+   - **Expected:** Voice note-heads form approximately horizontal contour lines with no large vertical jumps between adjacent chords (all jumps ≤ 6 semitones = ≤ 3 staff steps).
+
+2. Click "estricto" in the register-mode segmented control. Observe the same progression.
+   - **Expected:** Voice note-heads may show larger vertical jumps (reflecting the absolute octave formula). Audio output is audibly unchanged — the same chord sounds play.
+
+3. Click "suavizado" to return to the default. Confirm voice contours return to smooth lines.
+   - **Expected:** Smooth contours restored; audio unchanged throughout.
+
+#### A-08-12 — ProgressionStrip cursor
+
+1. During playback, confirm a thin white vertical cursor line is visible in the ProgressionStrip (above the Transport) and advances left-to-right in sync with the staff playhead.
+   - **Expected:** Cursor moves at the same speed as the staff playhead; both are synchronized via `getVisualPhaseAnchor()`.
+
+2. Confirm the ProgressionStrip cursor wraps back to x=0 when the progression loops (matching the staff playhead wrap).
+   - **Expected:** Cursor loops continuously with the progression; no freeze at the right edge.
+
+3. Switch between Tonnetz and Pentagrama subviews during playback. Confirm the ProgressionStrip cursor is visible in both.
+   - **Expected:** Cursor continues advancing in both subviews (it is a Svelte DOM element, not part of the PIXI canvas).
+
+#### A-08-13 — Top bar controls; no canvas overlap
+
+1. In the Armonía view (either subview), confirm the top bar shows: "Tonnetz" / "Pentagrama" toggle, "suavizado" / "estricto" toggle, "◧ acorde" / "⋯ arpegio" segmented control, and the 📨 marco button — all in the top bar.
+   - **Expected:** All harmony controls are in the top bar. No controls float over the canvas.
+
+2. In the Pentagrama subview, confirm the staff canvas is free of any overlay divs or controls (no `.orbit-ctl` or `.glass` panel in front of the notes).
+   - **Expected:** The staff canvas has no overlapping controls. The only elements in the canvas area are the PIXI WebGL canvas itself.
+
+#### A-08-05 — Ephemeral state not persisted
+
+1. Set the subview to "Pentagrama" and the register mode to "estricto". Use the save function (save session). Reload the page or re-open the saved session.
+   - **Expected:** After reload/load, the subview resets to "Tonnetz" (default) and the register mode resets to "suavizado" (default). The saved session blob does not contain `subview` or `registerMode` fields.
+
+---
+
+### 08.7 Phase-wide invariant confirmations
+
+| Invariant | Check | Status |
+| --- | --- | --- |
+| AGPL-3.0 header on all new/modified `.ts`/`.svelte` files | Verified above for all 9 files (voice-tracks.ts, harmony-staff-scene.ts, stage.ts, session.ts, persistence.ts, Header.svelte, HarmonyControls.svelte, ProgressionStrip.svelte, voice-tracks-register.test.ts) | **PASS** |
+| PIXI version pinned | `package.json`: `"pixi.js": "7.4.2"` (no caret) | **PASS** |
+| Strudel version pinned | `package.json`: `"@strudel/web": "1.0.3"` (no caret) | **PASS** |
+| No DOM/PIXI/Svelte imports in `src/core/harmony/` | grep → 0 matches | **PASS** |
+| `registerMode` visual-only (audio byte-identical) | `setRegisterMode` has no `requeueLive()` call; audio codegen does not import voice-tracks.ts | **PASS** |
+| `subview` / `registerMode` not persisted in `SavedHarmonySchema` or agent schema | grep → 0 matches in both files | **PASS** |
+| `PX_PER_CYCLE = 48` coordination rule: local const in ProgressionStrip.svelte, imported in harmony-staff-scene.ts | Verified; both values = 48 | **PASS** |
+
+### 08.7 Decisions Register proposals (for Pilot — Dev proposes, Pilot writes)
+
+The following entries are proposed for the Decisions Register. The Pilot decides whether to add them.
+
+#### Proposal 1 — `STEP_PX = 16` is a Phase 08 coordination point
+
+Suggested entry: `STEP_PX = 16` and `HALF_STEP_PX = 8` are binding staff geometry constants, declared in `src/render/harmony-staff-scene.ts`. `staffBaseY = height / 2 − 6 * HALF_STEP_PX` (`= height/2 − 48`). These are documented in ADR 0011 Amendment D5. Any Phase 09 orbital rendering that must align with the treble-clef staff positions (e.g., voice ring radii that correspond to specific pitch positions) must use these constants or reference the same geometry. The Dev cannot change these without Pilot awareness (they affect the visible pitch register mapping).
+
+#### Proposal 2 — estricto/suavizado contract: visual-only, audio byte-identical
+
+Suggested entry: `registerMode` in `HarmonyState` is purely visual. Changing between `'estricto'` and `'suavizado'` produces byte-identical Strudel pattern strings and byte-identical audio output (confirmed: `computeVoiceTracks` output feeds only `harmony-staff-scene.ts` → PIXI; audio codegen uses `chordVoicing` directly). Any future phase that routes `voice-tracks.ts` output into codegen must surface it to the Pilot as a breaking change to this invariant.
+
+#### Proposal 3 — Ephemeral UI state (subview, registerMode) is not persisted and not in agent schema
+
+Suggested entry: `HarmonyState.subview` and `HarmonyState.registerMode` are ephemeral. On session load/save, these fields reset to their defaults (`'tonnetz'` and `'suavizado'` respectively). They are absent from `SavedHarmonySchema` and `agent/schema.ts`. Any future phase that needs to persist or agent-control these fields must produce an ADR (requires versioning `SavedHarmonySchema` and bumping the session schema version).
+
+### 08.7 Phase status
+
+**PHASE 08 IMPLEMENTATION COMPLETE.** All 14 acceptance IDs are addressed (A-08-01 through A-08-04 by unit tests; A-08-05 and A-08-06 by static analysis; A-08-07 by all four quality gates; A-08-08 through A-08-14 by proxy:static-analysis with live verification deferred to Pilot).
+
+This handoff is ready for Pilot Checkpoint #5 (Phase Complete). The Pilot's manual acceptance checklist above contains 15 concrete in-browser verification steps. The Pilot decides whether to mark the phase CLOSED.
+
+**Next phase (planned):** Phase 09 — orbital harmony view + morph.
+
+### 08.7 Terminal commit
+
+- **Terminal commit:** `feat(harmony): Phase 08 step 08.7 — quality gates and manual acceptance`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+### 08.7 Planner Review
 
 (Filled by the Planner in review mode)
 
