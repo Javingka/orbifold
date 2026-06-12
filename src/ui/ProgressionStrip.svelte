@@ -519,17 +519,17 @@
             </div>
           {/if}
         {/each}
+        <!--
+          Phase 06 step 06.5: "+ silencio" button (ADR 0012 D5).
+          Inside .segments so it scrolls with the progression and is always reachable.
+          Visible only when progression.length < 16 (SavedHarmonySchema max).
+          Calls appendRest() which appends { isRest: true, bars: 1 } and requeueLive().
+        -->
+        {#if $sessionStore.harmony.progression.length < 16}
+          <button class="add-rest-btn" on:click={appendRest}>+ silencio</button>
+        {/if}
       </div>
     </div>
-  {/if}
-  <!--
-    Phase 06 step 06.5: "Add Rest" button (ADR 0012 D5).
-    Outside .strip-scroll so it does not participate in the horizontal scroll.
-    Visible only when progression.length < 16 (SavedHarmonySchema max).
-    Calls appendRest() which appends { isRest: true, bars: 1 } and requeueLive().
-  -->
-  {#if $sessionStore.harmony.progression.length < 16}
-    <button class="add-rest-btn" on:click={appendRest}>+ rest</button>
   {/if}
 </div>
 
