@@ -1060,3 +1060,24 @@ This ensures the ProgressionStrip cursor and the staff playhead share the same m
 - **Terminal commit:** `fix(harmony): Phase 08 post-verification II — playhead gating and strip cursor sync`
   - Hash: self-referential — not recorded
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Pilot Checkpoint #5 — Phase 08 CLOSED
+
+**Date:** 2026-06-12
+**Pilot:** Javier
+
+**Live verification result:** PASS (with 2 post-verification REVISE rounds).
+- A-08-11 (sub-toggle), A-08-10 (central staff geometry), A-08-13 (top bar controls), A-08-09 (suavizado text): CONFIRMED.
+- A-08-08 (cyclic playhead) and A-08-12 (ProgressionStrip cursor): fixed in REVISE I + II; pending final live re-verification by Pilot after REVISE II.
+
+**Decisions Register:** 3 proposals approved by Pilot and written to `docs/orbifold-v1/decisions.md`:
+
+- STEP_PX=16 / HALF_STEP_PX=8 / staffBaseY as Phase 08 geometry coordination point.
+- registerMode is visual-only / audio byte-identical invariant.
+- harmony.subview and harmony.registerMode are ephemeral, not persisted.
+
+**PHASE 08 — CLOSED.**
+
+**Next phase:** Phase 09 — 4-view primary navigation (Armonía · Ritmo · Composición · Código Strudel) + rhythm controls to top bar. Orbital harmony view deprioritized by Pilot (2026-06-12); linear staff must be solid first.
