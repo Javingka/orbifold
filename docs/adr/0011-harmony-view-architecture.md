@@ -76,3 +76,124 @@ Assignment rules:
 4. **Sharp spellings only from `NOTE_NAMES`.** `chordVoicing` generates note names using `NOTE_NAMES` from `src/core/theory/pitch.ts`, which contains only sharp spellings (`C#`, `D#`, `F#`, `G#`, `A#`). Flat accidentals (`Bb`, `Eb`, `Ab`, `Db`, `Gb`) will never appear in voicings produced by `chordVoicing`. `staff-map.ts` handles flat input gracefully (for robustness) but it is not a production path. The `accidental` field in `StaffPosition` will only ever be `'#'` or `''` for production voicings.
 
 5. **Voice-track computation is pure and stateless.** `computeVoiceTracks(progression, octave)` takes the full progression array and returns the complete set of voice tracks in one call. There is no incremental update, no mutable state, and no side effects. The rendering layers call it on every store change and re-render. This design favours correctness over incremental performance; for progressions up to the 8-chord maximum supported by the UI, the computation is negligible.
+
+---
+
+## Amendment — Phase 08
+
+- **Amendment date:** 2026-06-12
+- **Initiative / Phase:** orbifold-v2 / Phase 08 (step 08.2)
+- **Deciders:** Pilot (Javier)
+
+### Amendment context
+
+Phase 07 delivered the treble-clef staff scene but left four integration/UX items unresolved: the staff was cramped at the bottom of the canvas, voice register produced visible octave jumps, the playhead clamped at the staff end instead of looping, and the chord-mode overlay covered the canvas. Phase 08 reshapes the harmony view to address these items. Two new architectural decisions are recorded here.
+
+---
+
+### D5 — Staff is a central full-canvas view; Tonnetz ⇄ Pentagrama sub-toggle
+
+The Armonía view gains a sub-toggle inside the top bar with two options:
+
+- **Tonnetz** (`harmony.subview = 'tonnetz'`) — the existing Tonnetz scene is visible; the staff scene is hidden.
+- **Pentagrama** (`harmony.subview = 'staff'`) — the staff scene is visible at central full-canvas geometry; the Tonnetz scene is hidden.
+
+Exactly one of the two sub-views is visible at any time. The default is `'tonnetz'`, preserving the behavior of Phase 07 (reversibility: with `subview === 'tonnetz'` and `staffContainer.visible === false`, the harmony view is byte-identical in behavior to the pre-Phase-08 state).
+
+This supersedes the Phase 07 "coexisting strip" layout where the staff occupied only the bottom of the canvas with `staffBaseY = height − 60`.
+
+**Central staff geometry (binding constants):**
+
+| Constant | Phase 07 value | Phase 08 value | Source |
+| --- | --- | --- | --- |
+| `STEP_PX` | `10` | `16` | legibility at normal canvas heights; confirmed in phase-08-inventory.md |
+| `HALF_STEP_PX` | `5` | `8` | `STEP_PX / 2` |
+| `staffBaseY` | `app.screen.height − 60` | `app.screen.height / 2 − (6 * HALF_STEP_PX)` = `height / 2 − 48` | centers step-6 (B4, middle staff line) at canvas vertical midpoint |
+
+**Implementation — PIXI sub-containers inside `harmonyLayer`:**
+
+Two `PIXI.Container` children are created inside `harmonyLayer` at init:
+
+- `_tonnetzContainer` — holds the seven Tonnetz scene objects (hGrid, hPath, hDyn, hNRG, hNodes, hNRL, hLabels) in their original relative order.
+- `_staffContainer` — holds the four staff scene objects (`_staffGfx`, `_accidentalContainer`, `_clefText`, `_dynGfx`) in their original build order.
+
+`stage.ts` exports both via `getStageRefs()` on the `StageRefs` interface, and exposes a new function:
+
+```typescript
+export function setHarmonySubview(subview: 'tonnetz' | 'staff'): void
+```
+
+This sets `_tonnetzContainer.visible` and `_staffContainer.visible` to the appropriate complementary values. The existing `setView('harmony')` / `setView('rhythm')` API on `harmonyLayer.visible` is unchanged.
+
+The ProgressionStrip (ADR 0011 D2) remains visible in both sub-views; it is the authoritative duration/gain editor.
+
+**Justification:** A full-canvas staff with a legible step size (STEP_PX = 16) provides a proper music-notation reading experience — the Phase 07 bottom-strip layout with STEP_PX = 10 was too cramped to be pedagogically useful. The sub-toggle instead of coexistence avoids canvas crowding: Tonnetz and staff serve different cognitive modes (chord-space navigation vs. voice-leading visualization) and do not need to be on-screen simultaneously.
+
+---
+
+### D6 — Voice register is user-selectable: estricto and suavizado
+
+`computeVoiceTracks` gains a `registerMode` parameter with two modes:
+
+- **`'estricto'`** — absolute MIDI pitch: the current formula is preserved exactly.
+  `noteOctave = octave + Math.floor((rootPc + iv) / 12)`
+  Octave assignment is independent of the previous voice note; large root-pitch-class differences can produce register jumps.
+
+- **`'suavizado'`** — octave-nearest voice continuity: for each voice on chord `i > 0`, the algorithm computes the candidate at the `estricto` octave and also considers the octave immediately above and below. It picks the candidate with the smallest absolute semitone distance from the previous note in that voice. Ties (exactly ±6 semitones) resolve to the lower octave. The result is smooth horizontal contour lines on the staff.
+
+**Signature change:**
+
+```typescript
+export function computeVoiceTracks(
+  progression: (ChordInput | RestInput)[],
+  octave: number,
+  registerMode: RegisterMode = 'suavizado'
+): VoiceTrack[]
+```
+
+The default `registerMode = 'suavizado'` is the Phase 08 UX goal (smooth contour by default, friendly for free music-making). Existing callers passing only two arguments are unaffected in runtime behavior (they implicitly receive `'suavizado'`).
+
+**`RegisterMode` type:**
+
+```typescript
+export type RegisterMode = 'estricto' | 'suavizado';
+```
+
+**Cyclic playhead formula:**
+
+In `updateHarmonyStaffDynamic`, the playhead x-position is computed as:
+
+```typescript
+playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth
+```
+
+This wraps the playhead continuously from the staff's right edge back to the left edge, matching the looping nature of the progression. The positive-modulo guard handles briefly-negative `rawX` (possible when the phase anchor is in the future after a re-anchor). Guard: if `_staffWidth <= 0`, return early without drawing.
+
+**Visual-only invariant — audio output is byte-identical regardless of register mode:**
+
+`registerMode` controls only the octave assignment in `computeVoiceTracks`. The output of `computeVoiceTracks` (`VoiceTrack[]`) is consumed exclusively by:
+
+1. `staff-layout.ts` → `computeStaffLayout` (pure visual engine)
+2. `harmony-staff-scene.ts` (PIXI renderer)
+
+Neither file is in the audio pipeline. The audio codegen path (`melodyLine`, `chordToStrudel` in `src/core/codegen/strudel.ts`) calls `chordVoicing` directly from `src/core/theory/chords.ts` and does not import `voice-tracks.ts`. Changing `registerMode` produces byte-identical Strudel pattern strings and byte-identical audio output. This invariant is confirmed by the Phase 08 audio-path isolation verdict (phase-08-inventory.md §b).
+
+**Ephemeral state — `registerMode` and `subview` are NOT persisted:**
+
+`harmony.registerMode` and `harmony.subview` are ephemeral UI state held in the Svelte session store. They are absent from `SavedHarmonySchema` in `persistence.ts` and from the agent schema in `agent/schema.ts`. Changing either field in the store does not alter the saved session blob.
+
+**UI placement — relocation of chord-mode controls to the top bar:**
+
+The `acorde/arpegio` segmented control and the `marco` context button are relocated from the canvas overlay (`HarmonyControls.svelte`) to the top bar (`Header.svelte`), inside the harmony-only `{#if}` block alongside the new sub-toggle and register-mode controls. The canvas is fully freed of overlapping controls.
+
+**Justification:** `suavizado` as the default matches the product goal of smooth, approachable voice-leading visualization for free music-making. `estricto` is preserved for users who want to see the raw orbifold arithmetic. Keeping both modes as a toggle (rather than removing `estricto`) preserves pedagogical transparency — advanced users can switch to `estricto` to understand why voices jump. The audio invariant is fundamental: the register mode must not change what the user hears, only what they see.
+
+---
+
+### Amendment Consequences
+
+1. **`STEP_PX = 16` and `HALF_STEP_PX = 8` are now the binding constants for harmony staff rendering.** Any future phase that renders on the staff coordinate system must use these values. These supersede the Phase 07 constants (`STEP_PX = 10`, `HALF_STEP_PX = 5`) which produced an illegible staff layout.
+
+2. **`computeVoiceTracks` now accepts a third `registerMode` parameter (default `'suavizado'`).** All callers passing only two arguments continue to work correctly; they now implicitly receive smooth-contour behavior. Callers that need the original absolute-pitch behavior must pass `'estricto'` explicitly.
+
+3. **The `harmonyLayer` PIXI display list is restructured into two sub-containers.** Code that adds children directly to `harmonyLayer` after Phase 07 will break; children must be added to `refs.tonnetzContainer` or `refs.staffContainer` instead. The `StageRefs` interface is extended accordingly.
