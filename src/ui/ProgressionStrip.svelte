@@ -118,7 +118,7 @@
    */
   const PX_PER_CYCLE = 48;
 
-  // ── Phase 08 step 08.6: playhead cursor ──────────────────────────────────
+  // ── Phase 08 step 08.6: playhead cursor (revised: post-verification REVISE II) ─
   // A thin vertical cursor line tracking the playhead position.
   // Spec: cursor x = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE,
   //   modulo-wrapped so it loops with the progression (((rawX % w) + w) % w).
@@ -130,28 +130,60 @@
   // Note: ProgressionStrip has no onMount — it uses reactive Svelte statements.
   // The cursor rAF is managed with a module-level raf handle and a cleanup function
   // registered in onDestroy (the same pattern used in the harmony staff ticker).
+  //
+  // BUG A fix (post-verification REVISE II): gate on playback state.
+  // The loop only starts/resumes when nowPlaying.source !== null (something is
+  // playing). When not playing, cursorVisible is false and the cursor is hidden.
+  //
+  // BUG B fix (post-verification REVISE II): explicit cursorTotalWidth declaration.
+  // cursorTotalWidth is derived from the store directly (not via totalBars which
+  // may include transient resizeBars overrides). This ensures the modulo denominator
+  // matches _staffWidth in harmony-staff-scene.ts exactly.
+
+  /**
+   * Total cursor width in pixels: sum of all progression slot durations × PX_PER_CYCLE.
+   * Explicit reactive declaration so the rAF tick always reads the current musical
+   * duration (not the resizeBars-overridden totalBars used for the ruler/segments).
+   * Matches the _staffWidth formula in harmony-staff-scene.ts: both use the same
+   * slot.bars ?? 1 fallback and multiply by PX_PER_CYCLE = 48.
+   * BUG B fix: replaces `totalBars * PX_PER_CYCLE` inside the rAF closure.
+   */
+  $: cursorTotalWidth =
+    $sessionStore.harmony.progression.reduce((s, slot) => s + (slot.bars ?? 1), 0) * PX_PER_CYCLE;
 
   /** Cursor x position in pixels (used in the template to style the cursor div). */
   let cursorX: number = 0;
-  /** Whether the cursor should be visible (requires a non-empty progression). */
+  /** Whether the cursor should be visible (requires playing + non-empty progression). */
   let cursorVisible: boolean = false;
 
   /** Active requestAnimationFrame handle for the cursor loop. */
   let _cursorRaf: number | null = null;
 
-  /** Start the cursor rAF loop. Called when the progression becomes non-empty. */
+  /**
+   * Start the cursor rAF loop.
+   * BUG A: called only when both progression is non-empty AND nowPlaying.source !== null.
+   * BUG B: uses cursorTotalWidth (explicit reactive) instead of totalBars * PX_PER_CYCLE.
+   */
   function startCursorLoop(): void {
     if (_cursorRaf !== null) return; // already running
     function tick(): void {
       const state = $sessionStore;
+      // BUG A: stop loop if nothing is playing.
+      if (state.nowPlaying.source === null) {
+        cursorVisible = false;
+        _cursorRaf = null;
+        return;
+      }
       const prog = state.harmony.progression;
       if (prog.length === 0) {
         cursorVisible = false;
         _cursorRaf = null;
         return;
       }
-      const totalWidth = totalBars * PX_PER_CYCLE;
-      if (totalWidth <= 0) {
+      // BUG B: read cursorTotalWidth directly (explicit reactive declaration above).
+      // cursorTotalWidth = progression.reduce((s, slot) => s + (slot.bars ?? 1), 0) * PX_PER_CYCLE.
+      // This matches _staffWidth in harmony-staff-scene.ts exactly.
+      if (cursorTotalWidth <= 0) {
         _cursorRaf = requestAnimationFrame(tick);
         return;
       }
@@ -159,14 +191,14 @@
       const barMs = (60000 / bpm) * 4;
       const now = performance.now();
       const rawX = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE;
-      cursorX = ((rawX % totalWidth) + totalWidth) % totalWidth;
+      cursorX = ((rawX % cursorTotalWidth) + cursorTotalWidth) % cursorTotalWidth;
       cursorVisible = true;
       _cursorRaf = requestAnimationFrame(tick);
     }
     _cursorRaf = requestAnimationFrame(tick);
   }
 
-  /** Stop the cursor rAF loop. Called from onDestroy and when progression empties. */
+  /** Stop the cursor rAF loop. Called from onDestroy and when progression empties or stops. */
   function stopCursorLoop(): void {
     if (_cursorRaf !== null) {
       cancelAnimationFrame(_cursorRaf);
@@ -175,12 +207,17 @@
     cursorVisible = false;
   }
 
-  // Reactively start/stop the cursor loop based on whether there are slots to show.
+  // Reactively start/stop the cursor loop based on progression content AND playback state.
+  // BUG A fix: also gate on nowPlaying.source — don't animate unless something is playing.
   // Svelte $: reactive block runs synchronously after state changes.
-  $: if ($sessionStore.harmony.progression.length > 0) {
-    startCursorLoop();
-  } else {
-    stopCursorLoop();
+  $: {
+    const isPlaying = $sessionStore.nowPlaying.source !== null;
+    const hasSlots = $sessionStore.harmony.progression.length > 0;
+    if (isPlaying && hasSlots) {
+      startCursorLoop();
+    } else {
+      stopCursorLoop();
+    }
   }
 
   // Cleanup: cancel the rAF loop when the component is destroyed.

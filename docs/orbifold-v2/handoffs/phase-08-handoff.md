@@ -954,3 +954,109 @@ This uses the full progression duration directly, matching the ProgressionStrip 
 
 - **Terminal commit:** `fix(harmony): Phase 08 post-verification — staff lines, clef position, subview text, playhead sync`
   - Hash: self-referential — not recorded
+
+---
+
+## Post-verification REVISE II — Playhead gating and strip cursor sync
+
+**Date:** 2026-06-12
+**Iteration:** 2 (post-Pilot live-verification, second pass)
+
+### REVISE II Background
+
+After the first REVISE round was merged, the Pilot identified two additional bugs during live verification that were not caught by static analysis:
+
+- **BUG A** — Both playheads (staff playhead in `harmony-staff-scene.ts` and ProgressionStrip cursor in `ProgressionStrip.svelte`) animated before any audio was playing. The rAF loop and PIXI tick drew the playhead line unconditionally whenever the progression was non-empty, regardless of transport state.
+- **BUG B** — The ProgressionStrip cursor looped over only one chord's span rather than the full progression. Root cause: the `tick()` closure referenced `totalBars * PX_PER_CYCLE` where `totalBars` is a `$:` reactive variable that may include transient `resizeBars` overrides, and is not guaranteed to reflect the true musical duration inside a rAF tick. This caused the modulo denominator to be smaller than expected, making the cursor loop much too quickly.
+
+### Bug A fix — Playhead gating on transport state
+
+**`src/render/harmony-staff-scene.ts` — `updateHarmonyStaffDynamic`:**
+
+Added a guard after `_dynGfx.clear()`:
+
+```typescript
+// BUG A fix: do not draw the playhead when nothing is playing.
+if (state.nowPlaying.source === null) return;
+```
+
+When `nowPlaying.source === null`, the `_dynGfx` is cleared and the function returns without drawing the playhead line. The playhead is invisible when the transport is stopped.
+
+The `nowPlaying.source` field in `SessionState` is `null` when nothing is playing; it is set to `'rhythm'`, `'harmony'`, `'session'`, etc., by the transport actions in `session.ts`. This is the correct flag per the session state model (A-08-08).
+
+**`src/ui/ProgressionStrip.svelte` — cursor rAF loop:**
+
+Two changes:
+
+1. The `$:` reactive block that starts/stops the cursor loop now gates on **both** `nowPlaying.source !== null` AND `progression.length > 0`:
+
+   ```svelte
+   $: {
+     const isPlaying = $sessionStore.nowPlaying.source !== null;
+     const hasSlots = $sessionStore.harmony.progression.length > 0;
+     if (isPlaying && hasSlots) {
+       startCursorLoop();
+     } else {
+       stopCursorLoop();
+     }
+   }
+   ```
+
+2. Inside `tick()`, the first check is `if (state.nowPlaying.source === null) { cursorVisible = false; _cursorRaf = null; return; }` — this stops an already-running loop immediately if playback stops.
+
+When not playing, `cursorVisible = false` and the cursor div is hidden.
+
+### Bug B fix — Explicit `cursorTotalWidth` reactive declaration
+
+Added a new `$:` reactive declaration in `ProgressionStrip.svelte`:
+
+```svelte
+$: cursorTotalWidth =
+  $sessionStore.harmony.progression.reduce((s, slot) => s + (slot.bars ?? 1), 0) *
+  PX_PER_CYCLE;
+```
+
+This mirrors the `_staffWidth` formula in `harmony-staff-scene.ts` exactly:
+
+- Both use `slot.bars ?? 1` fallback
+- Both multiply by `PX_PER_CYCLE` (= 48 in the local const for ProgressionStrip; imported from `time-map.ts` for the staff scene — vigent coordination-point rule)
+- Neither includes `resizeBars` overrides (which are transient UI state, not musical duration)
+
+The `tick()` function now uses `cursorTotalWidth` instead of `totalBars * PX_PER_CYCLE`:
+
+```javascript
+if (cursorTotalWidth <= 0) { ... return; }
+cursorX = ((rawX % cursorTotalWidth) + cursorTotalWidth) % cursorTotalWidth;
+```
+
+This ensures the ProgressionStrip cursor and the staff playhead share the same modulo denominator regardless of resize-drag state.
+
+### REVISE II files touched
+
+- `src/render/harmony-staff-scene.ts` (BUG A: `nowPlaying.source === null` guard in `updateHarmonyStaffDynamic`; module comment updated)
+- `src/ui/ProgressionStrip.svelte` (BUG A: `isPlaying` gate in reactive block and in `tick()`; BUG B: `cursorTotalWidth` reactive declaration replacing `totalBars * PX_PER_CYCLE`)
+- `docs/orbifold-v2/handoffs/phase-08-handoff.md` (this file)
+
+### REVISE II validation evidence
+
+| Gate | Result |
+| --- | --- |
+| `pnpm exec tsc --noEmit` | exit 0 (0 errors) |
+| `pnpm lint` | exit 0 (ESLint + Prettier clean; Prettier reformatted ProgressionStrip.svelte after cursor block expansion) |
+| `pnpm exec vitest run` | 385 passed, 0 failed (13 test files) — count unchanged from phase baseline |
+| `pnpm build` | exit 0; pre-existing chunk-size advisory and dynamic-import advisories unchanged |
+
+### REVISE II Acceptance Coverage Table
+
+| Acceptance ID | Bug fixed | Source evidence | Gap status after fix |
+| --- | --- | --- | --- |
+| A-08-08 | BUG A: staff playhead no longer draws when not playing | `harmony-staff-scene.ts`: `if (state.nowPlaying.source === null) return` after `_dynGfx.clear()` in `updateHarmonyStaffDynamic` | proxy-covered (live: deferred to Pilot re-verification) |
+| A-08-12 | BUG A: ProgressionStrip cursor hidden when not playing | `ProgressionStrip.svelte`: `startCursorLoop()` gated on `isPlaying && hasSlots`; `tick()` exits on `source === null` | proxy-covered (live: deferred to Pilot re-verification) |
+| A-08-12 | BUG B: ProgressionStrip cursor loops over full progression | `ProgressionStrip.svelte`: `cursorTotalWidth` explicit reactive declaration matches `_staffWidth` formula exactly; `tick()` uses `cursorTotalWidth` as modulo denominator | proxy-covered (live: deferred to Pilot re-verification) |
+| A-08-08 | BUG B cross-check: staff and strip share same denominator | `harmony-staff-scene.ts` `_staffWidth = progression.reduce(...bars ?? 1...) * PX_PER_CYCLE` (from REVISE I); `ProgressionStrip.svelte` `cursorTotalWidth` uses identical formula | proxy-covered |
+
+### REVISE II Terminal commit
+
+- **Terminal commit:** `fix(harmony): Phase 08 post-verification II — playhead gating and strip cursor sync`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

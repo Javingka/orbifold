@@ -37,6 +37,7 @@
 //   _staffWidth = totalBars × PX_PER_CYCLE  (post-verification fix, A-08-08)
 //   playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth
 //   Guard: if _staffWidth <= 0, return early without drawing.
+//   Guard: if nowPlaying.source === null, clear and return (BUG A, post-verification REVISE II).
 //   where barMs = (60000 / bpm) × 4 (one 4/4 bar in ms)
 //   (Fixes Phase 07 A-07-11 / A-08-08: playhead loops continuously instead of
 //    clamping at the last note position; _staffWidth matches ProgressionStrip
@@ -344,12 +345,21 @@ export function buildHarmonyStaffScene(state: SessionState): void {
  * Guard: if _staffWidth <= 0, return early without drawing.
  * where barMs = (60000 / bpm) * 4  (one 4/4 bar in ms).
  *
+ * Post-verification REVISE II (BUG A): guard on playback state.
+ * When nowPlaying.source is null (nothing playing), clear and return without
+ * drawing the playhead line. This prevents the line from animating before
+ * the user has started playback.
+ *
  * @param state - Current SessionState.
  */
 export function updateHarmonyStaffDynamic(state: SessionState): void {
   if (_dynGfx === null || _staffBaseY === 0) return;
 
   _dynGfx.clear();
+
+  // BUG A fix: do not draw the playhead when nothing is playing.
+  // nowPlaying.source === null means no transport is active.
+  if (state.nowPlaying.source === null) return;
 
   // Guard: if staff width is zero or negative, return without drawing.
   // _staffWidth is always Math.max(_layout.totalWidth, MIN_STAFF_WIDTH) so it
