@@ -18,7 +18,18 @@ This phase takes the coherent core: **slots already exist** (Chord, RestSlot) �
 
 ---
 
-## Open questions for Pilot (must resolve at Checkpoint #1, after step 10.1 inventory)
+## Pilot decisions (Checkpoint #1, 2026-06-12)
+
+All open questions resolved by the Pilot at Checkpoint #1, after reviewing the step 10.1 inventory:
+
+- **OQ-1 → Confirmed cut line.** Phase 10 = slot editor (existing chord/rest slots); note-level data model (free placement, pitch drag, Tonnetz vertex→single note) deferred to Phase 11.
+- **OQ-2 → Option A.** Filled horizontal bar per voice (8px tall, voice color, 80% opacity, onset circle at left edge, width = bars × PX_PER_CYCLE).
+- **OQ-3 → Option A.** Body drag moves the slot in time (ghost bar + insertion indicator); same idiom as ProgressionStrip badges.
+- **OQ-4 → No decision needed this phase** (Phase 11 hazard, acknowledged by Pilot).
+- **OQ-5 → Option A.** Beat-accurate arpeggio stagger: each voice drawn at the third of the slot where it actually sounds, with ascending connector line.
+- **Playhead verdict accepted:** inventory found NO code discrepancy (both playheads share the width formula and the not-playing guard); Pilot will re-verify live during this phase's acceptance; step 10.3(a) is a no-op unless live verification contradicts.
+
+## Open questions for Pilot (resolved above — kept for the record)
 
 ### OQ-1 — ADR scope: chord-slot editor only, or include note-level data model?
 The Planner recommends chord/rest-slot editor only (this phase), note-level model deferred. **Confirm or override.**
