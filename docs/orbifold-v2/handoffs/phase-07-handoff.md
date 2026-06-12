@@ -83,7 +83,7 @@
 1. Import `buildHarmonyStaffScene`, `updateHarmonyStaffDynamic`, `tickHarmonyStaff` from `../render/harmony-staff-scene.js`.
 2. Call `buildHarmonyStaffScene` after `buildTonnetz` in `onMount` (after the `requestAnimationFrame` wait).
 3. Add to `onResize` callback.
-4. Add `updateHarmonyStaffDynamic(state)` in the store subscription.
+4. Add `updateHarmonyStaffDynamic(state)` in the store subscription alongside `updateTonnetzDynamic`.
 5. Register ticker via `app.ticker.add(tickHarmonyStaff)` — `registerTicker` in `tonnetz-scene.ts` is a dispatcher for `tickHarmony`/`tickRhythm`; adding a second ticker directly via `app.ticker.add` is the correct pattern for a parallel scene.
 6. Add change detection: `prevProgressionLength` and `prevOctave`; rebuild on change.
 
@@ -338,4 +338,93 @@ Step 07.4 wires `harmony-staff-scene.ts` into `App.svelte`:
 4. Register `tickHarmonyStaff` via `app.ticker.add(tickHarmonyStaff)` (direct ticker add — `registerTicker` is a one-call dispatcher for harmony/rhythm; staff uses a parallel add).
 5. Add change detection for `progressionLength` and `octave` to trigger `buildHarmonyStaffScene` on structural changes.
 
-**Next action:** Planner review of step 07.3. After APPROVE, Dev proceeds to step 07.4.
+**Planner Review:** APPROVED on 2026-06-12. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 07.4
+
+---
+
+## Step 07.4 — Svelte integration in `App.svelte`
+
+**Date:** 2026-06-12
+**Commit(s):**
+
+- **Terminal commit:** `feat(harmony): Phase 07 step 07.4 — wire harmony staff scene into App.svelte`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added import of `buildHarmonyStaffScene`, `updateHarmonyStaffDynamic`, `tickHarmonyStaff` from `../render/harmony-staff-scene.js` in `App.svelte`.
+- Added `prevProgressionLength` and `prevOctave` state variables for change detection.
+- Captured initial values of `initState.harmony.progression.length` and `initState.harmony.octave` in `onMount` alongside the existing `prevLayerCount`/`prevHarmonyRoot`/`prevHarmonyMode` captures.
+- Called `buildHarmonyStaffScene(get(sessionStore))` after `buildTonnetz` and `buildRhythmScene` in `onMount` (after the `requestAnimationFrame` wait — canvas is sized before the build call).
+- Added `buildHarmonyStaffScene(get(sessionStore))` and `updateHarmonyStaffDynamic(get(sessionStore))` to the `onResize` callback (after the existing `buildTonnetz`/`buildRhythmScene` calls). Ordering mirrors the spec: build then dynamic update.
+- Registered `tickHarmonyStaff` via `app.ticker.add(tickHarmonyStaff)` directly, after `registerTicker(app)`. `registerTicker` is a one-call dispatcher for the Tonnetz/rhythm tick path; the staff scene requires its own ticker entry. `tickHarmonyStaff` guards internally on `view === 'harmony'`.
+- In the `sessionStore.subscribe` callback: added progression length/octave change detection analogous to the existing `layerCount !== prevLayerCount` check. On structural change, calls `buildHarmonyStaffScene(state)` and updates `prevProgressionLength`/`prevOctave`. Otherwise calls `updateHarmonyStaffDynamic(state)`.
+- Verified the `updateHarmonyStaffDynamic` guard (`_dynGfx === null || _staffBaseY === 0`) in `harmony-staff-scene.ts` (line 282) safely no-ops before `buildHarmonyStaffScene` is called. The ticker is registered after `buildHarmonyStaffScene` in `onMount`, but the guard also protects against any race.
+- No new Svelte components, no new HTML elements. All staff rendering is inside the PIXI canvas.
+
+### Files touched
+
+- `src/app/App.svelte` — modified (import, state vars, onMount, onResize, subscribe, ticker)
+- `docs/orbifold-v2/handoffs/phase-07-handoff.md` — step 07.4 entry appended
+
+### Validation evidence (per Acceptance ID)
+
+- **A-07-07 (partial):** `tsc --noEmit` → 0 errors; `pnpm lint` → 0 errors; `pnpm test` → 361 passed (≥ 340); `pnpm build` → exits 0. All automated gates green.
+- **A-07-08 through A-07-12:** Implementation is wired; live visual verification deferred to step 07.5 manual acceptance.
+- **A-07-11:** `tickHarmonyStaff` registered via `app.ticker.add`; playhead formula `((now − anchor) / barMs) × PX_PER_CYCLE` in `updateHarmonyStaffDynamic` matches the rhythm-scene pattern. Live alignment verification deferred to step 07.5.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier)
+- `pnpm test` → 361 passed (≥ 340; no new Vitest tests — App.svelte is not Vitest-testable)
+- `pnpm build` → exits 0 (556 modules, pre-existing chunk-size warning unchanged)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-07-01 | `computeStaffLayout` empty progression → `{ noteHeads: [], restGlyphs: [], totalWidth: 0 }` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-02 | Single C-major chord at octave 3 → 3 note-heads at x=0, stepY values match `noteToStaffPosition` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-03 | Mixed `[C maj bars:1, rest bars:1, A min bars:2]` → note-heads x=0, rest x=48, note-heads x=96; totalWidth=192 | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-04 | Sharp-containing chord (D major/F#3) → `NoteHead.accidental='#'` for that voice | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-05 | Below-staff chord (C3 voicing) → `NoteHead.ledgerLines` non-empty, matching `noteToStaffPosition` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-06 | No pixi/svelte/DOM imports in `src/core/harmony/` | grep | proxy:static-analysis | covered (steps 07.2, 07.3) |
+| A-07-07 | tsc 0, lint 0, pnpm test ≥ 340, build 0 | all | automated | covered — all gates confirmed green in this step (361 ≥ 340) |
+| A-07-08 | Five staff lines visible in PIXI canvas with treble clef glyph | manual | manual | wired — visual verification deferred to step 07.5 |
+| A-07-09 | Colored note-heads at correct positions, per-voice colors, ledger lines | manual | manual | wired — visual verification deferred to step 07.5 |
+| A-07-10 | Rest glyphs at correct x-positions; no note-head for rest slots | manual | manual | wired — visual verification deferred to step 07.5 |
+| A-07-11 | White playhead advances, aligned with ProgressionStrip cursor | live-system | live-system | wired — live-system verification deferred to step 07.5 |
+| A-07-12 | Sharp accidentals drawn left of note-head; natural notes show no accidental | manual | manual | wired — visual verification deferred to step 07.5 |
+
+### Decisions made (if any)
+
+None — all design decisions (ticker pattern, change detection approach) are pre-resolved by the Pilot in the phase spec and inventory (step 07.1 critical note 5).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None. The Planner's ordering risk note was validated: the `_dynGfx === null || _staffBaseY === 0` guard in `updateHarmonyStaffDynamic` (line 282 of `harmony-staff-scene.ts`) safely no-ops before `buildHarmonyStaffScene` is called. The ticker is also registered after `buildHarmonyStaffScene` in `onMount` to further minimise the no-op window.
+
+### Environment state after this step
+
+- 361 tests passing (unchanged from step 07.3).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `src/app/App.svelte` modified with all four integration points (import, onMount, onResize, subscribe + ticker).
+- No other source files modified.
+
+### Next-step context
+
+Step 07.5 runs all quality gates and performs manual acceptance for A-07-08 through A-07-12:
+- Five staff lines visible with treble clef glyph in harmony view.
+- Colored note-heads at correct positions; rest glyphs; ledger lines.
+- White playhead advancing and aligned with ProgressionStrip cursor.
+- Sharp accidentals left of note-heads; natural notes show none.
+
+**Next action:** Planner review of step 07.4.

@@ -40,6 +40,11 @@
     getHoveredLayerIndex,
     getLayerLabelPos,
   } from '../render/rhythm-scene.js';
+  import {
+    buildHarmonyStaffScene,
+    updateHarmonyStaffDynamic,
+    tickHarmonyStaff,
+  } from '../render/harmony-staff-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
   let stageEl: HTMLDivElement;
@@ -103,6 +108,11 @@
   let prevHarmonyRoot = -1;
   let prevHarmonyMode = '';
 
+  // Step 07.4: track previous progression length and octave to detect when
+  // buildHarmonyStaffScene must be called (structural change) vs updateHarmonyStaffDynamic.
+  let prevProgressionLength = 0;
+  let prevOctave = 3;
+
   onMount(async () => {
     // Phase 04: start with empty session (no default rhythm seed).
     // Prototype melState.progression:[] (line 717), rhythmLayers:[] (line 815).
@@ -111,6 +121,9 @@
     // Round-2 fix (Defect A): capture initial harmony key/mode for change detection.
     prevHarmonyRoot = initState.harmony.root;
     prevHarmonyMode = initState.harmony.mode;
+    // Step 07.4: capture initial progression length and octave for staff scene change detection.
+    prevProgressionLength = initState.harmony.progression.length;
+    prevOctave = initState.harmony.octave;
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
     // initStage appends app.view inside stageEl and registers resize handler.
@@ -134,19 +147,32 @@
     // Prototype: buildTonnetz() called at lines 928–929 from initPixi().
     buildTonnetz(get(sessionStore));
     buildRhythmScene(get(sessionStore));
+    // Step 07.4: build harmony staff scene after Tonnetz and rhythm scenes are ready.
+    // The guard in updateHarmonyStaffDynamic (_dynGfx === null || _staffBaseY === 0)
+    // ensures safe no-ops if the ticker fires before buildHarmonyStaffScene completes,
+    // but we call build first to minimise the window of no-op tick calls.
+    buildHarmonyStaffScene(get(sessionStore));
 
     // Wire the resize callback: rebuild both scenes when the window is resized.
     // Prototype lines 935–943: resize calls buildTonnetz() and buildRhythmScene().
     onResize(() => {
       buildTonnetz(get(sessionStore));
       buildRhythmScene(get(sessionStore));
+      // Step 07.4: rebuild harmony staff scene on resize (canvas dimensions change).
+      buildHarmonyStaffScene(get(sessionStore));
       // After rebuild, restore dynamic overlays.
       updateTonnetzDynamic(get(sessionStore));
+      updateHarmonyStaffDynamic(get(sessionStore));
     });
 
     // ── Step 03.4: register ticker ─────────────────────────────────────────
     // Prototype: app.ticker.add(tick) at line 931.
     registerTicker(app);
+    // Step 07.4: register harmony staff ticker as a parallel ticker.
+    // registerTicker dispatches tickHarmony/tickRhythm only; tickHarmonyStaff
+    // is a separate scene module requiring its own ticker registration.
+    // tickHarmonyStaff guards internally on view === 'harmony' (per spec).
+    app.ticker.add(tickHarmonyStaff);
 
     // ── Step 03.4: initial dynamic state after build ───────────────────────
     updateTonnetzDynamic(get(sessionStore));
@@ -189,6 +215,20 @@
       } else {
         // Only label/mute state changed: dynamic update
         updateRhythmDynamic(state);
+      }
+
+      // Step 07.4: harmony staff scene updates.
+      // Structural changes (progression length or octave) require a full rebuild
+      // because note-heads, ledger lines, and staff width all depend on the voice tracks.
+      // Playhead-only changes (BPM, playback state) are handled by updateHarmonyStaffDynamic.
+      const progressionLength = state.harmony.progression.length;
+      const octave = state.harmony.octave;
+      if (progressionLength !== prevProgressionLength || octave !== prevOctave) {
+        buildHarmonyStaffScene(state);
+        prevProgressionLength = progressionLength;
+        prevOctave = octave;
+      } else {
+        updateHarmonyStaffDynamic(state);
       }
     });
 
