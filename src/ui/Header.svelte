@@ -10,13 +10,26 @@
   handleViewChange updated to accept all four primary view-type strings and delegates
   to the setView store action (added in step 09.3) which also calls stage.setView.
 
+  Phase 09 step 09.5: Rhythm controls moved inline from RhythmControls.svelte.
+  All rhythm-specific controls (morph toggle, euclidean controls, preview, + órbita,
+  + capa vacía, 📨 base) are now inside {#if $sessionStore.view === 'rhythm'} in this
+  component. ADR 0013 D3: local state inline; zero naming collisions with existing locals.
+  RhythmControls.svelte is now an empty shell with a relocation comment.
+
   Store reads:
     $sessionStore.view        — active view for segmented control
     $sessionStore.harmony.root / .mode / .octave — key-selector values
+    $sessionStore.nowPlaying  — preview button active state
+    $agentCtx.includeRhythm   — base context button active state
 
   Store writes (via session.ts actions):
     setView(view)               on view-toggle click (replaces inline sessionStore.update)
     setHarmonyKey(root, mode, octave)  on key-selector change
+    addEuclidLayer / addEmptyLayer / previewEuclid / hushAll — rhythm actions
+  Store writes (via rhythm-scene.ts):
+    setMorphTarget              on morph toggle click
+  Store writes (via agentCtx):
+    agentCtx.update (includeRhythm: true) on base context button click
 -->
 <script lang="ts">
   import {
@@ -26,7 +39,12 @@
     setHarmonySubview,
     setRegisterMode,
     setChordMode,
+    addEuclidLayer,
+    addEmptyLayer,
+    previewEuclid,
+    hushAll,
   } from '../state/session.js';
+  import { setMorphTarget } from '../render/rhythm-scene.js';
   import { agentCtx } from '../state/agentCtx.js';
 
   // Note names for the root pitch-class select.
@@ -39,6 +57,73 @@
   // and calls stage.setView via lazy import (avoids PIXI pollution in Node/Vitest).
   function handleViewChange(view: 'harmony' | 'rhythm' | 'composition' | 'code'): void {
     setView(view);
+  }
+
+  // ── Rhythm controls — transient local state ────────────────────────────────
+  // Phase 09 step 09.5: moved inline from RhythmControls.svelte (ADR 0013 D3).
+  // All five variables are ephemeral (NOT in sessionStore). They persist across
+  // view switches because Header.svelte is mounted for the entire app lifetime.
+  // Zero naming collisions with existing Header.svelte locals (confirmed in inventory).
+  //
+  // Prototype: values read from DOM inputs directly in the prototype JS.
+  // Port: local Svelte reactive declarations here.
+
+  let euclidSound: string = 'hh';
+  let euclidK: number = 3;
+  let euclidN: number = 8;
+  let euclidR: number = 0;
+
+  /** Morph target: 0 = radial (default), 1 = linear. */
+  let morphTarget: 0 | 1 = 0;
+
+  // ── Named-pattern lookup ───────────────────────────────────────────────────
+  // Prototype lines 844–846.
+  const KNOWN_PATTERNS: Record<string, string> = {
+    '3,8': 'tresillo',
+    '5,8': 'cinquillo',
+    '2,5': '2:5',
+    '4,9': 'aksak',
+    '7,16': 'brasileño',
+    '5,12': 'venda',
+    '7,12': 'west african',
+    '5,16': 'bossa',
+  };
+
+  // ── Rhythm reactive readouts ───────────────────────────────────────────────
+  // euclidR max clamped to n-1 (prototype line 844).
+  $: euclidRMax = Math.max(0, euclidN - 1);
+  // Clamp euclidR if euclidN is reduced below current euclidR.
+  $: if (euclidR > euclidRMax) euclidR = euclidRMax;
+
+  // Named-pattern info text (prototype line 846).
+  $: euclidInfo = KNOWN_PATTERNS[`${euclidK},${euclidN}`]
+    ? '· ' + KNOWN_PATTERNS[`${euclidK},${euclidN}`]
+    : '';
+
+  // Preview button active state.
+  $: isPreviewing = $sessionStore.nowPlaying.source === 'preview';
+
+  // ── Rhythm handlers ────────────────────────────────────────────────────────
+
+  function handleMorphToggle(): void {
+    morphTarget = morphTarget === 0 ? 1 : 0;
+    setMorphTarget(morphTarget);
+  }
+
+  function handlePreviewToggle(): void {
+    if (isPreviewing) {
+      void hushAll();
+    } else {
+      void previewEuclid(euclidSound, euclidK, euclidN, euclidR);
+    }
+  }
+
+  function handleAddEuclid(): void {
+    addEuclidLayer(euclidSound, euclidK, euclidN, euclidR);
+  }
+
+  function handleAddEmpty(): void {
+    addEmptyLayer(euclidSound);
   }
 
   // ── Key selector ───────────────────────────────────────────────────────────
@@ -120,6 +205,167 @@
       Código Strudel
     </button>
   </div>
+
+  <!--
+    Rhythm controls (Phase 09 step 09.5).
+    Moved from RhythmControls.svelte overlay (ADR 0013 D3).
+    All rhythm-specific controls inline here, gated by view === 'rhythm'.
+    Layout: compact inline-flex matching the header gap:18px row.
+    Sliders are width:78px (matching prototype); the rhythm block uses flex-wrap
+    so that it wraps gracefully on narrow viewports without overflowing the header.
+    The inner .rhythm-ctl div acts as the flex-wrap container.
+  -->
+  {#if $sessionStore.view === 'rhythm'}
+    <div class="rhythm-ctl">
+      <!--
+        Morph toggle. Prototype: button#layoutToggle.mk (line 427).
+        Toggles morphTarget (0|1) and calls setMorphTarget() from rhythm-scene.ts.
+      -->
+      <button
+        class="rk"
+        id="layoutToggle"
+        data-tip="Alterna entre el reloj radial y una pista lineal, con transición animada."
+        style="background:rgba(138,160,255,.14);border-color:rgba(138,160,255,.4);color:var(--accent)"
+        on:click={handleMorphToggle}
+      >
+        {morphTarget === 0 ? '▭ lineal' : '▭ radial'}
+      </button>
+
+      <span class="r-sep">│</span>
+
+      <!--
+        Euclidean section header. Prototype line 429.
+      -->
+      <span
+        data-tip="Ritmo euclidiano: reparte k golpes lo más uniformemente posible entre n pasos. Base de muchos patrones del mundo."
+      >
+        órbita euclidiana
+      </span>
+
+      <!--
+        Sound select. Prototype lines 430–434.
+      -->
+      <select
+        id="euclidSound"
+        bind:value={euclidSound}
+        data-tip="Sonido/muestra de esta órbita (bombo bd, caja sd, hi-hats hh/oh, palmas cp, toms lt/mt/ht…)."
+      >
+        <option value="bd">bd</option>
+        <option value="sd">sd</option>
+        <option value="hh" selected>hh</option>
+        <option value="oh">oh</option>
+        <option value="cp">cp</option>
+        <option value="rim">rim</option>
+        <option value="lt">lt</option>
+        <option value="mt">mt</option>
+        <option value="ht">ht</option>
+      </select>
+
+      <!--
+        E(k,n) readout. Prototype line 435.
+      -->
+      <span
+        data-tip="E(k,n): k golpes distribuidos en n pasos. Ej: E(3,8) = tresillo; E(5,8) = cinquillo."
+        >E(<b>{euclidK}</b>,<b>{euclidN}</b>)</span
+      >
+
+      <!--
+        k slider. Prototype line 436.
+      -->
+      <input
+        type="range"
+        id="euclidK"
+        min="1"
+        max="16"
+        bind:value={euclidK}
+        data-tip="k = número de golpes (onsets) a repartir."
+      />
+
+      <!--
+        n slider. Prototype line 437.
+      -->
+      <input
+        type="range"
+        id="euclidN"
+        min="2"
+        max="16"
+        bind:value={euclidN}
+        data-tip="n = número de pasos (subdivisiones) del ciclo."
+      />
+
+      <!--
+        rot readout + slider. Prototype lines 438–439.
+      -->
+      <span data-tip="rot = rotación: desplaza el patrón r pasos, cambiando en qué pulso empieza."
+        >rot <b>{euclidR}</b></span
+      >
+      <input
+        type="range"
+        id="euclidR"
+        min="0"
+        max={euclidRMax}
+        bind:value={euclidR}
+        data-tip="rot = rotación: desplaza el patrón r pasos."
+      />
+
+      <!--
+        Named pattern info. Prototype line 440.
+      -->
+      <span class="euclid-info">{euclidInfo}</span>
+
+      <!--
+        Preview toggle button. Prototype line 441 / lines 863–876.
+      -->
+      <button
+        class="rk"
+        id="euclidPreview"
+        data-tip="Oír solo esta órbita euclidiana antes de añadirla."
+        style={isPreviewing
+          ? 'background:rgba(232,123,172,.16);border-color:rgba(232,123,172,.4);color:var(--dom)'
+          : 'background:rgba(86,207,196,.16);border-color:rgba(86,207,196,.4);color:var(--subdom)'}
+        on:click={handlePreviewToggle}
+      >
+        {isPreviewing ? '■ stop' : '▶ oír'}
+      </button>
+
+      <!--
+        Add euclid orbit. Prototype line 442.
+      -->
+      <button
+        class="rk"
+        id="addEuclid"
+        data-tip="Añadir esta órbita euclidiana como una nueva capa."
+        on:click={handleAddEuclid}
+      >
+        + órbita
+      </button>
+
+      <!--
+        Add empty layer. Prototype line 443.
+      -->
+      <button
+        class="rk"
+        id="addLayerEmpty"
+        data-tip="Añadir una capa vacía de 16 pasos para dibujarla a mano."
+        style="background:rgba(255,255,255,.05);border-color:var(--stroke);color:var(--muted)"
+        on:click={handleAddEmpty}
+      >
+        + capa vacía
+      </button>
+
+      <!--
+        Context capture button: send current groove to the agent as rhythmic base.
+        Prototype: button#rhythmToCtx in footer (line 511).
+        Active state when $agentCtx.includeRhythm is true.
+      -->
+      <button
+        class="rk r-ctx-btn"
+        class:active={$agentCtx.includeRhythm}
+        title="Enviar el groove al agente como base rítmica"
+        on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}>📨 base</button
+      >
+    </div>
+  {/if}
 
   <!--
     Key selector: root pitch-class, mode, octave.
@@ -357,5 +603,79 @@
   .tutorial-link:hover {
     color: var(--text);
     border-color: var(--stroke);
+  }
+
+  /*
+   * Rhythm controls container (Phase 09 step 09.5).
+   * Moved from RhythmControls.svelte .orbit-ctl overlay (ADR 0013 D3).
+   * Inline-flex row matching the header gap:18px layout; flex-wrap allows
+   * the controls to wrap on narrow viewports rather than overflow the header.
+   * font-size and color match the overlay's values (11px, var(--muted)).
+   */
+  .rhythm-ctl {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Separator glyph between morph toggle and euclidean section. */
+  .r-sep {
+    opacity: 0.4;
+  }
+
+  /* Select inside rhythm controls. Matches overlay .orbit-ctl select rules. */
+  .rhythm-ctl select {
+    background: rgba(0, 0, 0, 0.34);
+    border: 1px solid var(--stroke);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 5px 7px;
+    font-size: 11px;
+  }
+
+  /* Range inputs — keep at 78px matching the original overlay. */
+  .rhythm-ctl input[type='range'] {
+    width: 78px;
+    accent-color: var(--accent);
+  }
+
+  /* Bold monospace readouts. Matches .orbit-ctl b. */
+  .rhythm-ctl b {
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Named-pattern info text. */
+  .euclid-info {
+    font-size: 10px;
+    color: var(--faint);
+  }
+
+  /*
+   * Rhythm action buttons (.rk).
+   * Matches .orbit-ctl .mk from RhythmControls.svelte.
+   * Individual style overrides are passed via inline style attribute
+   * on specific buttons (morph toggle, preview, add empty).
+   */
+  .rk {
+    padding: 6px 12px;
+    border-radius: 9px;
+    font-weight: 600;
+    font-size: 11px;
+    background: rgba(138, 160, 255, 0.15);
+    border: 1px solid rgba(138, 160, 255, 0.35);
+    color: var(--accent);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* Context capture button active state. Matches .orbit-ctl .ctx-btn.active. */
+  .r-ctx-btn.active {
+    background: rgba(86, 207, 196, 0.2);
+    border-color: rgba(86, 207, 196, 0.5);
+    color: var(--subdom);
   }
 </style>

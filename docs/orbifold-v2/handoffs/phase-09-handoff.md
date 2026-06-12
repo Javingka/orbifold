@@ -343,3 +343,124 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
 - **Terminal commit:** `feat(navigation): Phase 09 step 09.4 — 4-view nav, elevate Composición and Código Strudel`
   - Hash: self-referential — not recorded
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 09.5 — Rhythm controls to top bar
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- **`src/ui/Header.svelte` — rhythm controls added inline:**
+  - Added four new session imports: `addEuclidLayer`, `addEmptyLayer`, `previewEuclid`, `hushAll` from `session.js`.
+  - Added new render import: `setMorphTarget` from `rhythm-scene.js`. `agentCtx` was already imported.
+  - Added five transient local state variables (`euclidSound`, `euclidK`, `euclidN`, `euclidR`, `morphTarget`) with their reactive declarations (`euclidRMax`, clamp guard on `euclidR`, `euclidInfo`, `isPreviewing`) inline in the `<script lang="ts">` block — per ADR 0013 D3 and OQ-3 resolution.
+  - Added `KNOWN_PATTERNS` const (8-entry named-pattern lookup) inline in script — same values as `RhythmControls.svelte`.
+  - Added four handler functions (`handleMorphToggle`, `handlePreviewToggle`, `handleAddEuclid`, `handleAddEmpty`) inline in script.
+  - Added `{#if $sessionStore.view === 'rhythm'}` template block (`.rhythm-ctl` div) after the 4-tab nav segment and before the key selector / harmony controls block. The block contains all controls from the original overlay: morph toggle, separator, euclidean section label, sound select, E(k,n) readout, k/n/r sliders, named-pattern info span, preview toggle, + órbita, + capa vacía, and 📨 base context button.
+  - Added CSS for `.rhythm-ctl`, `.r-sep`, `select`, `input[type='range']`, `b`, `.euclid-info`, `.rk`, `.r-ctx-btn.active` in the `<style>` block. Slider `width:78px` matches the original overlay value. `flex-wrap:wrap` on `.rhythm-ctl` prevents header overflow on narrow viewports.
+  - Component header comment updated to document Phase 09 step 09.5 additions.
+
+- **`src/ui/RhythmControls.svelte` — emptied to shell:**
+  - All content (`.orbit-ctl.glass#orbitCtl` div, all CSS rules, all script logic) removed.
+  - AGPL-3.0 header comment retained.
+  - Relocation note comment added: "Phase 09 step 09.5 (ADR 0013 D3): all rhythm controls moved inline into Header.svelte."
+  - Component left as an empty shell so `App.svelte`'s existing import compiles without change.
+
+- **`src/app/App.svelte` — comment updated:**
+  - Updated the `<RhythmControls />` comment from the step 09.4 placeholder ("Phase 09 step 09.5 will remove this overlay content") to the accurate post-09.5 note ("RhythmControls is now an empty shell (ADR 0013 D3). All rhythm controls moved to Header.svelte.").
+  - No structural change to `App.svelte` — `<RhythmControls />` tag retained as an empty shell; import is unchanged.
+
+**Layout choice (documented per spec):** The `.rhythm-ctl` container uses `display:flex; flex-wrap:wrap; gap:9px; align-items:center` matching the overlay's layout behavior. Sliders are `width:78px` (unchanged from the original overlay). The `flex-wrap` on the container means that on narrow viewports the controls wrap to a second line within the header rather than overflowing horizontally. No `max-width` hard cap is applied (the original overlay's `max-width:62%` was specific to absolute canvas positioning; the header context does not have the same constraint).
+
+**`RhythmControls.svelte` fate:** Empty shell retained (not deleted) so that `App.svelte`'s import continues to compile without a code change to `App.svelte`. The component renders nothing. Step 09.6 may clean up the import if desired; the handoff records this as a non-breaking choice.
+
+### Files touched
+
+- `src/ui/Header.svelte` — rhythm controls state + handlers + template block + CSS added
+- `src/ui/RhythmControls.svelte` — emptied to AGPL shell with relocation note
+- `src/app/App.svelte` — `<RhythmControls />` comment updated
+- `docs/orbifold-v2/handoffs/phase-09-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+- **A-09-09** — `Header.svelte` contains `{#if $sessionStore.view === 'rhythm'}` block with all rhythm controls (morph toggle, euclidean controls, preview, + órbita, + capa vacía, 📨 base). `RhythmControls.svelte` is empty — no `.orbit-ctl` class, no canvas overlay. `grep -rn 'class="orbit-ctl' src/ui/` → 0 matches. `grep -n "orbit-ctl" src/ui/RhythmControls.svelte` → 0 matches (file has only AGPL + relocation comment).
+  - Proxy citation: `src/ui/Header.svelte` (rhythm controls block); `src/ui/RhythmControls.svelte` (empty shell).
+  - Manual verification deferred to Pilot (cannot render browser in CLI).
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier clean; Prettier auto-fixed Header.svelte formatting before final lint pass)
+- `pnpm exec vitest run` → 396 passed, 0 failed (13 test files; same baseline as steps 09.3/09.4 — no regressions)
+- `pnpm build` → exit 0 (1.49s)
+- `grep -n "orbit-ctl" src/ui/RhythmControls.svelte` → 0 matches (file is an empty shell)
+- `grep -rn 'class="orbit-ctl\|class:orbit-ctl\|\.orbit-ctl {' src/` → 0 live usages (only comment references in `Header.svelte` and `HarmonyControls.svelte`)
+- `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/` → 0 matches (A-09-05 maintained)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-09-01 | `SessionState.view` includes all 5 strings; `DEFAULT_SESSION_STATE.view` valid | `tests/persistence.test.ts` | proxy:static-analysis + unit | covered (step 09.3) |
+| A-09-02 | `stage.ts setView` hides both PIXI layers for `'composition'`, `'session'`, `'code'` | `src/render/stage.ts` | proxy:static-analysis | covered (step 09.3) |
+| A-09-03 | Schema v2; `SESSION_SCHEMA_VERSION = 2`; unrecognized view → `'harmony'`; v1 blobs dropped | `tests/persistence.test.ts` | unit | covered (step 09.3) |
+| A-09-04 | All quality gates green (tsc, lint, vitest ≥ 385, build) | — | automated | covered |
+| A-09-05 | No PIXI/Svelte/DOM imports in `src/core/` | — | proxy:static-analysis | covered (step 09.3; confirmed again this step) |
+| A-09-06 | Four equal-weight nav tabs; one active at a time | `src/ui/Header.svelte` | proxy:static-analysis | proxy-covered (step 09.4); manual deferred to Pilot |
+| A-09-07 | Composición shows timeline; navigating away and back preserves state | `src/app/App.svelte` + `src/ui/CompositionDrawer.svelte` | proxy:static-analysis | proxy-covered (step 09.4); manual deferred to Pilot |
+| A-09-08 | Código Strudel shows code editor; drawer tab buttons gone | `src/app/App.svelte` + `src/ui/CodeDrawer.svelte` | proxy:static-analysis | proxy-covered (step 09.4); manual deferred to Pilot |
+| A-09-09 | Rhythm controls in top bar when Ritmo active; no canvas overlay | `src/ui/Header.svelte` | proxy:static-analysis | proxy-covered; `orbit-ctl` live usages = 0; manual deferred to Pilot |
+| A-09-10 | Transport footer transversal-only in all views | — | manual | not covered — deferred to step 09.6 |
+| A-09-11 | Per-view hint text correct | `src/app/App.svelte` | proxy:static-analysis | proxy-covered (step 09.4); manual deferred to Pilot |
+
+**Proxy disclosures:**
+
+- A-09-09:
+  - `src/ui/Header.svelte` — `{#if $sessionStore.view === 'rhythm'}` block at line ~202 (post-Prettier) contains `.rhythm-ctl` div with all rhythm controls. The block only renders when `view === 'rhythm'`.
+  - `src/ui/RhythmControls.svelte` — file is now an empty shell (AGPL comment + relocation note only). No executable template, no CSS rules, no script logic.
+  - `grep -n "orbit-ctl" src/ui/RhythmControls.svelte` → 0 matches.
+  - `grep -rn 'class="orbit-ctl' src/ui/` → 0 matches (no live `.orbit-ctl` HTML class attributes anywhere).
+
+### Decisions made (if any)
+
+- **Empty shell retained (not deleted).** `RhythmControls.svelte` is kept as an empty file so `App.svelte` compiles without a second edit. Rationale: the phase spec explicitly allows this: "If the component is left as an empty shell: keep `<RhythmControls />` in `App.svelte` but it renders nothing." Cleanup (removing the import and tag from `App.svelte`) is explicitly allowed in step 09.6 static analysis review.
+- **CSS class renamed `.mk` → `.rk` in Header.svelte.** The original class name `.mk` (from the overlay) would conflict if HarmonyControls or other header-scoped CSS ever used `.mk`. `.rk` (rhythm key) is namespaced to the rhythm controls section. This is a purely internal naming decision within the header's scoped CSS block.
+- **No `max-width` on `.rhythm-ctl`.** The original overlay's `max-width:62%` was tied to absolute canvas positioning. In the header's inline-flex row, `flex-wrap:wrap` handles overflow on narrow viewports without a hard cap. This was noted as the layout choice per the spec's requirement to document it.
+
+### Proposed Decisions Register entries (if any)
+
+- None. All decisions in this step are implementation details within the bounds of ADR 0013 D3.
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- Rhythm controls are in the top bar (Header.svelte, gated by `view === 'rhythm'`). Canvas overlay is gone. `RhythmControls.svelte` is an empty shell. Quality gate baseline: 396 passed, 0 tsc errors, 0 lint errors.
+- Branch: `orbifold-v2/phase-09`.
+
+### Next-step context (only if non-obvious)
+
+- Step 09.6 is the quality-gates + static analysis step. It confirms all A-09 acceptance IDs across all source changes (09.3–09.5) and produces a manual acceptance checklist for the Pilot.
+- Clean-up item for 09.6 consideration: remove the `<RhythmControls />` import and tag from `App.svelte` (currently an empty shell). This is optional — the empty import does not affect correctness or quality gates, but removing it would keep `App.svelte` clean.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+- **Terminal commit:** `feat(navigation): Phase 09 step 09.5 — rhythm controls to top bar`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

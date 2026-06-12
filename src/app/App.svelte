@@ -381,10 +381,9 @@
   <HarmonyControls />
 
   <!--
-    Rhythm view overlay: morph toggle + euclidean controls.
-    Phase 09 step 09.5 will remove this overlay content (RhythmControls moves to top bar).
-    For now it renders nothing visible (empty shell) while still in App.svelte.
-    Shown only when $sessionStore.view === 'rhythm' (prototype #orbitCtl).
+    Phase 09 step 09.5: RhythmControls is now an empty shell (ADR 0013 D3).
+    All rhythm controls moved to Header.svelte. Component retained here to
+    avoid breaking the import; it renders nothing.
   -->
   <RhythmControls />
 
