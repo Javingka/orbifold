@@ -9,6 +9,11 @@
   Phase 03 step 03.4: absolute pixel-width model (PX_PER_CYCLE = 48 px/cycle),
             numbered bar ruler, hierarchical gridlines, own-row layout (strip
             relocated to .progression-row in App.svelte above Transport footer).
+  Phase 06 step 06.5: rest-slot rendering. Each slot in progression is now
+            ProgressionSlot = Chord | RestSlot. Rest slots render as grey segments
+            (no tonal-function border, no gain fill, no gain drag). Resize handle
+            and ✕ remove button remain functional for rest slots. A "+ rest" button
+            is added outside .strip-scroll to append a RestSlot via appendRest().
 
   All interactions ported 1:1 from ProgressionChips.svelte (which itself ports
   prototype #progChips area — HTML lines 505–508, CSS lines 224–234, JS lines 1413–1468):
@@ -23,18 +28,22 @@
 
     Tap-to-preview: pointer moved ≤ 3px → playChord(rootPc, qual, gain)
                   (ProgressionChips.svelte handlePointerUp else branch, line 133).
+                  No-op for rest slots (no chord to preview).
 
     Keyboard:   Enter/Space → playChord (accessibility; ProgressionChips.svelte line 177).
+                No-op for rest slots.
 
     Remove:     ✕ button → clearChordAt(index)
                   (ProgressionChips.svelte handleRemove lines 143–146, prototype line 1440).
 
     Gain fill:  chipGainCss(g) — bottom-to-top gradient proportional to gain 0–1.2
                   (ProgressionChips.svelte lines 38–41, prototype lines 1413–1415).
+                  Rest slots: flat grey background, no fill.
 
     Tonal-function border class: diatonicLookup → entry.func.cls
                   (ProgressionChips.svelte tonalClass lines 47–55,
                    prototype ch.info.func.cls line 1435).
+                  Rest slots: no tonal-function class, flat grey border.
 
   Phase 02 additions (no prototype equivalent — new feature per ADR 0010):
     Proportional widths:  flex: 0 0 {pct}% where pct = (bars/totalBars)*100.
@@ -57,24 +66,33 @@
     Scroll sync:          Ruler and segments share a .strip-scroll wrapper so they
                           scroll in sync.
 
+  Phase 06 changes (ADR 0012 D5 — rest rendering):
+    Rest segment style:   .rest-seg class — flat grey background (#3a3a3a), no gradient,
+                          no tonal-function border. Label shows '–' + barsLabel.
+                          No gain fill, no gain drag (handlePointerDown guards early exit).
+    Add Rest button:      Outside .strip-scroll; calls appendRest(); visible only
+                          when progression.length < 16.
+
   Visual differences from chips:
     - Phase 01: flex:1 (equal width) instead of flex:0 0 auto (auto-shrink chips).
     - Phase 02: flex: 0 0 {pct}% (proportional to ch.bars).
     - Phase 03: fixed pixel width per cycle; strip scrolls horizontally when wide.
 
   Store reads (same as ProgressionChips — no new reads):
-    $sessionStore.harmony.progression  — array of Chord
+    $sessionStore.harmony.progression  — array of ProgressionSlot (Chord | RestSlot)
     $sessionStore.harmony.root         — for tonal-function class derivation
     $sessionStore.harmony.mode         — for tonal-function class derivation
 
-  Store writes via session.ts actions (Phase 01 unchanged + Phase 02 addition):
+  Store writes via session.ts actions (Phase 01 unchanged + Phase 02 addition + Phase 06):
     clearChordAt(index)    — ✕ remove button
     requeueLive()          — drag-release volume update (called inside setChordBars too)
-    playChord(...)         — tap on segment
-    setChordBars(i, bars)  — commit resized bars (Phase 02)
+    playChord(...)         — tap on chord segment
+    setChordBars(i, bars)  — commit resized bars (Phase 02; works for RestSlot too)
+    appendRest()           — "+ rest" button (Phase 06 ADR 0012 D5)
 
   No changes to src/core/codegen/strudel.ts. Strudel output changes only when
   ch.bars !== 1 for any chord (dual-mode: arrange() path). See ADR 0010.
+  Rest slots force arrange() path per ADR 0012 D2.
 -->
 <script lang="ts">
   import {
@@ -84,6 +102,7 @@
     playChord,
     setChordBars,
     barsLabel,
+    appendRest,
   } from '../state/session.js';
   import { chordLabel } from '../core/theory/chords.js';
   import { diatonicLookup } from '../core/theory/scales.js';
@@ -188,6 +207,9 @@
    * Prototype lines 1441–1450.
    */
   function handlePointerDown(e: PointerEvent, i: number): void {
+    // Phase 06: rest slots have no gain to drag — no-op entirely.
+    const slot = $sessionStore.harmony.progression[i];
+    if (slot && 'isRest' in slot) return;
     const target = e.target as HTMLElement;
     if (target.classList.contains('rm')) return;
     // Do not start gain drag if clicking on the resize handle — that gesture
@@ -251,8 +273,9 @@
       requeueLive();
     } else {
       // Tap: play chord preview. Prototype lines 1461–1464.
+      // Phase 06: guard against rest slots — no chord to preview.
       const ch = $sessionStore.harmony.progression[i];
-      if (ch) {
+      if (ch && !('isRest' in ch)) {
         playChord(ch.rootPc, ch.qual, ch.gain);
       }
     }
@@ -389,78 +412,124 @@
       -->
       <div class="segments" bind:this={segmentsEl}>
         {#each $sessionStore.harmony.progression as ch, i (i)}
-          {@const label = chordLabel(ch.rootPc, ch.qual)}
-          {@const tcls = tonalClass(
-            ch.rootPc,
-            ch.qual,
-            $sessionStore.harmony.root,
-            $sessionStore.harmony.mode
-          )}
-          {@const displayGain = localGain[i] ?? ch.gain}
           {@const segBars = resizeBars[i] ?? ch.bars ?? 1}
           {@const segPx = segBars * PX_PER_CYCLE}
           {@const durLabel = barsLabel(resizeBars[i] ?? ch.bars)}
-          <!--
-            Phase 03: width and flex-basis are fixed pixel values (absolute grid).
-            Background: gain fill (topmost) over half-bar gridlines over beat gridlines.
-            Beat lines at 12px intervals (rgba(255,255,255,0.07));
-            Half-bar lines at 24px intervals (rgba(255,255,255,0.13)) — MANDATORY (OD-03-02).
-            The gain gradient is the topmost layer; gridlines show through underneath.
-          -->
-          <div
-            class="seg {tcls}"
-            style="
-              width: {segPx}px;
-              flex: 0 0 {segPx}px;
-              background:
-                {chipGainCss(displayGain)},
-                repeating-linear-gradient(
-                  to right,
-                  transparent 0,
-                  transparent calc({PX_PER_CYCLE / 2}px - 1px),
-                  rgba(255,255,255,0.13) calc({PX_PER_CYCLE / 2}px - 1px),
-                  rgba(255,255,255,0.13) {PX_PER_CYCLE / 2}px
-                ),
-                repeating-linear-gradient(
-                  to right,
-                  transparent 0,
-                  transparent calc({PX_PER_CYCLE / 4}px - 1px),
-                  rgba(255,255,255,0.07) calc({PX_PER_CYCLE / 4}px - 1px),
-                  rgba(255,255,255,0.07) {PX_PER_CYCLE / 4}px
-                )
-            "
-            title="mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar"
-            role="button"
-            tabindex="0"
-            on:pointerdown={(e) => handlePointerDown(e, i)}
-            on:pointermove={(e) => handlePointerMove(e, i)}
-            on:pointerup={(e) => handlePointerUp(e, i)}
-            on:keydown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') playChord(ch.rootPc, ch.qual, ch.gain);
-            }}
-          >
-            <span class="seg-content">
-              <span class="seg-label">{label}</span>
-              {#if durLabel}
-                <span class="seg-dur">{durLabel}</span>
-              {/if}
-            </span>
-            <button class="rm" on:click={(e) => handleRemove(e, i)} tabindex="-1">✕</button>
-            <!-- Phase 02: horizontal resize handle on right edge. -->
-            <!-- stopPropagation on pointerdown prevents gain-drag from starting. -->
+          {#if 'isRest' in ch}
+            <!--
+              Phase 06 step 06.5: rest slot rendering (ADR 0012 D5).
+              Grey flat segment — no tonal-function border, no gain fill, no gain drag.
+              Gridlines still shown for temporal alignment. Resize handle + ✕ button present.
+            -->
             <div
-              class="resize-handle"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Redimensionar duración"
-              on:pointerdown={(e) => handleResizePointerDown(e, i)}
-              on:pointermove={(e) => handleResizePointerMove(e, i)}
-              on:pointerup={(e) => handleResizePointerUp(e, i)}
-            ></div>
-          </div>
+              class="seg rest-seg"
+              style="
+                width: {segPx}px;
+                flex: 0 0 {segPx}px;
+              "
+              title="silencio · ✕ para quitar"
+              role="presentation"
+              tabindex="-1"
+            >
+              <span class="seg-content">
+                <span class="seg-label rest-label">–</span>
+                {#if durLabel}
+                  <span class="seg-dur">{durLabel}</span>
+                {/if}
+              </span>
+              <button class="rm" on:click={(e) => handleRemove(e, i)} tabindex="-1">✕</button>
+              <!-- Resize handle: functional for rest slots (setChordBars spreads bars onto RestSlot). -->
+              <div
+                class="resize-handle"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Redimensionar duración del silencio"
+                on:pointerdown={(e) => handleResizePointerDown(e, i)}
+                on:pointermove={(e) => handleResizePointerMove(e, i)}
+                on:pointerup={(e) => handleResizePointerUp(e, i)}
+              ></div>
+            </div>
+          {:else}
+            <!--
+              Chord slot rendering (unchanged from Phase 03).
+              Phase 03: width and flex-basis are fixed pixel values (absolute grid).
+              Background: gain fill (topmost) over half-bar gridlines over beat gridlines.
+              Beat lines at 12px intervals (rgba(255,255,255,0.07));
+              Half-bar lines at 24px intervals (rgba(255,255,255,0.13)) — MANDATORY (OD-03-02).
+              The gain gradient is the topmost layer; gridlines show through underneath.
+            -->
+            {@const label = chordLabel(ch.rootPc, ch.qual)}
+            {@const tcls = tonalClass(
+              ch.rootPc,
+              ch.qual,
+              $sessionStore.harmony.root,
+              $sessionStore.harmony.mode
+            )}
+            {@const displayGain = localGain[i] ?? ch.gain}
+            <div
+              class="seg {tcls}"
+              style="
+                width: {segPx}px;
+                flex: 0 0 {segPx}px;
+                background:
+                  {chipGainCss(displayGain)},
+                  repeating-linear-gradient(
+                    to right,
+                    transparent 0,
+                    transparent calc({PX_PER_CYCLE / 2}px - 1px),
+                    rgba(255,255,255,0.13) calc({PX_PER_CYCLE / 2}px - 1px),
+                    rgba(255,255,255,0.13) {PX_PER_CYCLE / 2}px
+                  ),
+                  repeating-linear-gradient(
+                    to right,
+                    transparent 0,
+                    transparent calc({PX_PER_CYCLE / 4}px - 1px),
+                    rgba(255,255,255,0.07) calc({PX_PER_CYCLE / 4}px - 1px),
+                    rgba(255,255,255,0.07) {PX_PER_CYCLE / 4}px
+                  )
+              "
+              title="mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar"
+              role="button"
+              tabindex="0"
+              on:pointerdown={(e) => handlePointerDown(e, i)}
+              on:pointermove={(e) => handlePointerMove(e, i)}
+              on:pointerup={(e) => handlePointerUp(e, i)}
+              on:keydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') playChord(ch.rootPc, ch.qual, ch.gain);
+              }}
+            >
+              <span class="seg-content">
+                <span class="seg-label">{label}</span>
+                {#if durLabel}
+                  <span class="seg-dur">{durLabel}</span>
+                {/if}
+              </span>
+              <button class="rm" on:click={(e) => handleRemove(e, i)} tabindex="-1">✕</button>
+              <!-- Phase 02: horizontal resize handle on right edge. -->
+              <!-- stopPropagation on pointerdown prevents gain-drag from starting. -->
+              <div
+                class="resize-handle"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Redimensionar duración"
+                on:pointerdown={(e) => handleResizePointerDown(e, i)}
+                on:pointermove={(e) => handleResizePointerMove(e, i)}
+                on:pointerup={(e) => handleResizePointerUp(e, i)}
+              ></div>
+            </div>
+          {/if}
         {/each}
       </div>
     </div>
+  {/if}
+  <!--
+    Phase 06 step 06.5: "Add Rest" button (ADR 0012 D5).
+    Outside .strip-scroll so it does not participate in the horizontal scroll.
+    Visible only when progression.length < 16 (SavedHarmonySchema max).
+    Calls appendRest() which appends { isRest: true, bars: 1 } and requeueLive().
+  -->
+  {#if $sessionStore.harmony.progression.length < 16}
+    <button class="add-rest-btn" on:click={appendRest}>+ rest</button>
   {/if}
 </div>
 
@@ -674,5 +743,56 @@
     font-size: 11px;
     color: var(--faint);
     font-style: italic;
+  }
+
+  /*
+   * Phase 06 step 06.5: rest slot segment styling (ADR 0012 D5).
+   * Flat grey background — no gain fill, no tonal-function border color.
+   * cursor:default (no gain drag affordance). Gridlines are absent (plain bg).
+   * Inherits .seg layout (position:relative, flex, padding, border-radius, overflow).
+   */
+  .seg.rest-seg {
+    background: #3a3a3a;
+    border-color: rgba(255, 255, 255, 0.12);
+    cursor: default;
+  }
+
+  /*
+   * Rest slot label: '–' character, muted, slightly smaller than chord labels.
+   */
+  .rest-label {
+    color: var(--faint);
+    font-weight: 400;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+  }
+
+  /*
+   * Phase 06 step 06.5: "Add Rest" button (ADR 0012 D5).
+   * Positioned outside .strip-scroll — does not participate in horizontal scroll.
+   * Small, low-contrast, consistent with the strip aesthetic.
+   * flex:0 0 auto keeps it from growing.
+   */
+  .add-rest-btn {
+    flex: 0 0 auto;
+    align-self: center;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    color: var(--faint);
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    padding: 3px 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+
+  .add-rest-btn:hover {
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.3);
   }
 </style>

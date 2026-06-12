@@ -103,7 +103,7 @@ No source code written; no build/test/lint runs required for this step. Test cou
 | A-06-05 | Session with rest slot round-trips through serialize → JSON → parse → deserialize | `tests/persistence.test.ts` | unit | not covered — deferred to step 06.4 |
 | A-06-06 | Version-1 session JSON (chord-only) parses against updated `SavedSessionSchema` | `tests/persistence.test.ts` | unit | not covered — deferred to step 06.4 |
 | A-06-07 | Agent payload with mixed progression validates; `applyHarmonySpec` produces `[Chord, RestSlot]` in store | `tests/schema.test.ts` | unit | not covered — deferred to step 06.4 |
-| A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | `schema.ts` | proxy:static-analysis | not covered — deferred to step 06.4 |
+| A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | `src/agent/schema.ts` | proxy:static-analysis | not covered — deferred to step 06.4 |
 | A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | `ProgressionStrip.svelte` | manual | not covered — deferred to step 06.5 |
 | A-06-10 | "+ rest" button appends `RestSlot`; playing harmony with rest produces silence; Strudel drawer shows `silence` | `ProgressionStrip.svelte` + store | live-system | not covered — deferred to step 06.5 |
 | A-06-11 | `tsc 0`, `lint 0`, `pnpm test ≥ 325`, `pnpm build 0` | all | automated | not covered — deferred to step 06.5 |
@@ -302,8 +302,8 @@ Test count: 317 (was 307; +10 new tests, spec required ≥ 314).
 | A-06-06 | Version-1 session JSON (chord-only) parses against updated `SavedSessionSchema` | `tests/persistence.test.ts` | unit | not covered — deferred to step 06.4 |
 | A-06-07 | Agent payload with mixed progression validates; `applyHarmonySpec` produces `[Chord, RestSlot]` in store | `tests/schema.test.ts` | unit | not covered — deferred to step 06.4 |
 | A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | `src/agent/schema.ts` | proxy:static-analysis | not covered — deferred to step 06.4 |
-| A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | `src/ui/ProgressionStrip.svelte` | manual | not covered — deferred to step 06.5 |
-| A-06-10 | "+ rest" button appends `RestSlot`; playing harmony with rest produces silence; Strudel drawer shows `silence` | `src/ui/ProgressionStrip.svelte` + store | live-system | not covered — deferred to step 06.5 |
+| A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | `ProgressionStrip.svelte` | manual | not covered — deferred to step 06.5 |
+| A-06-10 | "+ rest" button appends `RestSlot`; playing harmony with rest produces silence; Strudel drawer shows `silence` | `ProgressionStrip.svelte` + store | live-system | not covered — deferred to step 06.5 |
 | A-06-11 | `tsc 0`, `lint 0`, `pnpm test ≥ 325`, `pnpm build 0` | all | automated | partial — tsc 0, lint 0, test 317; build and final count deferred to step 06.5 |
 
 ### Decisions made (if any)
@@ -454,5 +454,159 @@ None.
 
 Step 06.5 implements ProgressionStrip rest rendering: import `appendRest`, template narrowing on `'isRest' in ch`, grey rest segment style, "Add Rest" button, and `handlePointerDown` guard. All quality gates (including `pnpm build`) are confirmed at step 06.5.
 
-**Planner Review:** pending
-**Next action:** Planner reviews step 06.4
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 06.5
+
+---
+
+## Step 06.5 — ProgressionStrip rest slot rendering and quality gates
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- `feat(ui): Phase 06 step 06.5 — ProgressionStrip rest slot rendering and Add Rest button`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0012-rest-data-model.md`, `src/ui/ProgressionStrip.svelte` (complete), `src/state/session.ts` (for `appendRest`, `ProgressionSlot`, `RestSlot` exports).
+
+**`src/ui/ProgressionStrip.svelte` changes (ADR 0012 D5):**
+
+1. **Import**: Added `appendRest` to the imports from `../state/session.js`. No `ProgressionSlot` type import needed — the `in` operator narrowing is pure JavaScript and requires no type annotation at the call site.
+
+2. **`handlePointerDown` guard**: Added early return `if (slot && 'isRest' in slot) return;` at the top of `handlePointerDown`, before all target/class checks. Rest slots have no gain to drag; the guard prevents pointer capture from starting.
+
+3. **`handlePointerUp` tap-preview guard**: The existing tap branch calls `playChord(ch.rootPc, ch.qual, ch.gain)`. Changed `if (ch)` to `if (ch && !('isRest' in ch))` to prevent attempting to preview a rest slot.
+
+4. **Template narrowing**: The `{#each}` block now computes `segBars`, `segPx`, and `durLabel` for all slots (both `Chord` and `RestSlot` have `bars?`), then branches on `{#if 'isRest' in ch}`:
+   - **Rest slot branch**: `class="seg rest-seg"`, inline style with width only (no background gradient), `title="silencio · ✕ para quitar"`, `role="presentation"`, `tabindex="-1"`. Label: `<span class="seg-label rest-label">–</span>` plus `barsLabel` if non-default. No gain fill, no gain drag handlers. Resize handle and ✕ button present and functional.
+   - **Chord slot branch**: unchanged from Phase 03 — `chordLabel`, `tonalClass`, `displayGain`, gain fill gradient, all pointer/keyboard handlers, resize handle, ✕ button.
+
+5. **"Add Rest" button**: Added outside `.strip-scroll` wrapper (after the `{/if}` closing the `{:else}` empty-state guard):
+
+   ```svelte
+   {#if $sessionStore.harmony.progression.length < 16}
+     <button class="add-rest-btn" on:click={appendRest}>+ rest</button>
+   {/if}
+   ```
+
+   The button is always visible alongside the strip (even when the strip is empty) as long as the 16-slot cap has not been reached.
+
+6. **CSS additions**:
+   - `.seg.rest-seg`: `background: #3a3a3a`, `border-color: rgba(255,255,255,0.12)`, `cursor: default`. Inherits all `.seg` layout properties.
+   - `.rest-label`: `color: var(--faint)`, `font-weight: 400`, `font-size: 14px` — visually distinct from chord labels.
+   - `.add-rest-btn`: Low-contrast small button (10px, `color: var(--faint)`, 1px border, `border-radius: 4px`), flex-aligned to the right of the strip scroll area. Hover: slightly brighter text and border.
+
+### A-06-09 implementation evidence (manual verification required)
+
+**What the rendered output looks like (based on template inspection):**
+
+- A rest slot appears as a flat dark-grey rectangle (`#3a3a3a` background) with a subdued border (`rgba(255,255,255,0.12)`). The segment width is proportional to `bars * 48px`, identical to chord segments.
+- The label inside is `–` (en-dash) in a faint, regular-weight style. If `bars !== 1`, a secondary duration label (`barsLabel`) appears below the `–`.
+- No gain fill gradient. No tonal-function border color (tonic/subdominant/dominant colors). Cursor is `default`, not `ns-resize`.
+- The resize handle (right edge, 8px wide) is visually identical to chord segment resize handles — ew-resize cursor on hover, semi-transparent white background.
+- The ✕ remove button is present and functional; on hover, the `–` label gains the `--dom` color (same as chord segments).
+- Chord slot rendering is visually unchanged: tonal-function border colors, gain fill gradient, gridlines, `ns-resize` cursor, all preserved.
+- The `+ rest` button appears to the right of the scrollable area, outside the scrollable region. It uses a low-contrast 10px style consistent with the `progresión` label aesthetic. It is only visible when `progression.length < 16`.
+
+**Pilot manual verification required** to confirm: (a) grey rest segments appear in the Harmony view ProgressionStrip; (b) chord segments are visually unchanged; (c) the `+ rest` button is clickable and adds a rest; (d) the resize handle adjusts rest duration; (e) the ✕ removes the rest.
+
+### A-06-10 implementation evidence (live-system verification required)
+
+**What Strudel code is produced (based on codegen inspection):**
+
+With progression `[C major bars:1, rest bars:1, F major bars:1]`, `melodyLine()` produces (ADR 0012 D2 + D3):
+
+```
+arrange(
+  [1, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)],
+  [1, silence],
+  [1, note("[F3,A3,C4]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)]
+)
+```
+
+The `silence` keyword in the `arrange()` segment causes Strudel to emit no audio during that cycle span. The live-code drawer shows this exact string when the Harmony transport is playing.
+
+**Pilot live-system verification required** to confirm: (a) clicking `+ rest` adds a rest slot; (b) clicking `▶ Armonía` plays audio where the rest cycle is silent; (c) the Strudel code visible in the live-code drawer contains `silence` at the rest position.
+
+### Files touched
+
+- `src/ui/ProgressionStrip.svelte` — modified (appendRest import, handlePointerDown guard, handlePointerUp tap guard, template rest/chord bifurcation, Add Rest button, CSS for .rest-seg / .rest-label / .add-rest-btn)
+- `docs/orbifold-v2/handoffs/phase-06-handoff.md` — this file (step 06.5 entry appended)
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Test / Check | Result |
+|---|---|---|
+| A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | IMPL — template inspection confirms grey bg, no gain fill, no tonal border; Pilot manual verification required |
+| A-06-10 | "+ rest" button appends RestSlot; harmony with rest plays silence; Strudel drawer shows `silence` | IMPL — codegen inspection confirms `[1, silence]` at rest position; Pilot live-system verification required |
+| A-06-11 | `tsc 0`, `lint 0`, `pnpm test ≥ 325`, `pnpm build 0` | PASS — all four pass (329 tests) |
+
+### Routine validations
+
+```
+pnpm exec tsc --noEmit   → 0 errors
+pnpm lint                → 0 errors (eslint + prettier)
+pnpm test                → 329 tests pass (11 test files; count unchanged — no new Vitest tests; ProgressionStrip.svelte is not covered by Vitest)
+pnpm build               → exits 0 (1.48s; pre-existing chunk-size and dynamic-import warnings only)
+```
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-06-01 | `melodyLine([{ isRest: true, bars: 2 }], 'chord', 3)` returns `'arrange(\n  [2, silence]\n)'` | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-02 | Mixed progression `[C maj, rest 1 bar, F maj]` emits `arrange()` with `[1, silence]` at rest position | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-03 | Chord-only progression all `bars === 1` still emits slowcat `<…>` (regression guard) | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-04 | `computeVoiceTracks([C maj, rest 1 bar, A min], 3)` → `VoiceRestEvent` at slotIndex 1; A min uses perm `[1,2,0]` (same as direct C maj → A min) | `tests/harmony/voice-tracks.test.ts` | unit | COVERED — step 06.3 |
+| A-06-05 | Session with rest slot round-trips through serialize → JSON → parse → deserialize | `tests/persistence.test.ts` | unit | COVERED — step 06.4 |
+| A-06-06 | Version-1 session JSON (chord-only) parses against updated `SavedSessionSchema` | `tests/persistence.test.ts` | unit | COVERED — step 06.4 |
+| A-06-07 | Agent payload with mixed progression validates; `applyHarmonySpec` produces `[Chord, RestSlot]` in store | `tests/schema.test.ts` | unit | COVERED — step 06.4 |
+| A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | `tests/schema.test.ts` | unit + proxy:static-analysis | COVERED — step 06.4 |
+| A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | `src/ui/ProgressionStrip.svelte` | manual | IMPL — Pilot manual verification required |
+| A-06-10 | "+ rest" button appends `RestSlot`; playing harmony with rest produces silence; Strudel drawer shows `silence` | `src/ui/ProgressionStrip.svelte` + store | live-system | IMPL — Pilot live-system verification required |
+| A-06-11 | `tsc 0`, `lint 0`, `pnpm test ≥ 325`, `pnpm build 0` | all | automated | PASS — 329 tests, all gates green |
+
+### Decisions made (if any)
+
+The `ProgressionSlot` type import was initially added but removed after ESLint flagged it as unused. The `in` operator narrowing (`'isRest' in ch`) is a JavaScript runtime check and does not require a type annotation in the Svelte template context — TypeScript infers the narrowed type correctly from the `{#if 'isRest' in ch}` branch without an explicit `ProgressionSlot` annotation.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 329 tests passing (unchanged from step 06.4 — ProgressionStrip.svelte is not covered by Vitest).
+- `tsc --noEmit` 0 errors.
+- `pnpm lint` 0 errors (ESLint + Prettier).
+- `pnpm build` exits 0.
+- `ProgressionStrip` renders rest slots as grey segments with resize handle and ✕ remove button.
+- "+ rest" button present outside scroll area, calls `appendRest()`.
+- `handlePointerDown` no-ops for rest slots; `handlePointerUp` tap-preview no-ops for rest slots.
+- All Phase 06 unit and automated acceptance criteria covered. A-06-09 and A-06-10 require Pilot manual / live-system verification.
+
+### Phase 06 completion
+
+**All Phase 06 deliverables complete:**
+
+1. ADR 0012 committed (step 06.2).
+2. `RestSlot` and `ProgressionSlot` exported from `session.ts` (step 06.3).
+3. `melodyLine()` emits `[bars, silence]` for rest slots in `arrange()` path (step 06.3).
+4. `computeVoiceTracks()` produces `VoiceRestEvent` gap events (step 06.3).
+5. `SavedRestSchema` added to `persistence.ts`; `SESSION_SCHEMA_VERSION` stays at 1 (step 06.4).
+6. Agent `SCHEMA_VERSION = 2`; `HarmonyChordSchema` union (step 06.4).
+7. `ProgressionStrip` renders rest slots and has `+ rest` button (step 06.5).
+8. `pnpm test` count: 329 (≥ 325 required).
+9. All automated quality gates pass: `tsc 0`, `lint 0`, `test 329`, `build 0`.
+10. A-06-09 and A-06-10 (manual/live-system): implementation evidence provided above; Pilot manual verification pending.
+
+**Planner Review:** (pending)
+**Next action:** (pending Planner review)
