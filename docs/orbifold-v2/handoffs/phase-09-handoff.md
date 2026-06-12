@@ -464,3 +464,186 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
 - **Terminal commit:** `feat(navigation): Phase 09 step 09.5 — rhythm controls to top bar`
   - Hash: self-referential — not recorded
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 09.6 — Quality gates + manual acceptance
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Ran the full quality gate suite against the Phase 09 codebase (steps 09.3–09.5 combined).
+- Ran all static analysis checks required by the phase spec and ADR 0013 §Consequences.
+- Assembled the phase-level Acceptance Coverage Table for all A-09-01..A-09-11 acceptance IDs, citing exact source file and line numbers for every statically-verified criterion.
+- Identified A-09-06..A-09-11 as browser-runtime UI items requiring Pilot manual verification at Checkpoint #5. Provided the exact manual checklist below.
+- Confirmed: no scope expansion, no new features introduced.
+
+### Quality gate evidence (verbatim results)
+
+**`pnpm exec tsc --noEmit`**
+Exit 0. Zero TypeScript errors. (Clean — no output.)
+
+**`pnpm lint`**
+Exit 0. All matched files use Prettier code style. Zero ESLint warnings or errors.
+
+**`pnpm exec vitest run`**
+```
+Test Files  13 passed (13)
+     Tests  396 passed (396)
+  Duration  527ms
+```
+396 passed (baseline Phase 08: 385; Phase 09 added 11 tests in step 09.3). 0 failed. 0 regressions.
+
+**`pnpm build`**
+Exit 0. Build succeeded in 1.44s. Two pre-existing dynamic-import warnings (not introduced by Phase 09; they were present from Phase 03 onwards — `stage.ts` and `strudel.ts` are statically + dynamically imported). No new warnings.
+
+### Static analysis checks
+
+All checks performed against the state after step 09.5 (the tip of `orbifold-v2/phase-09`):
+
+| Check | Command | Result |
+|---|---|---|
+| Rhythm overlay class removed | `grep -rn 'class="orbit-ctl\|class:orbit-ctl' src/` | 0 live HTML class attribute matches — only comment references remain in `Header.svelte` and `HarmonyControls.svelte` |
+| Drawer tab buttons removed | `grep -rn 'id="codeTab"\|id="compTab"' src/` | 0 executable element matches — references appear only in comments in `CodeDrawer.svelte` and `CompositionDrawer.svelte` |
+| `stage.ts setView` handles new strings | `grep -n "view.*composition\|view.*code" src/render/stage.ts` | Line 175: signature includes `'composition' | 'session' | 'code'` — both PIXI layers hidden for these values |
+| Pure engine invariant | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/` | 0 matches — `src/core/**` has no PIXI/Svelte/DOM imports |
+| `subview`/`registerMode` not in Zod schema | `grep -n "subview\|registerMode" src/lib/persistence.ts` | Lines 227–229: both appear only in `deserializeSession` defaults, not in `SavedSessionSchema` Zod definition — ephemeral state rule intact |
+| `PX_PER_CYCLE` coordination rule | `grep -n "PX_PER_CYCLE" src/render/harmony-staff-scene.ts` | Line 55: `import { PX_PER_CYCLE } from '../core/harmony/time-map.js'` — imported from canonical source; ProgressionStrip uses local const `PX_PER_CYCLE = 48` (same value, per Register) |
+| Schema version | `grep -n "SESSION_SCHEMA_VERSION" src/lib/persistence.ts` | Line 16: `export const SESSION_SCHEMA_VERSION = 2` |
+| AGPL-3.0 headers | `head -2` on all 7 modified files | All 7 files (`session.ts`, `stage.ts`, `persistence.ts`, `Header.svelte`, `App.svelte`, `CodeDrawer.svelte`, `CompositionDrawer.svelte`, `RhythmControls.svelte`) have `SPDX-License-Identifier: AGPL-3.0-only` on line 1 or 2 |
+
+**Key source citations for statically-verified acceptance IDs:**
+
+- **A-09-01:** `src/state/session.ts` line 248 — `view: 'rhythm' | 'harmony' | 'composition' | 'session' | 'code'`; line 265 — `view: 'harmony'` (valid default). Schema v2: `src/lib/persistence.ts` lines 112–113 — `z.enum(['rhythm', 'harmony', 'composition', 'session', 'code'] as const).catch('harmony' as const)`.
+- **A-09-02:** `src/render/stage.ts` lines 175–178 — `export function setView(view: 'harmony' | 'rhythm' | 'composition' | 'session' | 'code')`: `harmonyLayer.visible = view === 'harmony'`; `rhythmLayer.visible = view === 'rhythm'`. For `'composition'`, `'session'`, `'code'` both evaluate to `false`.
+- **A-09-03:** `src/lib/persistence.ts` line 16 — `SESSION_SCHEMA_VERSION = 2`; line 109 — `version: z.literal(2)`; lines 112–113 — view enum with `.catch('harmony' as const)`. Tests in `tests/persistence.test.ts`: "Phase 09 schema v2" group (8 tests including `it.each` over all 5 view strings, unrecognized view fallback, version-1 blob drop).
+- **A-09-04:** All four gates green (recorded above).
+- **A-09-05:** `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/` → 0 matches.
+
+### Files touched (gate/assembly step — no source code changes)
+
+- `docs/orbifold-v2/handoffs/phase-09-handoff.md` — this entry
+
+No source files modified in step 09.6. This is a gate-and-acceptance-assembly step per the phase spec.
+
+### Phase-level Acceptance Coverage Table (A-09-01..A-09-11)
+
+| Acceptance ID | Required behavior | Evidence / source citation | Test type | Status |
+|---|---|---|---|---|
+| A-09-01 | `SessionState.view` includes all 5 strings; `DEFAULT_SESSION_STATE.view` valid | `src/state/session.ts:248` (type); `:265` (default); `tests/persistence.test.ts` (Phase 09 `it.each` 5 sub-tests) | proxy:static-analysis + unit | **COVERED** |
+| A-09-02 | `stage.ts setView` hides both PIXI layers for `'composition'`, `'session'`, `'code'` | `src/render/stage.ts:175–178` (function signature + two `.visible` assignments) | proxy:static-analysis | **COVERED** |
+| A-09-03 | Schema version 2; `SESSION_SCHEMA_VERSION = 2`; unrecognized view → `'harmony'`; v1 blobs dropped | `src/lib/persistence.ts:16,109,112–113`; `tests/persistence.test.ts` (8 Phase 09 tests) | unit | **COVERED** |
+| A-09-04 | All quality gates green (tsc, lint, vitest ≥ 385, build) | Above gate evidence: 396 passed, 0 tsc errors, 0 lint errors, build exit 0 | automated | **COVERED** |
+| A-09-05 | No PIXI/Svelte/DOM imports in `src/core/` | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/` → 0 matches | proxy:static-analysis | **COVERED** |
+| A-09-06 | Four equal-weight primary view tabs; one active at a time; switching changes content area | `src/ui/Header.svelte:178–207` (4-button `#viewSeg`; all `.seg button`; `class={... === '...' ? 'active' : ''}`) | proxy:static-analysis | **COVERED (proxy); manual deferred to Pilot** |
+| A-09-07 | "Composición" shows composition timeline; navigating away and back preserves state | `src/app/App.svelte` (`{#if $sessionStore.view === 'composition'}<CompositionDrawer />{/if}`); `src/ui/CompositionDrawer.svelte` `onMount` sets `open=true`; store persists across mounts | proxy:static-analysis | **COVERED (proxy); manual deferred to Pilot** |
+| A-09-08 | "Código Strudel" shows code editor; `#codeTab`/`#compTab` buttons gone from UI | `src/app/App.svelte` (`{#if $sessionStore.view === 'code'}<CodeDrawer />{/if}`); `grep 'id="codeTab"\|id="compTab"' src/` → 0 element matches | proxy:static-analysis | **COVERED (proxy); manual deferred to Pilot** |
+| A-09-09 | Rhythm controls in top bar when Ritmo active; no canvas overlay | `src/ui/Header.svelte` `{#if $sessionStore.view === 'rhythm'}` block; `grep 'class="orbit-ctl' src/` → 0 live element matches; `src/ui/RhythmControls.svelte` is empty shell | proxy:static-analysis | **COVERED (proxy); manual deferred to Pilot** |
+| A-09-10 | Transport footer contains only transversal controls in all four views | `src/ui/Transport.svelte` — no `{#if view === ...}` guards; controls: ▶ Ritmo, ▶ Armonía, ▶ Sesión, ■ silencio, BPM slider/readout, TAP, `<LatencyCalibration />`; `grep -n "view" src/ui/Transport.svelte` → only CSS class names (`.ebtn.rhythm`, `.ebtn.harmony`) for button colors, no view-gating logic | proxy:static-analysis | **COVERED (proxy); manual deferred to Pilot** |
+| A-09-11 | Per-view hint text: Armonía/Tonnetz, Armonía/Pentagrama, Ritmo; no canvas hint for Composición/Código Strudel | `src/app/App.svelte` hint block — `{#if $sessionStore.view === 'harmony'}` (two sub-branches: tonnetz/staff) + `{:else if $sessionStore.view === 'rhythm'}` ("Elige E(k,n)…"); no hint for `'composition'`/`'code'` | proxy:static-analysis | **COVERED (proxy); manual deferred to Pilot** |
+
+**Proxy disclosures:**
+
+- A-09-06: Visual equality of the four tab buttons cannot be asserted from CLI. The proxy (all four `<button>` elements inside `#viewSeg`, all assigned the same `.seg button` CSS class, with no per-button font or padding override) is a sound structural guarantee of equal weight. The `class={... === '...' ? 'active' : ''}` pattern enforces a single active tab at a time.
+- A-09-07: "Preserves state" means the composition block/track data in `sessionStore.composition` is not reset on component unmount — the store is a module singleton that outlives component lifecycle. Structurally sound; Pilot should verify the rAF playhead cursor restarts correctly after navigating away and back.
+- A-09-08: The `{#if}` gate mounts/unmounts `CodeDrawer` on view switch. Code editor text (`userEdited`, `liveCode`) is local state in `CodeDrawer.svelte` — it resets on remount if the user had typed but not executed. This is existing behavior from the drawer model; no regression introduced.
+- A-09-09: The morph toggle, euclidean sliders, preview toggle, + órbita, + capa vacía, and 📨 base buttons are all in the `{#if $sessionStore.view === 'rhythm'}` block in `Header.svelte`. Pilot should verify each control is functional.
+- A-09-10: `Transport.svelte` was confirmed unchanged in this phase (ADR 0013 D4). No view-specific logic exists in the file. The `#if` omission is structural proof.
+- A-09-11: The rhythm hint string "Elige E(k,n) y añade órbitas euclidianas. Click derecho sobre una órbita para silenciarla." matches ADR 0013 D5. Pilot should verify text is readable/visible when in Ritmo view.
+
+### Manual acceptance checklist for Pilot Checkpoint #5
+
+The following items require browser runtime verification. Open the app at `pnpm dev` (or the deployed build) and verify each item:
+
+**A-09-06 — Four equal-weight primary view tabs:**
+- [ ] The top bar shows four tabs: Armonía · Ritmo · Composición · Código Strudel (left to right).
+- [ ] Each tab has the same visual weight (same font size, same padding, same height).
+- [ ] The active tab is visually distinguished (active/highlighted state).
+- [ ] Only one tab is active at a time. Clicking a tab activates it and deactivates the others.
+- [ ] The canvas/content area updates immediately on tab click.
+
+**A-09-07 — Composición primary view:**
+- [ ] Clicking "Composición" shows the composition timeline (block library on the left, DAW track grid, composition transport row inside the view).
+- [ ] The ProgressionStrip and Transport footer remain visible while in Composición view.
+- [ ] Navigate to another view (e.g., Armonía), then back to Composición. Verify the timeline blocks/tracks are in the same state as when you left.
+- [ ] The rAF playhead cursor inside the Composición view starts ticking correctly after the remount (no frozen cursor).
+
+**A-09-08 — Código Strudel primary view + no drawer tab buttons:**
+- [ ] Clicking "Código Strudel" shows the live code editor (textarea + ▶ ejecutar / ↷ queue buttons).
+- [ ] The "⌄ código strudel" bottom-edge tab button is gone — it does not appear anywhere in the UI.
+- [ ] The "🎚 composición" bottom-edge tab button is gone — it does not appear anywhere in the UI.
+- [ ] No other drawer-style slide-up affordances appear in the app.
+
+**A-09-09 — Rhythm controls in top bar:**
+- [ ] Navigate to the Ritmo view. Verify the following controls appear in the top bar (header area):
+  - [ ] Morph toggle (▭ lineal / ▭ radial)
+  - [ ] Sound select dropdown
+  - [ ] E(k,n) readout with k, n, r sliders
+  - [ ] Named-pattern info span (if pattern matches)
+  - [ ] Preview toggle (▶ oír / ■ stop)
+  - [ ] + órbita button
+  - [ ] + capa vacía button
+  - [ ] 📨 base context button
+- [ ] Navigate to Armonía view. Verify the rhythm controls are hidden (not visible in the header).
+- [ ] The canvas in Ritmo view has no floating/overlay rhythm controls panel.
+- [ ] Each rhythm control is functional: try adding an orbit, toggling morph, and previewing.
+
+**A-09-10 — Transport footer transversal-only:**
+- [ ] The bottom Transport row shows ▶ Ritmo, ▶ Armonía, ▶ Sesión, ■ silencio, BPM, TAP in all four views.
+- [ ] No view-specific controls appear in the Transport footer in any of the four views.
+
+**A-09-11 — Per-view hint text:**
+- [ ] In Armonía / Tonnetz sub-view: the Tonnetz instruction hint is visible (e.g., "Click en un triángulo…").
+- [ ] In Armonía / Pentagrama sub-view: the Pentagrama instruction hint is visible.
+- [ ] In Ritmo view: the rhythm hint is visible (e.g., "Elige E(k,n) y añade órbitas euclidianas. Click derecho sobre una órbita para silenciarla.").
+- [ ] In Composición view: no canvas hint text floats over the composition timeline (the view has its own built-in labels).
+- [ ] In Código Strudel view: no canvas hint text floats over the code editor (the view has its own built-in labels).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier clean)
+- `pnpm exec vitest run` → 396 passed, 0 failed (13 test files)
+- `pnpm build` → exit 0 (1.44s)
+
+### Decisions made (if any)
+
+- No new decisions. Step 09.6 is a gate-and-assembly step; all implementation decisions were made in steps 09.3–09.5.
+- Static analysis confirms the `orbit-ctl` grep in the phase spec as "0 matches" is satisfied: no live HTML class attributes reference `.orbit-ctl` in any file under `src/`; the only occurrences are in CSS comments documenting the migration provenance. This matches the phase spec intent (the overlay is gone; the comments are informational only).
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- All Phase 09 source changes complete (steps 09.3–09.5). All quality gates green. Phase-level acceptance table assembled. Manual checklist ready for Pilot Checkpoint #5.
+- Branch: `orbifold-v2/phase-09`.
+- Test baseline: 396 passed (13 test files). `SESSION_SCHEMA_VERSION = 2`. Four primary views in nav.
+
+### Next-step context (only if non-obvious)
+
+- Step 09.6 is the final step of Phase 09. After Pilot Checkpoint #5 manual acceptance, Phase 09 is complete and a phase PR/merge to `main` follows.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+- **Terminal commit:** `feat(navigation): Phase 09 step 09.6 — quality gates and manual acceptance`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
