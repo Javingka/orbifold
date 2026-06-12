@@ -10,7 +10,14 @@
 
 ## Pilot decisions (pre-resolved 2026-06-12, before step 09.1)
 
-None — all open decisions are surfaced at the inventory step (09.1) and resolved at Checkpoint #1 before any code is written. See step 09.1 for the full list of open questions.
+The Pilot pre-resolved 3 of the 4 open questions; OQ-2 is deferred to Checkpoint #1 (after the inventory measures each option's blast radius):
+
+- **OQ-1 → Option B.** Add `'code'` as a new fifth view-type string. `SessionState.view` becomes `'rhythm' | 'harmony' | 'composition' | 'session' | 'code'`. `'session'` is retained (it remains the rhythm+harmony combined transport mode, per OQ-4). Composición → `'composition'` (existing string); Código Strudel → `'code'` (new).
+- **OQ-2 → DEFERRED to Checkpoint #1.** Drawer-lifecycle option (D / E / F) to be chosen after step 09.1 documents each option's concrete blast radius.
+- **OQ-3 → inline.** The rhythm-specific Euclidean controls' transient local state lives inline in `Header.svelte`'s `<script>` block — same criterion as the harmony controls already there (no dedicated sub-component).
+- **OQ-4 → "Sesión" stays in the Transport footer.** The ▶ Sesión button (rhythm + harmony together) remains a transport control; each segment can still be played independently regardless of the active view.
+
+Implications for OQ-1 (Option B): because `'code'` is a new value the persisted `view` field could take, step 09.3 must handle the persistence schema per A-09-03 (version bump + safe fallback to `'harmony'` for unrecognized strings on load). Step 09.2 (ADR 0013) records this.
 
 ---
 
