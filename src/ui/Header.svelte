@@ -14,7 +14,12 @@
     setHarmonyKey(root, mode, octave)            on key-selector change
 -->
 <script lang="ts">
-  import { sessionStore, setHarmonyKey } from '../state/session.js';
+  import {
+    sessionStore,
+    setHarmonyKey,
+    setHarmonySubview,
+    setRegisterMode,
+  } from '../state/session.js';
 
   // Note names for the root pitch-class select.
   // Prototype: NOTE_NAMES (line 592): ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
@@ -97,6 +102,50 @@
     The view-toggle (#viewSeg) above must never be hidden.
   -->
   {#if $sessionStore.view === 'harmony'}
+    <!--
+      Phase 08 (step 08.5): Tonnetz ⇄ Pentagrama sub-toggle.
+      Toggles harmony.subview between 'tonnetz' and 'staff'.
+      Calls setHarmonySubview() from session.ts which updates the store and
+      calls setHarmonySubview() from stage.ts (via lazy import).
+      ADR 0011 Amendment §D5.
+    -->
+    <div class="seg" id="subviewSeg">
+      <button
+        class={$sessionStore.harmony.subview === 'tonnetz' ? 'active' : ''}
+        on:click={() => setHarmonySubview('tonnetz')}
+      >
+        Tonnetz
+      </button>
+      <button
+        class={$sessionStore.harmony.subview === 'staff' ? 'active' : ''}
+        on:click={() => setHarmonySubview('staff')}
+      >
+        Pentagrama
+      </button>
+    </div>
+
+    <!--
+      Phase 08 (step 08.5): Voice register mode toggle.
+      Toggles harmony.registerMode between 'suavizado' and 'estricto'.
+      Calls setRegisterMode() from session.ts which updates the store only
+      (visual-only: audio is byte-identical; no requeueLive).
+      ADR 0011 Amendment §D6.
+    -->
+    <div class="seg" id="registerModeSeg">
+      <button
+        class={$sessionStore.harmony.registerMode === 'suavizado' ? 'active' : ''}
+        on:click={() => setRegisterMode('suavizado')}
+      >
+        suavizado
+      </button>
+      <button
+        class={$sessionStore.harmony.registerMode === 'estricto' ? 'active' : ''}
+        on:click={() => setRegisterMode('estricto')}
+      >
+        estricto
+      </button>
+    </div>
+
     <div class="field">
       <span>clave</span>
 

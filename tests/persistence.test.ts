@@ -122,6 +122,9 @@ const FULL_STATE: SessionState = {
       { rootPc: 5, qual: 'min', gain: 0.6, cx: 100, cy: 200 }, // cx/cy must be stripped
       { rootPc: 0, qual: 'maj', gain: 0.8 },
     ],
+    // Phase 08 (step 08.5): ephemeral fields required by HarmonyState type.
+    subview: 'tonnetz',
+    registerMode: 'suavizado',
   },
   rhythm: {
     layers: [

@@ -201,6 +201,11 @@ export function deserializeSession(saved: SavedSession): Omit<SessionState, 'now
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
         };
       }),
+      // Phase 08 (step 08.5): ephemeral UI fields — NOT from SavedHarmonySchema.
+      // These fields are never persisted; always restored to defaults on load.
+      // See HarmonyState.subview and HarmonyState.registerMode JSDoc.
+      subview: 'tonnetz' as const,
+      registerMode: 'suavizado' as const,
     },
     rhythm: {
       layers: saved.rhythm.layers.map((l) => {

@@ -39,7 +39,6 @@ import * as PIXI from 'pixi.js';
 import { get } from 'svelte/store';
 
 import { computeVoiceTracks } from '../core/harmony/voice-tracks.js';
-import type { RegisterMode } from '../core/harmony/voice-tracks.js';
 import { computeStaffLayout } from '../core/harmony/staff-layout.js';
 import type { StaffLayout } from '../core/harmony/staff-layout.js';
 import { TREBLE_STAFF_LINES } from '../core/harmony/staff-map.js';
@@ -231,13 +230,15 @@ function drawAccidentals(container: PIXI.Container, layout: StaffLayout, staffBa
  */
 export function buildHarmonyStaffScene(state: SessionState): void {
   const refs = getStageRefs();
-  const { app, harmonyLayer } = refs;
+  // Phase 08 (step 08.5): staff scene objects added to refs.staffContainer
+  // instead of refs.harmonyLayer directly. ADR 0011 Amendment §D5.
+  const { app, staffContainer } = refs;
 
   // ── Remove previous staff scene objects ───────────────────────────────────
-  if (_staffGfx !== null) harmonyLayer.removeChild(_staffGfx);
-  if (_dynGfx !== null) harmonyLayer.removeChild(_dynGfx);
-  if (_clefText !== null) harmonyLayer.removeChild(_clefText);
-  if (_accidentalContainer !== null) harmonyLayer.removeChild(_accidentalContainer);
+  if (_staffGfx !== null) staffContainer.removeChild(_staffGfx);
+  if (_dynGfx !== null) staffContainer.removeChild(_dynGfx);
+  if (_clefText !== null) staffContainer.removeChild(_clefText);
+  if (_accidentalContainer !== null) staffContainer.removeChild(_accidentalContainer);
 
   // ── Create fresh PIXI objects ─────────────────────────────────────────────
   _staffGfx = new PIXI.Graphics();
@@ -262,18 +263,13 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   _staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX;
 
   // ── Compute layout ────────────────────────────────────────────────────────
-  // TODO(step-08.5): wire state.harmony.registerMode once session.ts adds the field.
-  // Until then, default to 'suavizado' (ADR 0011 D6 Phase 08 UX goal default).
-  // Double cast via unknown is intentional: HarmonyState does not yet carry the
-  // registerMode field; it is added in step 08.5. The cast is safe because the field
-  // will either be undefined (missing) or a valid RegisterMode string.
-  const registerMode = (state.harmony as unknown as Record<string, unknown>).registerMode as
-    | RegisterMode
-    | undefined;
+  // Phase 08 (step 08.5): state.harmony.registerMode is now a typed field
+  // on HarmonyState (added in session.ts step 08.5). No cast needed.
+  // Default 'suavizado' is the ADR 0011 Amendment D6 UX goal.
   const tracks = computeVoiceTracks(
     state.harmony.progression,
     state.harmony.octave,
-    registerMode ?? 'suavizado'
+    state.harmony.registerMode
   );
   _layout = computeStaffLayout(tracks, PX_PER_CYCLE);
   _staffWidth = Math.max(_layout.totalWidth, MIN_STAFF_WIDTH);
@@ -289,11 +285,14 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   _clefText.x = 2;
   _clefText.y = _staffBaseY - TREBLE_CLEF_Y_OFFSET - TREBLE_CLEF_FONT_SIZE * 0.75;
 
-  // ── Add to harmonyLayer (staff behind accidentals behind clef, dyn on top) ──
-  harmonyLayer.addChild(_staffGfx);
-  harmonyLayer.addChild(_accidentalContainer);
-  harmonyLayer.addChild(_clefText);
-  harmonyLayer.addChild(_dynGfx);
+  // ── Add to staffContainer (staff behind accidentals behind clef, dyn on top) ──
+  // Phase 08 (step 08.5): children go to refs.staffContainer, not harmonyLayer.
+  // Build order: _staffGfx → _accidentalContainer → _clefText → _dynGfx.
+  // ADR 0011 Amendment §D5.
+  staffContainer.addChild(_staffGfx);
+  staffContainer.addChild(_accidentalContainer);
+  staffContainer.addChild(_clefText);
+  staffContainer.addChild(_dynGfx);
 }
 
 // ── updateHarmonyStaffDynamic ─────────────────────────────────────────────────

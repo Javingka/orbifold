@@ -301,8 +301,9 @@ Three changes applied to `src/render/harmony-staff-scene.ts`:
 - `STEP_PX = 16` at line 60: matches ADR 0011 D5 table exactly.
 - `HALF_STEP_PX = STEP_PX / 2` at line 63: equals 8. Matches ADR 0011 D5 table.
 - `staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` at line 261: equals `height / 2 - 48`. Matches ADR 0011 D5 formula: `app.screen.height / 2 − (6 * HALF_STEP_PX) = height/2 − 48`.
-- Cyclic playhead at line 328: `((rawX % _staffWidth) + _staffWidth) % _staffWidth`. Matches ADR 0011 D6 formula exactly.
-- Guard at line 319: `if (_staffWidth <= 0) return;`. Satisfies the spec "if `_staffWidth <= 0`, return early without drawing the playhead".
+- Cyclic playhead at line 332: `((rawX % _staffWidth) + _staffWidth) % _staffWidth`. Matches ADR 0011 D6 formula exactly.
+- Guard at line 323: `if (_staffWidth <= 0) return;`. Satisfies the spec "if `_staffWidth <= 0`, return early without drawing the playhead".
+- No `Math.min`/`Math.max` on `playheadX` anywhere in `updateHarmonyStaffDynamic` — old clamp is fully gone.
 - `PX_PER_CYCLE` import at line 46: from `../core/harmony/time-map.js` (vigent coordination-point rule — not redeclared).
 
 **Prototype parity note (PIXI render module — visual equivalence):**
@@ -316,12 +317,12 @@ This step does not port new logic from the prototype; it replaces Phase 07 deliv
 | Acceptance ID | Required behavior | Source evidence | Test type | Gap status |
 |---|---|---|---|---|
 | A-08-07 | `tsc --noEmit` → 0, `pnpm lint` → 0, `pnpm test` count ≥ 361, `pnpm build` → 0 | All four gates green (tsc: 0 errors; lint: 0; test: 385 passed; build: exit 0) | automated | covered |
-| A-08-08 | Playhead loops back to left edge instead of freezing | `harmony-staff-scene.ts` line 328: `((rawX % _staffWidth) + _staffWidth) % _staffWidth`; guard at line 319 | proxy:static-analysis (live: deferred to Pilot) | proxy-covered — live verification deferred |
-| A-08-09 | `suavizado` produces smooth voice contours | `registerMode ?? 'suavizado'` passed to `computeVoiceTracks` at line 272; suavizado engine already covered by A-08-02 unit tests | proxy:static-analysis | proxy-covered — rendering effect requires live visual verification |
-| A-08-10 | Staff occupies full canvas, centered | `harmony-staff-scene.ts` lines 259–261: `_staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` with `STEP_PX=16` | proxy:static-analysis (visual: deferred to Pilot) | proxy-covered — visual layout deferred |
+| A-08-08 | Playhead loops back to left edge instead of freezing | `harmony-staff-scene.ts` line 332: `((rawX % _staffWidth) + _staffWidth) % _staffWidth`; guard at line 323; no Math.min/max on playheadX | proxy:static-analysis (live: deferred to Pilot) | proxy-covered — live verification deferred |
+| A-08-09 | `suavizado` produces smooth voice contours | `registerMode ?? 'suavizado'` passed to `computeVoiceTracks` at line 276; suavizado engine already covered by A-08-02 unit tests | proxy:static-analysis | proxy-covered — rendering effect requires live visual verification |
+| A-08-10 | Staff occupies full canvas, centered | `harmony-staff-scene.ts` line 262: `_staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` with `STEP_PX=16` | proxy:static-analysis (visual: deferred to Pilot) | proxy-covered — visual layout deferred |
 
 **Proxy disclosures:**
-- A-08-08 proxy: the formula at line 328 implements the exact positive-modulo expression from ADR 0011 D6; guard at line 319 satisfies the `_staffWidth <= 0` spec requirement. Live looping behavior requires a running PIXI canvas — deferred to Pilot checkpoint.
+- A-08-08 proxy: the formula at line 332 implements the exact positive-modulo expression from ADR 0011 D6; guard at line 323 satisfies the `_staffWidth <= 0` spec requirement; confirmed no residual Math.min/Math.max clamp on playheadX. Live looping behavior requires a running PIXI canvas — deferred to Pilot checkpoint.
 - A-08-09 proxy: step 08.3 unit tests (A-08-02) already prove the suavizado smoothing engine produces notes within ±6 semitones; this step wires the mode into the scene call. The visual staff rendering of smooth contour lines requires a running PIXI canvas — deferred to Pilot checkpoint.
 - A-08-10 proxy: the geometry formula `height / 2 − 48` is identical to ADR 0011 D5 binding constant. Visual centering verification requires a running PIXI canvas — deferred to Pilot checkpoint.
 
@@ -332,6 +333,136 @@ This step does not port new logic from the prototype; it replaces Phase 07 deliv
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
 
 ### 08.4 Planner Review
+
+**Decision:** APPROVED on 2026-06-12. Iteration: 1 of 5.
+**Reviewed on:** 2026-06-12
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass: geometry constants verified at source lines 60/63/262 matching ADR 0011 D5 exactly (STEP_PX=16, HALF_STEP_PX=8, staffBaseY=height/2-48); cyclic playhead formula at line 332 is the positive-modulo expression from D6, old clamp fully absent; `_staffWidth <= 0` guard at line 323; PX_PER_CYCLE imported from time-map.ts not redeclared; interim `as unknown` cast is properly annotated with TODO(step-08.5) and will be replaced by a typed field read in step 08.5 per spec; all four quality gates green (tsc/lint/test-385/build).
+**Next action:** Dev proceeds to step 08.5
+
+---
+
+## Step 08.5 — Tonnetz ⇄ Pentagrama sub-toggle (stage + store + Header)
+
+**Date:** 2026-06-12
+**Iteration:** 1 of 5
+
+### 08.5 Completed
+
+**Part A — `src/render/stage.ts` refactor:**
+
+- Added `_tonnetzContainer` and `_staffContainer` module-level variables (`PIXI.Container | null`).
+- In `initStage`, after creating `harmonyLayer`, created the two sub-containers and added them as children of `harmonyLayer` (`_tonnetzContainer.visible = true`, `_staffContainer.visible = false`).
+- Migrated the seven Tonnetz children (hGrid, hPath, hDyn, hNRG, hNodes, hNRL, hLabels) from `harmonyLayer.addChild(...)` to `_tonnetzContainer.addChild(...)`. Z-order preserved exactly (hGrid → hPath → hDyn → hNRG → hNodes → hNRL → hLabels).
+- Extended `StageRefs` interface with `tonnetzContainer: PIXI.Container` and `staffContainer: PIXI.Container`.
+- Added `tonnetzContainer` and `_staffContainer` null guards to `getStageRefs()` and included both in the returned object.
+- Added `export function setHarmonySubview(subview: 'tonnetz' | 'staff'): void` that sets `_tonnetzContainer.visible` and `_staffContainer.visible` to complementary values. `setView('harmony'/'rhythm')` on `harmonyLayer.visible` is unchanged.
+
+**Part A — `src/render/harmony-staff-scene.ts` update:**
+
+- Removed the interim `as unknown as Record<string,unknown>` cast for `registerMode` (TODO step-08.5 comment) and replaced with the direct typed read `state.harmony.registerMode` — now that `HarmonyState` carries the field.
+- Removed the unused `import type { RegisterMode }` (no longer needed after removing the cast).
+- Changed `buildHarmonyStaffScene` to use `refs.staffContainer` instead of `refs.harmonyLayer` for all add/remove operations on the four staff scene objects. Build order: `_staffGfx` → `_accidentalContainer` → `_clefText` → `_dynGfx`.
+
+**Part B — `src/state/session.ts` store changes:**
+
+- Added `import type { RegisterMode }` from `../core/harmony/voice-tracks.js`.
+- Added lazy stage loader (`type StageModule = typeof import('../render/stage.js')`) with `getStage()` helper (mirrors the lazy audio pattern to avoid pulling PIXI into Vitest's Node environment).
+- Extended `HarmonyState` interface with:
+  - `subview: 'tonnetz' | 'staff'` — documented as EPHEMERAL, not persisted.
+  - `registerMode: RegisterMode` — documented as EPHEMERAL, not persisted, audio byte-identical invariant stated.
+- Updated `DEFAULT_SESSION_STATE.harmony` to include `subview: 'tonnetz'` and `registerMode: 'suavizado'` (Pilot decisions).
+- Added `export function setHarmonySubview(subview)`: updates store `harmony.subview` and calls `stage.setHarmonySubview` via lazy dynamic import. Does NOT call `requeueLive()`.
+- Added `export function setRegisterMode(mode)`: updates store `harmony.registerMode` only. Visual-only; no `requeueLive()`. Staff re-renders via App.svelte's store subscription on the next state change.
+- Updated `applyLoadedSession` to include `subview: s.harmony.subview` and `registerMode: s.harmony.registerMode` (preserves current ephemeral state when loading a saved session — ephemeral fields are NOT from `SavedHarmonySchema`).
+
+**Part B — `src/lib/persistence.ts` typing fix:**
+
+- Updated `deserializeSession` to include `subview: 'tonnetz' as const` and `registerMode: 'suavizado' as const` in the returned harmony object, satisfying the updated `HarmonyState` type. These values are hardcoded defaults — not derived from any `SavedHarmonySchema` field. `SavedHarmonySchema` Zod schema unchanged.
+
+**Part C — `src/ui/Header.svelte` sub-toggle:**
+
+- Added `setHarmonySubview` and `setRegisterMode` imports from session.ts.
+- Inside `{#if $sessionStore.view === 'harmony'}`: added two `.seg` segmented controls (before the existing `.field.clave`):
+  1. `#subviewSeg` — "Tonnetz" / "Pentagrama" buttons; active class driven by `$sessionStore.harmony.subview`; calls `setHarmonySubview('tonnetz'/'staff')`.
+  2. `#registerModeSeg` — "suavizado" / "estricto" buttons; active class driven by `$sessionStore.harmony.registerMode`; calls `setRegisterMode('suavizado'/'estricto')`.
+
+**Test updates (session.ts shape change):**
+
+- `tests/session.test.ts`: updated `makePopulatedState()` to spread `...DEFAULT_SESSION_STATE.harmony` (adds `subview` and `registerMode`). Updated 3 inline `harmony: { root, mode, octave, progression }` literals in `requeueLive()` tests to use `harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: [...] }`.
+- `tests/persistence.test.ts`: updated `FULL_STATE` to include `subview: 'tonnetz'` and `registerMode: 'suavizado'` on the `harmony` field.
+- No test logic changed — the same behaviors are asserted; only the shape of `HarmonyState` objects is updated to satisfy the new required fields.
+
+### 08.5 Files touched
+
+- `src/render/stage.ts` (modified — `_tonnetzContainer`, `_staffContainer` state; `initStage` sub-container creation; Tonnetz children migrated; `StageRefs` extended; `getStageRefs` updated; `setHarmonySubview` added)
+- `src/render/harmony-staff-scene.ts` (modified — `refs.staffContainer` instead of `refs.harmonyLayer`; cast removed; `RegisterMode` import removed)
+- `src/state/session.ts` (modified — `RegisterMode` import; lazy stage loader; `HarmonyState` extended; `DEFAULT_SESSION_STATE` updated; `setHarmonySubview` + `setRegisterMode` actions added; `applyLoadedSession` updated)
+- `src/lib/persistence.ts` (modified — `deserializeSession` harmony object includes `subview`/`registerMode` defaults to satisfy `HarmonyState` type; `SavedHarmonySchema` unchanged)
+- `src/ui/Header.svelte` (modified — `setHarmonySubview` + `setRegisterMode` imports; two `.seg` sub-toggle controls added)
+- `tests/session.test.ts` (modified — `makePopulatedState` and 3 inline `harmony:` literals updated for new required fields)
+- `tests/persistence.test.ts` (modified — `FULL_STATE.harmony` updated for new required fields)
+- `docs/orbifold-v2/handoffs/phase-08-handoff.md` (this file)
+
+### 08.5 Validation evidence
+
+**TypeScript:** `pnpm exec tsc --noEmit` → exit 0 (0 errors). All new typed fields resolve correctly. Lazy `typeof import(...)` pattern satisfies strict mode.
+
+**Lint:** `pnpm lint` → 0 errors. ESLint and Prettier both clean.
+
+**Tests:** `pnpm exec vitest run` → 385 passed, 0 failed, 13 test files. Count unchanged from step 08.4 baseline (step 08.5 has no new unit tests; the store changes required updating existing tests but no new Vitest tests per spec).
+
+**Build:** `pnpm build` → exit 0. Pre-existing chunk-size warning on `index-*.js` (≈1,062 kB, gzip ≈335 kB) unchanged. New Vite advisory: `stage.ts` is dynamically imported by `session.ts` but also statically imported by several other modules — this is expected (mirrors the `strudel.ts` advisory) and means no code-splitting benefit, but the app works correctly.
+
+**A-08-05 (persistence/agent schema exclusion):**
+
+`grep -n "subview\|registerMode" src/lib/persistence.ts` → returns only lines in `deserializeSession` (defaults, not schema) and a comment. The `SavedHarmonySchema` Zod schema at lines 46–54 has no `subview` or `registerMode` fields — confirmed by reading the schema source.
+
+`grep -n "subview\|registerMode" src/agent/schema.ts` → 0 matches. Confirmed completely absent from agent schema.
+
+**A-08-05 reversibility invariant:**
+
+With `subview === 'tonnetz'` (default), `_staffContainer.visible = false` — the staff scene objects are hidden. The Tonnetz scene objects are in `_tonnetzContainer.visible = true` — identical display list to Phase 07 (the objects existed, just now in a container). Harmony view behavior is byte-identical to pre-Phase-08 Phase 07 state.
+
+**A-08-06 (no PIXI/Svelte/DOM in core/harmony):**
+`grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches.
+
+**Coordinate rule check:**
+`PX_PER_CYCLE` in `harmony-staff-scene.ts` is still imported from `../core/harmony/time-map.js` (line 46 in the updated file). Not redeclared. The `RegisterMode` import was removed (no longer needed).
+
+**HarmonyState ephemeral JSDoc:**
+Both `subview` and `registerMode` in `HarmonyState` carry JSDoc comments stating "EPHEMERAL — not persisted, not in agent schema" plus the ADR citation.
+
+### 08.5 Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Source evidence | Test type | Gap status |
+|---|---|---|---|---|
+| A-08-05 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts`; changing them does not alter saved blob | `grep` → 0 matches in `agent/schema.ts`; `SavedHarmonySchema` Zod schema unchanged; `serializeSession` does not read `subview`/`registerMode`; `deserializeSession` restores defaults | proxy:static-analysis | covered |
+| A-08-06 | No PIXI/Svelte/DOM imports in `src/core/harmony/` | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches | proxy:static-analysis | covered |
+| A-08-07 | All quality gates green | `tsc`: 0 errors; `lint`: 0; `test`: 385 passed; `build`: exit 0 | automated | covered |
+| A-08-11 | Tonnetz ⇄ Pentagrama sub-toggle in top bar; ProgressionStrip visible in both subviews | `Header.svelte`: `#subviewSeg` with two buttons calling `setHarmonySubview`; `stage.ts`: `setHarmonySubview` toggles container visibility; ProgressionStrip is a Svelte component outside the PIXI canvas — always visible | proxy:static-analysis (live: deferred to Pilot) | proxy-covered |
+| A-08-14 | Default `subview='tonnetz'`: harmony view visually identical to Phase 07 | `_tonnetzContainer.visible = true`, `_staffContainer.visible = false` on init; DEFAULT_SESSION_STATE `subview: 'tonnetz'`; `setHarmonySubview` not called until user clicks Pentagrama | proxy:static-analysis (live: deferred to Pilot) | proxy-covered |
+| A-08-09 | `suavizado` produces smooth voice contours on staff | `harmony-staff-scene.ts` now reads `state.harmony.registerMode` directly (typed); DEFAULT is `'suavizado'`; suavizado engine unit-tested in A-08-02 | proxy:static-analysis | proxy-covered (visual rendering deferred to Pilot) |
+
+**Proxy disclosures:**
+
+A-08-11 proxy: `stage.ts setHarmonySubview` sets exactly one container visible at a time (source: lines added to `setHarmonySubview`). Header.svelte `#subviewSeg` buttons call `setHarmonySubview`. ProgressionStrip renders as a Svelte DOM element above the PIXI canvas — it is always visible regardless of `harmonyLayer` children. Live toggle interaction requires a running browser — deferred to Pilot.
+
+A-08-14 proxy: On `initStage`, `_tonnetzContainer.visible = true` and `_staffContainer.visible = false`. The `setHarmonySubview('staff')` call in the store action is only reached when the user clicks "Pentagrama". On initial load, the store default `subview: 'tonnetz'` means `setHarmonySubview('staff')` is never called — init state prevails (Tonnetz visible, staff hidden).
+
+A-08-09 proxy: The typed `state.harmony.registerMode` read (default `'suavizado'`) is now passed directly to `computeVoiceTracks`. Visual rendering of smooth contour lines requires a PIXI canvas — deferred to Pilot.
+
+### 08.5 Reversibility note
+
+With `subview === 'tonnetz'` (the default on load): `_staffContainer.visible = false`. The staff scene objects (_staffGfx, _accidentalContainer, _clefText, _dynGfx) are added to `_staffContainer` but not rendered (PIXI skips invisible containers entirely). `_tonnetzContainer` (containing all 7 Tonnetz objects) is `visible = true`. The harmonyLayer renders exactly the same Tonnetz scene as in Phase 07. Audio output is byte-identical to pre-Phase-08 state (no audio changes in this step).
+
+### 08.5 Terminal commit
+
+- **Terminal commit:** `feat(harmony): Phase 08 step 08.5 — Tonnetz⇄Pentagrama sub-toggle, stage containers, store fields`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+### 08.5 Planner Review
 
 (Filled by the Planner in review mode)
 

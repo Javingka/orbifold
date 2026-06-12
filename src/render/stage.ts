@@ -3,6 +3,14 @@
 // Prototype source: reference/orbifold.html lines 900–944 (initPixi()).
 // ADR 0006: WebGL detection via canvas.getContext before PIXI Application creation.
 // ADR 0007: PIXI Application as a module-level singleton.
+//
+// Phase 08 (step 08.5): harmonyLayer now has two child sub-containers:
+//   _tonnetzContainer — holds the seven Tonnetz scene objects (hGrid…hLabels).
+//   _staffContainer   — holds the four staff scene objects (_staffGfx…_dynGfx).
+// setHarmonySubview() toggles exactly one container visible at a time.
+// Default: _tonnetzContainer.visible = true, _staffContainer.visible = false.
+// (Reversibility: with subview='tonnetz', harmony view is byte-identical to Phase 07.)
+// ADR 0011 Amendment §D5.
 
 import * as PIXI from 'pixi.js';
 
@@ -15,8 +23,15 @@ let _app: PIXI.Application | null = null;
 let harmonyLayer: PIXI.Container | null = null;
 let rhythmLayer: PIXI.Container | null = null;
 
+// Phase 08 (step 08.5): Sub-containers inside harmonyLayer (ADR 0011 Amendment §D5).
+// _tonnetzContainer holds the seven Tonnetz scene objects; visible by default.
+// _staffContainer holds the four staff scene objects; hidden by default.
+let _tonnetzContainer: PIXI.Container | null = null;
+let _staffContainer: PIXI.Container | null = null;
+
 // Harmony scene children — prototype line 920–922
 // addChild order per prototype line 923: hGrid, hPath, hDyn, hNRG, hNodes, hNRL, hLabels
+// Phase 08: these are now children of _tonnetzContainer, not harmonyLayer directly.
 let hGrid: PIXI.Graphics | null = null;
 let hPath: PIXI.Graphics | null = null;
 let hNodes: PIXI.Graphics | null = null;
@@ -89,7 +104,17 @@ export async function initStage(stageEl: HTMLElement): Promise<PIXI.Application 
   rhythmLayer.visible = false; // prototype line 917
   _app.stage.addChild(harmonyLayer, rhythmLayer); // prototype line 918
 
+  // ── Phase 08 (step 08.5): Create sub-containers inside harmonyLayer ─────────
+  // ADR 0011 Amendment §D5: _tonnetzContainer (Tonnetz behind staff by z-order).
+  // Default: Tonnetz visible, staff hidden — reversibility preserved.
+  _tonnetzContainer = new PIXI.Container();
+  _tonnetzContainer.visible = true;
+  _staffContainer = new PIXI.Container();
+  _staffContainer.visible = false;
+  harmonyLayer.addChild(_tonnetzContainer, _staffContainer);
+
   // ── Create harmony scene children — prototype lines 920–922 ─────────────────
+  // Phase 08: children added to _tonnetzContainer (not harmonyLayer directly).
   hGrid = new PIXI.Graphics();
   hPath = new PIXI.Graphics();
   hNodes = new PIXI.Graphics();
@@ -101,7 +126,7 @@ export async function initStage(stageEl: HTMLElement): Promise<PIXI.Application 
   // addChild ORDER per prototype line 923 (not phase file prose — inventory correction):
   // hGrid → hPath → hDyn → hNRG → hNodes → hNRL → hLabels
   // Dynamic glow layers (hDyn, hNRG) render BELOW node circles (hNodes) — visually correct.
-  harmonyLayer.addChild(hGrid, hPath, hDyn, hNRG, hNodes, hNRL, hLabels);
+  _tonnetzContainer.addChild(hGrid, hPath, hDyn, hNRG, hNodes, hNRL, hLabels);
 
   // ── Create rhythm scene children — prototype lines 925–926 ──────────────────
   rRings = new PIXI.Graphics();
@@ -141,6 +166,23 @@ export function setView(view: 'harmony' | 'rhythm'): void {
 }
 
 /**
+ * Switch the harmony sub-view between Tonnetz and Pentagrama (staff).
+ *
+ * Exactly one of the two sub-containers is visible at a time:
+ *   'tonnetz' → _tonnetzContainer.visible = true, _staffContainer.visible = false
+ *   'staff'   → _tonnetzContainer.visible = false, _staffContainer.visible = true
+ *
+ * The parent harmonyLayer.visible is unchanged (managed by setView).
+ * Default on init: 'tonnetz' — reversibility invariant: byte-identical to Phase 07.
+ *
+ * ADR 0011 Amendment §D5.
+ */
+export function setHarmonySubview(subview: 'tonnetz' | 'staff'): void {
+  if (_tonnetzContainer !== null) _tonnetzContainer.visible = subview === 'tonnetz';
+  if (_staffContainer !== null) _staffContainer.visible = subview === 'staff';
+}
+
+/**
  * Register a callback to be called after the debounced window resize (120 ms).
  * Scene modules register build callbacks here; App.svelte passes them in.
  * Prototype lines 935–943: resize calls buildTonnetz() and buildRhythmScene().
@@ -156,6 +198,10 @@ export function onResize(cb: () => void): void {
 export interface StageRefs {
   app: PIXI.Application;
   harmonyLayer: PIXI.Container;
+  /** Phase 08 (step 08.5): sub-container holding the seven Tonnetz scene objects. */
+  tonnetzContainer: PIXI.Container;
+  /** Phase 08 (step 08.5): sub-container holding the four staff scene objects. */
+  staffContainer: PIXI.Container;
   hGrid: PIXI.Graphics;
   hPath: PIXI.Graphics;
   hNodes: PIXI.Graphics;
@@ -177,6 +223,8 @@ export function getStageRefs(): StageRefs {
     _app === null ||
     harmonyLayer === null ||
     rhythmLayer === null ||
+    _tonnetzContainer === null ||
+    _staffContainer === null ||
     hGrid === null ||
     hPath === null ||
     hNodes === null ||
@@ -193,6 +241,8 @@ export function getStageRefs(): StageRefs {
   return {
     app: _app,
     harmonyLayer,
+    tonnetzContainer: _tonnetzContainer,
+    staffContainer: _staffContainer,
     hGrid,
     hPath,
     hNodes,

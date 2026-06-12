@@ -29,6 +29,17 @@ import { writable, get } from 'svelte/store';
 
 import type { SavedSession } from '../lib/persistence.js';
 import type { Quality } from '../core/theory/chords.js';
+import type { RegisterMode } from '../core/harmony/voice-tracks.js';
+
+// ── Lazy stage loader (mirrors lazy audio pattern) ─────────────────────────
+// stage.ts imports PIXI at module-level (import * as PIXI from 'pixi.js').
+// A static import here would pull PIXI into the Node/Vitest environment and
+// cause "window is not defined". Dynamic import defers loading to browser context.
+// Only called by setHarmonySubview (a UI action — never called in unit tests).
+type StageModule = typeof import('../render/stage.js');
+function getStage(): Promise<StageModule> {
+  return import('../render/stage.js');
+}
 import type { RhythmLayer } from '../core/rhythm/layers.js';
 import type { Sound } from '../core/rhythm/layers.js';
 import { bjorklund, rotate, RSTEPS } from '../core/rhythm/euclid.js';
@@ -161,12 +172,32 @@ export type ProgressionSlot = Chord | RestSlot;
  * Harmony sub-state: root scale / key, octave, and chord progression.
  *
  * Prototype reference: `melState` global (lines 717, usage throughout).
+ *
+ * Phase 08 (step 08.5): `subview` and `registerMode` are EPHEMERAL UI state.
+ * They are NOT persisted in SavedHarmonySchema (persistence.ts) and NOT in
+ * the agent schema (agent/schema.ts). Changing them does not alter the saved
+ * session blob or the Strudel audio output.
  */
 export interface HarmonyState {
   root: number; // pitch class 0–11; default 0 (C)
   mode: string; // 'major' | 'minor' | other SCALE_INTERVALS keys
   octave: number; // default 3
   progression: ProgressionSlot[]; // ordered list; empty = silent
+  /**
+   * Active harmony sub-view.
+   * EPHEMERAL — not persisted, not in agent schema.
+   * Default: 'tonnetz' (reversibility: preserves Phase 07 behavior on load).
+   * ADR 0011 Amendment §D5.
+   */
+  subview: 'tonnetz' | 'staff';
+  /**
+   * Voice register assignment mode for the staff view.
+   * EPHEMERAL — not persisted, not in agent schema.
+   * Default: 'suavizado' (smooth octave-nearest contour by default).
+   * Audio output is byte-identical regardless of this setting (visual-only).
+   * ADR 0011 Amendment §D6.
+   */
+  registerMode: RegisterMode;
 }
 
 /**
@@ -231,6 +262,9 @@ export const DEFAULT_SESSION_STATE: SessionState = {
     mode: 'major',
     octave: 3,
     progression: [],
+    // Phase 08 (step 08.5): ephemeral UI defaults — not persisted.
+    subview: 'tonnetz', // Pilot decision: Tonnetz visible by default (reversibility)
+    registerMode: 'suavizado', // Pilot decision: smooth contour by default
   },
   rhythm: {
     layers: [],
@@ -593,6 +627,52 @@ export function setHarmonyKey(root: number, mode: string, octave: number): void 
     harmony: { ...s.harmony, root, mode, octave },
   }));
   requeueLive();
+}
+
+/**
+ * Switch the harmony sub-view between Tonnetz and Pentagrama (staff).
+ *
+ * Updates `harmony.subview` in the store and calls `setHarmonySubview` on the
+ * stage module (via lazy dynamic import to avoid PIXI in Node/Vitest tests).
+ *
+ * Visual-only: does NOT call requeueLive() — audio is unaffected.
+ * EPHEMERAL: this field is not persisted (see HarmonyState.subview JSDoc).
+ *
+ * Phase 08 (step 08.5) — ADR 0011 Amendment §D5.
+ *
+ * @param subview - 'tonnetz' or 'staff'.
+ */
+export function setHarmonySubview(subview: 'tonnetz' | 'staff'): void {
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: { ...s.harmony, subview },
+  }));
+  // Call stage.setHarmonySubview via lazy import (mirrors lazy audio pattern;
+  // avoids pulling PIXI into the Node/Vitest environment at module-eval time).
+  void getStage().then((m) => m.setHarmonySubview(subview));
+}
+
+/**
+ * Set the voice register mode for the harmony staff view.
+ *
+ * Updates `harmony.registerMode` in the store. Visual-only: does NOT call
+ * requeueLive() — audio output is byte-identical regardless of register mode
+ * (confirmed in phase-08-inventory.md §b; ADR 0011 Amendment §D6).
+ *
+ * EPHEMERAL: this field is not persisted (see HarmonyState.registerMode JSDoc).
+ * The store subscription in App.svelte (buildHarmonyStaffScene) will re-render
+ * the staff with the new register mode on the next state change.
+ *
+ * Phase 08 (step 08.5) — ADR 0011 Amendment §D6.
+ *
+ * @param mode - 'estricto' (absolute MIDI pitch) or 'suavizado' (smooth contour).
+ */
+export function setRegisterMode(mode: RegisterMode): void {
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: { ...s.harmony, registerMode: mode },
+  }));
+  // Visual-only: no requeueLive(). The staff re-renders via App.svelte store subscription.
 }
 
 /**
@@ -1210,6 +1290,9 @@ export function applyLoadedSession(saved: SavedSession): void {
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
         };
       }),
+      // Phase 08 (step 08.5): ephemeral fields NOT persisted — always reset to defaults.
+      subview: s.harmony.subview,
+      registerMode: s.harmony.registerMode,
     },
     rhythm: {
       layers: saved.rhythm.layers.map((l) => {

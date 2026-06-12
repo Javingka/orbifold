@@ -72,6 +72,7 @@ function makePopulatedState(): SessionState {
     ...DEFAULT_SESSION_STATE,
     rhythm: { layers: [BD_LAYER, SD_LAYER] },
     harmony: {
+      ...DEFAULT_SESSION_STATE.harmony,
       root: 0,
       mode: 'major',
       octave: 3,
@@ -299,7 +300,7 @@ describe('requeueLive()', () => {
     sessionStore.set({
       ...DEFAULT_SESSION_STATE,
       rhythm: { layers: [BD_LAYER] },
-      harmony: { root: 0, mode: 'major', octave: 3, progression: [C_MAJ] },
+      harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: [C_MAJ] },
       nowPlaying: { label: 'Sesión', source: 'session' },
     });
     const expected = buildSession([BD_LAYER], [C_MAJ], 'chord', 3);
@@ -309,7 +310,7 @@ describe('requeueLive()', () => {
   it("returns harmonyCode trimmed when source='harmony'", () => {
     sessionStore.set({
       ...DEFAULT_SESSION_STATE,
-      harmony: { root: 0, mode: 'major', octave: 3, progression: [C_MAJ, A_MIN] },
+      harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: [C_MAJ, A_MIN] },
       nowPlaying: { label: 'Armonía', source: 'harmony' },
     });
     // Prototype line 1312: code = melodyLine().trim()
@@ -321,7 +322,7 @@ describe('requeueLive()', () => {
     sessionStore.set({
       ...DEFAULT_SESSION_STATE,
       chordMode: 'chord',
-      harmony: { root: 0, mode: 'major', octave: 3, progression: [C_MAJ, A_MIN] },
+      harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: [C_MAJ, A_MIN] },
       nowPlaying: { label: 'Acorde', source: 'chord' },
     });
     // Prototype line 1313: last chord in progression
