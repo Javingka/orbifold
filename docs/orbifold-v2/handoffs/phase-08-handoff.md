@@ -154,3 +154,99 @@ Original ADR 0011 content lines 1–79 are unchanged. The amendment begins at li
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Step 08.3 — Voice register mode engine (`voice-tracks.ts` revision + tests)
+
+**Date:** 2026-06-12
+**Iteration:** 1 of 5
+
+### 08.3 Completed
+
+- Added `export type RegisterMode = 'estricto' | 'suavizado'` to `voice-tracks.ts`.
+- Updated `computeVoiceTracks` signature to accept `registerMode: RegisterMode = 'suavizado'` as a third parameter (default `'suavizado'`).
+- `estricto` mode: preserves the pre-phase formula exactly (`octave + Math.floor((rootPc + iv) / 12)` — unchanged from Phase 05/06).
+- `suavizado` mode: added `midiPitch()` helper (MIDI pitch from note name + octave) and `smoothOctave()` helper (picks estricto-1/estricto/estricto+1 candidate closest to prevMidi, ties resolve to lower). First chord always uses the estricto anchor in both modes. `prevMidi[]` seeded from first chord and updated per chord (not on rest events).
+- AGPL-3.0 header updated to note Phase 08 addition; no other header changes.
+- No DOM/PIXI/Svelte imports added.
+- Updated `tests/harmony/voice-tracks.test.ts`: added `'estricto'` as the third argument to two pre-existing tests that asserted the prototype-parity octave values (C major → A minor golden values). These tests previously called `computeVoiceTracks(prog, 3)` (2-arg); now the default is `'suavizado'` and `'estricto'` is the explicit mode that preserves the old arithmetic. The tests still assert the same values — they are now correctly annotated as `'estricto'` parity tests.
+- Created `tests/harmony/voice-tracks-register.test.ts` with 24 tests covering all four required acceptance IDs plus the tie-resolution invariant.
+
+### 08.3 Files touched
+
+- `src/core/harmony/voice-tracks.ts` (modified — RegisterMode type, signature change, midiPitch helper, smoothOctave helper, suavizado branch in chord loop, prevMidi tracking)
+- `tests/harmony/voice-tracks-register.test.ts` (new)
+- `tests/harmony/voice-tracks.test.ts` (modified — 2 calls updated to pass `'estricto'` explicitly)
+- `docs/orbifold-v2/handoffs/phase-08-handoff.md` (this file)
+
+### 08.3 Validation evidence
+
+**A-08-01 (estricto parity):**
+`pnpm exec vitest run tests/harmony/voice-tracks-register.test.ts` → 24 passed.
+Tests `A-08-01: voice-0 = C4`, `A-08-01: voice-1 = E4`, `A-08-01: voice-2 = A3` assert the pre-phase formula output using explicit `'estricto'` mode — identical to prototype golden values.
+`A-08-01: three-chord estricto...` confirms voice-1 and voice-2 jump to octave 4 (D#4, F#4) in estricto, proving the formula is unchanged and register jumps are intentionally preserved in this mode.
+
+**A-08-02 (suavizado smoothing + tie resolution):**
+Tests `A-08-02: suavizado voice-1 stays D#3` and `A-08-02: suavizado voice-2 stays F#3` prove that suavizado picks nearest octave (D#3 is 1 semitone from E3; estricto gives D#4 which is 11 semitones away).
+`A-08-02: suavizado leap for every voice is <= 6 semitones` asserts the invariant holds across all three voices for the C major → B major register-jump case.
+Tie tests: `TIE resolves to lower octave: voice-0 at 3rd chord = E2` and `TIE resolves to lower octave: voice-1 at 3rd chord = G2` use the 3-chord progression [C maj, F# maj, C maj] where prevMidi[v] ± 6 === estrictoMidi for two voices simultaneously. Analytically verified: prevMidi[0]=A#2(46), estricto E3=MIDI52, E2=MIDI40, both at distance 6 → lower (E2) wins. prevMidi[1]=C#3(49), estricto G3=MIDI55, G2=MIDI43, both at distance 6 → lower (G2) wins.
+
+**A-08-03 (default param = suavizado):**
+`A-08-03: 2-arg call and suavizado produce identical outputs` deep-compares all note names and octaves between `computeVoiceTracks(prog, 3)` and `computeVoiceTracks(prog, 3, 'suavizado')` — all equal.
+`A-08-03: 2-arg default and 3-arg estricto differ` confirms the default no longer matches estricto for a register-jumping progression.
+
+**A-08-04 (rest slot passthrough):**
+`A-08-04 estricto: A minor after rest has same notes as direct A minor` and `A-08-04 suavizado: A minor after rest has same notes as direct A minor` prove rest events do not update prevMidi or prevPcs in either mode.
+`A-08-04: leading rest followed by chord uses estricto anchor` proves the first chord (even after leading rests) is anchored identically in both modes.
+
+**Audio-path isolation (A-08-06 proxy):**
+`grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches. Confirmed.
+
+**Quality gates:**
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier)
+- `pnpm exec vitest run` → 385 passed (361 baseline + 24 new); 0 failed
+- Test count raised above 361 baseline ✓
+
+**Pre-existing tests that were updated:**
+Two tests in `voice-tracks.test.ts` (C major → A minor "perm [1,2,0] is applied correctly" and A-06-04 rest passthrough) now pass `'estricto'` explicitly. They continue asserting the same C4/E4/A3 golden values — the semantic meaning is preserved. The prototype parity note is intact: these are now annotated as estricto-mode parity tests.
+
+### 08.3 Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-08-01 | `computeVoiceTracks(prog, octave, 'estricto')` produces the same octave assignment as the pre-phase formula | `tests/harmony/voice-tracks-register.test.ts` | unit | covered |
+| A-08-02 | `computeVoiceTracks(prog, octave, 'suavizado')` produces notes within ±6 semitones of the previous note; tie resolves to lower octave | `tests/harmony/voice-tracks-register.test.ts` | unit | covered |
+| A-08-03 | Default 2-arg call is byte-identical to explicit `'suavizado'` | `tests/harmony/voice-tracks-register.test.ts` | unit | covered |
+| A-08-04 | Rest slot between two chords preserves voice-leading across the gap in both modes | `tests/harmony/voice-tracks-register.test.ts` | unit | covered |
+| A-08-05 | `registerMode` absent from `SavedHarmonySchema` and `agent/schema.ts` | (none — verified in 08.1 inventory and 08.2 ADR; no source changes to those files this step) | proxy:static-analysis | partial — full confirmation at step 08.7 |
+| A-08-06 | No PIXI/Svelte/DOM imports in `src/core/harmony/` | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches | proxy:static-analysis | covered |
+| A-08-07 | All quality gates green | `pnpm exec tsc --noEmit` → 0; `pnpm lint` → 0; `pnpm exec vitest run` → 385 passed; not running `pnpm build` (deferred to 08.7) | automated | partial — build deferred to 08.7 |
+
+**Proxy disclosures:**
+- A-08-05 proxy: `persistence.ts` and `agent/schema.ts` confirmed unchanged at step 08.1; no edits in this step. Full static analysis at 08.7.
+- A-08-06 proxy: `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches, run in this step.
+
+**Notes on partial coverage:**
+- A-08-07: `pnpm build` is part of the spec's quality gates but is deferred to step 08.7 to avoid redundancy across steps. The three other gates (`tsc`, `lint`, `test`) pass clean.
+
+### 08.3 Audio-path isolation evidence (required by spec)
+
+From phase-08-inventory.md §(b): `computeVoiceTracks` output is consumed only by `harmony-staff-scene.ts` (PIXI renderer) and `staff-layout.ts` (pure visual engine). Neither is in the audio pipeline. `melodyLine` and `chordToStrudel` in `strudel.ts` call `chordVoicing` directly and do not import `voice-tracks.ts`. Confirmed by reading `strudel.ts` and verifying no import of `voice-tracks`. Changing `registerMode` produces byte-identical Strudel pattern strings and byte-identical audio output.
+
+### 08.3 Terminal commit
+
+- **Terminal commit:** `feat(harmony): Phase 08 step 08.3 — voice register mode engine and tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+### 08.3 Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**

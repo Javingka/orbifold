@@ -128,13 +128,16 @@ describe('computeVoiceTracks — C major → A minor (R transform)', () => {
   // voice-0: perm[0]=1 → A minor interval 1 = 3 → (9+3)%12=0=C, octave=3+floor(12/12)=4 → C4
   // voice-1: perm[1]=2 → A minor interval 2 = 7 → (9+7)%12=4=E, octave=3+floor(16/12)=4 → E4
   // voice-2: perm[2]=0 → A minor interval 0 = 0 → (9+0)%12=9=A, octave=3+floor(9/12)=3  → A3
+  // Phase 08: pass 'estricto' explicitly — this test asserts the pre-phase formula (prototype parity).
+  // The default is now 'suavizado'; estricto preserves the original octave arithmetic.
   it('perm [1,2,0] is applied correctly: voice-0=C4, voice-1=E4, voice-2=A3', () => {
     const tracks = computeVoiceTracks(
       [
         { rootPc: 0, qual: 'maj' },
         { rootPc: 9, qual: 'min' },
       ],
-      3
+      3,
+      'estricto'
     );
     expect(tracks[0].events[1].noteName).toBe('C4');
     expect(tracks[1].events[1].noteName).toBe('E4');
@@ -250,6 +253,8 @@ describe('computeVoiceTracks — rest slot (Phase 06, ADR 0012)', () => {
 
   // A-06-04: rest does NOT affect prevPcs — voice leading from C major to A minor
   // through a rest is identical to direct C major → A minor (perm [1,2,0]).
+  // Phase 08: pass 'estricto' explicitly — this test asserts the pre-phase formula (octave
+  // arithmetic unchanged); the default is now 'suavizado' which smooths octave assignments.
   it('A-06-04: rest does not affect prevPcs; A minor after rest uses same perm as direct transition', () => {
     // Direct C major → A minor (no rest)
     const directTracks = computeVoiceTracks(
@@ -257,7 +262,8 @@ describe('computeVoiceTracks — rest slot (Phase 06, ADR 0012)', () => {
         { rootPc: 0, qual: 'maj' },
         { rootPc: 9, qual: 'min' },
       ],
-      3
+      3,
+      'estricto'
     );
     // C major → rest → A minor
     const withRestTracks = computeVoiceTracks(
@@ -266,7 +272,8 @@ describe('computeVoiceTracks — rest slot (Phase 06, ADR 0012)', () => {
         { isRest: true, bars: 1 },
         { rootPc: 9, qual: 'min' },
       ],
-      3
+      3,
+      'estricto'
     );
 
     // A minor chord is at events[1] in direct, events[2] in withRest
