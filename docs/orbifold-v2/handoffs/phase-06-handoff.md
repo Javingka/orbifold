@@ -608,5 +608,78 @@ None.
 9. All automated quality gates pass: `tsc 0`, `lint 0`, `test 329`, `build 0`.
 10. A-06-09 and A-06-10 (manual/live-system): implementation evidence provided above; Pilot manual verification pending.
 
-**Planner Review:** (pending)
-**Next action:** (pending Planner review)
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action:** Pilot phase-complete checkpoint
+
+---
+
+## Phase 06 — Completion Entry
+
+**Date:** 2026-06-11
+**Planner:** Planner subagent (review mode)
+
+### Phase Acceptance Coverage Summary
+
+| Acceptance ID | Description | Test type | Final status |
+|---|---|---|---|
+| A-06-01 | `melodyLine` single-rest exact string | unit | COVERED — step 06.3 |
+| A-06-02 | Mixed progression `arrange()` form with `[1, silence]` at rest | unit | COVERED — step 06.3 |
+| A-06-03 | Chord-only progression still emits slowcat (regression guard) | unit | COVERED — step 06.3 |
+| A-06-04 | `computeVoiceTracks` rest does not affect `prevPcs`; voice-0/1/2 after rest match direct transition | unit | COVERED — step 06.3 |
+| A-06-05 | Rest slot round-trips through serialize → JSON → parse → deserialize | unit | COVERED — step 06.4 |
+| A-06-06 | Version-1 chord-only session JSON parses against updated `SavedSessionSchema` | unit | COVERED — step 06.4 |
+| A-06-07 | Agent mixed payload validates; `applyHarmonySpec` produces `[Chord, RestSlot]` | unit | COVERED — step 06.4 |
+| A-06-08 | `SCHEMA_VERSION = 2` | unit + proxy:static-analysis | COVERED — step 06.4 |
+| A-06-09 | Rest slots render grey; chord rendering unchanged | manual | IMPL — Pilot manual verification required |
+| A-06-10 | `+ rest` button; silence in audio; `silence` in Strudel drawer | live-system | IMPL — Pilot live-system verification required |
+| A-06-11 | `tsc 0`, `lint 0`, `test 329 ≥ 325`, `build 0` | automated | PASS |
+
+### Phase-level invariant confirmations
+
+- `tsc --noEmit`: 0 errors (confirmed step 06.5)
+- `pnpm lint`: 0 errors (confirmed step 06.5)
+- `pnpm test`: 329 tests passing, 11 test files (confirmed step 06.5; minimum 325 required)
+- `pnpm build`: exits 0 (confirmed step 06.5)
+- AGPL-3.0 header: present and intact in all modified files (confirmed by SPDX-License-Identifier header at line 2 of `ProgressionStrip.svelte` and all core files)
+- No DOM/PIXI/Svelte imports in `src/core/`: 0 matches confirmed step 06.3 (grep confirms `strudel.ts` and `voice-tracks.ts` clean; no new core files added in steps 06.4–06.5)
+- Dependency versions: no new dependencies added in Phase 06; pinned versions unchanged
+- `PX_PER_CYCLE = 48` coordination rule: `ProgressionStrip.svelte` line 117 = 48; `time-map.ts` unchanged — vigent rule respected
+
+### Pending Register proposals
+
+None — no Register proposals surfaced in any step of Phase 06.
+
+### Notes for Phase 07
+
+Phase 07 (linear harmony view) will consume `VoiceEvent`, `VoiceRestEvent`, `VoiceTrack`, and `StaffPosition` from Phase 05/06 core engines. It must render rest events as gaps in the staff display. The `PX_PER_CYCLE = 48` coordination rule applies — the linear view's x-axis must use the same constant.
+
+---
+
+## Post-phase fix 1 — "+ silencio" button relocated inside `.segments`
+
+**Date:** 2026-06-11
+**Commit:** `0e4b4d1` — `fix(ui): Phase 06 — relocate silencio button inside .segments so it scrolls with the progression`
+
+**Issue (Pilot manual verification):** The `+ rest` button was placed after `.strip-scroll` in the `.strip` flex row. `.strip` has `overflow: hidden` and `.strip-scroll` consumes all space with `flex: 1`, so the button received zero width and was clipped whenever any chord slot was present.
+
+**Fix:** Moved the button inside the `.segments` div (last child, after the `{#each}` loop). It now scrolls with the progression and is always reachable. Renamed label from `+ rest` to `+ silencio`. Quality gates confirmed: tsc 0 / lint 0 / tests 329.
+
+---
+
+## Post-phase fix 2 — Drawer tabs raised to clear ProgressionStrip row
+
+**Date:** 2026-06-11
+**Commit:** `326e00d` — `fix(ui): raise drawer tab bottom from 90px to 140px to clear progression strip row`
+
+**Issue (Pilot manual verification):** `#codeTab` and `#compTab` were `position: fixed; bottom: 90px`. This value was calibrated in Phase 01 when the strip was inside the Transport slot. After Phase 03 moved the strip to its own row above the Transport, the effective footer height became Transport (~68px) + strip row (~60px) = ~128px. The tabs at 90px sat in the middle of the progression strip row, covering chord slots and the silencio button.
+
+**Fix:** Raised both tabs to `bottom: 140px` (`CodeDrawer.svelte` and `app.css`) so they float in the canvas area above the strip. Quality gates confirmed: tsc 0 / lint 0.
+
+---
+
+## Phase 06 — CLOSED
+
+**Date:** 2026-06-11
+**Pilot:** Javier
+
+A-06-09 and A-06-10 verified after post-phase fixes. All acceptance criteria met. Phase 06 complete.
