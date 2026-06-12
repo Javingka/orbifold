@@ -243,6 +243,96 @@ From phase-08-inventory.md §(b): `computeVoiceTracks` output is consumed only b
 
 ### 08.3 Planner Review
 
+**Decision:** APPROVED on 2026-06-12. Iteration: 1 of 5.
+**Reviewed on:** 2026-06-12
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass and both project-specific additions (prototype parity, visual-only invariant) are satisfied: the two modified tests in voice-tracks.test.ts assert the same C4/E4/A3 golden values as before (only the call was updated to add 'estricto' explicitly); the suavizado algorithm and tie-resolution logic are mathematically verified against D6; grep confirms 0 PIXI/Svelte/DOM imports in src/core/harmony/; 385 tests pass with tsc and lint clean.
+**Next action:** Dev proceeds to step 08.4
+
+---
+
+## Step 08.4 — Central staff layout + cyclic playhead (`harmony-staff-scene.ts`)
+
+**Date:** 2026-06-12
+**Iteration:** 1 of 5
+
+### 08.4 Completed
+
+Three changes applied to `src/render/harmony-staff-scene.ts`:
+
+**(a) Central staff geometry (ADR 0011 Amendment D5 binding constants):**
+- `STEP_PX` changed from `10` to `16`.
+- `HALF_STEP_PX` changed from `5` to `8` (recomputed as `STEP_PX / 2`).
+- `staffBaseY` changed from `app.screen.height - 60` to `app.screen.height / 2 - 6 * HALF_STEP_PX` (= `height / 2 - 48`). This centers step-6 (B4, middle staff line) at the canvas vertical midpoint per ADR 0011 D5.
+
+**(b) Cyclic playhead (ADR 0011 Amendment D6):**
+- Replaced `Math.min(Math.max(rawX, 0), _staffWidth)` clamp with `((rawX % _staffWidth) + _staffWidth) % _staffWidth`. The positive-modulo formula handles briefly-negative `rawX` (phase anchor in the future after a re-anchor event).
+- Added `if (_staffWidth <= 0) return;` guard before the modulo expression (replaces the old `if (_staffWidth === 0) return;`).
+
+**(c) `registerMode` wiring (step 08.5 TODO):**
+- Added `import type { RegisterMode }` from `voice-tracks.ts`.
+- Reads `state.harmony.registerMode` defensively via a double `as unknown` cast (HarmonyState does not yet carry the field; it will be added in step 08.5). Defaults to `'suavizado'` when the field is `undefined`. A clearly marked `// TODO(step-08.5):` comment explains the interim pattern.
+- `computeVoiceTracks` now receives the `registerMode ?? 'suavizado'` value.
+
+**AGPL-3.0 header:** present and intact (line 1).
+**`PX_PER_CYCLE` coordination rule:** `PX_PER_CYCLE` is still imported from `time-map.ts` (line 46) — not redeclared.
+**No new unit tests:** this step modifies PIXI render logic; prototype parity is a parity note (see below).
+
+### 08.4 Files touched
+
+- `src/render/harmony-staff-scene.ts` (modified — STEP_PX, HALF_STEP_PX, staffBaseY, modulo playhead, registerMode wiring)
+- `docs/orbifold-v2/handoffs/phase-08-handoff.md` (this file)
+
+### 08.4 Validation evidence
+
+**TypeScript:**
+`pnpm exec tsc --noEmit` → exit 0 (no errors). The `as unknown as Record<string, unknown>` double-cast is the standard TypeScript pattern for defensive access of a future field on a typed struct; no type violations.
+
+**Lint:**
+`pnpm lint` → 0 errors. Prettier reformatted one minor import-alignment difference.
+
+**Tests:**
+`pnpm exec vitest run` → 385 passed, 0 failed, 13 test files. Count unchanged from post-08.3 baseline (this step has no new unit tests; the existing 385 tests continue to pass).
+
+**Build:**
+`pnpm build` → exit 0. Pre-existing chunk-size warning on `index-BSjaotaw.js` (1,059 kB, gzip 334 kB) is unchanged from prior phases; not introduced by this step.
+
+**Coordinate verification (static analysis):**
+- `STEP_PX = 16` at line 60: matches ADR 0011 D5 table exactly.
+- `HALF_STEP_PX = STEP_PX / 2` at line 63: equals 8. Matches ADR 0011 D5 table.
+- `staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` at line 261: equals `height / 2 - 48`. Matches ADR 0011 D5 formula: `app.screen.height / 2 − (6 * HALF_STEP_PX) = height/2 − 48`.
+- Cyclic playhead at line 328: `((rawX % _staffWidth) + _staffWidth) % _staffWidth`. Matches ADR 0011 D6 formula exactly.
+- Guard at line 319: `if (_staffWidth <= 0) return;`. Satisfies the spec "if `_staffWidth <= 0`, return early without drawing the playhead".
+- `PX_PER_CYCLE` import at line 46: from `../core/harmony/time-map.js` (vigent coordination-point rule — not redeclared).
+
+**Prototype parity note (PIXI render module — visual equivalence):**
+This step does not port new logic from the prototype; it replaces Phase 07 delivery geometry and playhead behavior. The parity note is against Phase 07:
+- Phase 07 `staffBaseY = height − 60`: the staff was a bottom strip. Phase 08 `staffBaseY = height / 2 − 48`: the staff is now centered. Observed equivalence is a visual layout change (not a regression), confirmed by the new geometry formula matching ADR 0011 D5 exactly.
+- Phase 07 clamp playhead: the playhead froze at the staff's right edge at the end of a progression loop. Phase 08 modulo playhead: the playhead loops back to x=0 after `_staffWidth` pixels, matching the cyclic nature of the progression. This is the intended correction for A-07-11 / A-08-08.
+- Live visual verification of the centered staff and looping playhead is deferred to Pilot Checkpoint #4 (A-08-08, A-08-10) as the CLI environment cannot render PIXI.
+
+### 08.4 Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Source evidence | Test type | Gap status |
+|---|---|---|---|---|
+| A-08-07 | `tsc --noEmit` → 0, `pnpm lint` → 0, `pnpm test` count ≥ 361, `pnpm build` → 0 | All four gates green (tsc: 0 errors; lint: 0; test: 385 passed; build: exit 0) | automated | covered |
+| A-08-08 | Playhead loops back to left edge instead of freezing | `harmony-staff-scene.ts` line 328: `((rawX % _staffWidth) + _staffWidth) % _staffWidth`; guard at line 319 | proxy:static-analysis (live: deferred to Pilot) | proxy-covered — live verification deferred |
+| A-08-09 | `suavizado` produces smooth voice contours | `registerMode ?? 'suavizado'` passed to `computeVoiceTracks` at line 272; suavizado engine already covered by A-08-02 unit tests | proxy:static-analysis | proxy-covered — rendering effect requires live visual verification |
+| A-08-10 | Staff occupies full canvas, centered | `harmony-staff-scene.ts` lines 259–261: `_staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX` with `STEP_PX=16` | proxy:static-analysis (visual: deferred to Pilot) | proxy-covered — visual layout deferred |
+
+**Proxy disclosures:**
+- A-08-08 proxy: the formula at line 328 implements the exact positive-modulo expression from ADR 0011 D6; guard at line 319 satisfies the `_staffWidth <= 0` spec requirement. Live looping behavior requires a running PIXI canvas — deferred to Pilot checkpoint.
+- A-08-09 proxy: step 08.3 unit tests (A-08-02) already prove the suavizado smoothing engine produces notes within ±6 semitones; this step wires the mode into the scene call. The visual staff rendering of smooth contour lines requires a running PIXI canvas — deferred to Pilot checkpoint.
+- A-08-10 proxy: the geometry formula `height / 2 − 48` is identical to ADR 0011 D5 binding constant. Visual centering verification requires a running PIXI canvas — deferred to Pilot checkpoint.
+
+### 08.4 Terminal commit
+
+- **Terminal commit:** `feat(harmony): Phase 08 step 08.4 — central staff geometry and cyclic playhead`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+### 08.4 Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**

@@ -13,9 +13,11 @@
 // PIXI v7 only. No DOM/Svelte/core imports — only state, render, and PIXI.
 //
 // Staff geometry (vigent diatonic-coordinate rule, docs/orbifold-v2/decisions.md):
-//   staffBaseY = app.screen.height − 60  → C4 anchor
-//   STEP_PX = 10 → each diatonic step = STEP_PX/2 = 5 px vertically
-//   y(s) = staffBaseY − s × (STEP_PX / 2)
+//   Phase 08 (ADR 0011 Amendment D5): central full-canvas geometry.
+//   STEP_PX = 16 → each diatonic step = STEP_PX/2 = 8 px vertically
+//   staffBaseY = app.screen.height / 2 − (6 × HALF_STEP_PX)
+//             = height / 2 − 48   → centers step-6 (B4) at canvas midpoint
+//   y(s) = staffBaseY − s × HALF_STEP_PX
 //   Five staff lines: diatonic steps [2, 4, 6, 8, 10] (E4, G4, B4, D5, F5)
 //
 // Voice colors (Pilot decision, phase-07.md):
@@ -23,9 +25,13 @@
 //   voice 1 → COL.subdom (0x56cfc4)
 //   voice 2 → COL.dom    (0xe87bac)
 //
-// Playhead (phase-07.md step 07.3 spec):
-//   playheadX = clamp((now − getVisualPhaseAnchor()) / barMs × PX_PER_CYCLE, 0, totalWidth)
+// Playhead (Phase 08 ADR 0011 Amendment D6): cyclic modulo wrap.
+//   rawX = (now − getVisualPhaseAnchor()) / barMs × PX_PER_CYCLE
+//   playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth
+//   Guard: if _staffWidth <= 0, return early without drawing.
 //   where barMs = (60000 / bpm) × 4 (one 4/4 bar in ms)
+//   (Fixes Phase 07 A-07-11 / A-08-08: playhead loops continuously instead of
+//    clamping at the last note position.)
 //
 // PX_PER_CYCLE imported from time-map.ts (vigent coordination-point rule).
 
@@ -33,6 +39,7 @@ import * as PIXI from 'pixi.js';
 import { get } from 'svelte/store';
 
 import { computeVoiceTracks } from '../core/harmony/voice-tracks.js';
+import type { RegisterMode } from '../core/harmony/voice-tracks.js';
 import { computeStaffLayout } from '../core/harmony/staff-layout.js';
 import type { StaffLayout } from '../core/harmony/staff-layout.js';
 import { TREBLE_STAFF_LINES } from '../core/harmony/staff-map.js';
@@ -45,11 +52,15 @@ import { COL, FONT_SERIF } from './theme.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** Pixels per diatonic step pair (full staff space). */
-const STEP_PX = 10;
+/**
+ * Pixels per diatonic step pair (full staff space).
+ * Phase 08 value: 16 (ADR 0011 Amendment D5 — central full-canvas legibility).
+ * Supersedes Phase 07 value of 10.
+ */
+const STEP_PX = 16;
 
 /** Half-step in pixels: the y-increment per diatonic step unit. */
-const HALF_STEP_PX = STEP_PX / 2;
+const HALF_STEP_PX = STEP_PX / 2; // 8
 
 /** Note-head radius in pixels. */
 const NOTE_RADIUS = 4;
@@ -245,10 +256,25 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   _clefText.resolution = 2;
 
   // ── Compute staff geometry ─────────────────────────────────────────────────
-  _staffBaseY = app.screen.height - 60;
+  // Phase 08 (ADR 0011 Amendment D5): center step-6 (B4) at canvas vertical midpoint.
+  // staffBaseY = height / 2 − (6 × HALF_STEP_PX) = height / 2 − 48
+  // Supersedes Phase 07 value of (height − 60).
+  _staffBaseY = app.screen.height / 2 - 6 * HALF_STEP_PX;
 
   // ── Compute layout ────────────────────────────────────────────────────────
-  const tracks = computeVoiceTracks(state.harmony.progression, state.harmony.octave);
+  // TODO(step-08.5): wire state.harmony.registerMode once session.ts adds the field.
+  // Until then, default to 'suavizado' (ADR 0011 D6 Phase 08 UX goal default).
+  // Double cast via unknown is intentional: HarmonyState does not yet carry the
+  // registerMode field; it is added in step 08.5. The cast is safe because the field
+  // will either be undefined (missing) or a valid RegisterMode string.
+  const registerMode = (state.harmony as unknown as Record<string, unknown>).registerMode as
+    | RegisterMode
+    | undefined;
+  const tracks = computeVoiceTracks(
+    state.harmony.progression,
+    state.harmony.octave,
+    registerMode ?? 'suavizado'
+  );
   _layout = computeStaffLayout(tracks, PX_PER_CYCLE);
   _staffWidth = Math.max(_layout.totalWidth, MIN_STAFF_WIDTH);
 
@@ -277,7 +303,10 @@ export function buildHarmonyStaffScene(state: SessionState): void {
  * Called by App.svelte's store subscription on every state change,
  * and also called each tick via tickHarmonyStaff.
  *
- * Playhead x = clamp((now - anchor) / barMs * PX_PER_CYCLE, 0, totalWidth)
+ * Phase 08 (ADR 0011 Amendment D6): cyclic modulo wrap.
+ * rawX = (now - anchor) / barMs * PX_PER_CYCLE
+ * playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth
+ * Guard: if _staffWidth <= 0, return early without drawing.
  * where barMs = (60000 / bpm) * 4  (one 4/4 bar in ms).
  *
  * @param state - Current SessionState.
@@ -287,13 +316,20 @@ export function updateHarmonyStaffDynamic(state: SessionState): void {
 
   _dynGfx.clear();
 
-  if (_staffWidth === 0) return;
+  // Guard: if staff width is zero or negative, return without drawing.
+  // _staffWidth is always Math.max(_layout.totalWidth, MIN_STAFF_WIDTH) so it
+  // should be ≥ MIN_STAFF_WIDTH (200). This guard satisfies the spec requirement
+  // and prevents a division-by-zero / NaN in the modulo expression.
+  if (_staffWidth <= 0) return;
 
   const bpm = state.bpm > 0 ? state.bpm : 120;
   const barMs = (60000 / bpm) * 4;
   const now = performance.now();
   const rawX = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE;
-  const playheadX = Math.min(Math.max(rawX, 0), _staffWidth);
+  // Phase 08 (ADR 0011 Amendment D6): cyclic modulo wrap replaces the old clamp.
+  // Positive-modulo guard handles briefly-negative rawX (phase anchor in the future
+  // after a re-anchor event). ((rawX % w) + w) % w is always in [0, w).
+  const playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth;
 
   // Vertical span: from top staff line (step 10) to bottom of ledger zone (step −8).
   // Top: step 10 + 2 extra steps margin
