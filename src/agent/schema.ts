@@ -9,8 +9,12 @@ import { z } from 'zod';
 
 // ── Version ────────────────────────────────────────────────────────────────
 
-/** Schema version constant; bump if the shape changes in a future phase. */
-export const SCHEMA_VERSION = 1;
+/**
+ * Schema version constant; bump if the shape changes in a future phase.
+ * Phase 06: bumped from 1 to 2 — `HarmonyChordSchema` now accepts a discriminated
+ * rest union `{ isRest: true; bars? }` in addition to the chord object (ADR 0012 D4).
+ */
+export const SCHEMA_VERSION = 2;
 
 // ── Constants (prototype lines 1670–1673) ─────────────────────────────────
 
@@ -92,21 +96,41 @@ export const RhythmSpecSchema = z.object({
 // ── HarmonyChord ───────────────────────────────────────────────────────────
 
 /**
- * A single chord in the progression: root note name and quality.
- * `gain` is optional (defaults to 0.6 in apply.ts, prototype line 1714).
- * `bars` is optional — duration in Strudel cycles (0.25 = one beat, 0.5 = half bar,
- * 1 = one bar, 2 = two bars; multiples of 0.25; default 1). Introduced in Phase 02 —
- * ADR 0010. Phase 03: granularity changed from 0.5 to 0.25 (ADR 0010 amendment).
+ * A rest (silence) slot in the progression. `isRest: true` is the discriminant.
+ * `bars` follows the same semantics as chord `bars` (default 1, multiples of 0.25).
+ * Introduced in Phase 06 — ADR 0012.
+ *
+ * Rest schema is listed FIRST in `HarmonyChordSchema` union (ADR 0012 D4) so that an
+ * entry with `{ isRest: true, ... }` always parses as a rest regardless of other fields.
+ */
+const HarmonyRestSchema = z.object({
+  isRest: z.literal(true),
+  bars: z.number().min(0.25).max(8).optional(),
+});
+
+/**
+ * Core chord object schema (not exported). Used inside the `HarmonyChordSchema` union.
+ * Root note name and quality are required; gain and bars are optional.
  *
  * Prototype §7: `quality ∈ {maj,min,dim,aug}`.
  */
-export const HarmonyChordSchema = z.object({
+const HarmonyChordCoreSchema = z.object({
   root: z.string(),
   quality: z.enum(SK_QUAL),
   gain: z.number().min(0).max(1.2).optional(),
   /** Duration in Strudel cycles (0.25 = one beat, 0.5 = half bar, 1 = one bar, 2 = two bars; multiples of 0.25; default 1). */
   bars: z.number().min(0.25).max(8).optional(),
 });
+
+/**
+ * A single entry in the harmony progression: either a chord (root + quality) or a
+ * rest slot ({ isRest: true }). Rest schema is listed first (ADR 0012 D4).
+ *
+ * Phase 06 ADR 0012: `gain` is optional (defaults to 0.6 in apply.ts, prototype line 1714).
+ * `bars` is optional — duration in Strudel cycles. Introduced in Phase 02 (ADR 0010).
+ * Phase 03: granularity changed from 0.5 to 0.25 (ADR 0010 amendment).
+ */
+export const HarmonyChordSchema = z.union([HarmonyRestSchema, HarmonyChordCoreSchema]);
 
 // ── HarmonySpec ────────────────────────────────────────────────────────────
 

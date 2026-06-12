@@ -337,5 +337,122 @@ None.
 
 Step 06.4 implements persistence (`SavedRestSchema`, `SavedHarmonySchema` union update, `serializeSession`/`deserializeSession` rest narrowing), agent schemas (`HarmonyRestSchema`, `SCHEMA_VERSION` bump to 2, `HarmonyChordSchema` union), and `apply.ts` rest detection. The `persistence.ts` `flatMap` guard added in this step will be replaced by the full `SavedRestSchema` logic in step 06.4.
 
+**Planner Review:** APPROVED on 2026-06-11. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 06.4
+
+---
+
+## Step 06.4 — Persistence and agent schemas
+
+**Date:** 2026-06-11
+**Commit(s):**
+
+- `feat(harmony): Phase 06 step 06.4 — persistence and agent schemas for rest slots`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v2/decisions.md`, `docs/adr/0012-rest-data-model.md`, `docs/orbifold-v2/inventories/phase-06-inventory.md`, `src/lib/persistence.ts`, `src/agent/schema.ts`, `src/agent/apply.ts`, `src/state/session.ts`, `tests/persistence.test.ts`, `tests/schema.test.ts`.
+
+**`src/lib/persistence.ts` changes (ADR 0012 D4):**
+- Added `SavedRestSchema = z.object({ isRest: z.literal(true), bars: z.number().min(0.25).max(8).optional() })` after `SavedChordSchema`.
+- Changed `SavedHarmonySchema.progression` from `z.array(SavedChordSchema).max(16)` to `z.array(z.union([SavedRestSchema, SavedChordSchema])).max(16)` — rest schema listed first per ADR 0012 D4.
+- Updated `serializeSession` `progression.map`: replaced the `flatMap` guard (step 06.3 placeholder) with full rest narrowing — `'isRest' in slot` branch serializes `{ isRest: true, bars? }`.
+- Updated `deserializeSession` `progression.map`: same narrowing — `'isRest' in slot` branch returns `{ isRest: true, bars? }` or `{ isRest: true }`.
+- `SESSION_SCHEMA_VERSION` stays at `1` (ADR 0012 D4 — additive union, no migration needed).
+
+**`src/state/session.ts` changes:**
+- Updated `applyLoadedSession` `progression.map` to narrow on `'isRest' in slot`, returning `ProgressionSlot` for both rest and chord elements. Required because `SavedHarmonySchema.progression` is now typed as the union and TypeScript raised 3 errors on the old `.rootPc`, `.qual`, `.gain` direct accesses.
+
+**`src/agent/schema.ts` changes (ADR 0012 D4):**
+- Bumped `SCHEMA_VERSION` from `1` to `2`.
+- Added `HarmonyRestSchema = z.object({ isRest: z.literal(true), bars: z.number().min(0.25).max(8).optional() })` with JSDoc.
+- Renamed existing `HarmonyChordSchema` object to `HarmonyChordCoreSchema` (unexported).
+- Exported `HarmonyChordSchema = z.union([HarmonyRestSchema, HarmonyChordCoreSchema])` — rest schema listed first.
+- Updated `HarmonyChord` type alias to `z.infer<typeof HarmonyChordSchema>` (now a discriminated union type).
+
+**`src/agent/apply.ts` changes (ADR 0012 Consequence 6):**
+- Imported `RestSlot`, `ProgressionSlot` from `../state/session.js`.
+- Updated progression-building loop: `const newProg: ProgressionSlot[] = []`. Added `if ('isRest' in c && c.isRest === true)` branch before calling `noteToPc` — appends `RestSlot` directly, bypassing the silent-omission risk. Narrowed chord-slot property access via type assertions (required because `HarmonyChord` is now a union).
+
+**Tests added:**
+- `tests/schema.test.ts`: updated SCHEMA_VERSION test (was `1`, now `2`); added 8 new tests in `describe('HarmonyChordSchema — rest slot union')` and `describe('applyHarmonySpec — rest slot')` covering A-06-07, A-06-08, and rest union validation.
+- `tests/persistence.test.ts`: added 4 new tests in `describe('rest-slot persistence')` covering A-06-05, A-06-06, and rest-without-bars round-trip.
+
+### Files touched
+
+- `src/lib/persistence.ts` — modified (SavedRestSchema, union schema, serialize/deserialize rest narrowing)
+- `src/agent/schema.ts` — modified (SCHEMA_VERSION→2, HarmonyRestSchema, HarmonyChordSchema union)
+- `src/agent/apply.ts` — modified (RestSlot/ProgressionSlot imports, rest detection in applyHarmonySpec loop)
+- `src/state/session.ts` — modified (applyLoadedSession progression.map narrowed to ProgressionSlot union)
+- `tests/persistence.test.ts` — extended (4 new rest-slot persistence tests)
+- `tests/schema.test.ts` — extended (SCHEMA_VERSION updated + 8 new rest-slot schema/apply tests)
+- `docs/orbifold-v2/handoffs/phase-06-handoff.md` — this file (step 06.4 entry appended)
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Test / Check | Result |
+|---|---|---|
+| A-06-05 | Rest slot `{ isRest: true, bars: 2 }` round-trips serialize → JSON.stringify → JSON.parse → SavedSessionSchema.safeParse → deserialize | PASS |
+| A-06-06 | Version-1 chord-only session JSON parses against updated `SavedSessionSchema` | PASS |
+| A-06-07 | Agent payload `[C maj, rest bars:2]` validates via `AgentOutputSchema`; `applyHarmonySpec` produces `[Chord, RestSlot]` in store | PASS |
+| A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | PASS — static-analysis confirmed |
+
+### Routine validations
+
+```
+pnpm exec tsc --noEmit   → 0 errors
+pnpm lint                → 0 errors (eslint + prettier)
+pnpm exec vitest run tests/persistence.test.ts  → 31 tests pass
+pnpm exec vitest run tests/schema.test.ts       → 41 tests pass
+pnpm test                → 329 tests pass (11 test files)
+```
+
+Test count: 329 (was 317; +12 new tests, spec required ≥ 324).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-06-01 | `melodyLine([{ isRest: true, bars: 2 }], 'chord', 3)` returns `'arrange(\n  [2, silence]\n)'` | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-02 | Mixed progression `[C maj, rest 1 bar, F maj]` emits `arrange()` with `[1, silence]` at rest position | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-03 | Chord-only progression all `bars === 1` still emits slowcat `<…>` (regression guard) | `tests/codegen.test.ts` | unit | COVERED — step 06.3 |
+| A-06-04 | `computeVoiceTracks([C maj, rest 1 bar, A min], 3)` → `VoiceRestEvent` at slotIndex 1; A min uses perm `[1,2,0]` (same as direct C maj → A min) | `tests/harmony/voice-tracks.test.ts` | unit | COVERED — step 06.3 |
+| A-06-05 | Session with rest slot round-trips through serialize → JSON → parse → deserialize | `tests/persistence.test.ts` | unit | COVERED — step 06.4 |
+| A-06-06 | Version-1 session JSON (chord-only) parses against updated `SavedSessionSchema` | `tests/persistence.test.ts` | unit | COVERED — step 06.4 |
+| A-06-07 | Agent payload with mixed progression validates; `applyHarmonySpec` produces `[Chord, RestSlot]` in store | `tests/schema.test.ts` | unit | COVERED — step 06.4 |
+| A-06-08 | `SCHEMA_VERSION` exported from `schema.ts` equals `2` | `tests/schema.test.ts` | unit + proxy:static-analysis | COVERED — step 06.4 |
+| A-06-09 | Rest slots render as grey segments; chord slot rendering unchanged | `src/ui/ProgressionStrip.svelte` | manual | not covered — deferred to step 06.5 |
+| A-06-10 | "+ rest" button appends `RestSlot`; playing harmony with rest produces silence; Strudel drawer shows `silence` | `src/ui/ProgressionStrip.svelte` + store | live-system | not covered — deferred to step 06.5 |
+| A-06-11 | `tsc 0`, `lint 0`, `pnpm test ≥ 325`, `pnpm build 0` | all | automated | partial — tsc 0, lint 0, test 329; build and final count deferred to step 06.5 |
+
+### Decisions made (if any)
+
+One `session.ts` change was required beyond what step 06.4 listed: `applyLoadedSession` needed `progression.map` narrowing because `SavedHarmonySchema.progression` became a union type and TypeScript raised 3 errors on the old direct property accesses. This is a minimal mechanical fix (7 lines) — no behavioral change, no governance impact.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 329 tests passing (+12 from step 06.4).
+- `tsc --noEmit` 0 errors.
+- `pnpm lint` 0 errors.
+- `pnpm build` not run (deferred to step 06.5 quality gate).
+- `SavedRestSchema` added to `persistence.ts`; rest slots round-trip correctly.
+- Agent `SCHEMA_VERSION = 2`; `HarmonyChordSchema` union accepts rest entries.
+- `applyHarmonySpec` correctly creates `RestSlot` objects without silent omission.
+
+### Next-step context
+
+Step 06.5 implements ProgressionStrip rest rendering: import `appendRest`, template narrowing on `'isRest' in ch`, grey rest segment style, "Add Rest" button, and `handlePointerDown` guard. All quality gates (including `pnpm build`) are confirmed at step 06.5.
+
 **Planner Review:** pending
-**Next action:** Planner reviews step 06.3
+**Next action:** Planner reviews step 06.4

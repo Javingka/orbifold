@@ -375,3 +375,106 @@ describe('saveSession / listSavedSessions / loadSavedSession / deleteSession', (
     expect(localStorage.getItem(PERSISTENCE_KEY_PREFIX + 'my-session')).not.toBeNull();
   });
 });
+
+// ── Rest-slot persistence (Phase 06, ADR 0012) ────────────────────────────
+
+describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
+  // A-06-05: session with rest slot round-trips correctly.
+  it('rest slot with bars:2 round-trips through serialize → JSON → parse → deserialize', () => {
+    // Build a SessionState containing a rest slot at index 0.
+    const stateWithRest: SessionState = {
+      ...FULL_STATE,
+      harmony: {
+        ...FULL_STATE.harmony,
+        progression: [{ isRest: true as const, bars: 2 }],
+      },
+    };
+    const serialized = serializeSession(stateWithRest);
+    // Verify the rest slot is in the raw JSON.
+    expect(serialized.harmony.progression[0]).toEqual({ isRest: true, bars: 2 });
+    // Verify JSON round-trip through schema parse.
+    const raw = JSON.parse(JSON.stringify(serialized)) as unknown;
+    const parseResult = SavedSessionSchema.safeParse(raw);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+    // Verify deserialization preserves the rest slot.
+    const back = deserializeSession(parseResult.data);
+    expect(back.harmony.progression).toHaveLength(1);
+    expect(back.harmony.progression[0]).toEqual({ isRest: true, bars: 2 });
+  });
+
+  it('mixed progression [C major, rest bars:1, F major] round-trips correctly (A-06-05)', () => {
+    const stateWithMixed: SessionState = {
+      ...FULL_STATE,
+      harmony: {
+        ...FULL_STATE.harmony,
+        progression: [
+          { rootPc: 0, qual: 'maj', gain: 0.6 },
+          { isRest: true as const, bars: 1 },
+          { rootPc: 5, qual: 'maj', gain: 0.6 },
+        ],
+      },
+    };
+    const serialized = serializeSession(stateWithMixed);
+    expect(serialized.harmony.progression).toHaveLength(3);
+    expect(serialized.harmony.progression[1]).toEqual({ isRest: true, bars: 1 });
+
+    const back = deserializeSession(serialized);
+    expect(back.harmony.progression).toHaveLength(3);
+    expect(back.harmony.progression[0]).toEqual({ rootPc: 0, qual: 'maj', gain: 0.6 });
+    expect(back.harmony.progression[1]).toEqual({ isRest: true, bars: 1 });
+    expect(back.harmony.progression[2]).toEqual({ rootPc: 5, qual: 'maj', gain: 0.6 });
+  });
+
+  // A-06-06: backward compatibility — version-1 chord-only session still parses.
+  it('version-1 session with chord-only progression parses against updated SavedSessionSchema', () => {
+    // A chord-only session with no isRest fields must still parse correctly.
+    const v1Payload = {
+      version: 1,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: {
+        root: 0,
+        mode: 'major',
+        octave: 3,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6 }],
+      },
+      rhythm: { layers: [] },
+      composition: { blocks: [], tracks: [] },
+    };
+    const result = SavedSessionSchema.safeParse(v1Payload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Chord slot must parse correctly as a chord (not a rest).
+      expect(result.data.harmony.progression[0]).toMatchObject({
+        rootPc: 0,
+        qual: 'maj',
+        gain: 0.6,
+      });
+      expect(result.data.harmony.progression[0]).not.toHaveProperty('isRest');
+    }
+  });
+
+  it('{ isRest: true } with no bars field parses and serializes correctly', () => {
+    // A rest slot with no bars (defaulting to 1 cycle) is valid.
+    const stateWithRestNoBars: SessionState = {
+      ...FULL_STATE,
+      harmony: {
+        ...FULL_STATE.harmony,
+        progression: [{ isRest: true as const }],
+      },
+    };
+    const serialized = serializeSession(stateWithRestNoBars);
+    // When bars is undefined, only { isRest: true } is serialized (no bars key).
+    expect(serialized.harmony.progression[0]).toEqual({ isRest: true });
+    // Schema accepts { isRest: true } with no bars field.
+    const parseResult = SavedSessionSchema.safeParse(
+      JSON.parse(JSON.stringify(serialized)) as unknown
+    );
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+    const back = deserializeSession(parseResult.data);
+    expect(back.harmony.progression[0]).toEqual({ isRest: true });
+  });
+});

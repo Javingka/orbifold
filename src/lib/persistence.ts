@@ -33,11 +33,24 @@ const SavedChordSchema = z.object({
   bars: z.number().min(0.25).max(8).optional(),
 });
 
+/**
+ * A serialised rest slot. `isRest: true` is the required discriminant.
+ * Rest schema is listed FIRST in the union (ADR 0012 D4) so that an entry
+ * containing `isRest: true` always parses as a rest regardless of other fields.
+ */
+const SavedRestSchema = z.object({
+  isRest: z.literal(true),
+  bars: z.number().min(0.25).max(8).optional(),
+});
+
 const SavedHarmonySchema = z.object({
   root: z.number().int().min(0).max(11),
   mode: z.enum(SK_MODES),
   octave: z.number().int().min(2).max(5),
-  progression: z.array(SavedChordSchema).max(16),
+  // ADR 0012 D4: rest schema first so { isRest: true, ... } always parses as rest.
+  // Old sessions (chord-only, no isRest field) still parse: elements fail SavedRestSchema
+  // (missing isRest: literal(true)) and succeed on SavedChordSchema as before.
+  progression: z.array(z.union([SavedRestSchema, SavedChordSchema])).max(16),
 });
 
 const SavedRhythmLayerSchema = z.object({
@@ -103,19 +116,22 @@ export function serializeSession(state: SessionState): SavedSession {
       root: state.harmony.root,
       mode: state.harmony.mode as SavedSession['harmony']['mode'],
       octave: state.harmony.octave,
-      progression: state.harmony.progression.flatMap((ch) => {
-        // Phase 06: rest slots are not yet serialized (step 06.4 will add SavedRestSchema).
-        // Skip rest slots for now so the schema round-trips chord-only sessions correctly.
-        if ('isRest' in ch) return [];
-        return [
-          {
-            rootPc: ch.rootPc,
-            qual: ch.qual,
-            gain: ch.gain,
-            // cx/cy excluded — Decisions Register: render hints ephemeral
-            ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
-          },
-        ];
+      progression: state.harmony.progression.map((slot) => {
+        // ADR 0012 D4: narrow on isRest discriminant.
+        if ('isRest' in slot) {
+          // Rest slot — serialize only the discriminant and optional bars.
+          // cx/cy do not exist on RestSlot; only bars is carried.
+          return slot.bars !== undefined
+            ? { isRest: true as const, bars: slot.bars }
+            : { isRest: true as const };
+        }
+        // Chord slot — cx/cy excluded (Decisions Register: render hints ephemeral).
+        return {
+          rootPc: slot.rootPc,
+          qual: slot.qual,
+          gain: slot.gain,
+          ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+        };
       }),
     },
     rhythm: {
@@ -171,12 +187,20 @@ export function deserializeSession(saved: SavedSession): Omit<SessionState, 'now
       root: saved.harmony.root,
       mode: saved.harmony.mode,
       octave: saved.harmony.octave,
-      progression: saved.harmony.progression.map((ch) => ({
-        rootPc: ch.rootPc,
-        qual: ch.qual,
-        gain: ch.gain,
-        ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
-      })),
+      // ADR 0012 D4: narrow on isRest discriminant in deserialized union.
+      progression: saved.harmony.progression.map((slot) => {
+        if ('isRest' in slot) {
+          return slot.bars !== undefined
+            ? { isRest: true as const, bars: slot.bars }
+            : { isRest: true as const };
+        }
+        return {
+          rootPc: slot.rootPc,
+          qual: slot.qual,
+          gain: slot.gain,
+          ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+        };
+      }),
     },
     rhythm: {
       layers: saved.rhythm.layers.map((l) => {

@@ -11,6 +11,7 @@ import {
   AgentOutputSchema,
   RhythmSpecSchema,
   HarmonySpecSchema,
+  HarmonyChordSchema,
   SCHEMA_VERSION,
 } from '../src/agent/schema';
 import { applyRhythmSpec, applyHarmonySpec } from '../src/agent/apply';
@@ -26,8 +27,9 @@ beforeEach(() => {
 // ── SCHEMA_VERSION ─────────────────────────────────────────────────────────
 
 describe('SCHEMA_VERSION', () => {
-  it('is numeric 1', () => {
-    expect(SCHEMA_VERSION).toBe(1);
+  // A-06-08: SCHEMA_VERSION must equal 2 after Phase 06 rest-union change (ADR 0012 D4).
+  it('is numeric 2 (bumped in Phase 06 — ADR 0012 D4)', () => {
+    expect(SCHEMA_VERSION).toBe(2);
   });
 });
 
@@ -378,5 +380,95 @@ describe('applyHarmonySpec', () => {
     const state = get(sessionStore);
     expect(state.harmony.progression).toHaveLength(1);
     expect(state.harmony.progression[0].rootPc).toBe(7); // G = pc 7
+  });
+});
+
+// ── HarmonyChordSchema — rest slot union (Phase 06, ADR 0012) ──────────────
+
+describe('HarmonyChordSchema — rest slot union (Phase 06, ADR 0012)', () => {
+  // A-06-08 proxy: verify SCHEMA_VERSION = 2 via HarmonyChordSchema accepting rests.
+  it('{ isRest: true } succeeds (rest with no bars)', () => {
+    // A-06-08: SCHEMA_VERSION = 2; rest variant accepted by union.
+    const result = HarmonyChordSchema.safeParse({ isRest: true });
+    expect(result.success).toBe(true);
+  });
+
+  it('{ isRest: true, bars: 2 } succeeds', () => {
+    const result = HarmonyChordSchema.safeParse({ isRest: true, bars: 2 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({ isRest: true, bars: 2 });
+    }
+  });
+
+  it('{ isRest: true, bars: 0.1 } fails (bars below minimum 0.25)', () => {
+    const result = HarmonyChordSchema.safeParse({ isRest: true, bars: 0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('{ root: "C", quality: "maj" } still succeeds (existing chord variant unaffected)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj' });
+    expect(result.success).toBe(true);
+  });
+
+  it('mixed progression with rest validates via AgentOutputSchema (A-06-07)', () => {
+    // A-06-07: agent payload with mixed progression validates.
+    const result = AgentOutputSchema.safeParse({
+      harmony: {
+        progression: [
+          { root: 'C', quality: 'maj' },
+          { isRest: true, bars: 2 },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+// ── applyHarmonySpec — rest slot (Phase 06, ADR 0012) ─────────────────────
+
+describe('applyHarmonySpec — rest slot (Phase 06, ADR 0012)', () => {
+  // A-06-07: applyHarmonySpec produces [Chord, RestSlot] from a mixed progression.
+  it('mixed progression [C maj, rest bars:2] produces [Chord, RestSlot] in store', () => {
+    applyHarmonySpec({
+      progression: [
+        { root: 'C', quality: 'maj' },
+        { isRest: true, bars: 2 },
+      ],
+    });
+    const state = get(sessionStore);
+    expect(state.harmony.progression).toHaveLength(2);
+    // slot 0: Chord
+    const slot0 = state.harmony.progression[0];
+    expect('isRest' in slot0).toBe(false);
+    expect(slot0.rootPc).toBe(0); // C = pc 0
+    expect(slot0.qual).toBe('maj');
+    expect(slot0.gain).toBe(0.6);
+    // slot 1: RestSlot
+    const slot1 = state.harmony.progression[1];
+    expect('isRest' in slot1 && slot1.isRest).toBe(true);
+    expect(slot1.bars).toBe(2);
+  });
+
+  it('rest slot without bars gets default bars undefined in store', () => {
+    applyHarmonySpec({
+      progression: [{ isRest: true }],
+    });
+    const state = get(sessionStore);
+    expect(state.harmony.progression).toHaveLength(1);
+    const slot = state.harmony.progression[0];
+    expect('isRest' in slot && slot.isRest).toBe(true);
+    expect(slot.bars).toBeUndefined();
+  });
+
+  it('rest slot bars is clamped via clampBars (rounds to 0.25 multiples)', () => {
+    applyHarmonySpec({
+      progression: [{ isRest: true, bars: 1.1 }],
+    });
+    const state = get(sessionStore);
+    const slot = state.harmony.progression[0];
+    expect('isRest' in slot && slot.isRest).toBe(true);
+    // clampBars(1.1) = Math.round(1.1 * 4) / 4 = Math.round(4.4) / 4 = 4/4 = 1
+    expect(slot.bars).toBe(1);
   });
 });

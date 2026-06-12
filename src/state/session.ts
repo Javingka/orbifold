@@ -1196,12 +1196,20 @@ export function applyLoadedSession(saved: SavedSession): void {
       root: saved.harmony.root,
       mode: saved.harmony.mode,
       octave: saved.harmony.octave,
-      progression: saved.harmony.progression.map((ch) => ({
-        rootPc: ch.rootPc,
-        qual: ch.qual,
-        gain: ch.gain,
-        ...(ch.bars !== undefined ? { bars: ch.bars } : {}),
-      })),
+      // ADR 0012 D4: SavedHarmonySchema.progression is now a union; narrow on isRest.
+      progression: saved.harmony.progression.map((slot): ProgressionSlot => {
+        if ('isRest' in slot) {
+          return slot.bars !== undefined
+            ? { isRest: true as const, bars: slot.bars }
+            : { isRest: true as const };
+        }
+        return {
+          rootPc: slot.rootPc,
+          qual: slot.qual,
+          gain: slot.gain,
+          ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+        };
+      }),
     },
     rhythm: {
       layers: saved.rhythm.layers.map((l) => {

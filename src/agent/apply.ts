@@ -18,7 +18,7 @@ import { noteToPc } from '../core/theory/pitch.js';
 import { QUAL_INTERVALS } from '../core/theory/chords.js';
 import type { Quality } from '../core/theory/chords.js';
 import type { RhythmLayer, Sound } from '../core/rhythm/layers.js';
-import type { Chord } from '../state/session.js';
+import type { Chord, RestSlot, ProgressionSlot } from '../state/session.js';
 import { sessionStore, clampBars } from '../state/session.js';
 import type { RhythmSpec, HarmonySpec } from './schema.js';
 
@@ -139,26 +139,41 @@ export function applyHarmonySpec(spec: HarmonySpec): void {
 
     // Rebuild progression (prototype lines 1707–1720)
     if (Array.isArray(spec.progression)) {
-      const newProg: Chord[] = [];
+      const newProg: ProgressionSlot[] = [];
       for (const c of spec.progression) {
-        const rootPc = noteToPc(c.root);
+        // ADR 0012 Consequence 6: detect rest slot before calling noteToPc.
+        // Without this guard, a rest entry { isRest: true } lacking 'root' would
+        // have noteToPc(undefined) return null, silently dropping the rest.
+        if ('isRest' in c && c.isRest === true) {
+          const restSlot: RestSlot = { isRest: true };
+          if (c.bars !== undefined) restSlot.bars = clampBars(c.bars);
+          newProg.push(restSlot);
+          continue;
+        }
+
+        // Chord slot: narrow to the chord variant (isRest absent).
+        // c.root and c.quality are guaranteed by HarmonyChordCoreSchema validation.
+        const rootPc = noteToPc((c as { root: string }).root);
         if (rootPc == null) continue;
 
         // Quality: schema already validates {maj,min,dim,aug}.
         // Cast is safe; Zod guarantees the value is a valid Quality.
         // Prototype line 1711 handles 'major'→'maj','minor'→'min' aliases at the
         // raw-parse layer; those aliases are excluded by our schema, so no cast needed.
-        const qual: Quality = SK_QUAL.includes(c.quality) ? (c.quality as Quality) : 'maj';
+        const cQuality = (c as { quality: string }).quality;
+        const qual: Quality = SK_QUAL.includes(cQuality) ? (cQuality as Quality) : 'maj';
 
         // Compute pitch classes from QUAL_INTERVALS (prototype line 1712)
         const _pcs = QUAL_INTERVALS[qual].map((iv) => (rootPc + iv) % 12);
 
         // Build Chord — no cx/cy (Register: render hints ephemeral)
+        const cBars = (c as { bars?: number }).bars;
         const chord: Chord = {
           rootPc,
           qual,
-          gain: typeof c.gain === 'number' ? c.gain : 0.6, // prototype line 1714
-          ...(c.bars !== undefined ? { bars: clampBars(c.bars) } : {}),
+          gain:
+            typeof (c as { gain?: number }).gain === 'number' ? (c as { gain: number }).gain : 0.6, // prototype line 1714
+          ...(cBars !== undefined ? { bars: clampBars(cBars) } : {}),
         };
 
         // Suppress unused variable warning — pcs is computed for prototype fidelity
