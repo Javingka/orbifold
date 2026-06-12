@@ -464,6 +464,122 @@ With `subview === 'tonnetz'` (the default on load): `_staffContainer.visible = f
 
 ### 08.5 Planner Review
 
+**Decision:** APPROVED on 2026-06-12. Iteration: 1 of 5.
+**Reviewed on:** 2026-06-12
+**Iteration:** 1 of 5
+**Reason:** (Pre-approved per invocation context — steps 08.1–08.5 confirmed approved before 08.6 was invoked.)
+**Next action:** Dev proceeds to step 08.6
+
+---
+
+## Step 08.6 — Relocate acorde/arpegio to top bar + ProgressionStrip cursor
+
+**Date:** 2026-06-12
+**Iteration:** 1 of 5
+
+### 08.6 Completed
+
+**Part A — Relocate acorde/arpegio and marco to Header.svelte:**
+
+- Added `setChordMode` import from `session.ts` and `agentCtx` import from `agentCtx.ts` to `Header.svelte`.
+- Inside `{#if $sessionStore.view === 'harmony'}`, added two new controls after the `#registerModeSeg` div (step 08.5) and before the `.field.clave`:
+  1. `<div class="seg" id="chordModeSeg">` — two buttons "◧ acorde" / "⋯ arpegio". Active state driven by `$sessionStore.chordMode`. On click: `setChordMode('chord' | 'arp')`. Includes `data-tip` attributes for tooltip accessibility. Button labels and click semantics are identical to the prototype (HTML lines 449–452).
+  2. `<button class="marco-btn">` — the 📨 marco context button. Active state driven by `$agentCtx.includeHarmony`. On click: `agentCtx.update((c) => ({ ...c, includeHarmony: true }))`. Behavior preserved from the prototype (button#harmonyToCtx, line 510).
+- Added `.marco-btn` CSS class (matching the `.tbtn` style from HarmonyControls.svelte: 11px bold font, 6px 12px padding, border-radius 10px, accent active state).
+- AGPL-3.0 header present in `Header.svelte` (was already present from step 08.5).
+
+**Part B — HarmonyControls.svelte emptied:**
+
+Decision: **Keep as empty shell** (not deleted). `App.svelte` line 373 has `<HarmonyControls />` which would require editing App.svelte to remove — an additional file touch with higher risk for no functional benefit. The empty shell compiles to no output. The comment block documents the relocation clearly.
+
+- Removed the entire `.orbit-ctl.glass#harmonyCtl` div and all its contents (`.seg2#chordModeSeg`, `.tbtn.marco`).
+- Removed all CSS (`.orbit-ctl`, `.tbtn`, `.tbtn:hover`, `.tbtn.active`, and the `<style>` block).
+- Retained only the AGPL-3.0 header comment with a relocation note.
+
+**Part C — ProgressionStrip.svelte playhead cursor:**
+
+- Added `import { onDestroy } from 'svelte'`.
+- Added `import { getVisualPhaseAnchor } from '../state/phase-anchor.js'`.
+- Added cursor state variables: `cursorX: number = 0`, `cursorVisible: boolean = false`, `_cursorRaf: number | null = null`.
+- Added `startCursorLoop()`: launches a rAF loop that computes `rawX = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE`, then `cursorX = ((rawX % totalWidth) + totalWidth) % totalWidth`. The loop self-cancels when `progression.length === 0`. `bpm` is read from `$sessionStore.bpm` (guarded `> 0` defaulting to 120). `totalWidth = totalBars * PX_PER_CYCLE` where `totalBars` is the existing reactive `$:` computed value.
+- Added `stopCursorLoop()`: cancels the rAF and sets `cursorVisible = false`.
+- Added Svelte `$:` reactive block: starts the cursor loop when `progression.length > 0`, stops it when empty.
+- Added `onDestroy(() => stopCursorLoop())` for cleanup.
+- Added `{#if cursorVisible}` cursor div in the template inside `.strip-scroll`, before `.segments`: `<div class="playhead-cursor" style="left: {cursorX}px;" aria-hidden="true">`.
+- Added `.playhead-cursor` CSS: `position: absolute; top: 14px; bottom: 0; width: 1px; background: rgba(255,255,255,0.8); pointer-events: none; z-index: 2`.
+- Added `position: relative` to `.strip-scroll` (existing block, appended in CSS to establish positioning context for the absolutely-positioned cursor).
+- `PX_PER_CYCLE` used is the local `const PX_PER_CYCLE = 48` already declared at line 119 — NOT imported from `time-map.ts` (vigent coordination-point rule: this is a Svelte component, not a pure engine).
+- All existing ProgressionStrip behavior (gain drag, resize, tap-to-preview, rest slots, add-rest button) is preserved — the cursor div has `pointer-events: none`.
+
+### 08.6 Files touched
+
+- `src/ui/Header.svelte` (modified — `setChordMode` + `agentCtx` imports; `#chordModeSeg` seg; `.marco-btn` button and CSS)
+- `src/ui/HarmonyControls.svelte` (modified — emptied to shell: all controls and CSS removed; AGPL-3.0 comment retained)
+- `src/ui/ProgressionStrip.svelte` (modified — `onDestroy` + `getVisualPhaseAnchor` imports; cursor state; `startCursorLoop`/`stopCursorLoop` functions; `$:` reactive trigger; `onDestroy` cleanup; cursor div in template; `.playhead-cursor` + `.strip-scroll { position: relative }` CSS)
+- `docs/orbifold-v2/handoffs/phase-08-handoff.md` (this file)
+
+### 08.6 Validation evidence
+
+**TypeScript:** `pnpm exec tsc --noEmit` → exit 0 (0 errors). All new store imports, agentCtx binding, and DOM type expressions resolve cleanly.
+
+**Lint:** `pnpm lint` → 0 errors. ESLint and Prettier both clean (Prettier reformatted ProgressionStrip.svelte after the cursor addition).
+
+**Tests:** `pnpm exec vitest run` → 385 passed, 0 failed, 13 test files. Count unchanged from step 08.5 baseline (this step has no new unit tests; all existing tests continue to pass).
+
+**Build:** `pnpm build` → exit 0. Pre-existing chunk-size advisory on `index-*.js` (≈1,063 kB, gzip ≈335 kB) and stage.ts dynamic-import advisory unchanged.
+
+**Static analysis (per spec 08.6 and 08.7 requirements):**
+
+| Check | Result |
+| --- | --- |
+| `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` | 0 matches |
+| `grep -n "PX_PER_CYCLE" src/ui/ProgressionStrip.svelte` | local `const PX_PER_CYCLE = 48` at line 119; NOT an import from time-map.ts |
+| `grep -n "PX_PER_CYCLE" src/render/harmony-staff-scene.ts` | imported from `../core/harmony/time-map.js` at line 45; not redeclared |
+| `grep -n "subview\|registerMode" src/lib/persistence.ts` | only in `deserializeSession` defaults (not in SavedHarmonySchema Zod schema) |
+| `grep -n "subview\|registerMode" src/agent/schema.ts` | 0 matches |
+| AGPL-3.0 header in modified files | present in `Header.svelte`, `HarmonyControls.svelte`, `ProgressionStrip.svelte` |
+
+**HarmonyControls.svelte emptied — canvas free:**
+The `.orbit-ctl` absolute-positioned overlay div has been removed. No harmony controls overlap the canvas in harmony view. The component renders as an empty Svelte template (comment-only), producing no DOM output.
+
+**Prototype parity note:**
+- `setChordMode('chord' | 'arp')`: prototype behavior at lines 449–452 (`.seg2#chordModeSeg` buttons), action is unchanged (`setChordMode` in `session.ts`). Labels "◧ acorde" / "⋯ arpegio" are preserved exactly.
+- `agentCtx.update(c => ({...c, includeHarmony: true}))`: prototype behavior from `button#harmonyToCtx` (line 510), action is unchanged (`agentCtx` store update). Label "📨 marco" preserved.
+- No behavioral changes — controls are relocated, not redesigned.
+
+**Live/visual verification:** deferred to Pilot (CLI cannot render PIXI or open a browser):
+- A-08-12: ProgressionStrip cursor visually advances and loops — requires live browser.
+- A-08-13: top bar shows acorde/arpegio/marco in harmony view; canvas has no overlay — requires live browser.
+
+### 08.6 Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Source evidence | Test type | Gap status |
+| --- | --- | --- | --- | --- |
+| A-08-06 | No PIXI/Svelte/DOM imports in `src/core/harmony/` | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/` → 0 matches | proxy:static-analysis | covered |
+| A-08-07 | `tsc --noEmit` → 0, `pnpm lint` → 0, `pnpm test` count ≥ 361, `pnpm build` → 0 | All four gates green (tsc: 0 errors; lint: 0; test: 385 passed; build: exit 0) | automated | covered |
+| A-08-12 | ProgressionStrip cursor advances in sync with staff playhead, loops with progression, visible in both subviews | `ProgressionStrip.svelte`: `startCursorLoop()` rAF loop with positive-modulo formula; `onDestroy` cleanup; cursor div with `pointer-events:none` | proxy:static-analysis (live: deferred to Pilot) | proxy-covered |
+| A-08-13 | acorde/arpegio seg and marco button in top bar; no canvas overlap | `Header.svelte`: `#chordModeSeg` + `.marco-btn` inside `{#if view === 'harmony'}`; `HarmonyControls.svelte`: empty shell (no DOM output) | proxy:static-analysis (live: deferred to Pilot) | proxy-covered |
+
+**Proxy disclosures:**
+
+- A-08-12 proxy: `startCursorLoop()` uses the same positive-modulo formula as the staff playhead (`((rawX % totalWidth) + totalWidth) % totalWidth`); both consume `getVisualPhaseAnchor()` and `bpm` from the session store; cursor div is `aria-hidden="true"` and `pointer-events:none`; `onDestroy` cancels the rAF. Live synchronization requires a running browser — deferred to Pilot.
+
+- A-08-13 proxy: `HarmonyControls.svelte` is now an empty comment-only file; Svelte compiles it to no DOM elements. `Header.svelte` now has `#chordModeSeg` and `.marco-btn` inside the `{#if $sessionStore.view === 'harmony'}` guard. The canvas is free of harmony control overlays. Visual confirmation requires a running browser — deferred to Pilot.
+
+### 08.6 Prototype parity
+
+- `setChordMode('chord' | 'arp')`: originally `.seg2#chordModeSeg` in prototype HTML lines 449–452. Relocated to Header.svelte; action function (`setChordMode` in `session.ts`) and button labels ("◧ acorde", "⋯ arpegio") are identical.
+- `agentCtx.update((c) => ({ ...c, includeHarmony: true }))`: originally `button#harmonyToCtx` in prototype line 510; button already moved to `HarmonyControls.svelte` in Phase 06. Now relocated again to `Header.svelte`; behavior unchanged.
+- No audio behavior modified.
+
+### 08.6 Terminal commit
+
+- **Terminal commit:** `feat(harmony): Phase 08 step 08.6 — relocate acorde/arpegio to header, ProgressionStrip cursor`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+### 08.6 Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**

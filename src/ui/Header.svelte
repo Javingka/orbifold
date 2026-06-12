@@ -19,7 +19,9 @@
     setHarmonyKey,
     setHarmonySubview,
     setRegisterMode,
+    setChordMode,
   } from '../state/session.js';
+  import { agentCtx } from '../state/agentCtx.js';
 
   // Note names for the root pitch-class select.
   // Prototype: NOTE_NAMES (line 592): ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
@@ -146,6 +148,47 @@
       </button>
     </div>
 
+    <!--
+      Phase 08 (step 08.6): Chord-mode segmented control relocated from HarmonyControls.svelte.
+      Prototype: .seg2#chordModeSeg (HTML lines 449–452); moved here per ADR 0011 Amendment §D6.
+      Two buttons: ◧ acorde (block) / ⋯ arpegio (arpeggio).
+      Active state driven by $sessionStore.chordMode.
+      On click: calls setChordMode() from session.ts which also calls requeueLive().
+    -->
+    <div class="seg" id="chordModeSeg">
+      <button
+        class={$sessionStore.chordMode === 'chord' ? 'active' : ''}
+        data-mode="chord"
+        data-tip="Toca el acorde como bloque (todas las notas a la vez)."
+        on:click={() => setChordMode('chord')}
+      >
+        ◧ acorde
+      </button>
+      <button
+        class={$sessionStore.chordMode === 'arp' ? 'active' : ''}
+        data-mode="arp"
+        data-tip="Arpegia el acorde (notas en sucesión, duración por subdivisión)."
+        on:click={() => setChordMode('arp')}
+      >
+        ⋯ arpegio
+      </button>
+    </div>
+
+    <!--
+      Phase 08 (step 08.6): Marco context button relocated from HarmonyControls.svelte.
+      Prototype: button#harmonyToCtx in footer (line 510); moved to top bar per ADR 0011 Amendment §D6.
+      Active state when $agentCtx.includeHarmony is true.
+      On click: sets agentCtx.includeHarmony = true so the next agent send includes the harmony context.
+    -->
+    <button
+      class="marco-btn"
+      class:active={$agentCtx.includeHarmony}
+      title="Enviar la clave + progresión al agente como marco armónico"
+      on:click={() => agentCtx.update((c) => ({ ...c, includeHarmony: true }))}
+    >
+      📨 marco
+    </button>
+
     <div class="field">
       <span>clave</span>
 
@@ -241,6 +284,35 @@
   /* Spacer: pushes right side. Prototype line 77. */
   .sp {
     flex: 1;
+  }
+
+  /*
+   * Marco context button — sits in the top bar alongside the seg controls.
+   * Phase 08 (step 08.6): relocated from HarmonyControls.svelte .tbtn.
+   * Matches the existing .tbtn style from Transport.svelte for visual consistency.
+   */
+  .marco-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 10px;
+    color: var(--muted);
+    border: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .marco-btn:hover {
+    color: var(--text);
+    border-color: var(--stroke-2);
+  }
+
+  /* Active state: accent color when context flag is set. */
+  .marco-btn.active {
+    color: var(--accent);
+    border-color: rgba(138, 160, 255, 0.4);
+    background: rgba(138, 160, 255, 0.12);
   }
 
   .tutorial-link {

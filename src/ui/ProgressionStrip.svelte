@@ -95,6 +95,7 @@
   Rest slots force arrange() path per ADR 0012 D2.
 -->
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import {
     sessionStore,
     clearChordAt,
@@ -104,6 +105,7 @@
     barsLabel,
     appendRest,
   } from '../state/session.js';
+  import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
   import { chordLabel } from '../core/theory/chords.js';
   import { diatonicLookup } from '../core/theory/scales.js';
   import type { Mode } from '../core/theory/scales.js';
@@ -115,6 +117,76 @@
    * Pilot-confirmed value: OD-03-01 (PX_PER_CYCLE = 48).
    */
   const PX_PER_CYCLE = 48;
+
+  // ── Phase 08 step 08.6: playhead cursor ──────────────────────────────────
+  // A thin vertical cursor line tracking the playhead position.
+  // Spec: cursor x = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE,
+  //   modulo-wrapped so it loops with the progression (((rawX % w) + w) % w).
+  // barMs = (60000 / bpm) * 4 (one 4/4 bar in ms).
+  // PX_PER_CYCLE uses the local const (not imported from time-map.ts — vigent
+  // coordination-point rule: this Svelte file is not a pure engine consumer).
+  // Lifecycle: rAF loop started/stopped in onMount/onDestroy respectively.
+  //
+  // Note: ProgressionStrip has no onMount — it uses reactive Svelte statements.
+  // The cursor rAF is managed with a module-level raf handle and a cleanup function
+  // registered in onDestroy (the same pattern used in the harmony staff ticker).
+
+  /** Cursor x position in pixels (used in the template to style the cursor div). */
+  let cursorX: number = 0;
+  /** Whether the cursor should be visible (requires a non-empty progression). */
+  let cursorVisible: boolean = false;
+
+  /** Active requestAnimationFrame handle for the cursor loop. */
+  let _cursorRaf: number | null = null;
+
+  /** Start the cursor rAF loop. Called when the progression becomes non-empty. */
+  function startCursorLoop(): void {
+    if (_cursorRaf !== null) return; // already running
+    function tick(): void {
+      const state = $sessionStore;
+      const prog = state.harmony.progression;
+      if (prog.length === 0) {
+        cursorVisible = false;
+        _cursorRaf = null;
+        return;
+      }
+      const totalWidth = totalBars * PX_PER_CYCLE;
+      if (totalWidth <= 0) {
+        _cursorRaf = requestAnimationFrame(tick);
+        return;
+      }
+      const bpm = state.bpm > 0 ? state.bpm : 120;
+      const barMs = (60000 / bpm) * 4;
+      const now = performance.now();
+      const rawX = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE;
+      cursorX = ((rawX % totalWidth) + totalWidth) % totalWidth;
+      cursorVisible = true;
+      _cursorRaf = requestAnimationFrame(tick);
+    }
+    _cursorRaf = requestAnimationFrame(tick);
+  }
+
+  /** Stop the cursor rAF loop. Called from onDestroy and when progression empties. */
+  function stopCursorLoop(): void {
+    if (_cursorRaf !== null) {
+      cancelAnimationFrame(_cursorRaf);
+      _cursorRaf = null;
+    }
+    cursorVisible = false;
+  }
+
+  // Reactively start/stop the cursor loop based on whether there are slots to show.
+  // Svelte $: reactive block runs synchronously after state changes.
+  $: if ($sessionStore.harmony.progression.length > 0) {
+    startCursorLoop();
+  } else {
+    stopCursorLoop();
+  }
+
+  // Cleanup: cancel the rAF loop when the component is destroyed.
+  onDestroy(() => {
+    stopCursorLoop();
+  });
 
   /**
    * Returns the CSS background gradient for a segment based on its gain.
@@ -410,6 +482,19 @@
         (PX_PER_CYCLE/2). Gain fill is the topmost background layer.
         Bar boundaries = the 3px gap between segments + the ruler tick.
       -->
+      <!--
+        Phase 08 step 08.6: Playhead cursor (A-08-12).
+        A 1px white vertical line that tracks playhead position within the strip body.
+        Positioned absolutely over .segments; loops modulo total strip width.
+        x = ((rawX % totalWidth) + totalWidth) % totalWidth where
+          rawX = (now - getVisualPhaseAnchor()) / barMs * PX_PER_CYCLE.
+        Spec: white rgba(255,255,255,0.8), full height of the strip body.
+        Uses the local PX_PER_CYCLE const (not imported from time-map.ts).
+        Visible only when the progression is non-empty and cursorVisible is true.
+      -->
+      {#if cursorVisible}
+        <div class="playhead-cursor" style="left: {cursorX}px;" aria-hidden="true"></div>
+      {/if}
       <div class="segments" bind:this={segmentsEl}>
         {#each $sessionStore.harmony.progression as ch, i (i)}
           {@const segBars = resizeBars[i] ?? ch.bars ?? 1}
@@ -794,5 +879,31 @@
   .add-rest-btn:hover {
     color: rgba(255, 255, 255, 0.7);
     border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  /*
+   * Phase 08 step 08.6: Playhead cursor (A-08-12).
+   * 1px wide, full height of the strip body (below the ruler, over segments).
+   * position:absolute inside .strip-scroll; left set via inline style to cursorX.
+   * Spec: rgba(255,255,255,0.8), pointer-events:none so it doesn't block gestures.
+   * top:14px to sit below the ruler (.ruler height:14px); bottom:0 to fill body.
+   * z-index:2 to appear above segment backgrounds but below the .rm button.
+   */
+  .playhead-cursor {
+    position: absolute;
+    top: 14px; /* below the ruler row (height: 14px) */
+    bottom: 0;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /*
+   * Ensure .strip-scroll establishes a positioning context for the cursor.
+   * (position:relative added here — the cursor is absolutely positioned within it.)
+   */
+  .strip-scroll {
+    position: relative;
   }
 </style>
