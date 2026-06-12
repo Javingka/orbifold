@@ -599,5 +599,30 @@ All steps approved on iteration 1.
 
 ### Next focus
 
-- Phase 08 — orbital harmony view + morph: concentric voice rings with linear↔orbital morph; one full revolution = full progression loop; bar markers on the ring. Rest-aware from the start.
-- Specific context for Planner scoping: Phase 07 confirmed `tickHarmonyStaff` via direct `app.ticker.add`; Phase 08 should follow the same pattern for the orbital scene. The `_staffWidth` and `_staffBaseY` module-level state in `harmony-staff-scene.ts` are private; Phase 08 will need its own module.
+- Specific context for Planner scoping: Phase 07 confirmed `tickHarmonyStaff` via direct `app.ticker.add`. The `_staffWidth` and `_staffBaseY` module-level state in `harmony-staff-scene.ts` are private.
+
+---
+
+## Pilot Checkpoint #5 — Phase 07 verification (2026-06-12)
+
+**Pilot:** Javier. Live visual verification performed in-browser.
+
+### Verified PASS
+
+- **A-07-08** — staff lines + treble clef render (clef visible).
+- **A-07-10** — rest glyph (horizontal dash) renders correctly.
+- **A-07-12** — sharp accidentals render left of the note-head.
+- A-07-01 … A-07-07 — unit/automated, confirmed at step 07.5.
+
+### Carry-forward partials → Phase 08
+
+The linear-staff **engine and renderer are delivered and correct at the unit level**, but live verification revealed four integration/UX items that require rework. Per methodology, they are carried forward to Phase 08 (not silently deferred):
+
+- **A-07-08 (placement)** — the staff sits in the lower-left strip coexisting with the Tonnetz; it is cramped and visually subordinate. Pilot decision: the staff must be a **central, prominent, full-canvas view**, separated from the Tonnetz via a **Tonnetz ⇄ Pentagrama sub-toggle** inside the Armonía view.
+- **A-07-09 (voice register)** — note octaves are derived from `octave + floor((rootPc + iv)/12)` in `voice-tracks.ts:176`, so register jumps arbitrarily with the chromatic pitch-class of the root; voice contours are not readable. Pilot decision: introduce a **user-selectable register mode** — "estricto" (absolute MIDI pitch) vs "suavizado" (octave-nearest voice continuity → smooth horizontal contour lines).
+- **A-07-11 (cyclic playhead)** — `updateHarmonyStaffDynamic` clamps the playhead to `_staffWidth` instead of taking it modulo the loop width, so the playhead freezes at the last note instead of looping. The ProgressionStrip also has **no playhead cursor** (the criterion's premise was incorrect). Phase 08: fix the modulo (`playheadX = rawX % _staffWidth`) and add a lightweight strip cursor so strip and staff agree.
+- **A-07-12 (widget overlap)** — the `acorde/arpegio/marco` selector (`HarmonyControls.svelte` absolute overlay, `left:16px; bottom:46px`) covers the staff. Pilot decision: relocate it to the **top bar** next to clave/escala/octava.
+
+### Phase 07 status: CLOSED with carry-forward partials
+
+Phase 07 delivered the testable core (`staff-layout.ts`, `computeStaffLayout`) and the PIXI staff renderer. The four items above are reframed as a harmony-view UX phase (new Phase 08) because the playhead and register fixes depend on the final layout. The orbital view + morph (formerly Phase 08) shifts to Phase 09. ADR 0011 amendment to be written in Phase 08 capturing the new layout + register-mode decisions.
