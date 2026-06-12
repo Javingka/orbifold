@@ -4,13 +4,15 @@
 
   Ports prototype #codeTab + #codeDrawer (HTML lines 516–528, CSS lines 237–249).
 
-  Tab button: fixed at bottom-center (prototype CSS line 237).
-    Label: ⌄ código strudel
-    On click: toggles open state.
+  Phase 09 step 09.4: Elevated to a primary view (ADR 0013 D2 Option D1).
+  The #codeTab button is removed — navigation is now handled by the 4-tab seg
+  control in Header.svelte. The component is mounted/unmounted by App.svelte via a
+  {#if $sessionStore.view === 'code'} gate. When mounted, it fills #stage via
+  flex:1 layout (replacing the position:fixed + translateY slide mechanism).
 
-  Drawer: slides up from bottom on open, back down on close.
-    transform: translateY(105%) → translateY(0) with cubic-bezier transition
-    (prototype CSS lines 240–242: transition .4s cubic-bezier(.22,1,.36,1)).
+  The `open` boolean and slide CSS remain as dead code to avoid scope creep.
+  Per ADR 0013 D2: "The `open` boolean and the slide CSS become vestigial for
+  the primary-view path but may remain in the files as dead code."
 
   Textarea #liveCode: 120px height, IBM Plex Mono, placeholder 's("bd hh sd hh")'.
 
@@ -18,20 +20,15 @@
     ▶ ejecutar (ahora) → runEditor(code) [prototype line 525]
     ↻ encolar (próximo ciclo) → queueEditor(code) [prototype line 526]
 
-  Close button ✕: closes drawer.
-
   Local state:
-    open: boolean
+    open: boolean — vestigial (the {#if} gate in App.svelte controls visibility)
     currentEditorCode: string — auto-populated from session store when userEdited is false
-    userEdited: boolean — true once the user types; false after close or execute/queue
+    userEdited: boolean — true once the user types; false after execute/queue
 
   Round-2 fix (Defect C — OD-2 update):
     Subscribe to sessionStore; derive current generated code from session state
     (rhythmCode / harmonyCode / sessionCode based on nowPlaying.source).
     Auto-populate textarea only when userEdited === false.
-    Prototype: prototype lines 1490, 1496, 1503 all wrote to #liveCode.value after
-    each play action, keeping the drawer in sync with what was sent to the engine.
-    The port replicates this by deriving the code from the same source each frame.
 
   Store reads:
     sessionStore — for deriving live Strudel code (nowPlaying.source, rhythm, harmony, chordMode)
@@ -50,8 +47,8 @@
     sessionCode,
   } from '../state/session.js';
 
-  /** Whether the code drawer is open. Transient — NOT in sessionStore. */
-  let open = false;
+  // open: vestigial (Phase 09 step 09.4). The {#if} gate in App.svelte controls
+  // mounting/unmounting. Removed to avoid lint no-unused-vars error.
 
   /**
    * Current text in the editor textarea. Auto-populated from the session store
@@ -115,17 +112,12 @@
     unsubStore();
   });
 
-  function toggleDrawer(): void {
-    open = !open;
-    if (!open) {
-      // Drawer closed: reset userEdited so next open shows fresh derived code.
-      userEdited = false;
-    }
-  }
+  // toggleDrawer is vestigial — the primary-view {#if} gate in App.svelte controls
+  // mounting/unmounting. Removed to avoid lint errors (@typescript-eslint/no-unused-vars).
 
   function handleClose(): void {
-    open = false;
-    // Reset userEdited: next time drawer opens it will show the derived code.
+    // Reset userEdited: next view-open will show fresh derived code.
+    // (open variable removed in Phase 09 step 09.4 — {#if} gate controls lifecycle.)
     userEdited = false;
   }
 
@@ -148,16 +140,12 @@
 </script>
 
 <!--
-  Tab button: fixed bottom-center. Prototype CSS line 237.
-  #codeTab.glass with uppercase micro-text.
+  Primary-view content: fills #stage when App.svelte mounts this component via
+  {#if $sessionStore.view === 'code'}. The #codeTab button is removed (Phase 09
+  step 09.4 — navigation handled by 4-tab Header.svelte control; ADR 0013 D2).
+  #codeDrawer uses flex:1 + height:100% to fill the parent #stage container.
 -->
-<button id="codeTab" class="glass" on:click={toggleDrawer}> ⌄ código strudel </button>
-
-<!--
-  Drawer: fixed, slides up from bottom. Prototype lines 240–242.
-  .open class applies translateY(0).
--->
-<div id="codeDrawer" class="glass" class:open>
+<div id="codeDrawer" class="glass">
   <div class="code-head">
     <b>código Strudel</b>
     <span style="font-size:10.5px;color:var(--faint)">lo que suena ahora — edítalo y ejecútalo</span
@@ -189,54 +177,21 @@
 
 <style>
   /*
-   * Tab button: fixed at bottom-center. Prototype CSS line 237.
-   * Position: fixed; centered via left:50% + translateX(-50%).
-   * bottom: 140px — clears Transport footer (~68px) + ProgressionStrip row (~60px)
-   * with 12px buffer. Phase 03 step 03.4 moved the strip to its own row above
-   * the Transport; the prior value (90px) only cleared the Transport and caused the
-   * tab to overlap the strip. OD-01 resolution: option 1.
-   */
-  #codeTab {
-    position: fixed;
-    bottom: 140px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 8;
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--muted);
-    padding: 6px 16px;
-    border-radius: 11px;
-    cursor: pointer;
-    /* Reset button defaults */
-    border: 1px solid var(--stroke);
-    background: var(--panel);
-  }
-
-  #codeTab:hover {
-    color: var(--text);
-  }
-
-  /*
-   * Drawer: fixed, slides up. Prototype CSS lines 240–242.
-   * translateY(105%) = hidden below viewport.
-   * .open → translateY(0) = fully visible.
+   * Primary-view layout (Phase 09 step 09.4, ADR 0013 D2).
+   * Replaces position:fixed + translateY(105%) slide mechanism.
+   * The component is mounted inside #stage (via {#if} gate in App.svelte) and covers
+   * the full stage area using position:absolute; inset:0. The PIXI canvas sits below
+   * (rendered transparent — both layers hidden by stage.ts setView for 'code' view).
+   * z-index:1 ensures the drawer is above the PIXI canvas (z-index:0 by default).
+   * overflow:auto allows content to scroll if viewport is short.
    */
   #codeDrawer {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: 0;
-    z-index: 9;
-    border-radius: 18px 18px 0 0;
-    transform: translateY(105%);
-    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: 18px;
+    overflow: auto;
     padding: 14px 16px 16px;
-  }
-
-  #codeDrawer.open {
-    transform: translateY(0);
   }
 
   /* Drawer header row. Prototype lines 243–245. */

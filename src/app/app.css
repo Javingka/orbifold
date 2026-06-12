@@ -265,46 +265,17 @@ textarea {
 /* Prototype lines 251–314 */
 
 /*
- * Tab button — fixed bottom-right of #codeTab, accent border, uppercase label.
- * bottom: 140px — clears Transport footer (~68px) + ProgressionStrip row (~60px)
- * with 12px buffer. Phase 03 step 03.4 moved the strip to its own row above
- * the Transport; the prior value (90px) only cleared the Transport and caused the
- * tab to overlap the strip. OD-01 resolution: option 1.
+ * Phase 09 step 09.4 (ADR 0013 D2): #compTab button is removed from the UI
+ * (navigation is via the 4-tab Header.svelte segment control). #compDrawer is
+ * elevated to a primary view filling #stage via position:absolute; inset:0
+ * (scoped CSS in CompositionDrawer.svelte). The old position:fixed + slide rules
+ * below are removed to avoid conflicting with the scoped primary-view layout.
+ *
+ * Dead CSS removed:
+ *   #compTab { position:fixed; bottom:140px; ... } — tab button eliminated
+ *   #compDrawer { position:fixed; transform:translateY(108%); ... } — slide eliminated
+ *   #compDrawer.open { transform:translateY(0); } — slide eliminated
  */
-#compTab {
-  position: fixed;
-  bottom: 140px;
-  left: calc(50% + 130px);
-  transform: translateX(-50%);
-  z-index: 8;
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
-  padding: 6px 16px;
-  border-radius: 11px;
-  cursor: pointer;
-  border: 1px solid rgba(138, 160, 255, 0.3);
-}
-
-/* Slide-up drawer */
-#compDrawer {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 0;
-  z-index: 10;
-  border-radius: 18px 18px 0 0;
-  transform: translateY(108%);
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-  padding: 14px 16px 16px;
-  max-height: 74vh;
-  overflow: auto;
-}
-
-#compDrawer.open {
-  transform: translateY(0);
-}
 
 /* Two-column grid layout */
 .comp-grid {

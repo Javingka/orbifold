@@ -194,3 +194,142 @@ No source files modified. Quality gates unchanged from Phase 09 baseline: 385 pa
 - **Terminal commit:** `feat(navigation): Phase 09 step 09.3 — view-type routing in store and stage`
   - Hash: self-referential — not recorded
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 09.4 — 4-view nav in Header + elevate Composición and Código Strudel views
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- **`src/ui/Header.svelte` — 4-tab nav segment:**
+  - Imported `setView` from `../state/session.js` (replaces inline `sessionStore.update` call).
+  - Widened `handleViewChange` from `'harmony' | 'rhythm'` to `'harmony' | 'rhythm' | 'composition' | 'code'`. Delegates to `setView()` store action (step 09.3) which calls `stage.setView` via lazy import.
+  - Replaced the 2-button `#viewSeg` segment with a 4-button segment: Armonía · Ritmo · Composición · Código Strudel. All four use the same `.seg button` CSS class — equal font size, equal padding — ADR 0013 D1.
+  - Harmony-specific controls remain inside `{#if $sessionStore.view === 'harmony'}` — unchanged.
+
+- **`src/ui/CodeDrawer.svelte` — elevated to primary view (ADR 0013 D2):**
+  - Removed `<button id="codeTab">` (the `⌄ código strudel` tab button) from the template — A-09-08.
+  - Removed `toggleDrawer()` function (vestigial; `open` boolean also removed to avoid lint `no-unused-vars`).
+  - Simplified `handleClose()` to reset `userEdited` only (open lifecycle now controlled by `{#if}` gate in App.svelte).
+  - Replaced `position:fixed + translateY(105%)` scoped CSS with `position:absolute; inset:0; z-index:1` so the component fills `#stage` when mounted.
+  - Updated component header comment to document primary-view lifecycle.
+
+- **`src/ui/CompositionDrawer.svelte` — elevated to primary view (ADR 0013 D2):**
+  - Removed `<button id="compTab">` (the `🎚 composición` tab button) from the template — A-09-08.
+  - Removed close button (✕) from the drawer header — navigation is via Header.svelte tabs.
+  - Removed `handleOpen()` and `handleClose()` functions (no callers; lint `no-unused-vars` would fail).
+  - Updated `onMount` to set `open = true` (was just `ensureLoop()`). Per ADR 0013 D2: "After D2 the `open` variable in CompositionDrawer is always true while mounted so compTickLoop runs continuously while the Composición view is active and stops on unmount."
+  - Replaced `position:fixed + translateY(108%)` scoped CSS with `position:absolute; inset:0; z-index:1` so the component fills `#stage` when mounted.
+
+- **`src/app/App.svelte` — `{#if}` gates + hint text + canvas pointer routing:**
+  - Moved `<CodeDrawer />` and `<CompositionDrawer />` inside `div#stage`, replacing the old standalone instances outside the flex column.
+  - Added `{#if $sessionStore.view === 'composition'}<CompositionDrawer />{/if}` inside `#stage`.
+  - Added `{#if $sessionStore.view === 'code'}<CodeDrawer />{/if}` inside `#stage`.
+  - Removed old `<CodeDrawer />` and `<CompositionDrawer />` outside `#stage` (they were `position:fixed`; now they are primary view components inside the stage).
+  - Extended hint block with `{:else if $sessionStore.view === 'rhythm'}` branch per ADR 0013 D5 — A-09-11: "Elige E(k,n) y añade órbitas euclidianas. Click derecho sobre una órbita para silenciarla."
+  - Added `else { /* no-op */ }` guard to canvas `pointerdown` handler for non-PIXI views (A-09 step spec canvas routing requirement).
+
+- **`src/app/app.css` — remove dead global CSS for eliminated drawer tabs:**
+  - Removed `#compTab { position:fixed; ... }` global rule (tab button eliminated; ADR 0013 D2).
+  - Removed `#compDrawer { position:fixed; transform:translateY(108%); ... }` global rule (slide mechanism eliminated; replaced by scoped `position:absolute; inset:0` CSS in `CompositionDrawer.svelte`).
+  - Removed `#compDrawer.open { transform:translateY(0); }` global rule (slide eliminated).
+  - Added comment explaining the removal with reference to ADR 0013 D2.
+
+### Files touched
+
+- `src/ui/Header.svelte` — 4-tab nav; `setView` import; `handleViewChange` widened
+- `src/ui/CodeDrawer.svelte` — `#codeTab` removed; primary-view CSS; `open`/`toggleDrawer` removed
+- `src/ui/CompositionDrawer.svelte` — `#compTab` removed; close button removed; `handleOpen`/`handleClose` removed; primary-view CSS; `onMount` sets `open=true`
+- `src/app/App.svelte` — `{#if}` gates for composition/code views; rhythm hint branch; canvas pointer routing guard; removed old standalone drawer instances
+- `src/app/app.css` — removed dead `#compTab`/`#compDrawer` global slide CSS
+- `docs/orbifold-v2/handoffs/phase-09-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+- **A-09-06** — `Header.svelte` `#viewSeg` now has 4 buttons (Armonía, Ritmo, Composición, Código Strudel), all using `.seg button` CSS class (equal weight). Active state: `class={$sessionStore.view === '...' ? 'active' : ''}`. Only one can be active at a time (single `view` string in store).
+  - Proxy citation: `src/ui/Header.svelte` (4-button `#viewSeg` segment).
+  - Manual verification deferred to Pilot (cannot render browser in CLI).
+- **A-09-07** — `App.svelte` line containing `{#if $sessionStore.view === 'composition'}<CompositionDrawer />{/if}` inside `#stage`. `CompositionDrawer.svelte` `onMount` sets `open=true` and starts `compTickLoop`. Timeline state (blocks, tracks) lives in `sessionStore` and persists across view switches (component unmount/remount only restarts the rAF loop, not the store).
+  - Proxy citation: `src/app/App.svelte` (`{#if}` gate); `src/ui/CompositionDrawer.svelte` (`onMount`).
+  - Manual verification deferred to Pilot.
+- **A-09-08** — `grep -n 'id="codeTab"\|id="compTab"' src/` → 0 matches (actual button elements gone). `{#if $sessionStore.view === 'code'}<CodeDrawer />{/if}` in `App.svelte` shows the code editor.
+  - Proxy citation: `src/ui/CodeDrawer.svelte` (no `#codeTab` button); `src/ui/CompositionDrawer.svelte` (no `#compTab` button); `src/app/App.svelte` (`{#if}` gate for code view).
+  - Manual verification deferred to Pilot.
+- **A-09-11** — `App.svelte` hint block: `{#if $sessionStore.view === 'harmony'}` (two sub-branches for Tonnetz/Pentagrama) + `{:else if $sessionStore.view === 'rhythm'}` (new branch with Euclidean hint). Composición and Código Strudel show no canvas hint (built-in labels in their components, per ADR 0013 D5).
+  - Proxy citation: `src/app/App.svelte` (hint block with 3 cases).
+  - Manual verification deferred to Pilot.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier clean)
+- `pnpm exec vitest run` → 396 passed, 0 failed (13 test files; same baseline as step 09.3)
+- `pnpm build` → exit 0 (1.44s)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-09-01 | `SessionState.view` includes all 5 strings; `DEFAULT_SESSION_STATE.view` valid | `tests/persistence.test.ts` | proxy:static-analysis + unit | covered (step 09.3) |
+| A-09-02 | `stage.ts setView` hides both PIXI layers for `'composition'`, `'session'`, `'code'` | `src/render/stage.ts` | proxy:static-analysis | covered (step 09.3) |
+| A-09-03 | Schema v2; `SESSION_SCHEMA_VERSION = 2`; unrecognized view → `'harmony'`; v1 blobs dropped | `tests/persistence.test.ts` | unit | covered (step 09.3) |
+| A-09-04 | All quality gates green (tsc, lint, vitest ≥ 385, build) | — | automated | covered |
+| A-09-05 | No PIXI/Svelte/DOM imports in `src/core/` | — | proxy:static-analysis | covered (step 09.3; `grep` → 0 matches) |
+| A-09-06 | Four equal-weight nav tabs; one active at a time | `src/ui/Header.svelte` | proxy:static-analysis | proxy-covered; manual deferred to Pilot |
+| A-09-07 | Composición shows timeline; navigating away and back preserves state | `src/app/App.svelte` + `src/ui/CompositionDrawer.svelte` | proxy:static-analysis | proxy-covered; manual deferred to Pilot |
+| A-09-08 | Código Strudel shows code editor; drawer tab buttons gone | `src/app/App.svelte` + `src/ui/CodeDrawer.svelte` | proxy:static-analysis | proxy-covered; `id="codeTab"` grep → 0 element matches; manual deferred to Pilot |
+| A-09-09 | Rhythm controls in top bar when Ritmo active; no canvas overlay | — | manual | not covered — deferred to step 09.5 |
+| A-09-10 | Transport footer transversal-only in all views | — | manual | not covered — deferred to step 09.6 |
+| A-09-11 | Per-view hint text correct | `src/app/App.svelte` | proxy:static-analysis | proxy-covered (3 hint cases: harmony/tonnetz, harmony/staff, rhythm); manual deferred to Pilot |
+
+**Proxy disclosures:**
+
+- A-09-06: `src/ui/Header.svelte` — `#viewSeg` div contains 4 `<button>` elements, each with `data-view` attribute and `class={$sessionStore.view === '...' ? 'active' : ''}`. TypeScript enforces that `handleViewChange` accepts only the 4 primary view strings.
+- A-09-07: `src/app/App.svelte` — `{#if $sessionStore.view === 'composition'}<CompositionDrawer />{/if}`. Timeline state in `sessionStore` persists across component mounts (store is not reset on unmount). `onMount` in CompositionDrawer sets `open=true` and starts the rAF loop.
+- A-09-08: `grep -n 'id="codeTab"\|id="compTab"' src/` → 0 element matches (references in comments only). `src/app/App.svelte` — `{#if $sessionStore.view === 'code'}<CodeDrawer />{/if}`.
+- A-09-11: `src/app/App.svelte` — hint block: `{#if ... === 'harmony'}` / `{#if ... === 'tonnetz'}` ... `{:else}` (staff) ... `{/if}` / `{:else if ... === 'rhythm'}` ... `{/if}`. Composición and Código Strudel have no canvas hint (drawer content provides labels).
+
+### Decisions made (if any)
+
+- `position:absolute; inset:0; z-index:1` chosen for the primary-view components (`CodeDrawer`, `CompositionDrawer`) rather than a flex-fill approach. Reason: `#stage` already has `position:relative` and the PIXI canvas fills it via `resizeTo`. Using `position:absolute; inset:0` on the primary-view components overlays them cleanly without disturbing PIXI's canvas sizing. The PIXI canvas renders transparent (both layers hidden) for these views — the drawer content is visible on top.
+- Dead global CSS (`#compTab`, `#compDrawer` slide rules) removed from `app.css` to prevent specificity conflicts with the new scoped CSS. The scoped CSS (with Svelte hash) would win anyway, but removing the dead rules avoids confusion.
+- `open` boolean removed entirely from `CodeDrawer.svelte` (was assigned but never read after removing `toggleDrawer` and `class:open`). Kept as live code only where it produces observable behavior (i.e., not here).
+- `handleOpen()` and `handleClose()` removed from `CompositionDrawer.svelte` (no callers after removing tab button and close button). Removing them is cleaner than keeping dead code that fails lint.
+
+### Proposed Decisions Register entries (if any)
+
+- None. All decisions in this step are implementation details within the bounds of ADR 0013 D2.
+
+### Blockers resolved during this step (if any)
+
+- None.
+
+### Environment state after this step
+
+- Four-tab primary nav in Header.svelte. Composición and Código Strudel are primary views mounted via `{#if}` gates inside `#stage`. Rhythm hint added. Drawer tab buttons gone. Quality gate baseline: 396 passed, 0 tsc errors, 0 lint errors.
+- Branch: `orbifold-v2/phase-09`.
+
+### Next-step context (only if non-obvious)
+
+- Step 09.5 moves the rhythm-specific controls from `RhythmControls.svelte` into `Header.svelte` behind `{#if $sessionStore.view === 'rhythm'}`. The `RhythmControls.svelte` component will be emptied (or deleted). `App.svelte` still imports it — step 09.5 handles the cleanup.
+- After step 09.5, `grep -rn "orbit-ctl" src/ui/` must return 0 matches (acceptance A-09-09 static analysis check).
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+- **Terminal commit:** `feat(navigation): Phase 09 step 09.4 — 4-view nav, elevate Composición and Código Strudel`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

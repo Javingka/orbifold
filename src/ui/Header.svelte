@@ -5,17 +5,23 @@
   Ports prototype <header class="glass"> (lines 358–395 HTML; CSS lines 68–98).
   Brand glyph + title + tag, view-toggle segmented control, and key selector.
 
+  Phase 09 step 09.4: 4-tab primary nav (Armonía · Ritmo · Composición · Código Strudel).
+  The two-button segmented control is replaced by a four-button segment.
+  handleViewChange updated to accept all four primary view-type strings and delegates
+  to the setView store action (added in step 09.3) which also calls stage.setView.
+
   Store reads:
     $sessionStore.view        — active view for segmented control
     $sessionStore.harmony.root / .mode / .octave — key-selector values
 
   Store writes (via session.ts actions):
-    sessionStore.update(s => ({ ...s, view }))  on view-toggle click
-    setHarmonyKey(root, mode, octave)            on key-selector change
+    setView(view)               on view-toggle click (replaces inline sessionStore.update)
+    setHarmonyKey(root, mode, octave)  on key-selector change
 -->
 <script lang="ts">
   import {
     sessionStore,
+    setView,
     setHarmonyKey,
     setHarmonySubview,
     setRegisterMode,
@@ -28,9 +34,11 @@
   const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
   // ── View toggle ────────────────────────────────────────────────────────────
-  // Prototype: #viewSeg buttons data-view="harmony"|"rhythm" (lines 365–368).
-  function handleViewChange(view: 'harmony' | 'rhythm'): void {
-    sessionStore.update((s) => ({ ...s, view }));
+  // Phase 09 step 09.4: widened from 'harmony'|'rhythm' to all four primary view strings.
+  // Delegates to setView() store action (session.ts step 09.3) which updates the store
+  // and calls stage.setView via lazy import (avoids PIXI pollution in Node/Vitest).
+  function handleViewChange(view: 'harmony' | 'rhythm' | 'composition' | 'code'): void {
+    setView(view);
   }
 
   // ── Key selector ───────────────────────────────────────────────────────────
@@ -75,9 +83,12 @@
   </div>
 
   <!--
-    View-toggle segmented control.
-    Prototype: .seg#viewSeg with data-view buttons (lines 365–368).
-    Active class on the currently-selected view.
+    4-tab primary navigation segmented control.
+    Phase 09 step 09.4: expanded from 2 buttons (Armonía · Ritmo) to 4 equal-weight
+    buttons (Armonía · Ritmo · Composición · Código Strudel). ADR 0013 D1.
+    All four buttons use the same CSS class (.seg button) and equal padding — no
+    tab can dominate via font size or padding differences.
+    Active class applied to the currently-selected view.
   -->
   <div class="seg" id="viewSeg">
     <button
@@ -93,6 +104,20 @@
       on:click={() => handleViewChange('rhythm')}
     >
       Ritmo
+    </button>
+    <button
+      data-view="composition"
+      class={$sessionStore.view === 'composition' ? 'active' : ''}
+      on:click={() => handleViewChange('composition')}
+    >
+      Composición
+    </button>
+    <button
+      data-view="code"
+      class={$sessionStore.view === 'code' ? 'active' : ''}
+      on:click={() => handleViewChange('code')}
+    >
+      Código Strudel
     </button>
   </div>
 

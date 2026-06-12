@@ -242,6 +242,9 @@
         tonnetzPointerDown(e);
       } else if (state.view === 'rhythm') {
         rhythmPointerDown(e);
+      } else {
+        // 'composition', 'code', 'session': PIXI canvas is hidden for these views
+        // (stage.ts setView hides both layers); no pointer routing needed.
       }
     });
 
@@ -354,6 +357,7 @@
 <!--
   Phase 04 step 04.3: Header component at top of flex-column layout.
   Replaces the inline prototype <header class="glass"> (lines 358–395).
+  Phase 09 step 09.4: Header now shows 4-tab primary nav (ADR 0013 D1).
 -->
 <Header />
 
@@ -362,6 +366,10 @@
   Phase 04 step 04.3: changed from position:fixed full-screen to flex:1 within #app.
   Phase 04 step 04.4: HarmonyControls and RhythmControls overlays placed inside #stage.
   Phase 04 step 04.5: Hud, Legend, Tooltip overlays added inside #stage.
+  Phase 09 step 09.4: Composición and Código Strudel primary views are mounted inside
+    #stage via {#if} gates (ADR 0013 D2 Option D1). The PIXI <canvas> stays in the DOM
+    for all views; stage.ts hides both PIXI layers for 'composition' and 'code' views.
+    The stage uses display:flex; flex-direction:column so the elevated views fill it.
   PIXI's resizeTo tracks this div. The <canvas> is appended inside by initStage.
 -->
 <div id="stage" bind:this={stageEl}>
@@ -374,8 +382,9 @@
 
   <!--
     Rhythm view overlay: morph toggle + euclidean controls.
+    Phase 09 step 09.5 will remove this overlay content (RhythmControls moves to top bar).
+    For now it renders nothing visible (empty shell) while still in App.svelte.
     Shown only when $sessionStore.view === 'rhythm' (prototype #orbitCtl).
-    position:absolute inside #stage (prototype .orbit-ctl lines 316–319).
   -->
   <RhythmControls />
 
@@ -396,11 +405,11 @@
   <!--
     Stage hint: bottom-left of #stage, view-and-subview-gated instructional text.
     Prototype: .hint#stageHint (line 423, CSS lines 119–120).
-    Post-verification fix (A-08-11): the Tonnetz instruction was always visible,
-    even in Pentagrama subview and in Ritmo view. Now gated by view + subview:
+    Phase 09 step 09.4 (ADR 0013 D5): extended to cover all four primary views:
       - harmony + tonnetz → Tonnetz instruction (from hudStore.hint)
       - harmony + staff   → Pentagrama instruction
-      - any other view    → no hint rendered
+      - rhythm            → Rhythm instruction (new branch, A-09-11)
+      - composition / code → no canvas hint (built-in labels in their components)
   -->
   {#if $sessionStore.view === 'harmony'}
     {#if $sessionStore.harmony.subview === 'tonnetz'}
@@ -411,6 +420,29 @@
         (contornos suaves) o estricto (posición absoluta).
       </div>
     {/if}
+  {:else if $sessionStore.view === 'rhythm'}
+    <div class="hint">
+      Elige E(k,n) y añade órbitas euclidianas. Click derecho sobre una órbita para silenciarla.
+    </div>
+  {/if}
+
+  <!--
+    Composición primary view (ADR 0013 D2 Option D1).
+    Mounted when view === 'composition'; unmounted on view change.
+    CompositionDrawer fills #stage via flex:1 + height:100% CSS.
+    rAF loop restarts cleanly on each mount (open=true in onMount).
+  -->
+  {#if $sessionStore.view === 'composition'}
+    <CompositionDrawer />
+  {/if}
+
+  <!--
+    Código Strudel primary view (ADR 0013 D2 Option D1).
+    Mounted when view === 'code'; unmounted on view change.
+    CodeDrawer fills #stage via flex:1 + height:100% CSS.
+  -->
+  {#if $sessionStore.view === 'code'}
+    <CodeDrawer />
   {/if}
 </div>
 
@@ -483,19 +515,11 @@
 <Transport />
 
 <!--
-  Code drawer: fixed position, slides up from bottom on toggle.
-  Prototype #codeTab + #codeDrawer (lines 516–528, CSS lines 237–249).
-  position:fixed so it renders outside the flex column layout.
+  Phase 09 step 09.4: CodeDrawer and CompositionDrawer moved inside #stage above
+  (gated by {#if} blocks). Removed from outside the flex column layout — they are
+  no longer position:fixed overlays; they now fill the stage as primary views.
+  ADR 0013 D2 Option D1.
 -->
-<CodeDrawer />
-
-<!--
-  Composition drawer: fixed position, slides up from bottom on toggle.
-  Prototype #compTab + #compDrawer (lines 530–574, CSS lines 251–314, JS lines 1927–2127).
-  position:fixed so it renders outside the flex column layout.
-  Tab positioned to the right of the code drawer tab (left: calc(50% + 130px)).
--->
-<CompositionDrawer />
 
 <!--
   Agent panel: tab + slide-in aside, fixed position relative to viewport.
@@ -535,9 +559,14 @@
   }
 
   /*
-   * div#stage: PIXI canvas container.
+   * div#stage: PIXI canvas container + primary view host.
    * Phase 04 step 04.3: changed from position:fixed full-screen to flex:1 within
    * #app flex column, with margin and border-radius matching prototype line 106.
+   * Phase 09 step 09.4: #stage layout unchanged (position:relative, no flex-direction).
+   * The PIXI <canvas> fills #stage via PIXI's resizeTo mechanism.
+   * The primary-view components (CompositionDrawer, CodeDrawer) use
+   * position:absolute; inset:0 in their own CSS to cover the canvas area
+   * (see their respective component <style> blocks).
    * Prototype: #stage { position:relative; flex:1; margin:10px 12px; border-radius:22px; overflow:hidden; }
    * OD-3 resolution: PIXI's resizeTo tracks this div.
    */

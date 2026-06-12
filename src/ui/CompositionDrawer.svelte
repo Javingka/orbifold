@@ -5,15 +5,20 @@
   Ports prototype #compTab + #compDrawer (HTML lines 530–574, CSS lines 251–314,
   JS lines 1927–2127).
 
-  Tab button #compTab.glass:
-    Fixed at bottom-center-right (left: calc(50% + 130px), to the right of the
-    code drawer tab). Accent color + accent border (prototype CSS lines 252–254).
-    Label: 🎚 composición. On click: opens drawer.
-    Prototype: `compTab.onclick` (line 2125).
+  Phase 09 step 09.4: Elevated to a primary view (ADR 0013 D2 Option D1).
+  The #compTab button is removed — navigation is now handled by the 4-tab seg
+  control in Header.svelte. The component is mounted/unmounted by App.svelte via a
+  {#if $sessionStore.view === 'composition'} gate. When mounted, it fills #stage
+  via flex:1 layout (replacing position:fixed + translateY slide mechanism).
+
+  The `open` boolean is set to true on onMount and the rAF loop runs for the entire
+  component lifetime (the {#if} gate replaces the slide open/close mechanic). Per
+  ADR 0013 D2: "After D2 the `open` variable in CompositionDrawer is always true
+  while mounted... so compTickLoop runs continuously while the Composición view is
+  active and stops on unmount."
 
   Drawer #compDrawer.glass:
-    Slides up with .open class (same mechanism as CodeDrawer.svelte).
-    Two-column .comp-grid: block library (col 1) + timeline (col 2).
+    Fills #stage via flex:1 (no slide). Two-column .comp-grid inside.
     Prototype: `#compDrawer` (HTML lines 532–574).
 
   Block library column (.comp-col):
@@ -175,15 +180,10 @@
   }
 
   // ── Drawer open/close ──────────────────────────────────────────────────────
-
-  function handleOpen(): void {
-    open = true;
-    ensureLoop();
-  }
-
-  function handleClose(): void {
-    open = false;
-  }
+  // Phase 09 step 09.4: The {#if} gate in App.svelte controls mounting/unmounting.
+  // handleOpen / handleClose are removed — the close button and tab button are gone.
+  // open is always true while mounted (set in onMount) so compTickLoop runs for the
+  // full component lifetime. Navigating away via Header.svelte unmounts the component.
 
   // ── Playhead rAF loop (`compTickLoop` equivalent) ──────────────────────────
 
@@ -272,8 +272,13 @@
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
+  // Phase 09 step 09.4: Set open=true on mount so compTickLoop runs for the full
+  // component lifetime. The {#if} gate in App.svelte (view === 'composition')
+  // replaces the slide open/close mechanic. Per ADR 0013 D2: "compTickLoop runs
+  // continuously while the Composición view is active and stops on unmount."
 
   onMount(() => {
+    open = true;
     ensureLoop();
   });
 
@@ -581,24 +586,19 @@
 </script>
 
 <!--
-  Tab button: fixed at bottom-center-right (offset right of the code drawer tab).
-  Prototype CSS line 252: left:calc(50% + 130px); transform:translateX(-50%);
-  Prototype HTML line 531.
+  Primary-view content: fills #stage when App.svelte mounts this component via
+  {#if $sessionStore.view === 'composition'}. The #compTab button is removed (Phase 09
+  step 09.4 — navigation handled by 4-tab Header.svelte control; ADR 0013 D2).
+  #compDrawer uses flex:1 + height:100% to fill the parent #stage container.
 -->
-<button id="compTab" class="glass" on:click={handleOpen}>🎚 composición</button>
-
-<!--
-  Drawer: slides up with .open class.
-  Prototype HTML lines 532–574. CSS lines 255–301.
--->
-<div id="compDrawer" class="glass" class:open>
-  <!-- Header row: title, hint, close button. Prototype lines 533–537. -->
+<div id="compDrawer" class="glass">
+  <!-- Header row: title + hint. Close button removed (navigate via Header.svelte). -->
+  <!-- Prototype lines 533–537. -->
   <div class="code-head">
     <b>composición — arregla ritmos y armonías ya montados</b>
     <span style="font-size:10.5px;color:var(--faint)"
       >guarda bloques y ordénalos en el tiempo (cada uno dura N compases)</span
     >
-    <button class="c-close" on:click={handleClose}>✕</button>
   </div>
 
   <!-- Two-column grid: block library + timeline. Prototype line 538. -->
@@ -916,27 +916,26 @@
 
 <style>
   /*
-   * Tab button: fixed at bottom-center-right. Prototype CSS lines 252–254.
-   * Offset right of #codeTab via left:calc(50% + 130px).
-   * Accent color (--accent) + accent border defined in app.css for #compTab.
-   * These scoped styles add cursor, font, letter-spacing, and hover state.
+   * Primary-view layout (Phase 09 step 09.4, ADR 0013 D2).
+   * Replaces position:fixed + translateY(108%) slide mechanism and #compTab button.
+   * The component is mounted inside #stage (via {#if} gate in App.svelte) and covers
+   * the full stage area using position:absolute; inset:0. The PIXI canvas sits below
+   * (rendered transparent — both layers hidden by stage.ts setView for 'composition').
+   * z-index:1 ensures the drawer is above the PIXI canvas (z-index:0 by default).
+   * overflow:auto allows content to scroll if viewport is short.
    */
-  #compTab {
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    padding: 6px 16px;
-    cursor: pointer;
-    background: var(--panel);
-    border-color: rgba(138, 160, 255, 0.3);
-  }
-
-  #compTab:hover {
-    color: var(--text);
+  #compDrawer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: 18px;
+    overflow: auto;
+    padding: 14px 16px 16px;
   }
 
   /*
-   * Drawer header and close button: scoped styles matching CodeDrawer.svelte pattern.
+   * Drawer header: title + hint. Close button removed in primary-view mode.
+   * Scoped style matching the previous .code-head pattern.
    */
   .code-head {
     display: flex;
@@ -949,21 +948,6 @@
     font-family: 'Fraunces', serif;
     font-weight: 500;
     font-size: 14px;
-  }
-
-  .code-head .c-close {
-    margin-left: auto;
-    color: var(--muted);
-    font-size: 18px;
-    padding: 0 6px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    line-height: 1;
-  }
-
-  .code-head .c-close:hover {
-    color: var(--text);
   }
 
   /*
