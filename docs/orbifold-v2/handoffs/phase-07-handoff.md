@@ -427,4 +427,177 @@ Step 07.5 runs all quality gates and performs manual acceptance for A-07-08 thro
 - White playhead advancing and aligned with ProgressionStrip cursor.
 - Sharp accidentals left of note-heads; natural notes show none.
 
-**Next action:** Planner review of step 07.4.
+**Planner Review:** APPROVED on 2026-06-12. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 07.5
+
+---
+
+## Step 07.5 — Quality gates + manual acceptance
+
+**Date:** 2026-06-12
+**Commit(s):**
+
+- **Terminal commit:** `feat(harmony): Phase 07 step 07.5 — quality gates and manual acceptance`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Ran all quality gates: `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` — all exit 0. Test count: 361 (≥ 340).
+- Verified AGPL-3.0 header present in `src/core/harmony/staff-layout.ts`, `src/render/harmony-staff-scene.ts`, and `tests/harmony/staff-layout.test.ts`.
+- Verified `grep -rn "from 'pixi|from 'svelte|from '@pixi" src/core/harmony/` → 0 matches (pure engine invariant maintained across all four files in `src/core/harmony/`).
+- Verified `PX_PER_CYCLE` in `harmony-staff-scene.ts` is imported from `time-map.ts` at line 39; not re-declared (vigent coordination-point rule).
+- Added font fallback stack for the treble clef PIXI.Text (Planner's risk note from step 07.4 review): changed `fontFamily` from `FONT_SERIF` to `Georgia, "Times New Roman", ${FONT_SERIF}`. Fraunces and most serif fonts do not contain U+1D11E (SMP codepoint). Georgia/Times New Roman also do not reliably contain it, but improve coverage. Honest note: the glyph may render as a tofu box on platforms without a music-glyph font installed — this is a known limitation of using Unicode SMP glyphs without a bundled music font (Bravura/SMuFL).
+- Performed static code analysis for A-07-08 through A-07-12 (CLI environment, no browser). Evidence recorded below.
+
+### Files touched
+
+- `src/render/harmony-staff-scene.ts` — font fallback stack added for treble clef PIXI.Text
+- `docs/orbifold-v2/handoffs/phase-07-handoff.md` — step 07.5 entry and phase-completion entry appended
+
+### Validation evidence (per Acceptance ID)
+
+**A-07-08 (IMPL-verified):** `buildHarmonyStaffScene` draws staff lines via `for (const lineStep of TREBLE_STAFF_LINES)` at `harmony-staff-scene.ts:137`. `TREBLE_STAFF_LINES = [2, 4, 6, 8, 10]` is a 5-element array (`staff-map.ts:24`). The treble clef PIXI.Text is created at `harmony-staff-scene.ts:236`: `new PIXI.Text('\u{1D11E}', {...})`. Font fallback `Georgia, "Times New Roman", Fraunces, serif` added in this step. Live visual verification deferred to Pilot.
+
+**A-07-09 (IMPL-verified):** Note-heads drawn with `voiceColor(nh.voiceIndex)` at `harmony-staff-scene.ts:146`, which maps to `COL.tonic` (0xf3b15a), `COL.subdom` (0x56cfc4), `COL.dom` (0xe87bac) at lines 116–118. Ledger lines drawn from `NoteHead.ledgerLines` at lines 151–155 (`for (const ledgerStep of nh.ledgerLines)`). Live visual verification (default octave-3 ledger lines below staff) deferred to Pilot.
+
+**A-07-10 (IMPL-verified):** Rest glyphs rendered at `harmony-staff-scene.ts:170–176`: `restY = stepToY(6, staffBaseY)` (middle staff line), `moveTo(rx - REST_HALF_W, restY)` + `lineTo(rx + REST_HALF_W, restY)` — a horizontal line, no `drawCircle`. The `for (const rg of layout.restGlyphs)` loop only draws lines; note-heads are in a separate loop over `layout.noteHeads`. No rest produces a note-head. Live visual verification deferred to Pilot.
+
+**A-07-11 (IMPL-verified):** Playhead formula in `updateHarmonyStaffDynamic` at `harmony-staff-scene.ts:289–292`:
+```
+const barMs = (60000 / bpm) * 4;
+const now = performance.now();
+const rawX = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE;
+const playheadX = Math.min(Math.max(rawX, 0), _staffWidth);
+```
+This matches the rhythm-scene pattern. `PX_PER_CYCLE` is the same imported constant as used by ProgressionStrip, ensuring the same rate. Live alignment verification deferred to Pilot.
+
+**A-07-12 (IMPL-verified):** Sharp accidentals drawn in `drawAccidentals` at `harmony-staff-scene.ts:195–206`. Only notes where `nh.accidental !== '#'` are skipped (line 189). For sharps, `PIXI.Text '#'` is created with `accText.anchor.set(1, 0.5)` (right-aligned) and positioned at `accText.x = nx - NOTE_RADIUS - 1` (line 204) — to the left of the note-head center at `nx`. Natural notes produce no PIXI.Text entry. Live visual verification deferred to Pilot.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint + Prettier)
+- `pnpm test` → 361 passed (≥ 340; 12 test files, all passing)
+- `pnpm build` → exits 0 (556 modules; pre-existing chunk-size warning unchanged; no new errors)
+- `grep -rn "from 'pixi|from 'svelte|from '@pixi" src/core/harmony/` → 0 matches
+- `grep -n "PX_PER_CYCLE" src/render/harmony-staff-scene.ts` → import from `time-map.ts` at line 39; not re-declared elsewhere
+- `grep -n "AGPL-3.0" src/core/harmony/staff-layout.ts src/render/harmony-staff-scene.ts tests/harmony/staff-layout.test.ts` → all three files: line 1 match
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-07-01 | `computeStaffLayout` empty progression → `{ noteHeads: [], restGlyphs: [], totalWidth: 0 }` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-02 | Single C-major chord at octave 3 → 3 note-heads at x=0, stepY values match `noteToStaffPosition` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-03 | Mixed `[C maj bars:1, rest bars:1, A min bars:2]` → note-heads x=0, rest x=48, note-heads x=96; totalWidth=192 | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-04 | Sharp-containing chord (D major/F#3) → `NoteHead.accidental='#'` for that voice | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-05 | Below-staff chord (C3 voicing) → `NoteHead.ledgerLines` non-empty, matching `noteToStaffPosition` | `tests/harmony/staff-layout.test.ts` | unit | covered (step 07.2) |
+| A-07-06 | No pixi/svelte/DOM imports in `src/core/harmony/` | grep | proxy:static-analysis | covered — grep returns 0 matches (confirmed this step) |
+| A-07-07 | tsc 0, lint 0, pnpm test ≥ 340, build 0 | all | automated | covered — all gates confirmed green in this step (361 ≥ 340) |
+| A-07-08 | Five staff lines visible in PIXI canvas with treble clef glyph | manual | manual | IMPL-verified (`TREBLE_STAFF_LINES` loop at line 137; `PIXI.Text '\u{1D11E}'` at line 236); live visual verification deferred to Pilot |
+| A-07-09 | Colored note-heads at correct positions, per-voice colors, ledger lines | manual | manual | IMPL-verified (`voiceColor` at line 115; `nh.ledgerLines` loop at line 153); live visual verification deferred to Pilot |
+| A-07-10 | Rest glyphs at correct x-positions; no note-head for rest slots | manual | manual | IMPL-verified (horizontal line at `restY` step-6; separate loop from note-heads at line 171); live visual verification deferred to Pilot |
+| A-07-11 | White playhead advances, aligned with ProgressionStrip cursor | live-system | live-system | IMPL-verified (formula `((now - anchor) / barMs) * PX_PER_CYCLE` at line 291; same PX_PER_CYCLE imported from time-map.ts); live alignment verification deferred to Pilot |
+| A-07-12 | Sharp accidentals drawn left of note-head; natural notes show no accidental | manual | manual | IMPL-verified (`accText.x = nx - NOTE_RADIUS - 1` with `anchor.set(1, 0.5)` at line 203–204; guard `nh.accidental !== '#'` at line 189); live visual verification deferred to Pilot |
+
+**Notes on partial coverage:** A-07-08 through A-07-12 are marked IMPL-verified because this is a CLI-only environment with no browser. The implementation correctness of each criterion is confirmed by static code analysis of the specific rendering logic. Live/visual verification is deferred to the Pilot, per the Planner's instructions for step 07.5.
+
+**Proxy disclosures (A-07-06):** `grep -rn "from 'pixi|from 'svelte|from '@pixi" src/core/harmony/` — checked all files in `src/core/harmony/` (staff-layout.ts, staff-map.ts, time-map.ts, voice-tracks.ts); returns 0 matches. Confirmed in this step.
+
+### Decisions made (if any)
+
+- Font fallback added for treble clef PIXI.Text: `Georgia, "Times New Roman", Fraunces, serif`. This is defensive — U+1D11E is in the Supplementary Multilingual Plane and is not reliably present in any of these fonts on all platforms. Honest limitation noted in handoff. No ADR needed; this is a cosmetic implementation detail.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- 361 tests passing (unchanged from step 07.4).
+- `tsc --noEmit`, `pnpm lint`, `pnpm build` all exit 0.
+- `src/render/harmony-staff-scene.ts` updated (font fallback for treble clef).
+- All other source files unchanged.
+
+### Next-step context
+
+Phase 07 complete. Phase 08 (orbital harmony view + morph) is next.
+
+**Next action:** Planner reviews step 07.5. After APPROVE, phase 07 is closed and the Pilot authorizes phase 08 scoping.
+
+---
+
+## Handoff — Phase 07 (Linear harmony view)
+
+**Phase completed:** 2026-06-12
+
+### Completed
+
+- Wrote `src/core/harmony/staff-layout.ts` — pure engine computing `NoteHead[]`, `RestGlyph[]`, and `totalWidth` from `VoiceTrack[]` and `pxPerCycle`. No DOM/PIXI/Svelte imports. AGPL-3.0 header. 32 unit tests.
+- Wrote `tests/harmony/staff-layout.test.ts` — 32 tests covering all 5 unit acceptance criteria (A-07-01 through A-07-05).
+- Created `src/render/harmony-staff-scene.ts` — PIXI v7 harmony staff scene: 5 staff lines, treble clef glyph, colored note-heads per voice, ledger lines, rest glyphs (horizontal thick lines), sharp accidentals (PIXI.Text '#' left of note-head), and white playhead advancing via `getVisualPhaseAnchor()`. Module-level singleton pattern mirroring `rhythm-scene.ts`.
+- Updated `src/render/stage.ts` — added `harmonyLayer: PIXI.Container` to `StageRefs` interface and `getStageRefs()` return, exposing the existing container.
+- Updated `src/app/App.svelte` — wired `buildHarmonyStaffScene`, `updateHarmonyStaffDynamic`, `tickHarmonyStaff`; change detection for `progressionLength` and `octave`; ticker registered via `app.ticker.add`.
+- All quality gates green throughout: tsc 0, lint 0, 361 tests (≥ 340), build exits 0.
+
+### Acceptance Coverage Summary
+
+| Acceptance ID | Required behavior | Covered in step | Status |
+|---|---|---|---|
+| A-07-01 | `computeStaffLayout` empty progression → `{ noteHeads: [], restGlyphs: [], totalWidth: 0 }` | 07.2 | covered |
+| A-07-02 | Single C-major chord at octave 3 → 3 note-heads at x=0, stepY matching `noteToStaffPosition` | 07.2 | covered |
+| A-07-03 | Mixed `[C maj, rest, A min]` → note-heads x=0, rest x=48, note-heads x=96; totalWidth=192 | 07.2 | covered |
+| A-07-04 | Sharp chord (D major/F#3) → `NoteHead.accidental='#'` for that voice | 07.2 | covered |
+| A-07-05 | Below-staff chord (C3) → `NoteHead.ledgerLines` non-empty | 07.2 | covered |
+| A-07-06 | No pixi/svelte/DOM imports in `src/core/harmony/` | 07.2, 07.5 | covered (proxy:static-analysis — grep 0 matches) |
+| A-07-07 | tsc 0, lint 0, test ≥ 340, build 0 | 07.5 | covered — 361 tests, all gates green |
+| A-07-08 | Five staff lines + treble clef glyph in PIXI canvas | 07.3, 07.5 | IMPL-verified; live visual verification deferred to Pilot |
+| A-07-09 | Colored note-heads per voice, ledger lines rendered | 07.3, 07.5 | IMPL-verified; live visual verification deferred to Pilot |
+| A-07-10 | Rest glyphs at correct x-positions; no note-head for rest slots | 07.3, 07.5 | IMPL-verified; live visual verification deferred to Pilot |
+| A-07-11 | White playhead advances, aligned with ProgressionStrip cursor at PX_PER_CYCLE=48 | 07.3, 07.4, 07.5 | IMPL-verified; live alignment verification deferred to Pilot |
+| A-07-12 | Sharp accidentals left of note-head; natural notes show no accidental | 07.3, 07.5 | IMPL-verified; live visual verification deferred to Pilot |
+
+### Decisions made
+
+- Voice colors: voice 0 → `COL.tonic` (0xf3b15a), voice 1 → `COL.subdom` (0x56cfc4), voice 2 → `COL.dom` (0xe87bac). Pre-resolved by Pilot in phase spec.
+- Staff layout region: lower strip of canvas (`staffBaseY = app.screen.height − 60`, `STEP_PX = 10`). Pre-resolved by Pilot.
+- Treble clef font: `Georgia, "Times New Roman", Fraunces, serif` — defensive fallback. U+1D11E (SMP) may still render as tofu on some platforms. Known limitation; no bundled music font (Bravura/SMuFL) added.
+- `stage.ts` `StageRefs` extended to expose `harmonyLayer: PIXI.Container` (existing container, not a new layer).
+- Ticker pattern: `app.ticker.add(tickHarmonyStaff)` direct add (parallel to `registerTicker` dispatcher; confirmed in inventory step 07.1).
+
+### ADRs committed
+
+None — Phase 07 used confirmed engines from Phases 05–06 and established PIXI patterns. No new architectural decisions required a full ADR.
+
+### Register entries added
+
+None.
+
+### Pending Register proposals resolved at phase approval
+
+None.
+
+### Deferred
+
+- Live visual verification for A-07-08 through A-07-12: CLI environment with no browser. Pilot performs live verification.
+- Treble clef glyph font: U+1D11E may render as tofu on platforms without a SMP music font. A future phase may bundle a music font (Bravura/SMuFL) if the glyph is consistently missing. Deferred — not a correctness issue, only cosmetic.
+
+### Blockers and review escalations
+
+None.
+
+### Iteration counts (only for steps that took multiple iterations)
+
+All steps approved on iteration 1.
+
+### Next focus
+
+- Phase 08 — orbital harmony view + morph: concentric voice rings with linear↔orbital morph; one full revolution = full progression loop; bar markers on the ring. Rest-aware from the start.
+- Specific context for Planner scoping: Phase 07 confirmed `tickHarmonyStaff` via direct `app.ticker.add`; Phase 08 should follow the same pattern for the orbital scene. The `_staffWidth` and `_staffBaseY` module-level state in `harmony-staff-scene.ts` are private; Phase 08 will need its own module.

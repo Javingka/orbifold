@@ -233,8 +233,12 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   _dynGfx = new PIXI.Graphics();
   _accidentalContainer = new PIXI.Container();
 
+  // Font fallback for U+1D11E (𝄞, Musical Symbol G Clef): Fraunces and most serif fonts
+  // do not contain SMP music glyphs. 'Georgia, "Times New Roman", serif' provides a wide
+  // OS coverage for BMP glyphs but the treble-clef codepoint is SMP and may still render
+  // as a tofu box on some platforms. This is a known limitation — see handoff step 07.5.
   _clefText = new PIXI.Text('\u{1D11E}', {
-    fontFamily: FONT_SERIF,
+    fontFamily: `Georgia, "Times New Roman", ${FONT_SERIF}`,
     fontSize: TREBLE_CLEF_FONT_SIZE,
     fill: COL.faint,
   });
