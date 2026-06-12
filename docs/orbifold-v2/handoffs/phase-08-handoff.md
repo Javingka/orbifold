@@ -874,3 +874,83 @@ This handoff is ready for Pilot Checkpoint #5 (Phase Complete). The Pilot's manu
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Post-verification REVISE — Pilot Checkpoint #5 bugs
+
+**Date:** 2026-06-12
+**Iteration:** 1 (post-Pilot live-verification)
+
+### Background
+
+After Pilot Checkpoint #5 live verification, four rendering/UX bugs were identified that were not detectable by static analysis alone. These are corrected in a single REVISE commit.
+
+### Bug 1 — Staff lines truncated to note content width (A-08-10)
+
+**Root cause:** `drawStaticStaff` drew horizontal staff lines from x=0 to `staffWidth` (= `totalBars × PX_PER_CYCLE` but bounded by `MIN_STAFF_WIDTH`). When a short progression placed only a few chord slots near the left, the right portion of the canvas was black rather than showing the five staff lines.
+
+**Fix:** `drawStaticStaff` now accepts a separate `lineWidth` parameter. In `buildHarmonyStaffScene`, `lineWidth = app.screen.width` is passed — the full canvas width — while note-head x-positions continue to come from `_layout.noteHeads[].x` (unchanged). The five staff lines are now edge-to-edge regardless of note content width.
+
+**Files:** `src/render/harmony-staff-scene.ts` — new `lineWidth` parameter on `drawStaticStaff`; call site passes `app.screen.width`.
+
+### Bug 2 — Treble clef curl one line too low (A-08-10)
+
+**Root cause:** `TREBLE_CLEF_Y_OFFSET = 10` was derived for the Phase 07 geometry and was not revalidated after `STEP_PX` increased to 16 and `staffBaseY` moved to canvas center. The result was that the G-clef curl visually sat on the E4 line (step 2, the bottom staff line) instead of the G4 line (step 4, the second staff line from the bottom) — off by 2 diatonic steps = 16 px.
+
+**Fix:** `TREBLE_CLEF_Y_OFFSET` increased from `10` to `26` (adds `2 × HALF_STEP_PX = 16 px` of upward offset). The clef text is now placed 16px higher, aligning the curl with the G4 line per the standard G-clef convention.
+
+**Files:** `src/render/harmony-staff-scene.ts` — `TREBLE_CLEF_Y_OFFSET` constant updated; comment added.
+
+### Bug 3 — Tonnetz instructional text visible in Pentagrama subview and Ritmo view (A-08-11)
+
+**Root cause:** The stage hint `<div class="hint">{$hudStore.hint}</div>` in `App.svelte` was always rendered unconditionally, regardless of view or subview. The `$hudStore.hint` string is the Tonnetz instruction ("Toca un triángulo para elegir un acorde…"), which is irrelevant — and confusing — when the user is in the Pentagrama subview or in the Ritmo view.
+
+**Fix:** The hint div in `App.svelte` is now gated by `$sessionStore.view === 'harmony'`. Within the harmony view, the rendered text branches on `$sessionStore.harmony.subview`:
+
+- `'tonnetz'` → shows `$hudStore.hint` (the existing Tonnetz instruction from `hud.ts`)
+- `'staff'` → shows the Pentagrama instruction: "3 voces en color — tónica, subdominante, dominante. Cambia modo registro: suavizado (contornos suaves) o estricto (posición absoluta)."
+
+Neither text renders in Ritmo view or any other non-harmony view.
+
+**Files:** `src/app/App.svelte` — hint `<div>` replaced with `{#if $sessionStore.view === 'harmony'}` / `{#if subview === 'tonnetz'}` / `{:else}` block.
+
+### Bug 4 — Staff playhead wraps faster than ProgressionStrip cursor (A-08-08)
+
+**Root cause:** `_staffWidth = Math.max(_layout.totalWidth, MIN_STAFF_WIDTH)` where `_layout.totalWidth` equals `max(event.startCycle + event.bars) × PX_PER_CYCLE`. For a progression where the last slot is a rest (which produces no note event in `staff-layout.ts`), `totalWidth` can be smaller than `totalBars × PX_PER_CYCLE`. The playhead modulo then uses a smaller divisor than the ProgressionStrip cursor's denominator (`totalBars × PX_PER_CYCLE`), causing the staff playhead to loop faster than the strip cursor — the two went out of sync.
+
+**Fix:** `_staffWidth` is now computed as:
+
+```typescript
+_staffWidth = Math.max(
+  state.harmony.progression.reduce((sum, slot) => sum + (slot.bars ?? 1), 0) * PX_PER_CYCLE,
+  MIN_STAFF_WIDTH
+);
+```
+
+This uses the full progression duration directly, matching the ProgressionStrip cursor's denominator. The `?? 1` guard handles slots where `bars` is `undefined` (defaults to 1 bar per the progression data model). The `_staffWidth <= 0` guard in `updateHarmonyStaffDynamic` is unchanged (still present).
+
+**Files:** `src/render/harmony-staff-scene.ts` — `_staffWidth` computation in `buildHarmonyStaffScene`.
+
+### REVISE validation evidence
+
+| Gate | Result |
+| --- | --- |
+| `pnpm exec tsc --noEmit` | exit 0 (0 errors) |
+| `pnpm lint` | exit 0 (ESLint + Prettier clean; Prettier reformatted App.svelte) |
+| `pnpm exec vitest run` | 385 passed, 0 failed (13 test files) — count unchanged |
+| `pnpm build` | exit 0; pre-existing chunk-size advisory unchanged |
+
+### REVISE Acceptance Coverage Table
+
+| Acceptance ID | Bug fixed | Source evidence | Gap status after fix |
+| --- | --- | --- | --- |
+| A-08-08 | Bug 4: playhead sync (staffWidth = totalBars × PX_PER_CYCLE) | `harmony-staff-scene.ts`: `_staffWidth = Math.max(progression.reduce(…bars ?? 1…) * PX_PER_CYCLE, MIN_STAFF_WIDTH)` | proxy-covered (live: deferred to Pilot re-verification) |
+| A-08-10 | Bug 1: staff lines span full canvas width | `drawStaticStaff` `lineWidth = app.screen.width` passed from `buildHarmonyStaffScene` | proxy-covered (live: deferred to Pilot re-verification) |
+| A-08-10 | Bug 2: clef curl on G4 line | `TREBLE_CLEF_Y_OFFSET = 26` (was 10) | proxy-covered (live: deferred to Pilot re-verification) |
+| A-08-11 | Bug 3: instructional text gated by subview | `App.svelte`: `{#if view === 'harmony'}{#if subview === 'tonnetz'}…{:else}…{/if}{/if}` | proxy-covered (live: deferred to Pilot re-verification) |
+
+### REVISE Terminal commit
+
+- **Terminal commit:** `fix(harmony): Phase 08 post-verification — staff lines, clef position, subview text, playhead sync`
+  - Hash: self-referential — not recorded

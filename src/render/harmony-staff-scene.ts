@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — harmony staff scene: PIXI rendering of the treble-clef linear staff
 // for the harmony view. Consumes StaffLayout from staff-layout.ts and draws:
-//   - Five treble-clef staff lines
+//   - Five treble-clef staff lines (full canvas width, edge-to-edge)
 //   - Treble clef glyph (𝄞, Unicode U+1D11E) at left edge
 //   - Colored note-heads (filled circles) per voice
 //   - Ledger lines for notes outside the five-line staff
@@ -19,6 +19,13 @@
 //             = height / 2 − 48   → centers step-6 (B4) at canvas midpoint
 //   y(s) = staffBaseY − s × HALF_STEP_PX
 //   Five staff lines: diatonic steps [2, 4, 6, 8, 10] (E4, G4, B4, D5, F5)
+//   Staff lines always span edge-to-edge (0 → app.screen.width), regardless of
+//   note content extent (post-verification fix, A-08-10).
+//
+// Clef placement (post-verification fix, A-08-10):
+//   The G-clef curl sits on G4 = step 4.
+//   G4 y = staffBaseY − 4 × HALF_STEP_PX = staffBaseY − 32.
+//   TREBLE_CLEF_Y_OFFSET = 26 aligns the curl visually on the G4 line.
 //
 // Voice colors (Pilot decision, phase-07.md):
 //   voice 0 → COL.tonic  (0xf3b15a)
@@ -27,11 +34,13 @@
 //
 // Playhead (Phase 08 ADR 0011 Amendment D6): cyclic modulo wrap.
 //   rawX = (now − getVisualPhaseAnchor()) / barMs × PX_PER_CYCLE
+//   _staffWidth = totalBars × PX_PER_CYCLE  (post-verification fix, A-08-08)
 //   playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth
 //   Guard: if _staffWidth <= 0, return early without drawing.
 //   where barMs = (60000 / bpm) × 4 (one 4/4 bar in ms)
 //   (Fixes Phase 07 A-07-11 / A-08-08: playhead loops continuously instead of
-//    clamping at the last note position.)
+//    clamping at the last note position; _staffWidth matches ProgressionStrip
+//    denominator so both cursors stay in sync.)
 //
 // PX_PER_CYCLE imported from time-map.ts (vigent coordination-point rule).
 
@@ -76,8 +85,13 @@ const REST_HALF_W = 10;
 /** Sharp accidental PIXI.Text font size. */
 const ACCIDENTAL_FONT_SIZE = 11;
 
-/** Treble clef y-offset above staffBaseY. */
-const TREBLE_CLEF_Y_OFFSET = 10;
+/**
+ * Treble clef y-offset above staffBaseY.
+ * Post-verification fix (A-08-10): increased from 10 to 26 so the G-clef curl
+ * visually sits on the G4 staff line (step 4) rather than the E4 line (step 2).
+ * The adjustment is 2 diatonic steps × HALF_STEP_PX (8 px) = 16 px added upward.
+ */
+const TREBLE_CLEF_Y_OFFSET = 26;
 
 /** Treble clef font size for the '𝄞' character. */
 const TREBLE_CLEF_FONT_SIZE = 60;
@@ -133,22 +147,30 @@ function voiceColor(voiceIndex: 0 | 1 | 2): number {
 /**
  * Draw the five staff lines, note-heads, ledger lines, and rest glyphs
  * into _staffGfx. Clears first.
+ *
+ * @param lineWidth - Horizontal extent of the five staff lines. Must equal
+ *   app.screen.width (edge-to-edge) so the canvas never shows black gaps on
+ *   the right when there are only a few chords. Note-head x-positions come
+ *   from layout.noteHeads[].x and are independent of this value.
  */
 function drawStaticStaff(
   gfx: PIXI.Graphics,
   layout: StaffLayout,
   staffBaseY: number,
-  staffWidth: number
+  staffWidth: number,
+  lineWidth: number
 ): void {
   gfx.clear();
 
   // ── Five treble staff lines ────────────────────────────────────────────────
-  // Lines are drawn in COL.faint, spanning the full staff width.
+  // Lines span edge-to-edge (0 → lineWidth = app.screen.width) regardless of
+  // how many notes exist. Post-verification fix (A-08-10): was 0→staffWidth,
+  // leaving the right portion of the canvas black when the progression is short.
   for (const lineStep of TREBLE_STAFF_LINES) {
     const y = stepToY(lineStep, staffBaseY);
     gfx.lineStyle(1, COL.faint, 0.9);
     gfx.moveTo(0, y);
-    gfx.lineTo(staffWidth, y);
+    gfx.lineTo(lineWidth, y);
   }
 
   // ── Note-heads, ledger lines ───────────────────────────────────────────────
@@ -272,10 +294,24 @@ export function buildHarmonyStaffScene(state: SessionState): void {
     state.harmony.registerMode
   );
   _layout = computeStaffLayout(tracks, PX_PER_CYCLE);
-  _staffWidth = Math.max(_layout.totalWidth, MIN_STAFF_WIDTH);
+
+  // ── _staffWidth: total progression duration in pixels ─────────────────────
+  // Post-verification fix (A-08-08): _staffWidth must equal the full progression
+  // duration (totalBars × PX_PER_CYCLE), not layout.totalWidth.  layout.totalWidth
+  // only extends to the last rendered note event and is shorter when notes don't
+  // fill the entire progression (e.g. a trailing rest).  Using totalWidth caused
+  // the playhead to wrap faster than the ProgressionStrip cursor, breaking sync.
+  // The ProgressionStrip cursor denominator is totalBars × PX_PER_CYCLE (local
+  // const PX_PER_CYCLE = 48 in ProgressionStrip.svelte, same value per Register).
+  _staffWidth = Math.max(
+    state.harmony.progression.reduce((sum, slot) => sum + (slot.bars ?? 1), 0) * PX_PER_CYCLE,
+    MIN_STAFF_WIDTH
+  );
 
   // ── Draw static content ───────────────────────────────────────────────────
-  drawStaticStaff(_staffGfx, _layout, _staffBaseY, _staffWidth);
+  // lineWidth = app.screen.width: staff lines span edge-to-edge regardless of
+  // note content (Bug 1 fix, A-08-10). Note-head positions use _layout coordinates.
+  drawStaticStaff(_staffGfx, _layout, _staffBaseY, _staffWidth, app.screen.width);
   drawAccidentals(_accidentalContainer, _layout, _staffBaseY);
 
   // ── Position treble clef glyph ────────────────────────────────────────────

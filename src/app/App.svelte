@@ -394,10 +394,24 @@
   <Legend />
 
   <!--
-    Stage hint: bottom-left of #stage, static instructional text.
+    Stage hint: bottom-left of #stage, view-and-subview-gated instructional text.
     Prototype: .hint#stageHint (line 423, CSS lines 119–120).
+    Post-verification fix (A-08-11): the Tonnetz instruction was always visible,
+    even in Pentagrama subview and in Ritmo view. Now gated by view + subview:
+      - harmony + tonnetz → Tonnetz instruction (from hudStore.hint)
+      - harmony + staff   → Pentagrama instruction
+      - any other view    → no hint rendered
   -->
-  <div class="hint">{$hudStore.hint}</div>
+  {#if $sessionStore.view === 'harmony'}
+    {#if $sessionStore.harmony.subview === 'tonnetz'}
+      <div class="hint">{$hudStore.hint}</div>
+    {:else}
+      <div class="hint">
+        3 voces en color — tónica, subdominante, dominante. Cambia modo registro: suavizado
+        (contornos suaves) o estricto (posición absoluta).
+      </div>
+    {/if}
+  {/if}
 </div>
 
 <!--
