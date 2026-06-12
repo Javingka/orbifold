@@ -157,10 +157,22 @@ export function getApp(): PIXI.Application | null {
 }
 
 /**
- * Toggle harmony / rhythm layer visibility.
+ * Toggle harmony / rhythm layer visibility for the active primary view.
+ *
+ * Phase 09 (step 09.3) — ADR 0013 D1/D2: signature widened to accept all 5
+ * view-type strings. Behavior:
+ *   'harmony'     → harmonyLayer visible, rhythmLayer hidden (unchanged).
+ *   'rhythm'      → rhythmLayer visible, harmonyLayer hidden (unchanged).
+ *   'composition' → both layers hidden (content is DOM, not PIXI).
+ *   'session'     → both layers hidden.
+ *   'code'        → both layers hidden.
+ *
+ * Reversibility: passing 'harmony' or 'rhythm' produces byte-identical PIXI
+ * layer state to the pre-Phase-09 implementation.
+ *
  * Prototype: rhythmLayer.visible is toggled based on current view.
  */
-export function setView(view: 'harmony' | 'rhythm'): void {
+export function setView(view: 'harmony' | 'rhythm' | 'composition' | 'session' | 'code'): void {
   if (harmonyLayer !== null) harmonyLayer.visible = view === 'harmony';
   if (rhythmLayer !== null) rhythmLayer.visible = view === 'rhythm';
 }

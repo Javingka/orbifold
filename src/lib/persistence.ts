@@ -7,7 +7,13 @@ import type { SessionState } from '../state/session.js';
 
 // ── Schema version ─────────────────────────────────────────────────────────
 
-export const SESSION_SCHEMA_VERSION = 1;
+/**
+ * Schema version 2 — Phase 09 (step 09.3), ADR 0013 D1.
+ * Change from v1: `view` enum extended with `'code'` (Código Strudel primary view).
+ * Version 1 blobs fail the `z.literal(2)` check and are dropped by the existing
+ * safeParse graceful-degradation path — no migration function. Pilot-confirmed tradeoff.
+ */
+export const SESSION_SCHEMA_VERSION = 2;
 
 // ── Shared enum constants (mirror agent/schema.ts SK_ arrays) ─────────────
 
@@ -86,10 +92,25 @@ const SavedCompositionSchema = z.object({
   tracks: z.array(SavedTrackSchema).max(16),
 });
 
+/**
+ * SavedSessionSchema v2 — Phase 09 (step 09.3), ADR 0013 D1.
+ *
+ * Changes from v1:
+ *   - `version` literal bumped from 1 to 2.
+ *   - `view` enum extended with `'code'` (five valid strings).
+ *   - Safe fallback: `.catch('harmony' as const)` after the enum so any
+ *     unrecognized `view` string (forward-compat or corrupt) silently defaults
+ *     to `'harmony'` rather than causing safeParse to return `null`.
+ *
+ * Version 1 blobs fail the `z.literal(2)` check → dropped by safeParse (existing
+ * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0013 D1).
+ */
 export const SavedSessionSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   bpm: z.number().int().min(40).max(280),
-  view: z.enum(['rhythm', 'harmony', 'composition', 'session'] as const),
+  view: z
+    .enum(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)
+    .catch('harmony' as const),
   chordMode: z.enum(['chord', 'arp'] as const),
   harmony: SavedHarmonySchema,
   rhythm: SavedRhythmSchema,

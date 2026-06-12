@@ -238,7 +238,14 @@ export interface NowPlaying {
  */
 export interface SessionState {
   bpm: number; // 40–280; default 120
-  view: 'rhythm' | 'harmony' | 'composition' | 'session'; // default 'harmony'
+  /**
+   * The active primary view.
+   * Phase 09 (step 09.3) — ADR 0013 D1: widens from 4 to 5 strings.
+   * 'rhythm' | 'harmony' | 'composition' | 'session' | 'code'
+   * 'session' is retained (not a nav view; used by the ▶ Sesión transport mode).
+   * 'code' is new (Código Strudel primary view).
+   */
+  view: 'rhythm' | 'harmony' | 'composition' | 'session' | 'code'; // default 'harmony'
   chordMode: 'chord' | 'arp'; // default 'chord'
   harmony: HarmonyState;
   rhythm: RhythmState;
@@ -673,6 +680,27 @@ export function setRegisterMode(mode: RegisterMode): void {
     harmony: { ...s.harmony, registerMode: mode },
   }));
   // Visual-only: no requeueLive(). The staff re-renders via App.svelte store subscription.
+}
+
+/**
+ * Switch the active primary view.
+ *
+ * Updates `SessionState.view` in the store and calls `stage.setView` via lazy
+ * import (mirrors the lazy pattern for setHarmonySubview to avoid pulling PIXI
+ * into the Node/Vitest environment).
+ *
+ * For 'harmony' and 'rhythm': the corresponding PIXI layer becomes visible.
+ * For 'composition', 'session', and 'code': both PIXI layers are hidden (the
+ * main content for those views is DOM, not PIXI).
+ *
+ * Phase 09 (step 09.3) — ADR 0013 D1/D2.
+ *
+ * @param view - One of the five valid view-type strings.
+ */
+export function setView(view: SessionState['view']): void {
+  sessionStore.update((s) => ({ ...s, view }));
+  // Call stage.setView via lazy import (avoids PIXI at module-eval time in Node).
+  void getStage().then((m) => m.setView(view));
 }
 
 /**

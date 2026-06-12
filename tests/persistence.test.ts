@@ -58,7 +58,7 @@ beforeEach(() => {
 // ── Test fixtures ──────────────────────────────────────────────────────────
 
 const MINIMAL_SAVED: SavedSession = {
-  version: 1,
+  version: 2,
   bpm: 120,
   view: 'harmony',
   chordMode: 'chord',
@@ -68,7 +68,7 @@ const MINIMAL_SAVED: SavedSession = {
 };
 
 const FULL_SAVED: SavedSession = {
-  version: 1,
+  version: 2,
   bpm: 140,
   view: 'rhythm',
   chordMode: 'arp',
@@ -167,8 +167,16 @@ describe('SavedSessionSchema', () => {
     expect(SavedSessionSchema.safeParse(FULL_SAVED).success).toBe(true);
   });
 
-  it('rejects version 2 (wrong literal)', () => {
-    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 2 }).success).toBe(false);
+  it('rejects version 1 (old schema — lossy drop per ADR 0013 D1)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 1 }).success).toBe(false);
+  });
+
+  it('accepts version 2 (current schema version)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 2 }).success).toBe(true);
+  });
+
+  it('rejects version 3 (unknown future version)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 3 }).success).toBe(false);
   });
 
   it('rejects bpm below 40', () => {
@@ -358,7 +366,7 @@ describe('saveSession / listSavedSessions / loadSavedSession / deleteSession', (
     expect(loaded).not.toBeNull();
     expect(loaded?.bpm).toBe(140);
     expect(loaded?.harmony.root).toBe(5);
-    expect(loaded?.version).toBe(1);
+    expect(loaded?.version).toBe(2);
   });
 
   it('loadSavedSession returns null for an unknown session name', () => {
@@ -429,11 +437,11 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
     expect(back.harmony.progression[2]).toEqual({ rootPc: 5, qual: 'maj', gain: 0.6 });
   });
 
-  // A-06-06: backward compatibility — version-1 chord-only session still parses.
-  it('version-1 session with chord-only progression parses against updated SavedSessionSchema', () => {
-    // A chord-only session with no isRest fields must still parse correctly.
-    const v1Payload = {
-      version: 1,
+  // A-06-06: chord-only session with current schema version still parses.
+  it('version-2 session with chord-only progression parses against SavedSessionSchema', () => {
+    // A chord-only session (no isRest fields) at schema v2 must parse correctly.
+    const v2Payload = {
+      version: 2,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -446,7 +454,7 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    const result = SavedSessionSchema.safeParse(v1Payload);
+    const result = SavedSessionSchema.safeParse(v2Payload);
     expect(result.success).toBe(true);
     if (result.success) {
       // Chord slot must parse correctly as a chord (not a rest).
@@ -457,6 +465,20 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
       });
       expect(result.data.harmony.progression[0]).not.toHaveProperty('isRest');
     }
+  });
+
+  // A-09-03: version-1 blob is dropped (lossy drop per ADR 0013 D1).
+  it('version-1 blob fails schema v2 validation and is dropped (ADR 0013 D1)', () => {
+    const v1Payload = {
+      version: 1,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: { root: 0, mode: 'major', octave: 3, progression: [] },
+      rhythm: { layers: [] },
+      composition: { blocks: [], tracks: [] },
+    };
+    expect(SavedSessionSchema.safeParse(v1Payload).success).toBe(false);
   });
 
   it('{ isRest: true } with no bars field parses and serializes correctly', () => {
@@ -480,4 +502,75 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
     const back = deserializeSession(parseResult.data);
     expect(back.harmony.progression[0]).toEqual({ isRest: true });
   });
+});
+
+// ── Phase 09 (step 09.3) — view-type schema v2 (A-09-01, A-09-03) ─────────
+
+describe("Phase 09 schema v2: view field 'code' and safe fallback (A-09-01, A-09-03)", () => {
+  // A-09-01 + A-09-03: session saved with view:'code' round-trips under schema v2.
+  it("round-trips a session with view:'code' under schema v2 (A-09-01)", () => {
+    const stateWithCode: SessionState = {
+      ...FULL_STATE,
+      view: 'code',
+    };
+    const serialized = serializeSession(stateWithCode);
+    // Serialized view must be 'code'.
+    expect(serialized.view).toBe('code');
+    expect(serialized.version).toBe(2);
+    // Schema v2 accepts 'code'.
+    const parseResult = SavedSessionSchema.safeParse(
+      JSON.parse(JSON.stringify(serialized)) as unknown
+    );
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+    expect(parseResult.data.view).toBe('code');
+    // Deserialization preserves 'code'.
+    const back = deserializeSession(parseResult.data);
+    expect(back.view).toBe('code');
+  });
+
+  // A-09-03: an unrecognized view string falls back to 'harmony' (safe fallback).
+  it("unrecognized view string defaults to 'harmony' via .catch fallback (A-09-03)", () => {
+    const unknownViewPayload = {
+      version: 2,
+      bpm: 120,
+      view: 'unknown-future-view',
+      chordMode: 'chord',
+      harmony: { root: 0, mode: 'major', octave: 3, progression: [] },
+      rhythm: { layers: [] },
+      composition: { blocks: [], tracks: [] },
+    };
+    const result = SavedSessionSchema.safeParse(unknownViewPayload);
+    // safeParse succeeds (does not throw) — .catch provides a valid fallback.
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    // Unrecognized view falls back to 'harmony'.
+    expect(result.data.view).toBe('harmony');
+  });
+
+  // A-09-03: SESSION_SCHEMA_VERSION is 2.
+  it('SESSION_SCHEMA_VERSION is 2 (A-09-03)', () => {
+    expect(SESSION_SCHEMA_VERSION).toBe(2);
+  });
+
+  // A-09-01: all five view-type strings are accepted by the schema.
+  it.each(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)(
+    "schema v2 accepts view:'%s' (A-09-01)",
+    (viewValue) => {
+      const payload = {
+        version: 2,
+        bpm: 120,
+        view: viewValue,
+        chordMode: 'chord',
+        harmony: { root: 0, mode: 'major', octave: 3, progression: [] },
+        rhythm: { layers: [] },
+        composition: { blocks: [], tracks: [] },
+      };
+      const result = SavedSessionSchema.safeParse(payload);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.view).toBe(viewValue);
+      }
+    }
+  );
 });
