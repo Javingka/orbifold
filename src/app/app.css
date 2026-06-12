@@ -266,13 +266,14 @@ textarea {
 
 /*
  * Tab button — fixed bottom-right of #codeTab, accent border, uppercase label.
- * bottom: 90px — clears the Transport footer (approx. 68–80 px at 1440 wide,
- * up to ~104 px with progression strip on narrow viewports; 90 px is a safe
- * clearance for the common single-row footer case). OD-01 resolution: option 1.
+ * bottom: 140px — clears Transport footer (~68px) + ProgressionStrip row (~60px)
+ * with 12px buffer. Phase 03 step 03.4 moved the strip to its own row above
+ * the Transport; the prior value (90px) only cleared the Transport and caused the
+ * tab to overlap the strip. OD-01 resolution: option 1.
  */
 #compTab {
   position: fixed;
-  bottom: 90px;
+  bottom: 140px;
   left: calc(50% + 130px);
   transform: translateX(-50%);
   z-index: 8;
