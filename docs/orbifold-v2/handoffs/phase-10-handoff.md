@@ -543,3 +543,210 @@ Step 10.6 adds the PIXI interaction layer (select, delete ✕, resize) per ADR 0
 **Terminal commit:** `feat(harmony): Phase 10 step 10.5 — arpeggio stagger visual`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.6 — PIXI interaction layer (select, delete, resize)
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+**(a) Interaction infrastructure — native DOM event routing (idiom match)**
+
+Per the step prompt: "check what the codebase already uses elsewhere, e.g. tonnetz-scene.ts, and match it." `tonnetz-scene.ts` and `rhythm-scene.ts` use native DOM `PointerEvent` listeners on the PIXI canvas element (via `canvas.addEventListener`), not PIXI's `interactive` system. No existing code path uses `displayObject.interactive = true` with PIXI event listeners. The implementation matches this established idiom:
+
+- Three exported functions: `onStaffPointerDown(e: PointerEvent)`, `onStaffPointerMove(e: PointerEvent)`, `onStaffPointerUp()` — called from `App.svelte`'s canvas event listeners.
+- Coordinate mapping: `e.offsetX` is canvas-local CSS pixels. With `autoDensity:true` in PIXI Application, PIXI logical px === CSS px, so `offsetX` aligns directly with slot bounds without DPR conversion (consistent with Tonnetz `onStagePointerDown` round-2 fix).
+- No `_hitRect: PIXI.Graphics` with `interactive = true` was created; the ADR's intent (one handler for all pointer events, pure-engine dispatch) is preserved through the equivalent DOM routing pattern.
+
+**(b) Module-level interaction state (ADR 0014 D3, Consequence 3)**
+
+Six module-level variables added to `harmony-staff-scene.ts`:
+- `_selectedSlotIdx: number | null = null`
+- `_resizeActive: boolean = false`
+- `_resizeStartPx: number = 0`
+- `_resizeStartBars: number = 1`
+- `_resizePreviewBars: number = 1`
+- `_slotBounds: SlotBounds[] = []`
+
+None persisted — ephemeral UI state consistent with `registerMode`/`subview` (Decisions Register, Phase 08).
+
+**(c) `drawAffordances()` helper**
+
+New `drawAffordances()` function (not exported) draws into `_affordanceGfx` (a separate `PIXI.Graphics` layer added on top of `_dynGfx` in the staffContainer z-order):
+- Static selection state: 1px white border rectangle around the slot's full vertical span; 4px white filled rectangle at the right edge (resize handle); `PIXI.Text '×'` added as a child of `staffContainer` at `(slotRight − 10, staffBaseY − 20)`.
+- Resize active state: white outline rectangle at slot's x position with width = `_resizePreviewBars × PX_PER_CYCLE` (no border, no ✕, no handle bar during drag).
+- Clears `_affordanceGfx` and destroys `_deleteBtn` (via `.destroy()`) on every call — prevents WebGL texture memory leak (ADR 0014 D4).
+
+**(d) Pointer dispatch order (ADR 0014 D4)**
+
+`onStaffPointerDown`:
+1. If `_selectedSlotIdx` non-null: check ✕ hit region (16×16 px centred at slotRight − 10, staffBaseY − 20) — if hit, call `clearChordAt(slotIndex)`, reset selection, return.
+2. If `_selectedSlotIdx` non-null: call `hitTestResizeHandle(px, _slotBounds, 10)` — if result equals `_selectedSlotIdx`, start resize (set `_resizeActive = true`, `_resizeStartPx`, `_resizeStartBars`), return.
+3. Call `hitTestSlot(px, _slotBounds)` — if non-null, set `_selectedSlotIdx = result`, return.
+4. Outside: `_selectedSlotIdx = null`, `_resizeActive = false`.
+
+`onStaffPointerMove`: if `_resizeActive`, compute `_resizePreviewBars = clampBars(_resizeStartBars + (px − _resizeStartPx) / PX_PER_CYCLE)`, call `drawAffordances()`. No store write.
+
+`onStaffPointerUp`: if `_resizeActive`, call `setChordBars(_selectedSlotIdx!, _resizePreviewBars)`, eagerly recompute `_slotBounds` (so the handle position is correct without waiting for a full rebuild), call `drawAffordances()`.
+
+**(e) Store action imports from `session.ts` (renderer → core direction)**
+
+Imported: `clearChordAt`, `setChordBars`, `clampBars` from `../state/session.js`. Pure engine: `computeSlotBounds`, `hitTestSlot`, `hitTestResizeHandle`, `SlotBounds` from `../core/harmony/staff-hit.js`. Import direction is renderer → state and renderer → core — both permitted.
+
+No `sessionStore.update` call in `harmony-staff-scene.ts` (confirmed by static-analysis check in step 10.8).
+
+**(f) Selection guard (Pilot Checkpoint #2, ADR 0014 Consequence 3) — BINDING**
+
+In `buildHarmonyStaffScene`, after computing `_staffWidth` and before adding children to `staffContainer`:
+
+```typescript
+if (_selectedSlotIdx !== null && _selectedSlotIdx >= state.harmony.progression.length) {
+  _selectedSlotIdx = null;
+  _resizeActive = false;
+  _resizePreviewBars = 1;
+}
+```
+
+This guard ensures that if the ProgressionStrip (or any external surface) deletes a slot while the staff has a selection, the stale index is cleared. It prevents `drawAffordances()` from attempting to look up `_slotBounds[_selectedSlotIdx]` on a nonexistent slot.
+
+**(g) `_slotBounds` recomputed on every `buildHarmonyStaffScene` call (ADR 0014 Consequence 7)**
+
+`computeSlotBounds(state.harmony.progression, PX_PER_CYCLE)` is called immediately after `_staffWidth` is set (and after the selection guard), before `drawAffordances()`. The `_slotBounds` array is always consistent with the current `state.harmony.progression` at the time of rebuild.
+
+**(h) App.svelte updates — trigger rebuild on `setChordBars` + event routing**
+
+Two changes to `src/app/App.svelte`:
+
+1. **Rebuild trigger**: the store subscription's staff rebuild condition now also fires when `totalBars` or `chordMode` changes (in addition to `progressionLength` and `octave`). This ensures that a `setChordBars` call — which changes a slot's duration without changing the progression length — causes `buildHarmonyStaffScene` to be called, so the visual duration bars update immediately.
+
+2. **Event routing**: 
+   - `pointerdown` on the canvas: if `view === 'harmony'` and `harmony.subview === 'staff'`, route to `onStaffPointerDown(e)` instead of `tonnetzPointerDown(e)`.
+   - `pointermove`: if `view === 'harmony'` and `harmony.subview === 'staff'`, route to `onStaffPointerMove(e)` (for resize preview). Rhythm hover logic unchanged for other views.
+   - `pointerup` (new listener): if `view === 'harmony'` and `harmony.subview === 'staff'`, call `onStaffPointerUp()` to commit the resize gesture.
+
+### Prototype parity note
+
+No prototype equivalent — this is a new UX feature. Audio byte-identity: no changes to `src/core/codegen/strudel.ts`. The store actions called (`clearChordAt`, `setChordBars`) are the same ones ProgressionStrip already calls — audio behavior is unchanged. `reorderSlot` (step 10.7) is the only action that changes audio output by design.
+
+### Files touched
+
+- `src/render/harmony-staff-scene.ts` — interaction constants, module-level state, `drawAffordances` helper, `onStaffPointerDown`/`onStaffPointerMove`/`onStaffPointerUp` exports, `buildHarmonyStaffScene` updated (affordance objects, selection guard, `computeSlotBounds` call, `drawAffordances` call), imports from `staff-hit.ts` and `session.ts`.
+- `src/app/App.svelte` — imports `onStaffPointerDown`, `onStaffPointerMove`, `onStaffPointerUp`; `prevTotalBars` / `prevChordMode` state variables; updated store subscription condition; updated `pointerdown` routing; updated `pointermove` routing; new `pointerup` listener.
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry.
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-05** (Select: clicking a slot shows border, ✕ button, and resize handle):
+- `drawAffordances()` draws: white border rect, ✕ PIXI.Text, resize handle rect; called from `onStaffPointerDown` after selection.
+- `_slotBounds` computed before any pointer event; selection set to `hitTestSlot(px, _slotBounds)` result.
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-06** (Delete via ✕: removes slot; ProgressionStrip reflects removal):
+- `onStaffPointerDown` dispatch step 1: hit region (16×16 px centred on delete button) → `clearChordAt(idxToDelete)` — same store action as ProgressionStrip badge ✕.
+- Store update propagates to ProgressionStrip via Svelte reactive subscription.
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-07** (Resize: right-edge drag changes duration; commits via `setChordBars`; strip updates):
+- `onStaffPointerDown` dispatch step 2: resize handle hit → `_resizeActive = true`.
+- `onStaffPointerMove`: `_resizePreviewBars = clampBars(...)` — same `clampBars` semantics as ProgressionStrip.
+- `onStaffPointerUp`: `setChordBars(_selectedSlotIdx!, _resizePreviewBars)` — same store action as ProgressionStrip resize.
+- App.svelte rebuild condition fires on `totalBars` change (new in this step).
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-10** (ProgressionStrip parity: edits on staff visible in strip and vice versa):
+- Same store actions (`clearChordAt`, `setChordBars`) used by both surfaces.
+- Selection guard ensures external deletions (from strip) clear stale `_selectedSlotIdx`.
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-15** (Audio byte-identical — no codegen changes):
+- Files modified: `src/render/harmony-staff-scene.ts`, `src/app/App.svelte`.
+- `src/core/codegen/strudel.ts`: 0 changes. Audio pipeline unchanged.
+
+**A-10-16** (AGPL-3.0 headers):
+- `head -2 src/render/harmony-staff-scene.ts` → `// SPDX-License-Identifier: AGPL-3.0-only`
+- `head -4 src/app/App.svelte` → `SPDX-License-Identifier: AGPL-3.0-only` (in HTML comment)
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files — no regressions; no new unit tests — PIXI/DOM interaction not unit-testable in Vitest)
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent rendering: horizontal bars spanning `bars × PX_PER_CYCLE` per voice | — | manual | **PROXY-COVERED (code)** (step 10.4) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-02 | Rest extent rendering: grey bars at middle staff line | — | manual | **PROXY-COVERED (code)** (step 10.4) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-03 | Bar grid: vertical beat and bar lines on staff canvas | — | manual | **PROXY-COVERED (code)** (step 10.4) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-04 | Chord / arp mode visual toggle: parallel bars vs staggered onset dots | — | manual | **PROXY-COVERED (code)** (step 10.5) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-05 | Select: clicking a slot shows border, ✕ button, and resize handle | — | manual | **PROXY-COVERED (code)** — `drawAffordances` + `onStaffPointerDown` select branch implemented; selection guard in place; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-06 | Delete via ✕: removes slot; ProgressionStrip reflects removal | — | manual | **PROXY-COVERED (code)** — `clearChordAt` called on ✕ hit in `onStaffPointerDown`; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-07 | Resize: right-edge drag changes duration; commits via `setChordBars`; strip updates | — | manual | **PROXY-COVERED (code)** — resize gesture (down/move/up) + `setChordBars` + `clampBars` + App.svelte rebuild on totalBars change; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-08 | Time-move: body drag reorders slot; ProgressionStrip reflects new order | — | manual | not covered — deferred to step 10.7 |
+| A-10-09 | Playhead cyclic + matches ProgressionStrip cursor; neither visible when not playing | — | manual | NO DISCREPANCY confirmed (step 10.3); live re-verification deferred to step 10.8 |
+| A-10-10 | ProgressionStrip parity: edits on staff visible in strip and vice versa | — | manual | **PROXY-COVERED (code)** — same store actions; selection guard for external edits; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-11 | `staff-hit.ts` pure engine; all exports unit-tested; no regressions | `tests/harmony/staff-hit.test.ts` | automated | **COVERED** (step 10.3) — 42 tests pass; 0 PIXI/DOM imports |
+| A-10-12 | `reorderSlot` store action: unit-tested; correct semantics; calls `requeueLive()`; no-op when fromIdx === toIdx | `tests/session.test.ts` | automated | **COVERED** (step 10.3) — 9 tests pass |
+| A-10-13 | All quality gates green: tsc, lint, vitest ≥ 447, build | multiple | automated | **PARTIAL** — all gates green this step (447 passed, 0 tsc, 0 lint, build clean); global sweep deferred to step 10.8 |
+| A-10-14 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts` | — | automated (proxy: grep) | not covered — deferred to step 10.8 |
+| A-10-15 | Audio byte-identical before/after visual rendering changes (no codegen changes) | — | automated (proxy: static-analysis) | **COVERED** — `src/core/codegen/strudel.ts` unchanged; store actions called (`clearChordAt`, `setChordBars`) are pre-existing actions that ProgressionStrip already calls |
+| A-10-16 | AGPL-3.0 header in all new and modified source files | — | automated (proxy: head -2) | **COVERED for this step** — both modified files confirmed |
+
+**Notes on partial coverage:** A-10-05 through A-10-07 and A-10-10 are implemented and proxy-covered (code inspection), but require manual live verification at Pilot Checkpoint #5 since PIXI rendering and DOM interaction are not unit-testable in Vitest. A-10-08 (time-move) deferred to step 10.7.
+
+**Proxy disclosures:**
+- A-10-05 affordance implementation: `grep -n "drawAffordances\|_deleteBtn\|_affordanceGfx" src/render/harmony-staff-scene.ts` → all present.
+- A-10-06 delete routing: `grep -n "clearChordAt" src/render/harmony-staff-scene.ts` → present in import and `onStaffPointerDown`.
+- A-10-07 resize commit: `grep -n "setChordBars" src/render/harmony-staff-scene.ts` → present in import and `onStaffPointerUp`.
+- A-10-10 selection guard: `grep -n "_selectedSlotIdx >= state.harmony.progression.length" src/render/harmony-staff-scene.ts` → present in `buildHarmonyStaffScene`.
+- A-10-15 audio: `grep -c "" src/core/codegen/strudel.ts` → line count unchanged (no diff).
+- A-10-16 AGPL headers: `head -2 src/render/harmony-staff-scene.ts` → AGPL-3.0-only; `head -4 src/app/App.svelte` → AGPL-3.0-only (in HTML comment block).
+- No `sessionStore.update` in render module: `grep -n "sessionStore.update" src/render/harmony-staff-scene.ts` → 0 matches.
+
+### Decisions made (if any)
+
+- **Native DOM events over PIXI interactive**: the existing codebase uses `canvas.addEventListener` with native `PointerEvent` objects (matching `tonnetz-scene.ts` `onStagePointerDown` pattern) — not PIXI's `interactive = true` / `.on()` event system. The interaction layer follows this idiom: three exported handler functions (`onStaffPointerDown`, `onStaffPointerMove`, `onStaffPointerUp`) routed from `App.svelte`. The ADR D3 intent (one handler dispatching to pure engine) is preserved; the delivery mechanism is native DOM rather than PIXI events.
+- **`_affordanceGfx` separate from `_dynGfx`**: the affordance layer gets its own `PIXI.Graphics` object (added above `_dynGfx` in the z-order) so that `drawAffordances()` can clear and redraw independently without disturbing the playhead animation.
+- **`_deleteBtn` as a direct child of `staffContainer`** (not of `_affordanceGfx`): PIXI.Text requires `addChild` on a container; `_affordanceGfx` is a `PIXI.Graphics` (not a `PIXI.Container`), so the text is added to `staffContainer` directly and tracked in `_deleteBtn` for explicit `destroy()` on next `drawAffordances()` call.
+- **App.svelte rebuild on `totalBars` change**: added `totalBars` (sum of `slot.bars ?? 1`) and `chordMode` to the rebuild trigger condition. This ensures `setChordBars` (which changes duration without changing progression length) causes `buildHarmonyStaffScene` to be called, so duration bars and `_slotBounds` are up to date.
+
+### Proposed Decisions Register entries (if any)
+
+None. No new governance decisions arise from this step beyond what is already in ADR 0014.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/harmony-staff-scene.ts`: interaction layer added (module-level state, `drawAffordances`, pointer handlers, selection guard, `computeSlotBounds` call).
+- `src/app/App.svelte`: event routing updated; rebuild condition extended to cover `totalBars` / `chordMode` changes.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context (only if non-obvious)
+
+Step 10.7 adds the time-move (slot reorder) gesture. It adds `_moveActive`, `_moveFromIdx`, `_moveDragPx`, `_moveInsertIdx` module-level state; ghost bar rendering in `drawAffordances`; and extends the pointer handlers with move threshold detection and `reorderSlot` dispatch. `nearestInsertionIndex` (already in `staff-hit.ts` and tested) will be used for the drop target computation.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.6 — staff interaction layer (select, delete, resize)`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

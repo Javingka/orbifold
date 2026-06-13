@@ -44,6 +44,9 @@
     buildHarmonyStaffScene,
     updateHarmonyStaffDynamic,
     tickHarmonyStaff,
+    onStaffPointerDown,
+    onStaffPointerMove,
+    onStaffPointerUp,
   } from '../render/harmony-staff-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -110,8 +113,13 @@
 
   // Step 07.4: track previous progression length and octave to detect when
   // buildHarmonyStaffScene must be called (structural change) vs updateHarmonyStaffDynamic.
+  // Step 10.6: also track total bars sum and chordMode so a setChordBars call (which
+  // changes a slot's duration without changing the progression length) triggers a full
+  // rebuild — otherwise the duration-extent bars stay at their old width.
   let prevProgressionLength = 0;
   let prevOctave = 3;
+  let prevTotalBars = 0;
+  let prevChordMode = 'chord';
 
   onMount(async () => {
     // Phase 04: start with empty session (no default rhythm seed).
@@ -122,8 +130,11 @@
     prevHarmonyRoot = initState.harmony.root;
     prevHarmonyMode = initState.harmony.mode;
     // Step 07.4: capture initial progression length and octave for staff scene change detection.
+    // Step 10.6: also capture total bars sum and chordMode.
     prevProgressionLength = initState.harmony.progression.length;
     prevOctave = initState.harmony.octave;
+    prevTotalBars = initState.harmony.progression.reduce((s, sl) => s + (sl.bars ?? 1), 0);
+    prevChordMode = initState.chordMode;
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
     // initStage appends app.view inside stageEl and registers resize handler.
@@ -218,15 +229,27 @@
       }
 
       // Step 07.4: harmony staff scene updates.
-      // Structural changes (progression length or octave) require a full rebuild
-      // because note-heads, ledger lines, and staff width all depend on the voice tracks.
+      // Structural changes (progression length, octave, total bars, or chordMode) require
+      // a full rebuild because note-heads, ledger lines, staff width, and duration-extent
+      // bar widths all depend on the voice tracks and slot durations.
+      // Step 10.6: total bars sum added so a setChordBars call (changing a slot's duration
+      // without changing the progression length) triggers a rebuild and redraws the bars.
       // Playhead-only changes (BPM, playback state) are handled by updateHarmonyStaffDynamic.
       const progressionLength = state.harmony.progression.length;
       const octave = state.harmony.octave;
-      if (progressionLength !== prevProgressionLength || octave !== prevOctave) {
+      const totalBars = state.harmony.progression.reduce((s, sl) => s + (sl.bars ?? 1), 0);
+      const chordMode = state.chordMode;
+      if (
+        progressionLength !== prevProgressionLength ||
+        octave !== prevOctave ||
+        totalBars !== prevTotalBars ||
+        chordMode !== prevChordMode
+      ) {
         buildHarmonyStaffScene(state);
         prevProgressionLength = progressionLength;
         prevOctave = octave;
+        prevTotalBars = totalBars;
+        prevChordMode = chordMode;
       } else {
         updateHarmonyStaffDynamic(state);
       }
@@ -239,7 +262,13 @@
     canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       const state = get(sessionStore);
       if (state.view === 'harmony') {
-        tonnetzPointerDown(e);
+        if (state.harmony.subview === 'staff') {
+          // Step 10.6: route to staff interaction layer (select, delete, resize).
+          onStaffPointerDown(e);
+        } else {
+          // Tonnetz sub-view: route to Tonnetz chord picker.
+          tonnetzPointerDown(e);
+        }
       } else if (state.view === 'rhythm') {
         rhythmPointerDown(e);
       } else {
@@ -257,11 +286,14 @@
       }
     });
 
-    // Pointer move: hover layer detection for DOM overlay (rhythm view only).
+    // Pointer move: staff resize gesture + rhythm hover layer detection.
     // Prototype: app.view.addEventListener('pointermove', onStageHover) at line 2159.
     canvas.addEventListener('pointermove', (e: PointerEvent) => {
       const state = get(sessionStore);
-      if (state.view === 'rhythm') {
+      if (state.view === 'harmony' && state.harmony.subview === 'staff') {
+        // Step 10.6: route to staff interaction layer for resize preview.
+        onStaffPointerMove(e);
+      } else if (state.view === 'rhythm') {
         onStagePointerMove(e, state);
         // Update hovered layer index; overlay position is computed reactively in
         // the $: block above keyed on hoveredLayerIndex (Defect 4 fix).
@@ -277,6 +309,15 @@
         }
       } else {
         hoveredLayerIndex = -1;
+      }
+    });
+
+    // Pointer up: commit staff resize gesture.
+    // Step 10.6: needed to finalize resize when user releases the mouse button.
+    canvas.addEventListener('pointerup', () => {
+      const state = get(sessionStore);
+      if (state.view === 'harmony' && state.harmony.subview === 'staff') {
+        onStaffPointerUp();
       }
     });
 

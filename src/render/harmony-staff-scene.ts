@@ -51,6 +51,17 @@
 //   connected by a thin ascending polyline (1px, white, 35% opacity).
 //   NoteHeads are grouped by nh.x (= startCycle × PX_PER_CYCLE) before the loop.
 //   Groups with fewer than 3 note-heads skip the connector; circles drawn individually.
+//
+// Step 10.6 (ADR 0014 D3/D4): slot interaction layer (select, delete, resize).
+//   Pointer events are delivered as native DOM events (e.offsetX/Y) matching the
+//   existing onStagePointerDown idiom in tonnetz-scene.ts.
+//   Module-level ephemeral state: _selectedSlotIdx, _resizeActive, _resizeStartPx,
+//   _resizeStartBars, _resizePreviewBars, _slotBounds (ADR 0014 Consequence 3).
+//   Selection guard (Pilot Checkpoint #2, ADR 0014 Consequence 3): on every
+//   buildHarmonyStaffScene call, if _selectedSlotIdx >= progression.length,
+//   reset to null. This prevents stale selection when the ProgressionStrip deletes
+//   a slot externally.
+//   Affordances drawn into _affordanceGfx (separate from _dynGfx/playhead layer).
 
 import * as PIXI from 'pixi.js';
 import { get } from 'svelte/store';
@@ -60,8 +71,10 @@ import { computeStaffLayout } from '../core/harmony/staff-layout.js';
 import type { StaffLayout } from '../core/harmony/staff-layout.js';
 import { TREBLE_STAFF_LINES } from '../core/harmony/staff-map.js';
 import { PX_PER_CYCLE } from '../core/harmony/time-map.js';
+import { computeSlotBounds, hitTestSlot, hitTestResizeHandle } from '../core/harmony/staff-hit.js';
+import type { SlotBounds } from '../core/harmony/staff-hit.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
-import { sessionStore } from '../state/session.js';
+import { sessionStore, clearChordAt, setChordBars, clampBars } from '../state/session.js';
 import type { SessionState } from '../state/session.js';
 import { getStageRefs } from './stage.js';
 import { COL, FONT_SERIF } from './theme.js';
@@ -123,6 +136,29 @@ const TREBLE_CLEF_FONT_SIZE = 60;
 /** Minimum staff width to show when progression is empty. */
 const MIN_STAFF_WIDTH = 200;
 
+// ── Interaction constants (ADR 0014 D3/D4) ───────────────────────────────────
+
+/**
+ * Pixel width of the resize handle hit zone on the right edge of each slot.
+ * ADR 0014 D4: 10 px. hitTestResizeHandle uses this value.
+ */
+const RESIZE_HANDLE_WIDTH = 10;
+
+/**
+ * Pixel width of the visual resize handle bar drawn over the slot right edge.
+ * Narrower than the hit zone for aesthetics.
+ */
+const RESIZE_HANDLE_BAR_WIDTH = 4;
+
+/**
+ * Delete button (✕) hit region size in pixels (width and height of the square
+ * hit region). ADR 0014 D4: 16 × 16 px centred on (slotRight − 10, staffBaseY − 20).
+ */
+const DELETE_HIT_SIZE = 16;
+
+/** Font size for the × delete button PIXI.Text. */
+const DELETE_BTN_FONT_SIZE = 14;
+
 // ── Module-level state ───────────────────────────────────────────────────────
 
 /** Main Graphics object for static staff content (lines, note-heads, ledger lines, rests). */
@@ -130,6 +166,21 @@ let _staffGfx: PIXI.Graphics | null = null;
 
 /** Graphics object for animated content (playhead). Redrawn every tick. */
 let _dynGfx: PIXI.Graphics | null = null;
+
+/**
+ * Graphics object for selection affordances (highlight border, resize handle,
+ * resize preview outline). Separate from _dynGfx so affordances and the playhead
+ * do not interfere. Drawn on top of _dynGfx in z-order.
+ * Step 10.6 — ADR 0014 D3/D4.
+ */
+let _affordanceGfx: PIXI.Graphics | null = null;
+
+/**
+ * Delete button PIXI.Text ('×'). Tracked module-level so it can be explicitly
+ * destroy()ed before replacement, preventing memory leaks (ADR 0014 D4).
+ * Null when no slot is selected or during resize preview.
+ */
+let _deleteBtn: PIXI.Text | null = null;
 
 /** Treble clef PIXI.Text glyph. */
 let _clefText: PIXI.Text | null = null;
@@ -145,6 +196,38 @@ let _staffBaseY = 0;
 
 /** Cached staff width (max of totalWidth and MIN_STAFF_WIDTH). */
 let _staffWidth = MIN_STAFF_WIDTH;
+
+// ── Interaction state (ADR 0014 D3, Consequence 3) ───────────────────────────
+// Ephemeral: NOT in session store, NOT persisted.
+
+/**
+ * Zero-based index of the currently selected slot, or null if nothing is selected.
+ * Selection guard (Pilot Checkpoint #2, ADR 0014 Consequence 3): reset to null
+ * on every buildHarmonyStaffScene call when >= progression.length.
+ */
+let _selectedSlotIdx: number | null = null;
+
+/** True while a resize drag gesture is in progress (pointerdown on resize handle, not yet pointerup). */
+let _resizeActive = false;
+
+/** Pointer x coordinate (canvas-local) at the start of a resize gesture. */
+let _resizeStartPx = 0;
+
+/** Slot bars value at the start of a resize gesture (before any drag delta). */
+let _resizeStartBars = 1;
+
+/**
+ * Live bars value during a resize gesture — updated on every pointermove.
+ * No store write until pointerup. Used for the preview outline rendering.
+ */
+let _resizePreviewBars = 1;
+
+/**
+ * Cached slot bounds for the current progression, computed by computeSlotBounds
+ * at the end of every buildHarmonyStaffScene call.
+ * Used by pointer handlers for hit-testing without recomputing on every event.
+ */
+let _slotBounds: SlotBounds[] = [];
 
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
@@ -220,6 +303,87 @@ function drawBarGrid(
   gfx.lineStyle(1, COL.faint, 0.5);
   gfx.moveTo(0, gridTop);
   gfx.lineTo(0, gridBottom);
+}
+
+// ── drawAffordances ───────────────────────────────────────────────────────────
+
+/**
+ * Draw selection affordances into _affordanceGfx: highlight border, ✕ delete
+ * button, right-edge resize handle, and (during resize) a preview outline.
+ *
+ * Called at the end of buildHarmonyStaffScene and from pointer handlers whenever
+ * selection or resize state changes.
+ *
+ * Step 10.6 (ADR 0014 D4).
+ */
+function drawAffordances(): void {
+  if (_affordanceGfx === null || _staffBaseY === 0) return;
+
+  // Clear the affordance layer and destroy any previous PIXI.Text delete button
+  // before rebuilding (explicit destroy prevents WebGL texture memory leak).
+  _affordanceGfx.clear();
+  if (_deleteBtn !== null) {
+    _deleteBtn.destroy();
+    _deleteBtn = null;
+  }
+
+  if (_selectedSlotIdx === null) return;
+
+  const bound = _slotBounds[_selectedSlotIdx];
+  if (bound === undefined) return;
+
+  // Slot pixel geometry.
+  const slotLeft = bound.x;
+  const slotRight = bound.x + bound.width;
+
+  // Vertical span of the staff for the highlight border and resize handle.
+  // Matches the grid/playhead vertical span.
+  const gridTop = stepToY(TREBLE_STAFF_LINES[TREBLE_STAFF_LINES.length - 1] + 2, _staffBaseY);
+  const gridBottom = stepToY(-6, _staffBaseY);
+
+  if (_resizeActive) {
+    // During resize: draw preview outline rectangle showing the new duration.
+    // No ✕ button, no resize handle during active drag.
+    const previewWidth = Math.max(_resizePreviewBars * PX_PER_CYCLE, BAR_HEIGHT);
+    _affordanceGfx.lineStyle(1, 0xffffff, 0.7);
+    _affordanceGfx.drawRect(slotLeft, gridTop, previewWidth, gridBottom - gridTop);
+  } else {
+    // Static selection state: highlight border + ✕ + resize handle.
+
+    // Highlight border: 1px white rectangle around the full slot vertical span.
+    _affordanceGfx.lineStyle(1, 0xffffff, 0.8);
+    _affordanceGfx.drawRect(slotLeft, gridTop, bound.width, gridBottom - gridTop);
+
+    // Resize handle: narrow vertical white bar at the right edge of the slot.
+    // ADR 0014 D4: 4px wide, spans staff vertical extent.
+    _affordanceGfx.lineStyle(0);
+    _affordanceGfx.beginFill(0xffffff, 0.6);
+    _affordanceGfx.drawRect(
+      slotRight - RESIZE_HANDLE_BAR_WIDTH,
+      gridTop,
+      RESIZE_HANDLE_BAR_WIDTH,
+      gridBottom - gridTop
+    );
+    _affordanceGfx.endFill();
+
+    // ✕ delete button: PIXI.Text '×' added as child of _affordanceGfx's parent
+    // container (staffContainer). Positioned at (slotRight − 10, staffBaseY − 20).
+    // ADR 0014 D4: font size 14, white.
+    // The text is a sibling of _affordanceGfx in staffContainer so it renders on top.
+    const refs = getStageRefs();
+    const { staffContainer } = refs;
+    _deleteBtn = new PIXI.Text('×', {
+      fontFamily: FONT_SERIF,
+      fontSize: DELETE_BTN_FONT_SIZE,
+      fill: 0xffffff,
+      fontWeight: 'bold',
+    });
+    _deleteBtn.resolution = 2;
+    _deleteBtn.anchor.set(0.5, 0.5);
+    _deleteBtn.x = slotRight - 10;
+    _deleteBtn.y = _staffBaseY - 20;
+    staffContainer.addChild(_deleteBtn);
+  }
 }
 
 // ── drawStaticStaff ──────────────────────────────────────────────────────────
@@ -463,10 +627,19 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   if (_dynGfx !== null) staffContainer.removeChild(_dynGfx);
   if (_clefText !== null) staffContainer.removeChild(_clefText);
   if (_accidentalContainer !== null) staffContainer.removeChild(_accidentalContainer);
+  if (_affordanceGfx !== null) staffContainer.removeChild(_affordanceGfx);
+  // Destroy any previous delete button PIXI.Text before rebuilding (memory leak guard).
+  if (_deleteBtn !== null) {
+    // The _deleteBtn may have been added as a direct child of staffContainer.
+    staffContainer.removeChild(_deleteBtn);
+    _deleteBtn.destroy();
+    _deleteBtn = null;
+  }
 
   // ── Create fresh PIXI objects ─────────────────────────────────────────────
   _staffGfx = new PIXI.Graphics();
   _dynGfx = new PIXI.Graphics();
+  _affordanceGfx = new PIXI.Graphics();
   _accidentalContainer = new PIXI.Container();
 
   // Font fallback for U+1D11E (𝄞, Musical Symbol G Clef): Fraunces and most serif fonts
@@ -531,14 +704,192 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   _clefText.x = 2;
   _clefText.y = _staffBaseY - TREBLE_CLEF_Y_OFFSET - TREBLE_CLEF_FONT_SIZE * 0.75;
 
+  // ── Selection guard (ADR 0014 Consequence 3, Pilot Checkpoint #2) ────────
+  // On every buildHarmonyStaffScene rebuild, validate _selectedSlotIdx against
+  // the fresh progression length. If _selectedSlotIdx >= progression.length
+  // (i.e., the selected slot no longer exists — e.g., deleted from the
+  // ProgressionStrip externally), reset to null.
+  // This prevents the interaction layer from referencing a nonexistent slot.
+  if (_selectedSlotIdx !== null && _selectedSlotIdx >= state.harmony.progression.length) {
+    _selectedSlotIdx = null;
+    _resizeActive = false;
+    _resizePreviewBars = 1;
+  }
+
+  // ── Compute slot bounds for hit-testing (ADR 0014 D3) ────────────────────
+  // Must be called after _staffWidth is set so _slotBounds reflect the current
+  // progression (used by pointer handlers and drawAffordances).
+  _slotBounds = computeSlotBounds(state.harmony.progression, PX_PER_CYCLE);
+
   // ── Add to staffContainer (staff behind accidentals behind clef, dyn on top) ──
   // Phase 08 (step 08.5): children go to refs.staffContainer, not harmonyLayer.
-  // Build order: _staffGfx → _accidentalContainer → _clefText → _dynGfx.
+  // Build order: _staffGfx → _accidentalContainer → _clefText → _dynGfx → _affordanceGfx.
+  // _affordanceGfx is on top so affordances render above the playhead.
   // ADR 0011 Amendment §D5.
   staffContainer.addChild(_staffGfx);
   staffContainer.addChild(_accidentalContainer);
   staffContainer.addChild(_clefText);
   staffContainer.addChild(_dynGfx);
+  staffContainer.addChild(_affordanceGfx);
+
+  // ── Draw affordances for current selection state ──────────────────────────
+  // Called after adding to container so drawAffordances can access staffContainer
+  // via getStageRefs() to add the _deleteBtn PIXI.Text as a sibling.
+  drawAffordances();
+}
+
+// ── Staff pointer event handlers (step 10.6, ADR 0014 D3/D4) ─────────────────
+//
+// Pointer events are delivered as native DOM PointerEvents on the PIXI canvas
+// element, matching the existing onStagePointerDown idiom in tonnetz-scene.ts.
+// App.svelte routes canvas 'pointerdown', 'pointermove', and 'pointerup' events
+// here when view === 'harmony' && harmony.subview === 'staff'.
+//
+// Local coordinate mapping: e.offsetX/Y are canvas-local CSS pixels. With
+// autoDensity:true in PIXI Application, logical px === CSS px, so offsetX
+// aligns directly with the slot bounds computed from x = 0 at staff origin.
+// No DPR conversion needed (mirrors the Tonnetz onStagePointerDown correction,
+// phase-03 round-2 fix).
+//
+// Dispatch order (ADR 0014 D4):
+//   1. If _selectedSlotIdx non-null: check ✕ hit region → call clearChordAt
+//   2. If _selectedSlotIdx non-null: check resize handle zone → start resize
+//   3. Check slot body hit → select
+//   4. Outside all slots → deselect
+
+/**
+ * Compute the delete button hit rectangle for the given slot bounds.
+ * Hit region: 16×16 px centred at (slotRight − 10, staffBaseY − 20).
+ * ADR 0014 D4.
+ */
+function deleteBtnHitRect(bound: SlotBounds): {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+} {
+  const slotRight = bound.x + bound.width;
+  const cx = slotRight - 10;
+  const cy = _staffBaseY - 20;
+  const half = DELETE_HIT_SIZE / 2;
+  return {
+    left: cx - half,
+    right: cx + half,
+    top: cy - half,
+    bottom: cy + half,
+  };
+}
+
+/**
+ * Handle pointerdown on the staff canvas (harmony sub-view 'staff').
+ *
+ * Dispatch order per ADR 0014 D4:
+ *   1. If slot selected: ✕ hit → clearChordAt, reset selection, return.
+ *   2. If slot selected: resize handle hit → start resize, return.
+ *   3. Slot body hit → select that slot.
+ *   4. Outside → deselect.
+ *
+ * @param e - Native PointerEvent; e.offsetX is canvas-local (autoDensity).
+ */
+export function onStaffPointerDown(e: PointerEvent): void {
+  const px = e.offsetX;
+
+  // ── 1. ✕ delete hit (only when a slot is currently selected) ─────────────
+  if (_selectedSlotIdx !== null) {
+    const bound = _slotBounds[_selectedSlotIdx];
+    if (bound !== undefined) {
+      const hr = deleteBtnHitRect(bound);
+      if (px >= hr.left && px <= hr.right) {
+        const py = e.offsetY;
+        if (py >= hr.top && py <= hr.bottom) {
+          const idxToDelete = _selectedSlotIdx;
+          _selectedSlotIdx = null;
+          _resizeActive = false;
+          drawAffordances();
+          // Store action: remove the slot. App.svelte subscription will call
+          // buildHarmonyStaffScene if progression length changes (which it will).
+          clearChordAt(idxToDelete);
+          return;
+        }
+      }
+    }
+  }
+
+  // ── 2. Resize handle hit (only when a slot is currently selected) ─────────
+  if (_selectedSlotIdx !== null) {
+    const resizeHit = hitTestResizeHandle(px, _slotBounds, RESIZE_HANDLE_WIDTH);
+    if (resizeHit === _selectedSlotIdx) {
+      // Start resize gesture.
+      const slot = get(sessionStore).harmony.progression[_selectedSlotIdx];
+      _resizeActive = true;
+      _resizeStartPx = px;
+      _resizeStartBars = slot !== undefined ? (slot.bars ?? 1) : 1;
+      _resizePreviewBars = _resizeStartBars;
+      drawAffordances();
+      return;
+    }
+  }
+
+  // ── 3. Slot body hit → select ─────────────────────────────────────────────
+  const hitIdx = hitTestSlot(px, _slotBounds);
+  if (hitIdx !== null) {
+    _selectedSlotIdx = hitIdx;
+    _resizeActive = false;
+    drawAffordances();
+    return;
+  }
+
+  // ── 4. Outside all slots → deselect ──────────────────────────────────────
+  _selectedSlotIdx = null;
+  _resizeActive = false;
+  drawAffordances();
+}
+
+/**
+ * Handle pointermove on the staff canvas (harmony sub-view 'staff').
+ *
+ * During an active resize gesture: update _resizePreviewBars and redraw
+ * affordances (preview outline). No store write until pointerup.
+ *
+ * @param e - Native PointerEvent; e.offsetX is canvas-local.
+ */
+export function onStaffPointerMove(e: PointerEvent): void {
+  if (!_resizeActive) return;
+
+  const px = e.offsetX;
+  const deltaPx = px - _resizeStartPx;
+  _resizePreviewBars = clampBars(_resizeStartBars + deltaPx / PX_PER_CYCLE);
+  drawAffordances();
+}
+
+/**
+ * Handle pointerup on the staff canvas (harmony sub-view 'staff').
+ *
+ * If a resize gesture is active: commit via setChordBars (store write).
+ * The store write triggers App.svelte's subscription; if progression content
+ * (bars) changed without a length change, updateHarmonyStaffDynamic is called
+ * rather than buildHarmonyStaffScene — so we also call drawAffordances here
+ * to refresh the handle position based on the new bounds.
+ */
+export function onStaffPointerUp(): void {
+  if (!_resizeActive) return;
+
+  if (_selectedSlotIdx !== null) {
+    const barsToCommit = _resizePreviewBars;
+    _resizeActive = false;
+    // Commit the resize: store write. App.svelte will trigger a rebuild only if
+    // progression length changes (it won't for a bars-only change). After the
+    // store update, _slotBounds will be stale until the next buildHarmonyStaffScene.
+    // We eagerly recompute _slotBounds and redraw affordances so the handle
+    // position is correct without waiting for a full rebuild.
+    setChordBars(_selectedSlotIdx, barsToCommit);
+    // Eagerly refresh slot bounds with the updated bars value.
+    _slotBounds = computeSlotBounds(get(sessionStore).harmony.progression, PX_PER_CYCLE);
+    _resizePreviewBars = barsToCommit;
+    drawAffordances();
+  } else {
+    _resizeActive = false;
+  }
 }
 
 // ── updateHarmonyStaffDynamic ─────────────────────────────────────────────────
