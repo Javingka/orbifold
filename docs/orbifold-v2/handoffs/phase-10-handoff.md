@@ -948,3 +948,209 @@ Step 10.8 is the quality gates + manual acceptance step. It runs the full static
 **Terminal commit:** `feat(harmony): Phase 10 step 10.7 — staff slot time-move (reorder gesture)`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.8 — Quality gates and manual acceptance
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+No source files were modified in this step. All work is documentation and validation.
+
+#### Quality gates (fresh run)
+
+| Gate | Command | Result |
+|---|---|---|
+| TypeScript | `pnpm exec tsc --noEmit` | exit 0 — 0 errors |
+| Lint | `pnpm lint` | exit 0 — 0 ESLint errors, 0 Prettier issues |
+| Tests | `pnpm exec vitest run` | 447 passed (14 files), 0 failed |
+| Build | `pnpm build` | exit 0 — 1,068 kB bundle; pre-existing chunk-size and dynamic-import warnings only |
+
+Test count breakdown (447 total):
+- `tests/harmony/staff-hit.test.ts`: 42 (new Phase 10 engine)
+- `tests/session.test.ts`: 55 (includes 9 new `reorderSlot` tests from step 10.3)
+- `tests/harmony/staff-map.test.ts`: 73
+- `tests/harmony/voice-tracks.test.ts`: 18
+- `tests/harmony/voice-tracks-register.test.ts`: 24
+- `tests/euclid.test.ts`: 25
+- `tests/harmony/staff-layout.test.ts`: 32
+- `tests/codegen.test.ts`: 39
+- `tests/tonnetz.test.ts`: 31
+- `tests/persistence.test.ts`: 42
+- `tests/schema.test.ts`: 41
+- `tests/voice-leading.test.ts`: 8
+- `tests/harmony/time-map.test.ts`: 13
+- `tests/phase-anchor.test.ts`: 4
+
+#### Static analysis checks (per phase file §10.8)
+
+| Check | Command | Result |
+|---|---|---|
+| Pure engine invariant | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi" src/core/` | **0 matches** — all core engines pure |
+| `PX_PER_CYCLE` coordination rule | `grep -n "PX_PER_CYCLE" src/render/harmony-staff-scene.ts` | imported at line 83 from `../core/harmony/time-map.js`; no `const PX_PER_CYCLE =` declaration anywhere in file |
+| `subview`/`registerMode` not in Zod schema | `grep -n "subview\|registerMode" src/lib/persistence.ts` | lines 227–229 are runtime defaults in a function body, NOT schema fields; `SavedHarmonySchema` (lines 52–60) contains only `root`, `mode`, `octave`, `progression` — confirmed absent |
+| `subview`/`registerMode` not in agent schema | `grep -n "subview\|registerMode" src/agent/schema.ts` | **0 matches** |
+| AGPL-3.0 headers | `head -2` on all modified/new files | All present (details below) |
+| `clearChordAt`, `setChordBars`, `reorderSlot` imported from session.ts | `grep -n "clearChordAt\|setChordBars\|reorderSlot" src/render/harmony-staff-scene.ts` | all three present as imports (lines 94–97) and call sites |
+| No direct `sessionStore.update` in render module | `grep -n "sessionStore.update" src/render/harmony-staff-scene.ts` | **0 matches** |
+
+AGPL-3.0 header evidence:
+- `src/core/harmony/staff-hit.ts` → line 1: `// SPDX-License-Identifier: AGPL-3.0-only`
+- `src/render/harmony-staff-scene.ts` → line 1: `// SPDX-License-Identifier: AGPL-3.0-only`
+- `src/app/App.svelte` → lines 1–2: `<!-- SPDX-License-Identifier: AGPL-3.0-only`
+- `src/state/session.ts` → line 1: `// SPDX-License-Identifier: AGPL-3.0-only`
+- `tests/harmony/staff-hit.test.ts` → line 1: `// SPDX-License-Identifier: AGPL-3.0-only`
+- `tests/session.test.ts` → line 1: `// SPDX-License-Identifier: AGPL-3.0-only`
+
+#### Cross-step invariants (phase level)
+
+- **No codegen diffs:** `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty (0 lines changed across all of Phase 10).
+- **No `sessionStore.update` in render modules:** confirmed 0 matches in `harmony-staff-scene.ts`.
+- **`core/**` purity:** confirmed 0 PIXI/Svelte/DOM imports in any `src/core/**` file.
+- **Pinned deps:** all `dependencies` and `devDependencies` in `package.json` use exact versions — no `^` or `~` ranges.
+- **ADR 0011 D2 partially superseded:** ADR 0014 D1 amends the "no editing affordance" clause for duration, while all other ADR 0011 D2 clauses (ProgressionStrip preserved, staff is downstream store consumer) remain in effect.
+
+---
+
+### Manual acceptance checklist for Pilot (Checkpoint #5)
+
+Open `pnpm dev` and navigate to the **Pentagrama** view (Armonía → Pentagrama sub-toggle). For each item, confirm the described behaviour is observed in the browser.
+
+1. **Barras de duración (A-10-01):** Con al menos dos acordes en la progresión, verifica que cada acorde aparece en el pentagrama como tres barras horizontales coloreadas (tónica/subdominante/dominante) que se extienden hacia la derecha proporcional a la duración del slot. Un slot de 2 barras debe ser el doble de ancho que uno de 1 barra.
+
+2. **Barras de silencio (A-10-02):** Agrega un silencio a la progresión (botón "+" en la ProgressionStrip y selecciona rest). Verifica que aparece en el pentagrama como una barra gris horizontal en la línea central del pentagrama (B4), con un tick vertical en el centro.
+
+3. **Cuadrícula de compases (A-10-03):** Verifica que se dibujan líneas verticales finas sobre el pentagrama: líneas tenues de corchea cada 12 px, líneas más visibles de compás cada 48 px, y una línea de borde izquierdo en x=0. La cuadrícula debe alinearse con la regla de la ProgressionStrip (mismos intervalos de compás).
+
+4. **Toggle acorde/arpegio (A-10-04):** Cambia el selector de "acorde" a "arpegio" en la barra superior. En modo **arpegio**, verifica que las tres notas de cada acorde aparecen como círculos escalonados (voz 0 al inicio del slot, voz 1 a un tercio, voz 2 a dos tercios) con una línea conectora ascendente entre ellos (no barras horizontales). Cambia de vuelta a "acorde" y verifica que vuelven las barras paralelas.
+   - **Nota cosmética (a):** El conector de arpegio salta el espacio entre slots cuando hay menos de 3 noteheads en un grupo (p. ej. slots adyacentes a un silencio) — no se dibuja línea. Esto es comportamiento correcto por el guard de grupo incompleto.
+   - **Nota cosmética (b):** Las alteraciones (accidentals) en modo arpegio se muestran en la posición x del onset escalonado, no en el inicio del slot. Esto es visualmente correcto (el accidental pertenece al onset de la nota) aunque puede parecer desplazado respecto al modo acorde.
+
+5. **Seleccionar slot (A-10-05):** Haz clic en cualquier barra horizontal de un acorde. Verifica que:
+   - Aparece un borde blanco alrededor del slot seleccionado.
+   - Aparece un botón "×" en la esquina superior derecha del slot.
+   - Aparece una barra de redimensionamiento blanca (4 px) en el borde derecho del slot.
+   - Hacer clic fuera de cualquier slot deselecciona (borde y botones desaparecen).
+
+6. **Eliminar con ✕ (A-10-06):** Con un slot seleccionado, haz clic en el botón "×". Verifica que el acorde desaparece del pentagrama Y que la ProgressionStrip refleja inmediatamente la eliminación (el badge desaparece).
+
+7. **Redimensionar duración (A-10-07):** Selecciona un slot y arrastra el borde derecho (barra blanca) hacia la derecha o la izquierda. Verifica que:
+   - Durante el arrastre, se muestra un rectángulo de previsualización (sin escribir en el store aún).
+   - Al soltar, la barra del slot cambia de ancho y la ProgressionStrip actualiza el ancho del badge correspondiente.
+   - La duración mínima es 0.25 barras y la máxima es 8 barras (igual que la ProgressionStrip).
+   - Si hay audio reproduciéndose, el cambio entra en efecto en el siguiente ciclo (no usa `.fast`/`.slow`).
+
+8. **Mover en el tiempo (A-10-08):** Selecciona un slot y arrástralo lentamente a una posición diferente (>4 px de desplazamiento). Verifica que:
+   - Aparece una barra fantasma semi-transparente en la posición de arrastre.
+   - Aparece un indicador de inserción vertical (línea blanca fina) en la posición de destino.
+   - Al soltar, el slot se reordena en la progresión y la ProgressionStrip refleja el nuevo orden inmediatamente.
+   - Si hay audio reproduciéndose, la secuencia de acordes cambia en el siguiente ciclo.
+
+9. **Playhead cíclico — re-verificación solicitada por el Pilot (A-10-09):** Con audio reproduciéndose (armónía activa), verifica que:
+   - El playhead del pentagrama avanza de izquierda a derecha y vuelve al inicio al final de la progresión (bucle), sin salirse del ancho del pentagrama.
+   - El cursor de la ProgressionStrip avanza y hace bucle en sincronía con el playhead del pentagrama.
+   - Sin audio reproduciéndose (`nowPlaying.source === null`), ninguno de los dos playheads es visible.
+   - El Pilot mencionó haber observado previamente que "el playhead continúa andando sin parar" — el inventario del paso 10.1 concluyó NO DISCREPANCIA. Re-verificar aquí que el comportamiento es correcto con el código actual.
+
+10. **Paridad con ProgressionStrip (A-10-10):** Realiza una edición desde la ProgressionStrip (p. ej., arrastra un badge para cambiar su duración). Verifica que la barra horizontal en el pentagrama se actualiza inmediatamente con el nuevo ancho. Realiza una edición desde el pentagrama (borrar, redimensionar). Verifica que la ProgressionStrip refleja el cambio. Ambas superficies están sincronizadas a través del mismo store.
+
+---
+
+### Files touched
+
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry (step 10.8).
+
+No source files modified.
+
+### Validation evidence (per Acceptance ID)
+
+All automated IDs are fully covered. All manual IDs are proxy-covered (code implemented in prior steps); live verification is the Pilot's Checkpoint #5 responsibility.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed (14 files), 0 failed
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by Phase 10)
+
+### Acceptance Coverage Table — Phase 10 (complete)
+
+| Acceptance ID | Required behavior | Test file(s) / Proof | Type | Status |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent bars: each chord slot renders as horizontal bars spanning `bars × PX_PER_CYCLE` per voice at correct y-positions, colored per voice | Code: `drawStaticStaff` — `barWidth = Math.max(nh.bars * PX_PER_CYCLE, BAR_HEIGHT)` (step 10.4) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 1 |
+| A-10-02 | Rest extent rendering: rest slots render as grey horizontal bars at middle staff line (step 6 = B4) with correct duration width | Code: `drawStaticStaff` rest branch — `restBarWidth = Math.max(rg.bars * PX_PER_CYCLE, BAR_HEIGHT)` at `stepToY(6, staffBaseY)` (step 10.4) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 2 |
+| A-10-03 | Bar grid: thin vertical beat and bar lines on staff canvas, aligning with ProgressionStrip ruler above | Code: `drawBarGrid` — beat lines at 12 px (15% opacity), bar lines at 48 px (35% opacity), left boundary at 50% opacity (step 10.4) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 3 |
+| A-10-04 | Chord/arp mode visual toggle: acorde shows parallel bars, arpegio shows staggered onset dots + ascending connector; <3-notehead groups skip connector | Code: `drawStaticStaff` `chordMode === 'arp'` branch — `Map<number, NoteHead[]>` grouping, stagger offsets `[0, span/3, 2*span/3]`, connector guard `nhGroup.length === 3` (step 10.5) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 4 |
+| A-10-05 | Select: clicking a slot highlights it with a border and shows a ✕ button and a right-edge resize handle; clicking outside deselects | Code: `onStaffPointerDown` → `hitTestSlot` → `_selectedSlotIdx = result`; `drawAffordances` draws border + `_deleteBtn` + handle rect (step 10.6) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 5 |
+| A-10-06 | Delete via ✕: removes slot from progression; ProgressionStrip immediately reflects removal | Code: `onStaffPointerDown` ✕ hit region → `clearChordAt(idxToDelete)` — same store action as ProgressionStrip badge ✕; selection guard clears stale index (step 10.6) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 6 |
+| A-10-07 | Resize: right-edge drag changes duration; commits via `setChordBars`; ProgressionStrip segment width updates; change re-emitted via `arrange()` (no `.fast`/`.slow`) | Code: `onStaffPointerDown` resize handle → `_resizeActive`; `onStaffPointerMove` → `clampBars(...)` preview; `onStaffPointerUp` → `setChordBars(_selectedSlotIdx, _resizePreviewBars)` (step 10.6); App.svelte rebuild on `totalBars` change (step 10.6) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 7 |
+| A-10-08 | Time-move: body drag (>4 px threshold) shows ghost bar + insertion indicator; releasing reorders slot; ProgressionStrip reflects new order | Code: `_pointerDownOnSelected` + 4 px threshold in `onStaffPointerMove`; `drawAffordances` ghost bar (40% opacity) + insertion indicator (2 px, 80% opacity); `onStaffPointerUp` → `reorderSlot(_moveFromIdx, _moveInsertIdx)`; App.svelte `prevProgressionKey` rebuild trigger (step 10.7) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 8 |
+| A-10-09 | Playhead is cyclic and matches ProgressionStrip cursor; neither visible when `nowPlaying.source === null` | Code analysis (step 10.1 inventory §a): NO DISCREPANCY — `_staffWidth` and `cursorTotalWidth` both use `progression.reduce(sum + (slot.bars ?? 1)) * PX_PER_CYCLE`; BUG A guard consistent in both surfaces | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 9 (re-verification requested) |
+| A-10-10 | ProgressionStrip parity: edits on staff visible in strip and vice versa; strip edits clear stale staff selection | Code: both surfaces call same store actions (`setChordBars`, `clearChordAt`); selection guard (`_selectedSlotIdx >= progression.length` → reset) handles strip-side deletions (step 10.6) | MANUAL | PROXY-COVERED (code) — MANUAL: Checkpoint #5 item 10 |
+| A-10-11 | `staff-hit.ts` pure engine (no DOM/PIXI/Svelte imports); all 4 exports unit-tested; prior suite has no regressions | `tests/harmony/staff-hit.test.ts` — 42 tests: `computeSlotBounds` (7 cases), `hitTestSlot` (13 cases), `hitTestResizeHandle` (8 cases), `nearestInsertionIndex` (9 cases); `grep -rn "from 'pixi..." src/core/` → 0 matches (step 10.3) | AUTOMATED | **COVERED** |
+| A-10-12 | `reorderSlot` store action: unit-tested; correct semantics; calls `requeueLive()`; no-op when fromIdx === toIdx | `tests/session.test.ts` — 9 `reorderSlot` tests: move-first-to-last, last-to-first, adjacent-swap, no-op same index, no-op single-slot, out-of-range clamping, empty progression (step 10.3) | AUTOMATED | **COVERED** |
+| A-10-13 | All quality gates green: `tsc --noEmit` → 0 errors, `pnpm lint` → 0 errors, `pnpm test` → 447 passed, `pnpm build` → exit 0 | Fresh run in step 10.8: tsc exit 0, lint exit 0, 447 passed (14 files), build exit 0 | AUTOMATED | **COVERED** |
+| A-10-14 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts` | `grep -n "subview\|registerMode" src/lib/persistence.ts` → matches are runtime defaults in function body (lines 227–229), NOT schema fields; `SavedHarmonySchema` (lines 52–60) contains only `root`, `mode`, `octave`, `progression`; `grep -n "subview\|registerMode" src/agent/schema.ts` → 0 matches | AUTOMATED (proxy: grep) | **COVERED** |
+| A-10-15 | Audio output byte-identical before/after all visual rendering changes: no changes to `src/core/codegen/strudel.ts` or the audio pipeline across the entire phase | `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty (0 lines changed); `reorderSlot` changes audio by design (ADR 0014 D5) — this is intended user behavior, not a regression | AUTOMATED (proxy: git diff) | **COVERED** |
+| A-10-16 | AGPL-3.0 header present in all new and modified source files | `head -2` on all Phase 10 files: `staff-hit.ts` (line 1), `harmony-staff-scene.ts` (line 1), `App.svelte` (line 2 in HTML comment), `session.ts` (line 1), `staff-hit.test.ts` (line 1), `session.test.ts` (line 1) — all confirmed | AUTOMATED (proxy: head -2) | **COVERED** |
+
+**Coverage summary:**
+- Automated (fully covered): A-10-11, A-10-12, A-10-13, A-10-14, A-10-15, A-10-16 — 6/16
+- Manual (proxy-covered, Checkpoint #5 needed): A-10-01 through A-10-10 — 10/16
+- No gaps. All 16 IDs accounted for.
+
+**Cosmetic notes for Pilot awareness (Planner review carry-forwards):**
+- **(a) Grid bottom vs playhead bottom:** the bar grid's bottom vertical extent uses `stepToY(-6, staffBaseY)` while the playhead line uses the same `stepToY(-6, staffBaseY)` formula (both from `harmony-staff-scene.ts`). However the playhead `lineStyle` call may extend 2 extra pixels below (-8 vs -6) due to a 2 px line centered on the boundary — this is a cosmetic 1–2 px discrepancy at the very bottom of the playhead and is not functionally significant.
+- **(b) Accidentals in arp mode:** in arpeggio mode, accidentals (sharps, flats) are drawn at the staggered note onset x-position rather than at the slot-start x. This is musically correct (the accidental belongs to the onset), but may appear visually inconsistent with chord mode where all three accidentals share the same leftmost x. Not a bug; noted for Pilot awareness.
+
+### Decisions made (if any)
+
+None. This step is documentation-only.
+
+### Proposed Decisions Register entries (if any)
+
+Two proposals for Pilot ratification at phase close:
+
+**P1 — ADR 0014 D3 amendment: DOM event routing is the canonical delivery mechanism for staff pointer events.**
+ADR 0014 D3 originally specified a `_hitRect: PIXI.Graphics` with `interactive = true` as the hit-test mechanism. Step 10.6 implemented the equivalent using native DOM `PointerEvent` listeners routed from `App.svelte` via three exported handler functions (`onStaffPointerDown`, `onStaffPointerMove`, `onStaffPointerUp`). This matches the established `tonnetz-scene.ts`/`rhythm-scene.ts` idiom, aligns coordinates correctly via `autoDensity: true`, and preserves D3's single-dispatch-point intent. ADR 0014 D3 §"Implementation note" already records this; the Register proposal asks the Pilot to formally ratify it so future phases know the canonical pattern.
+Source: step 10.6 "Decisions made"; ADR 0014 D3 §"Implementation note".
+
+**P2 — `progressionKey` fingerprint as rebuild trigger in App.svelte.**
+Step 10.7 introduced a lightweight per-slot string fingerprint (`'{rootPc}{qual}{bars}'` for chords, `'R{bars}'` for rests, joined by commas) to detect reorder events without a deep equality check. This trigger pattern (joining slot keys into a string) is now part of the App.svelte store subscription logic and should be documented so future phases that add new slot-level state know they may need to update the key formula. Proposal: add a one-sentence Register note pointing to the `prevProgressionKey` variable in `App.svelte` and documenting when it must be updated.
+Source: step 10.7 "Decisions made" §App.svelte `progressionKey` fingerprint.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- No source files modified. Phase 10 is complete pending Pilot Checkpoint #5 manual acceptance.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context
+
+This is the final step of Phase 10. After Pilot Checkpoint #5 manual acceptance:
+- If the Pilot approves: the phase is closed. The Pilot should archive/merge `orbifold-v2/phase-10` and begin scoping Phase 11 (note-level free placement, single-pitch data model, Tonnetz vertex→single note, pitch drag). Phase 11 will need a new ADR for the `NoteSlot` data model and OQ-4 (suavizado editing hazard) resolution.
+- If the Pilot finds regressions: return to the relevant step for a targeted fix.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `docs(harmony): Phase 10 step 10.8 — quality gates and manual acceptance`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
