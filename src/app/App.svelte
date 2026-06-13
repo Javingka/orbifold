@@ -41,13 +41,10 @@
     getLayerLabelPos,
   } from '../render/rhythm-scene.js';
   import {
-    buildHarmonyStaffScene,
-    updateHarmonyStaffDynamic,
-    tickHarmonyStaff,
-    onStaffPointerDown,
-    onStaffPointerMove,
-    onStaffPointerUp,
-  } from '../render/harmony-staff-scene.js';
+    initPentagrama,
+    destroyPentagrama,
+    setPentagramaVisible,
+  } from '../render/pentagrama-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
   let stageEl: HTMLDivElement;
@@ -111,19 +108,11 @@
   let prevHarmonyRoot = -1;
   let prevHarmonyMode = '';
 
-  // Step 07.4: track previous progression length and octave to detect when
-  // buildHarmonyStaffScene must be called (structural change) vs updateHarmonyStaffDynamic.
-  // Step 10.6: also track total bars sum and chordMode so a setChordBars call (which
-  // changes a slot's duration without changing the progression length) triggers a full
-  // rebuild — otherwise the duration-extent bars stay at their old width.
-  // Step 10.7: also track a lightweight slot-identity key so a reorderSlot call
-  // (which changes slot order without changing length/totalBars/chordMode) triggers a
-  // full rebuild — otherwise the note-head positions remain in the old order visually.
-  let prevProgressionLength = 0;
-  let prevOctave = 3;
-  let prevTotalBars = 0;
-  let prevChordMode = 'chord';
-  let prevProgressionKey = '';
+  // Phase 10 redesign (step 10.11): the Canvas 2D pentagrama-scene redraws on
+  // every rAF frame, so no progression-tracking variables are needed here.
+  // prevProgressionLength / prevOctave / prevTotalBars / prevChordMode /
+  // prevProgressionKey removed (were used for buildHarmonyStaffScene rebuild
+  // detection, which is now retired per ADR 0015 D1).
 
   onMount(async () => {
     // Phase 04: start with empty session (no default rhythm seed).
@@ -133,20 +122,6 @@
     // Round-2 fix (Defect A): capture initial harmony key/mode for change detection.
     prevHarmonyRoot = initState.harmony.root;
     prevHarmonyMode = initState.harmony.mode;
-    // Step 07.4: capture initial progression length and octave for staff scene change detection.
-    // Step 10.6: also capture total bars sum and chordMode.
-    // Step 10.7: also capture slot-identity key to detect reorderSlot changes.
-    prevProgressionLength = initState.harmony.progression.length;
-    prevOctave = initState.harmony.octave;
-    prevTotalBars = initState.harmony.progression.reduce((s, sl) => s + (sl.bars ?? 1), 0);
-    prevChordMode = initState.chordMode;
-    prevProgressionKey = initState.harmony.progression
-      .map((sl) =>
-        'isRest' in sl
-          ? `R${sl.bars ?? 1}`
-          : `${(sl as { rootPc: number; qual: string }).rootPc}${(sl as { rootPc: number; qual: string }).qual}${sl.bars ?? 1}`
-      )
-      .join(',');
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
     // initStage appends app.view inside stageEl and registers resize handler.
@@ -170,32 +145,30 @@
     // Prototype: buildTonnetz() called at lines 928–929 from initPixi().
     buildTonnetz(get(sessionStore));
     buildRhythmScene(get(sessionStore));
-    // Step 07.4: build harmony staff scene after Tonnetz and rhythm scenes are ready.
-    // The guard in updateHarmonyStaffDynamic (_dynGfx === null || _staffBaseY === 0)
-    // ensures safe no-ops if the ticker fires before buildHarmonyStaffScene completes,
-    // but we call build first to minimise the window of no-op tick calls.
-    buildHarmonyStaffScene(get(sessionStore));
+
+    // Phase 10 redesign (step 10.11, ADR 0015 D7): initialise the Canvas 2D
+    // Pentagrama layer after PIXI's stage is ready. The canvas is appended to
+    // stageEl with display:none; pointer-events:none until setPentagramaVisible
+    // is called by the store subscription below.
+    initPentagrama(stageEl);
 
     // Wire the resize callback: rebuild both scenes when the window is resized.
     // Prototype lines 935–943: resize calls buildTonnetz() and buildRhythmScene().
+    // Phase 10 redesign: harmony-staff-scene rebuild removed; Canvas 2D layer uses
+    // ResizeObserver internally (no explicit rebuild call needed).
     onResize(() => {
       buildTonnetz(get(sessionStore));
       buildRhythmScene(get(sessionStore));
-      // Step 07.4: rebuild harmony staff scene on resize (canvas dimensions change).
-      buildHarmonyStaffScene(get(sessionStore));
       // After rebuild, restore dynamic overlays.
       updateTonnetzDynamic(get(sessionStore));
-      updateHarmonyStaffDynamic(get(sessionStore));
     });
 
     // ── Step 03.4: register ticker ─────────────────────────────────────────
     // Prototype: app.ticker.add(tick) at line 931.
     registerTicker(app);
-    // Step 07.4: register harmony staff ticker as a parallel ticker.
-    // registerTicker dispatches tickHarmony/tickRhythm only; tickHarmonyStaff
-    // is a separate scene module requiring its own ticker registration.
-    // tickHarmonyStaff guards internally on view === 'harmony' (per spec).
-    app.ticker.add(tickHarmonyStaff);
+    // Phase 10 redesign (step 10.11): tickHarmonyStaff removed (PIXI staff
+    // scene retired per ADR 0015 D1). The Canvas 2D rAF loop in pentagrama-scene.ts
+    // is browser-native and does not require PIXI ticker registration.
 
     // ── Step 03.4: initial dynamic state after build ───────────────────────
     updateTonnetzDynamic(get(sessionStore));
@@ -240,43 +213,10 @@
         updateRhythmDynamic(state);
       }
 
-      // Step 07.4: harmony staff scene updates.
-      // Structural changes (progression length, octave, total bars, or chordMode) require
-      // a full rebuild because note-heads, ledger lines, staff width, and duration-extent
-      // bar widths all depend on the voice tracks and slot durations.
-      // Step 10.6: total bars sum added so a setChordBars call (changing a slot's duration
-      // without changing the progression length) triggers a rebuild and redraws the bars.
-      // Step 10.7: progression key added so a reorderSlot call (changing slot order without
-      // changing length/totalBars/chordMode) triggers a rebuild — otherwise note-heads stay
-      // in the old visual order.
-      // Playhead-only changes (BPM, playback state) are handled by updateHarmonyStaffDynamic.
-      const progressionLength = state.harmony.progression.length;
-      const octave = state.harmony.octave;
-      const totalBars = state.harmony.progression.reduce((s, sl) => s + (sl.bars ?? 1), 0);
-      const chordMode = state.chordMode;
-      const progressionKey = state.harmony.progression
-        .map((sl) =>
-          'isRest' in sl
-            ? `R${sl.bars ?? 1}`
-            : `${(sl as { rootPc: number; qual: string }).rootPc}${(sl as { rootPc: number; qual: string }).qual}${sl.bars ?? 1}`
-        )
-        .join(',');
-      if (
-        progressionLength !== prevProgressionLength ||
-        octave !== prevOctave ||
-        totalBars !== prevTotalBars ||
-        chordMode !== prevChordMode ||
-        progressionKey !== prevProgressionKey
-      ) {
-        buildHarmonyStaffScene(state);
-        prevProgressionLength = progressionLength;
-        prevOctave = octave;
-        prevTotalBars = totalBars;
-        prevChordMode = chordMode;
-        prevProgressionKey = progressionKey;
-      } else {
-        updateHarmonyStaffDynamic(state);
-      }
+      // Phase 10 redesign (step 10.11, ADR 0015 D7): show/hide the Canvas 2D
+      // Pentagrama layer based on current view + subview. The Canvas 2D rAF loop
+      // redraws every frame — no rebuild dispatch needed here.
+      setPentagramaVisible(state.view === 'harmony' && state.harmony.subview === 'staff');
     });
 
     // ── Canvas pointer routing ─────────────────────────────────────────────
@@ -286,10 +226,11 @@
     canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       const state = get(sessionStore);
       if (state.view === 'harmony') {
-        if (state.harmony.subview === 'staff') {
-          // Step 10.6: route to staff interaction layer (select, delete, resize).
-          onStaffPointerDown(e);
-        } else {
+        // Phase 10 redesign (step 10.11): staff sub-view pointer events are handled
+        // directly by the Canvas 2D element (pentagrama-scene.ts D6 wiring).
+        // When subview === 'staff' the Canvas 2D canvas (z-index:1) sits above the
+        // PIXI canvas and receives events directly; no routing needed here.
+        if (state.harmony.subview === 'tonnetz') {
           // Tonnetz sub-view: route to Tonnetz chord picker.
           tonnetzPointerDown(e);
         }
@@ -310,14 +251,13 @@
       }
     });
 
-    // Pointer move: staff resize gesture + rhythm hover layer detection.
+    // Pointer move: rhythm hover layer detection.
     // Prototype: app.view.addEventListener('pointermove', onStageHover) at line 2159.
+    // Phase 10 redesign (step 10.11): staff pointermove removed from PIXI canvas routing.
+    // The Canvas 2D element (pentagrama-scene.ts) handles its own pointermove directly.
     canvas.addEventListener('pointermove', (e: PointerEvent) => {
       const state = get(sessionStore);
-      if (state.view === 'harmony' && state.harmony.subview === 'staff') {
-        // Step 10.6: route to staff interaction layer for resize preview.
-        onStaffPointerMove(e);
-      } else if (state.view === 'rhythm') {
+      if (state.view === 'rhythm') {
         onStagePointerMove(e, state);
         // Update hovered layer index; overlay position is computed reactively in
         // the $: block above keyed on hoveredLayerIndex (Defect 4 fix).
@@ -333,15 +273,6 @@
         }
       } else {
         hoveredLayerIndex = -1;
-      }
-    });
-
-    // Pointer up: commit staff resize gesture.
-    // Step 10.6: needed to finalize resize when user releases the mouse button.
-    canvas.addEventListener('pointerup', () => {
-      const state = get(sessionStore);
-      if (state.view === 'harmony' && state.harmony.subview === 'staff') {
-        onStaffPointerUp();
       }
     });
 
@@ -375,6 +306,9 @@
       unsubStore();
       unsubStore = null;
     }
+    // Phase 10 redesign (step 10.11, ADR 0015 D7): destroy Canvas 2D layer on
+    // component teardown — cancels rAF, disconnects ResizeObserver, removes canvas.
+    destroyPentagrama();
   });
 
   // ── Layer overlay button handlers ────────────────────────────────────────
@@ -480,8 +414,8 @@
       <div class="hint">{$hudStore.hint}</div>
     {:else}
       <div class="hint">
-        3 voces en color — tónica, subdominante, dominante. Cambia modo registro: suavizado
-        (contornos suaves) o estricto (posición absoluta).
+        3 voces en color — tónica (naranja), subdominante (turquesa), dominante (rosa). Clic para
+        seleccionar · arrastrar para mover · borde derecho para redimensionar.
       </div>
     {/if}
   {:else if $sessionStore.view === 'rhythm'}

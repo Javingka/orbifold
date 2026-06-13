@@ -1475,3 +1475,226 @@ Step 10.11 does not proceed until Pilot Checkpoint #2 approval of this ADR.
 **Terminal commit:** `docs(adr): Phase 10 step 10.10 — ADR 0015 Canvas 2D Pentagrama layer`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.11 — Canvas 2D layer skeleton: mount, lifecycle, DPR, show/hide, retire PIXI wiring
+
+**Date:** 2026-06-13
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+**(a) New module `src/render/pentagrama-scene.ts` (ADR 0015 D7)**
+
+Module-level singleton in `src/render/` (render-layer code; DOM imports permitted).
+Exports three functions per ADR 0015 D7:
+
+- `initPentagrama(stageEl: HTMLDivElement)` — creates `<canvas>`, sets inline CSS to `position:absolute; top:0; left:0; z-index:1; display:none; pointer-events:none` (OQ-R6 strategy), gets `CanvasRenderingContext2D`, calls `setup(w, h)` from `stageEl.getBoundingClientRect()`, starts a `ResizeObserver` on `stageEl`, and starts the rAF loop.
+- `destroyPentagrama()` — cancels `cancelAnimationFrame`, calls `observer.disconnect()`, calls `canvas.remove()`, nulls `_ctx`.
+- `setPentagramaVisible(v: boolean)` — toggles `display:block/pointer-events:auto` vs `display:none/pointer-events:none`.
+
+`setup(w, h)` implements DPR scaling per ADR 0015 D3: `_dpr = Math.min(devicePixelRatio, 2)`, `canvas.width = Math.round(w * dpr)`, `canvas.height = Math.round(h * dpr)`, CSS `width/height = w/h px`.
+
+`paint(ts)` calls `ctx.save(); ctx.scale(dpr, dpr); void ts; ctx.clearRect(0, 0, W, H); ctx.restore()`. The `ts` parameter is accepted (passed from rAF via `loop`) and suppressed with `void ts` for this step; it will be used in step 10.13 for time-driven animation. This avoids the `@typescript-eslint/no-unused-vars` error while preserving the correct function signature.
+
+AGPL-3.0 header on line 1.
+
+**(b) `App.svelte` — import replacement (inventory OQ-R5 exact line numbers)**
+
+Removed import block (lines 44–50 at time of inventory):
+```typescript
+import {
+  buildHarmonyStaffScene,
+  updateHarmonyStaffDynamic,
+  tickHarmonyStaff,
+  onStaffPointerDown,
+  onStaffPointerMove,
+  onStaffPointerUp,
+} from '../render/harmony-staff-scene.js';
+```
+
+Replaced with:
+```typescript
+import {
+  initPentagrama,
+  destroyPentagrama,
+  setPentagramaVisible,
+} from '../render/pentagrama-scene.js';
+```
+
+Removed nine call sites (inventory OQ-R5):
+- `buildHarmonyStaffScene(get(sessionStore))` — lines 177, 185, 271
+- `updateHarmonyStaffDynamic(get(sessionStore))` — lines 188, 278
+- `app.ticker.add(tickHarmonyStaff)` — line 198
+- `onStaffPointerDown(e)` — line 291 (canvas `pointerdown` handler)
+- `onStaffPointerMove(e)` — line 319 (canvas `pointermove` handler)
+- `onStaffPointerUp()` — line 343 (canvas `pointerup` listener)
+
+Also removed the five progression-tracking variables that served only the staff rebuild-detect logic (`prevProgressionLength`, `prevOctave`, `prevTotalBars`, `prevChordMode`, `prevProgressionKey`) and their initialization in `onMount` and usage in the store subscription. The Canvas 2D layer redraws every rAF frame — no rebuild detection is needed.
+
+Added new wiring:
+- `initPentagrama(stageEl)` called in `onMount` after `buildTonnetz` / `buildRhythmScene`.
+- `destroyPentagrama()` called in `onDestroy` (alongside `unsubStore()`).
+- `setPentagramaVisible(state.view === 'harmony' && state.harmony.subview === 'staff')` called from the store subscription (single call, replacing the entire staff-rebuild conditional block).
+- `pointerdown` routing updated: when `subview === 'staff'`, no routing to PIXI canvas (Canvas 2D element handles its own events directly per ADR 0015 D6); `tonnetzPointerDown(e)` called only when `subview === 'tonnetz'`.
+- `pointermove` routing updated: staff `onStaffPointerMove` branch removed; rhythm hover branch unchanged.
+- `pointerup` listener for staff removed entirely.
+- Hint text updated (inventory §Additional findings): "Cambia modo registro: suavizado (contornos suaves) o estricto (posición absoluta)" replaced with "Clic para seleccionar · arrastrar para mover · borde derecho para redimensionar."
+
+**(c) `stage.ts` — `_staffContainer` removed (inventory OQ-R5, four touch-points)**
+
+1. Declaration removed: `let _staffContainer: PIXI.Container | null = null` (line 30).
+2. `initStage`: `_staffContainer = new PIXI.Container(); _staffContainer.visible = false;` removed; `harmonyLayer.addChild(_tonnetzContainer, _staffContainer)` → `harmonyLayer.addChild(_tonnetzContainer)`.
+3. `setHarmonySubview`: `if (_staffContainer !== null) _staffContainer.visible = subview === 'staff'` removed; now only toggles `_tonnetzContainer.visible`.
+4. `StageRefs` interface: `staffContainer: PIXI.Container` removed (comment added).
+5. `getStageRefs` null check: `_staffContainer === null` removed from the guard; `staffContainer: _staffContainer` removed from the return value.
+
+Header comment updated to reflect Phase 10 redesign.
+
+**(d) `harmony-staff-scene.ts` retired — deleted**
+
+Only `App.svelte` imported it (inventory OQ-R5 confirmed via `grep -rn "harmony-staff-scene" src/`). File deleted from `src/render/harmony-staff-scene.ts`. Zero TypeScript errors after deletion (confirmed by `pnpm exec tsc --noEmit` exit 0). Preserved in git history on `orbifold-v2/phase-10` branch per ADR 0015 D1.
+
+Remaining comment-only references to "harmony-staff-scene.ts" in `ProgressionStrip.svelte` (lines 141, 147, 185) and `voice-tracks.ts` (line 51) are comments that describe historical alignment logic — not imports. They produce zero TypeScript errors. They will be updated/removed in step 10.15 (cleanup).
+
+**(e) `Header.svelte` — `#registerModeSeg` removed (inventory OQ-R4)**
+
+1. `setRegisterMode` removed from the import statement at line 40 (with explanatory comment).
+2. The `<div class="seg" id="registerModeSeg">` block and its two `suavizado`/`estricto` buttons (inventory lines 407–420) deleted and replaced with a comment explaining the removal (ADR 0015 D2).
+
+`HarmonyState.registerMode` and `setRegisterMode` in `session.ts` are left inert (not deleted) per ADR 0015 D2. `voice-tracks.ts` is left inert.
+
+### Prototype parity note
+
+No prototype rendering in this step — the canvas is blank (transparent). Prototype parity for rendering begins in step 10.12. Audio byte-identity confirmed: `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty. The changes in this step are structural wiring only.
+
+### Files touched
+
+- `src/render/pentagrama-scene.ts` — new file (created)
+- `src/render/harmony-staff-scene.ts` — deleted
+- `src/render/stage.ts` — `_staffContainer` removed (4 touch-points + interface + return)
+- `src/app/App.svelte` — import replacement, call-site removal (9 sites), progression-tracking variable removal, new lifecycle wiring, pointer routing updated, hint text updated
+- `src/ui/Header.svelte` — `#registerModeSeg` block removed, `setRegisterMode` import removed
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry
+
+### Quality gate results (actual runs)
+
+| Gate | Command | Result |
+|---|---|---|
+| TypeScript | `pnpm exec tsc --noEmit` | exit 0 — 0 errors |
+| Lint | `pnpm lint` | exit 0 — 0 ESLint errors, 0 Prettier violations |
+| Tests | `pnpm exec vitest run` | 447 passed (14 files), 0 failed — no regressions |
+| Build | `pnpm build` | exit 0 — pre-existing chunk-size and dynamic-import warnings only |
+
+### Static checks
+
+| Check | Command | Result |
+|---|---|---|
+| No orphan harmony-staff-scene imports | `grep -rn "harmony-staff-scene" src/` | 3 comment-only matches (ProgressionStrip.svelte lines 141,147,185; voice-tracks.ts line 51; App.svelte comment); **0 actual import statements** |
+| `_staffContainer` removed from stage.ts | `grep -n "_staffContainer" src/render/stage.ts` | 4 matches, all in comments (no `let` declaration, no `addChild`, no `getStageRefs` return) |
+| Register toggle removed from Header | `grep -n "registerModeSeg" src/ui/Header.svelte` | 1 match — comment-only (no `<div id="registerModeSeg">`) |
+| `setRegisterMode` import removed | `grep -n "setRegisterMode" src/ui/Header.svelte` | 1 match — comment-only in `<script>` block (no actual import statement) |
+| Zero codegen changes | `git diff main...HEAD -- src/core/codegen/strudel.ts` | empty |
+| AGPL-3.0 header | `head -2 src/render/pentagrama-scene.ts` | `// SPDX-License-Identifier: AGPL-3.0-only` |
+| New canvas in src/render/ not src/core/ | file path | `src/render/pentagrama-scene.ts` confirmed |
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-17** (Canvas 2D `<canvas>` mounts in `#stage`; DPR scaling; show/hide lifecycle):
+- Code: `initPentagrama` appends canvas to `stageEl` with `z-index:1; display:none; pointer-events:none`.
+- DPR: `setup()` uses `Math.min(devicePixelRatio, 2)`; `canvas.width = Math.round(w * dpr)`.
+- Show/hide: `setPentagramaVisible` toggles `display:block/pointer-events:auto` vs `display:none/pointer-events:none`.
+- Lifecycle: rAF cancelled in `destroyPentagrama`; ResizeObserver disconnected; canvas removed.
+- Manual visual verification deferred to Pilot Checkpoint #5.
+- `tsc --noEmit` → 0 errors confirms correct TypeScript types.
+
+**A-10-18** (PIXI staff wiring removed; `harmony-staff-scene.ts` retired; `_staffContainer` removed):
+- `harmony-staff-scene.ts` deleted: `ls src/render/harmony-staff-scene.ts` → file not found.
+- Six imports removed from `App.svelte`; nine call sites removed.
+- `_staffContainer` removed from `stage.ts` (4 touch-points + interface + return value).
+- `tsc --noEmit` → exit 0, 0 errors — no orphan type errors.
+
+**A-10-19** (Register toggle removed from Header; no schema/agent breakage):
+- `#registerModeSeg` block and two buttons removed from `Header.svelte`.
+- `setRegisterMode` removed from Header's import (function still exists inert in `session.ts`).
+- `SavedHarmonySchema` (persistence.ts lines 52–60): `registerMode` absent — confirmed OQ-R4.
+- `HarmonySpecSchema` (agent/schema.ts lines 143–148): `registerMode` absent — confirmed OQ-R4.
+- `tsc --noEmit` → exit 0, 0 errors.
+
+### Routine validations (one-liner each)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed (14 files), 0 failed — no regressions; no new tests (Canvas 2D module not unit-tested directly; pure engines unchanged)
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by this step)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / Proof | Type | Status |
+|---|---|---|---|---|
+| A-10-17 | Canvas 2D `<canvas>` mounts in `#stage`; DPR scaling; show/hide gated on `view==='harmony' && subview==='staff'`; lifecycle clean | Code: `initPentagrama` / `destroyPentagrama` / `setPentagramaVisible` in `pentagrama-scene.ts`; `tsc` 0 errors | MANUAL + tsc | **PROXY-COVERED (code + tsc)** — manual visual deferred to Pilot Checkpoint #5 |
+| A-10-18 | PIXI staff wiring removed from `App.svelte`; `harmony-staff-scene.ts` retired/deleted; `_staffContainer` removed from `stage.ts`; 0 tsc errors | File deleted; 6 imports + 9 call sites removed from App.svelte; 4 touch-points removed from stage.ts; `tsc --noEmit` exit 0 | AUTOMATED (tsc) | **COVERED** |
+| A-10-19 | Register toggle removed from `Header.svelte`; 0 references to `setRegisterMode`/`registerModeSeg` in HTML; no schema/agent breakage | `#registerModeSeg` block deleted; import removed; `SavedHarmonySchema` and `HarmonySpecSchema` confirmed absent (OQ-R4); `tsc` 0 errors | AUTOMATED (grep + tsc) | **COVERED** |
+| A-10-20 | Staff geometry: responsive LS; 5 lines; clef gutter SL=76 | Not in scope for step 10.11 (no rendering yet) | MANUAL | deferred to step 10.12 |
+| A-10-21 | Chord mode rendering matches prototype `pChord` | Not in scope for step 10.11 | MANUAL | deferred to step 10.12 |
+| A-10-22 | Arp mode: per-cycle stagger | Not in scope for step 10.11 | MANUAL | deferred to step 10.12 |
+| A-10-23 | Rest rendering matches prototype `pRest` | Not in scope for step 10.11 | MANUAL | deferred to step 10.12 |
+| A-10-24 | Tonal-function badges | Not in scope for step 10.11 | MANUAL | deferred to step 10.12 |
+| A-10-25 | Time grid | Not in scope for step 10.11 | MANUAL | deferred to step 10.12 |
+| A-10-26 | Playhead via shared anchor | Not in scope for step 10.11 | MANUAL | deferred to step 10.13 |
+| A-10-27 | Spotlight + ambient breathe | Not in scope for step 10.11 | MANUAL | deferred to step 10.13 |
+| A-10-28 | Selection chrome | Not in scope for step 10.11 | MANUAL | deferred to step 10.14 |
+| A-10-29 | Move ghost | Not in scope for step 10.11 | MANUAL | deferred to step 10.14 |
+| A-10-30 | Hover state | Not in scope for step 10.11 | MANUAL | deferred to step 10.14 |
+| A-10-31 | Right vignette | Not in scope for step 10.11 | MANUAL | deferred to step 10.12 |
+| A-10-32 | All interactions call correct store actions | Not in scope for step 10.11 | MANUAL | deferred to step 10.14 |
+| A-10-33 | Zero codegen changes | `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty | AUTOMATED (git diff) | **COVERED** |
+| A-10-34 | All quality gates green | tsc exit 0, lint exit 0, 447 passed, build exit 0 | AUTOMATED | **COVERED** |
+
+**A-10-17 notes on manual portions:** DPR scaling, z-order, and lifecycle correctness require visual smoke-test in a browser. Code inspection confirms the CSS properties and ResizeObserver wiring are correct; Pilot verifies at Checkpoint #5 that the canvas appears as a blank dark overlay when `subview === 'staff'` and is absent (invisible) in Tonnetz mode.
+
+### Decisions made (if any)
+
+- **`void ts` to suppress `@typescript-eslint/no-unused-vars`**: the `paint(ts)` parameter is suppressed with `void ts` rather than removing it from the signature. This preserves the correct rAF callback signature (step 10.13 will use `ts` for time-driven animation without a signature change).
+- **`_stageEl` not stored as module-level state**: the stageEl reference is not needed after `initPentagrama` sets up the ResizeObserver and appends the canvas; the ResizeObserver holds a reference via its callback closure. Storing it would require an unused variable.
+- **Canvas 2D `<canvas>` mounts before PIXI's first resize cycle**: `initPentagrama` is called after `buildTonnetz` / `buildRhythmScene` in `onMount`, which is after the `await new Promise(rAF)` that waits for PIXI's first resize. The Canvas 2D canvas sizes itself from `stageEl.getBoundingClientRect()` at mount time, so it is correctly sized from the start.
+
+### Proposed Decisions Register entries (if any)
+
+None. This step implements previously approved decisions (ADR 0015 D1, D2, D7). The Pilot-proposed Register entries P1 and P2 from step 10.10 remain pending Pilot ratification.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/pentagrama-scene.ts` created (skeleton rAF loop, blank canvas).
+- `src/render/harmony-staff-scene.ts` deleted.
+- `src/render/stage.ts` updated (`_staffContainer` removed, 4 touch-points + interface + return).
+- `src/app/App.svelte` updated (6 imports removed, 9 call sites removed, new lifecycle wiring, pointer routing updated, hint text updated).
+- `src/ui/Header.svelte` updated (`#registerModeSeg` block removed, `setRegisterMode` import removed).
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context
+
+Step 10.12 adds the full `paint(ts)` static rendering to `pentagrama-scene.ts`: staff lines, clef glyph, time grid + bar numbers, chord-mode sustain bars + gemstone onsets, arp-mode staggered circles + connector, rest bars, ledger lines, accidentals, tonal-function badges, and right vignette. All prototype parity source citations from `Pentagrama.dc.html` begin in step 10.12.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.11 — Canvas 2D skeleton, retire PIXI staff wiring, remove register toggle`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
