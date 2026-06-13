@@ -1685,16 +1685,134 @@ Step 10.12 adds the full `paint(ts)` static rendering to `pentagrama-scene.ts`: 
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:**
-**Reviewed on:**
-**Iteration:**
-**Reason:**
-**Next action:**
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-13
+**Iteration:** 1 of 5
+**Reason:** All 8 base checklist items and both project-specific items pass: scope is exactly the 5 specced files; commit format correct; Acceptance Coverage Table complete with honest manual/automated split (A-10-17 visual smoke legitimately deferred to Checkpoint #5, consistent with step spec wording); gate runs reported (tsc 0, lint 0, vitest 447, build exit 0); no Register violations (registerMode left inert per ADR 0015 D2 and Phase 08 Register entries); audio byte-identity confirmed (strudel.ts diff empty); no new dependencies; source-verified: CSS inline string matches spec exactly, DPR cap = min(dpr,2), all 3 exports present, zero core/** imports, _staffContainer comment-only in stage.ts, registerModeSeg/setRegisterMode comment-only in Header.svelte, harmony-staff-scene yields 0 live import statements in src/.
+**Next action:** Dev proceeds to step 10.12
 
 ---
 
 **Terminal commit:** `feat(harmony): Phase 10 step 10.11 — Canvas 2D skeleton, retire PIXI staff wiring, remove register toggle`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.12 — Static rendering: staff, grid, chord/arp/rest slots
+
+**Date:** 2026-06-13
+**Iteration:** 1 of 5
+
+### Completed
+
+Implemented the full `paint(ts)` static layer in `src/render/pentagrama-scene.ts`. The canvas now renders a complete, visually faithful static staff view on every rAF frame. No playhead, spotlight, ambient breathe, or pointer affordances (deferred to steps 10.13/10.14).
+
+**Sections implemented:**
+
+**(a) State read pattern** — `paint(ts)` calls `get(sessionStore)` once per frame; extracts `chordMode`, `harmony.progression`, `harmony.root`, `harmony.mode`, `harmony.octave`, and `harmony.bpm`; computes `diatonicLookup(root, mode)` for badge colors.
+
+**(b) Helper functions (module-private):**
+- `noteNameToMidi(name)` — inline chromatic pc map (C→0…B→11 + flat aliases) per ADR 0015 D4 / inventory OQ-R2. Parses "C#4" → midi=61.
+- `m2p(midi)` — ported verbatim from prototype Pentagrama.dc.html lines 160–165. Returns `{pos, sh}` where pos=0 is B4. Verification: midi=71→(5-5)×7+6-6=0.
+- `ny(pos, H, ls)` — ported verbatim from prototype line 168. Anchors to H/2, NOT cy (per ADR 0015 D3 coordinate-system note).
+- `slotX(i, progression)` — ported from prototype slotX (lines 173–176), adapted to ProgressionSlot.bars (instead of slot.duration).
+- `slotW(slot)` — ported from prototype slotW (line 179).
+- `totalW(progression)` — ported from prototype totalW (line 171).
+- `rr(ctx, x, y, w, h, r)` — rounded-rect path helper, ported verbatim from prototype lines 202–212.
+- `ha(v)` — float→2-char hex alpha, ported verbatim from prototype line 238.
+- `ldg(ctx, pos, nx, H, ls)` — ledger lines, ported verbatim from prototype lines 215–235.
+
+**(c) `drawGrid`** — ported from prototype grid section (lines 277–298). Beat lines at 12px (opacity 0.028); bar lines at 48px (opacity 0.08 / 0.22 for x=SL, lineWidth 1/1.5px); bar numbers IBM Plex Mono 500 8.5px opacity 0.15. Vertical span cy−ls×2.6 to cy+ls×2.6.
+
+**(d) `drawStaffLines`** — ported from prototype staff section (lines 301–306). Five lines at cy−n×ls for n=−2..+2. Left SL−14, right W−20. Center (n=0) opacity 0.32, others 0.18.
+
+**(e) `pChord`** — ported from prototype pChord (lines 421–465). `chordVoicing(rootPc, qual, octave)` → note strings → `noteNameToMidi` → `m2p`. Per voice: bx=x+(sh?22:6), bw=max(4,w−(sh?26:10)), static gradient a=0.72 (active a=0.88 deferred to 10.13), rr sustain bar + gemstone onset circle (dark fill + colored stroke OR=4.5 lineWidth=1.7) + ♯ accidental + ldg ledger lines. `octave` sourced from `harmony.octave` (Chord type has no octave field).
+
+**(f) `pArp`** — CORRECTED per-cycle stagger (ADR 0015 D5). For each cycle 0..ceil(bars)−1: voice i at `cycleStart + (i/3)*PX` (i.e., 0, PX/3≈16px, 2*PX/3≈32px); connector line within each cycle. **Intentional divergence from prototype pArp (lines 468–476):** prototype uses `span = w-24` per-SLOT spread once across entire slot; app uses per-cycle stagger so audio rhythm (A/B/C per cycle) is visually represented.
+
+**(g) `pRest`** — ported verbatim from prototype pRest (lines 500–506). Rounded-rect rgba(140,145,162,0.38), height BH=10, inset 5px; center tick rgba(255,255,255,0.30) 1.5px height 22px at cy.
+
+**(h) Tonal-function badges** — ported from prototype badge section (lines 336–344). Lookup `dmap["rootPc:qual"]`; if found and `func.cls !== ''`: draw `{tonic:'T',subdom:'SD',dom:'D'}[func.cls]` at `x+5, cy+ls*2+5`, font 600 8px IBM Plex Mono, opacity 0.42. Non-diatonic (`undefined` or `cls===''`) → no badge. (`cls` is `''` for non-diatonic, not `'accent'` — confirmed from TonalFunctionInfo type.)
+
+**(i) Hover label** — deferred to step 10.14. Comment placeholder in paint().
+
+**(j) Right vignette** — ported from prototype lines 413–415. `createLinearGradient(W-90,0,W,0)` transparent→rgba(7,8,9,0.52), 90px, full height, drawn last.
+
+**Type discovery — `Chord.octave` does not exist:** The step spec referenced `slot.chord.octave ?? 4` but the `Chord` interface in `session.ts` has no `octave` field. `octave` is on `HarmonyState`. The render layer reads `harmony.octave` from the store and passes it as an explicit parameter to `pChord` and `pArp`. This matches the prototype's behavior (the prototype used a global octave from the sample data).
+
+### Files touched
+
+- `src/render/pentagrama-scene.ts` — full static paint(ts) implementation (step 10.12 additions)
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this handoff entry
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Required behavior | Code coverage | Status |
+|---|---|---|---|
+| A-10-20 | Staff geometry: LS=max(24,min(88,H/6)), cy=H/2-LS*0.75, 5 lines at cy-n*ls | `drawStaffLines`; `paint` geometry | MANUAL — visual confirmation deferred to Checkpoint #5 |
+| A-10-21 | Chord rendering matches prototype `pChord`: gradient bars + gemstone circles + ♯ + ledger lines | `pChord` function | MANUAL — visual confirmation deferred to Checkpoint #5 |
+| A-10-22 | Arp mode: per-cycle stagger (0, PX/3, 2*PX/3), connector; divergence documented | `pArp` function + ADR 0015 D5 citation | MANUAL — visual confirmation deferred to Checkpoint #5 |
+| A-10-23 | Rest rendering matches prototype `pRest`: grey rounded-rect + center tick | `pRest` function | MANUAL — visual confirmation deferred to Checkpoint #5 |
+| A-10-24 | Tonal-function badges (T/SD/D), 42% opacity, non-diatonic → no badge | Badge section in `paint` | MANUAL — visual confirmation deferred to Checkpoint #5 |
+| A-10-25 | Time grid: beat lines 12px, bar lines 48px, bar numbers IBM Plex Mono | `drawGrid` function | MANUAL — visual confirmation deferred to Checkpoint #5 |
+| A-10-31 | Right vignette: linear gradient W-90→W, drawn last | Right vignette section in `paint` | MANUAL — visual confirmation deferred to Checkpoint #5 |
+| A-10-33 | Zero codegen changes: `git diff main...HEAD -- src/core/codegen/strudel.ts` empty | Verified | PASS — empty diff confirmed |
+| A-10-34 | Quality gates: tsc 0 errors, lint 0 errors, vitest 447 passed, build exit 0 | Verified | PASS |
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors (exit 0)
+- `pnpm lint` → 0 ESLint errors, 0 Prettier violations (exit 0)
+- `pnpm exec vitest run` → 447 passed (14 files), 0 failed — baseline maintained
+- `pnpm build` → exit 0, 547 modules transformed (pre-existing chunk-size warnings unchanged)
+- `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty (zero codegen changes)
+
+### Prototype parity citations
+
+| Prototype method | Prototype source | App implementation | Divergence |
+|---|---|---|---|
+| `m2p(midi)` | Pentagrama.dc.html lines 160–165 | `m2p()` function — ported verbatim | None |
+| `ny(pos)` | Pentagrama.dc.html line 168 | `ny(pos, H, ls)` — ported verbatim (anchors to H/2, not cy) | None |
+| `slotX(i)` | Pentagrama.dc.html lines 173–176 | `slotX(i, progression)` — uses slot.bars instead of slot.duration | Field name only |
+| `slotW(s)` | Pentagrama.dc.html line 179 | `slotW(slot)` — uses slot.bars ?? 1 | Field name only |
+| `totalW()` | Pentagrama.dc.html line 171 | `totalW(progression)` | None |
+| `rr(ctx, x, y, w, h, r)` | Pentagrama.dc.html lines 202–212 | `rr()` — ported verbatim | None |
+| `ha(v)` | Pentagrama.dc.html line 238 | `ha(v)` — ported verbatim | None |
+| `ldg(ctx, pos, nx)` | Pentagrama.dc.html lines 215–235 | `ldg(ctx, pos, nx, H, ls)` — ported verbatim, H/ls passed explicitly | None |
+| `pChord(...)` | Pentagrama.dc.html lines 421–465 | `pChord(...)` — ported; static a=0.72 (active pulse deferred to 10.13) | Active pulse deferred |
+| `pArp(...)` | Pentagrama.dc.html lines 468–476 | `pArp(...)` — **INTENTIONAL DIVERGENCE**: per-cycle (i/3)*PX vs prototype per-slot span=(w-24) | Per-cycle vs per-slot (ADR 0015 D5) |
+| `pRest(...)` | Pentagrama.dc.html lines 500–506 | `pRest(...)` — ported verbatim | None |
+| Time grid | Pentagrama.dc.html lines 277–298 | `drawGrid()` — ported verbatim | None |
+| Staff lines | Pentagrama.dc.html lines 301–306 | `drawStaffLines()` — ported verbatim | None |
+| Badges | Pentagrama.dc.html lines 336–344 | Badge section in `paint()` — ported verbatim | None |
+| Vignette | Pentagrama.dc.html lines 413–415 | Vignette section in `paint()` — ported verbatim | None |
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Implementation | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-20 | Staff geometry: responsive LS, cy, 5 lines | `drawStaffLines`, paint geometry | MANUAL | Visual confirmation deferred to Checkpoint #5 |
+| A-10-21 | Chord rendering: gradient bars + gemstone circles | `pChord` | MANUAL | Visual confirmation deferred to Checkpoint #5 |
+| A-10-22 | Arp per-cycle stagger; divergence documented | `pArp` + ADR 0015 D5 | MANUAL | Visual confirmation deferred to Checkpoint #5 |
+| A-10-23 | Rest: grey rounded-rect + center tick | `pRest` | MANUAL | Visual confirmation deferred to Checkpoint #5 |
+| A-10-24 | Tonal-function badges at 42% opacity | Badge section in paint | MANUAL | Visual confirmation deferred to Checkpoint #5 |
+| A-10-25 | Time grid: beat/bar lines + bar numbers | `drawGrid` | MANUAL | Visual confirmation deferred to Checkpoint #5 |
+| A-10-31 | Right vignette drawn last | Vignette section in paint | MANUAL | Visual confirmation deferred to Checkpoint #5 |
+| A-10-33 | Zero codegen changes | `git diff` — empty | AUTOMATED | PASS |
+| A-10-34 | Quality gates green | tsc/lint/vitest/build | AUTOMATED | PASS |
+
+### Transient issues resolved
+
+- **Lint errors on `_isAct` parameters:** The step spec mentioned `_isAct` as reserved parameters for step 10.13. The ESLint `@typescript-eslint/no-unused-vars` rule (set to `error`) does not exempt `_`-prefixed parameters by default in this project. Resolved by removing the unused parameters from `pChord` and `pArp` signatures entirely — step 10.13 will add the `isAct: boolean` parameter when the pulse logic is implemented.
+- **`Chord.octave` does not exist:** The step spec referenced `slot.chord.octave ?? 4` but the actual `Chord` interface in `session.ts` has no `octave` field. `octave` is in `HarmonyState`. Resolved by reading `harmony.octave` from the store in `paint()` and passing it as an explicit parameter. Fallback is not needed because `octave` is always set in `HarmonyState` (default=3).
+- **Arp stagger formula `vi/2` vs `vi/3`:** Initial draft used `(vi/2)*PX` giving offsets 0, 24, 48 px. Corrected to `(vi/3)*PX` giving 0, 16, 32 px per ADR 0015 D5 spec.
+
+### Next-step context
+
+Step 10.13 adds the time-driven dynamic layer: ambient background breathe, `actIdx(ts)` helper, active-slot spotlight, gemstone onset pulse (`isAct` branch in `pChord`/`pArp`), and the playhead driven by `getVisualPhaseAnchor()`. The `ts` parameter passed to `paint(ts)` is available (guarded by `void ts` in this step).
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.12 — static rendering: staff, grid, chord/arp/rest`
+- Hash: self-referential — not recorded
