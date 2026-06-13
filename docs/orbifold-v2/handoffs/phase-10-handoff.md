@@ -1812,7 +1812,123 @@ Implemented the full `paint(ts)` static layer in `src/render/pentagrama-scene.ts
 
 Step 10.13 adds the time-driven dynamic layer: ambient background breathe, `actIdx(ts)` helper, active-slot spotlight, gemstone onset pulse (`isAct` branch in `pChord`/`pArp`), and the playhead driven by `getVisualPhaseAnchor()`. The `ts` parameter passed to `paint(ts)` is available (guarded by `void ts` in this step).
 
+### Planner Review
+
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-13
+**Iteration:** 1 of 5
+**Reason:** All 8 base checklist items pass. Prototype parity: all helpers cited with exact line ranges from Pentagrama.dc.html; m2p/ny/rr/ha/ldg ported verbatim; slotX/slotW/totalW adapted for ProgressionSlot.bars (field name only, geometry identical); noteNameToMidi inlined per ADR 0015 D4 (not staff-map.ts noteToStaffPosition, which uses an incompatible coordinate system). pChord: sustain-bar gradient stops (col+ha(0.72/0.62×/0.20×)) and gemstone onset (dark fill + colored stroke OR=4.5 lineWidth=1.7) match prototype; bx = x + (sh?22:6) correct (x from slotX already includes SL); active pulse correctly deferred to step 10.13. pArp: per-cycle stagger (vi/3)*PX gives 0, PX/3≈16, 2*PX/3≈32 within each cycle, repeated ceil(bars) times — matches ADR 0015 D5; prototype pArp per-slot spread (lines 468–476) cited and documented as intentional divergence. pRest, drawGrid, drawStaffLines, tonal-function badges (func.cls !== '' correct — TonalFunctionInfo.cls has no 'accent' value), right vignette all faithful to prototype. Type discovery (Chord has no octave field → read harmony.octave from HarmonyState) is correct and consistent with all other app octave usages (harmonyCode, playChord, setHarmonyKey). Codegen diff empty; core/** untouched; 447 tests pass; tsc 0 / lint 0 / build 0 all confirmed.
+**Next action:** Dev proceeds to step 10.13
+
 ---
 
 **Terminal commit:** `feat(harmony): Phase 10 step 10.12 — static rendering: staff, grid, chord/arp/rest`
+- Hash: self-referential — not recorded
+
+---
+
+## Step 10.13 — Dynamic: playhead, active-slot spotlight, ambient breathe
+
+**Date:** 2026-06-13
+**Commit(s):** `feat(harmony): Phase 10 step 10.13 — dynamic: playhead, spotlight, ambient breathe`
+**Iteration:** 1 of 5
+
+### Completed
+
+Added all time-driven animation to `src/render/pentagrama-scene.ts`. The Pentagrama Canvas 2D view is now visually complete except for interaction chrome (deferred to step 10.14).
+
+**(a) Ambient background breathe** — ported from prototype paint() breathe section (Pentagrama.dc.html lines 255–260). `b = 0.5 + 0.5×sin(ts/3400×2π)`. Radial gradient at (W×0.6, H×0.4), radius W×0.7, stop 0 `rgba(138,160,255, 0.018+0.008×b)`, stop 1 transparent. Drawn first after clearRect on every frame.
+
+**(b) `actIdx(state)` helper** — ported from prototype actIdx (lines 188–199). Accepts the full `SessionState` (read once per frame). `barMs=(60000/bpm)×4`; `totalCycles=slots.reduce(bars,0)`; `elapsedMs=performance.now()−getVisualPhaseAnchor()`; double-modulo wrap `((elapsedMs % loopMs) + loopMs) % loopMs / barMs` gives fractional-bar phase; iterate slots accumulating bars → return index containing phase. Returns −1 when `nowPlaying.source===null` or `totalCycles===0`. INTENTIONAL DIVERGENCE from prototype (which uses `this.ps`): uses shared `getVisualPhaseAnchor()` for sync with ProgressionStrip.
+
+**(c) Active-slot spotlight** — ported from prototype paint() spotlight section (lines 262–274). When `ai >= 0`: derives `spotCol` from `dmap[rootPc:qual].func.cls` → `FC[cls]` (fallback `'#8aa0ff'` for non-diatonic or rest slots); `p=0.5+0.5×sin(ts/820×2π)`; `a=ha(0.07+0.04×p)`; linear gradient from `sx−sw×0.4` to `sx+sw×1.4`, stops transparent/col+a/col+a/transparent; full-canvas fillRect. Drawn after breathe, before grid and staff.
+
+**(d) `pChord` pulse** — re-added `isAct: boolean` and `ts: DOMHighResTimeStamp` parameters to `pChord` (removed in step 10.12 per ESLint no-unused-vars; now used). When `isAct`: pulse `= 1 + 0.16×sin(ts/700×2π)`, onset circle radius = `OR × pulse`; shadowColor = col, shadowBlur = `7 + 5×|sin(ts/700×2π)|`. Sustain bar base opacity: `a = isAct ? 0.88 : 0.72`. Ported from prototype pChord lines 422–448.
+
+**(e) `pArp` pulse** — same `isAct`/`ts` parameters and same pulse+glow formula applied to arp onset circles. Ported from prototype pArp lines 469–494.
+
+**(f) Playhead** — ported from prototype phX (lines 182–186) and paint() playhead section (lines 396–410). `rawX = (performance.now()−getVisualPhaseAnchor())/barMs×PX`; `tw = totalW(progression)`; gated on `tw > 0 && nowPlaying.source !== null`; `playheadX = SL + ((rawX % tw) + tw) % tw`. Draws: shadowColor rgba(255,255,255,0.9) shadowBlur 14, strokeStyle rgba(255,255,255,0.88), lineWidth 1.5, vertical line cy−ls×2−16 to cy+ls×2+16; arrowhead triangle at top=cy−ls×2−18 (moveTo(phx−5,top), lineTo(phx+5,top), lineTo(phx,top+6), closePath, fill). INTENTIONAL DIVERGENCE from prototype: shared anchor instead of `this.ps` — ensures sync with ProgressionStrip cursor (mirrors ProgressionStrip.svelte cursor math, lines 190–195, exactly: same barMs formula, same rawX formula, same double-modulo wrap, same nowPlaying.source gate).
+
+**Removed:** `getPentagramaTotalW()` export (added as placeholder at end of step 10.12, now dead — playhead is inside `paint()`).
+
+### Prototype parity
+
+| Prototype method | Lines | Implementation | Notes |
+|---|---|---|---|
+| `paint` breathe section | 255–260 | `b = 0.5+0.5×sin(ts/3400×2π); radialGradient(W×0.6,H×0.4,W×0.7)` | Verbatim |
+| `paint` spotlight section | 262–274 | `p=0.5+0.5×sin(ts/820×2π); a=ha(0.07+0.04×p); linearGradient` | Verbatim |
+| `pChord` pulse | 422–448 | `pulse=1+0.16×sin(ts/700×2π); OR×pulse; shadowBlur=7+5×abs(sin)` | Verbatim; a=0.88 active |
+| `pArp` pulse | 469–494 | Same formula on arp onset circles | Verbatim |
+| `phX` / paint playhead | 182–186, 396–410 | `SL + ((rawX % tw)+tw)%tw`; vertical line + arrowhead | DIVERGENCE: `getVisualPhaseAnchor()` replaces `this.ps` |
+| `actIdx` | 188–199 | Double-modulo wrap on `elapsedMs`; iterate slots | DIVERGENCE: `getVisualPhaseAnchor()` replaces `this.ps` |
+
+**Shared-anchor divergence rationale:** The prototype's `this.ps` is a local timestamp set at demo launch — it has no coordination with any other UI component. The app's `getVisualPhaseAnchor()` is reset by `anchorVisualPhase()` on every Strudel pattern (re)start, shared by ProgressionStrip's cursor and the rhythm canvas. Using the shared anchor makes the Pentagrama playhead pixel-exactly in sync with ProgressionStrip: both use `(performance.now() − getVisualPhaseAnchor()) / barMs × PX` with identical `barMs = (60000/bpm)×4`.
+
+### Files touched
+
+- `src/render/pentagrama-scene.ts` — step 10.13 additions: `actIdx` helper, breathe/spotlight in paint(), `isAct`+`ts` params on `pChord`/`pArp`, playhead in paint(); `getPentagramaTotalW` export removed.
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Required behavior | Implementation | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-26 | Playhead: glowing vertical line, arrowhead, shared anchor, cyclic wrap, hidden when not playing | `paint()` playhead block: `SL + ((rawX % tw)+tw)%tw`; gate on `nowPlaying.source !== null` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-27 | Active-slot spotlight + ambient breathe | `paint()` breathe + spotlight blocks; `actIdx()` helper | MANUAL | Deferred to Checkpoint #5 |
+| A-10-21 (pulse portion) | Active slot: onset circle pulse + glow | `pChord` isAct branch: `OR×pulse`, shadowBlur | MANUAL | Deferred to Checkpoint #5 |
+| A-10-22 (pulse portion) | Active slot arp pulse | `pArp` isAct branch: same formula | MANUAL | Deferred to Checkpoint #5 |
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → 0 errors
+- `pnpm lint` → 0 errors (ESLint 0 + Prettier formatted)
+- `pnpm exec vitest run` → 447 passed (14 test files; no regressions; no new tests — canvas rendering not unit-tested)
+- `pnpm build` → exit 0 (1.72s; bundle 1066 kB gzip 335 kB)
+- `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty (zero codegen changes)
+- core/** untouched
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file/section | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-17 | Canvas 2D skeleton mount, DPR, show/hide, rAF, lifecycle | `initPentagrama`, `setPentagramaVisible`, `destroyPentagrama` in pentagrama-scene.ts | MANUAL | Visual smoke confirmed in step 10.11; final Checkpoint #5 |
+| A-10-18 | PIXI staff wiring removed | Step 10.11 — harmony-staff-scene.ts deleted; App.svelte unwired | automated (tsc) | Confirmed step 10.11 (0 tsc errors) |
+| A-10-19 | Register toggle removed | Step 10.11 — Header.svelte registerModeSeg removed | automated (grep + tsc) | Confirmed step 10.11 |
+| A-10-20 | Staff geometry: responsive LS; 5 lines; clef SL=76 | `drawStaffLines`; `paint` geometry | MANUAL | Deferred to Checkpoint #5 |
+| A-10-21 | Chord rendering: gradient bars + gemstone circles + pulse | `pChord` with isAct pulse | MANUAL | Deferred to Checkpoint #5 |
+| A-10-22 | Arp per-cycle stagger + pulse when active | `pArp` with isAct pulse | MANUAL | Deferred to Checkpoint #5 |
+| A-10-23 | Rest rendering: grey rounded-rect + center tick | `pRest` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-24 | Tonal-function badges at 42% opacity | Badge section in paint | MANUAL | Deferred to Checkpoint #5 |
+| A-10-25 | Time grid: beat/bar lines + bar numbers | `drawGrid` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-26 | Playhead: shared anchor, cyclic wrap, hidden when not playing | `paint()` playhead block | MANUAL | Implementing code present; Checkpoint #5 |
+| A-10-27 | Spotlight + ambient breathe | `paint()` breathe + spotlight blocks | MANUAL | Implementing code present; Checkpoint #5 |
+| A-10-28 | Selection chrome | Not yet implemented | MANUAL | Deferred to step 10.14 |
+| A-10-29 | Move ghost | Not yet implemented | MANUAL | Deferred to step 10.14 |
+| A-10-30 | Hover state | Not yet implemented | MANUAL | Deferred to step 10.14 |
+| A-10-31 | Right vignette drawn last | Vignette section in paint | MANUAL | Deferred to Checkpoint #5 |
+| A-10-32 | All interactions call correct store actions | Not yet implemented | MANUAL | Deferred to step 10.14 |
+| A-10-33 | git diff codegen empty | Confirmed: `git diff main...HEAD -- src/core/codegen/strudel.ts` is empty | automated (git diff) | Confirmed |
+| A-10-34 | All quality gates green | tsc 0 / lint 0 / vitest 447 / build exit 0 | automated | Confirmed |
+
+### Decisions made (if any)
+
+- No new governance decisions. All dynamic behavior follows prototype Pentagrama.dc.html exactly (breathe, spotlight, pulse formulae) with the one documented divergence (shared anchor vs `this.ps`).
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None. The `isAct` parameter removal in step 10.12 (ESLint no-unused-vars) was pre-documented in the 10.12 handoff as a known deferral — re-adding with the used parameter in this step was straightforward.
+
+### Environment state after this step
+
+- `src/render/pentagrama-scene.ts` has the full static + dynamic layer. Interaction chrome (step 10.14) is the only remaining visual gap.
+- 447 tests pass; 0 tsc errors; 0 lint errors.
+
+**Planner: STOP — do not auto-continue to step 10.14.**
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.13 — dynamic: playhead, spotlight, ambient breathe`
 - Hash: self-referential — not recorded

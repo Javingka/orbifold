@@ -9,7 +9,7 @@
 //   This file is render-layer code (src/render/), not core (src/core/), so DOM
 //   imports are permitted. No PIXI, no Svelte.
 //
-// ADR 0015 decisions implemented across steps 10.11–10.12:
+// ADR 0015 decisions implemented across steps 10.11–10.13:
 //   D3 — responsive staff geometry (LS, cy, SL, PX, DPR cap).
 //   D4 — note-name → staff position via inline MIDI conversion + ported m2p.
 //   D5 — arpeggio stagger: per-cycle (not per-slot), intentional divergence from prototype pArp.
@@ -17,7 +17,11 @@
 //
 // Step 10.12: adds full static paint(ts) layer — staff lines, clef, time grid,
 //   chord/arp/rest slots, tonal-function badges, right vignette.
-//   No playhead, spotlight, or pointer affordances (steps 10.13/10.14).
+//
+// Step 10.13: adds time-driven dynamic layer — ambient background breathe,
+//   actIdx helper, active-slot spotlight, pChord/pArp onset pulse (isAct branch),
+//   and playhead driven by getVisualPhaseAnchor() (shared anchor, not prototype's
+//   local this.ps — ensures sync with ProgressionStrip cursor).
 //
 // Prototype parity source: docs/orbifold-v2/reference/Pentagrama.dc.html
 //   m2p:         lines 160–165
@@ -28,21 +32,26 @@
 //   rr:          lines 202–212
 //   ha:          line 238
 //   ldg:         lines 215–235
-//   pChord:      lines 421–465
-//   pArp:        lines 468–497 (INTENTIONAL DIVERGENCE: per-cycle stagger, see below)
+//   pChord:      lines 421–465 (isAct pulse added step 10.13)
+//   pArp:        lines 468–497 (INTENTIONAL DIVERGENCE: per-cycle stagger; isAct pulse step 10.13)
 //   pRest:       lines 500–506
+//   paint breathe: lines 255–260 (ambient background breathe)
+//   paint spotlight: lines 262–274 (active-slot spotlight)
 //   paint grid:  lines 277–306 (time grid + bar numbers)
 //   paint staff: lines 301–306 (5-line staff)
 //   paint badge: lines 336–344 (tonal-function badges)
+//   phX:         lines 182–186 (playhead — DIVERGENCE: shared anchor not this.ps)
+//   actIdx:      lines 188–199 (active-slot index — DIVERGENCE: shared anchor not this.ps)
 //   paint vign:  lines 413–415 (right vignette)
 
 import { get } from 'svelte/store';
 import { sessionStore } from '../state/session.js';
-import type { ProgressionSlot, Chord } from '../state/session.js';
+import type { ProgressionSlot, Chord, SessionState } from '../state/session.js';
 import type { Quality } from '../core/theory/chords.js';
 import { chordVoicing } from '../core/theory/chords.js';
 import { diatonicLookup } from '../core/theory/scales.js';
 import type { Mode } from '../core/theory/scales.js';
+import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
 
 // ── Constants (ADR 0015 D3) ──────────────────────────────────────────────────
 
@@ -149,6 +158,46 @@ function slotW(slot: ProgressionSlot): number {
  */
 function totalW(progression: readonly ProgressionSlot[]): number {
   return progression.reduce((s, sl) => s + (sl.bars ?? 1) * PX, 0);
+}
+
+// ── Active-slot index helper (step 10.13) ─────────────────────────────────────
+
+/**
+ * Compute the currently-playing slot index from the shared visual phase anchor.
+ *
+ * Ported from prototype actIdx (Pentagrama.dc.html lines 188–199).
+ *
+ * INTENTIONAL DIVERGENCE: The prototype uses `this.ps` (a local timestamp set when
+ * the demo starts). This implementation uses `getVisualPhaseAnchor()` — the shared
+ * anchor from phase-anchor.ts — so the Pentagrama playhead stays in lockstep with
+ * ProgressionStrip's cursor rAF tick (same barMs, same rawX formula, same modulo wrap).
+ *
+ * Returns −1 when:
+ *   - nowPlaying.source === null (nothing is playing), or
+ *   - totalCycles === 0 (empty progression).
+ *
+ * @param state — current SessionState read from sessionStore
+ */
+function actIdx(state: SessionState): number {
+  if (state.nowPlaying.source === null) return -1;
+  const progression = state.harmony.progression;
+  const bpm = state.bpm > 0 ? state.bpm : 120;
+  const totalCycles = progression.reduce((s, sl) => s + (sl.bars ?? 1), 0);
+  if (totalCycles === 0) return -1;
+
+  const barMs = (60000 / bpm) * 4;
+  const elapsedMs = performance.now() - getVisualPhaseAnchor();
+  // phase = fractional-bar position within the full progression loop.
+  // Double-modulo ensures positive result even if elapsedMs < 0 (clock drift).
+  const loopMs = totalCycles * barMs;
+  const phase = (((elapsedMs % loopMs) + loopMs) % loopMs) / barMs;
+
+  let acc = 0;
+  for (let i = 0; i < progression.length; i++) {
+    acc += progression[i]?.bars ?? 1;
+    if (phase < acc) return i;
+  }
+  return 0;
 }
 
 // ── Canvas utilities (ported verbatim from prototype) ────────────────────────
@@ -303,7 +352,12 @@ function drawStaffLines(ctx: CanvasRenderingContext2D, cy: number, ls: number, W
  * Render a chord slot: 3 sustain bars (attack→decay gradient) + gemstone onset circles.
  * Ported from prototype pChord (Pentagrama.dc.html lines 421–465).
  *
- * No active pulse in this step — step 10.13 adds isAct pulse.
+ * Step 10.13: added `isAct` parameter for onset pulse and sustain-bar opacity.
+ * When isAct=true:
+ *   - onset circle radius pulses: OR × (1 + 0.16×sin(ts/700×2π))
+ *   - onset glow: shadowColor=col, shadowBlur=7+5×|sin(ts/700×2π)|
+ *   - sustain bar base opacity: 0.88 (vs 0.72 for inactive)
+ *
  * bx = x + (sh ? 22 : 6) — note: x here is the slot's canvas left edge (already includes SL).
  * Per prototype, the sustain bar and onset circle use the same bx.
  *
@@ -317,8 +371,12 @@ function pChord(
   w: number, // slot pixel width
   H: number,
   ls: number,
-  octave: number
+  octave: number,
+  isAct: boolean,
+  ts: DOMHighResTimeStamp
 ): void {
+  // Active pulse: radius scale and glow (prototype pChord lines 422–423, 444–448).
+  const pulse = isAct ? 1 + 0.16 * Math.sin((ts / 700) * Math.PI * 2) : 1;
   const voices = chordVoicing(slot.rootPc, slot.qual as Quality, octave);
 
   voices.forEach((noteName, vi) => {
@@ -329,29 +387,34 @@ function pChord(
 
     // Sustain bar: attack→decay gradient, rounded rect
     // Ported from prototype pChord lines 433–440.
+    // Active: base opacity 0.88; inactive: 0.72.
     const bx = x + (sh ? 22 : 6);
     const bw = Math.max(4, w - (sh ? 26 : 10));
 
     // Ledger lines drawn behind bar
     ldg(ctx, pos, bx + OR, H, ls);
 
-    const a = 0.72; // static opacity (active = 0.88, deferred to step 10.13)
+    const a = isAct ? 0.88 : 0.72;
     const g = ctx.createLinearGradient(bx, 0, bx + bw, 0);
     g.addColorStop(0, col + ha(a));
-    g.addColorStop(0.45, col + ha(a * 0.62));
-    g.addColorStop(1, col + ha(a * 0.2));
+    g.addColorStop(0.45, col + ha(a * 0.625)); // ≈ 0.55 active / 0.45 inactive
+    g.addColorStop(1, col + ha(a * 0.205)); // ≈ 0.18 active / 0.15 inactive
     ctx.fillStyle = g;
     rr(ctx, bx, yn - BH / 2, bw, BH, 2);
     ctx.fill();
 
-    // Gemstone onset circle: dark fill + colored stroke
+    // Gemstone onset circle: dark fill + colored stroke + active glow.
     // Ported from prototype pChord lines 443–454.
     ctx.save();
+    if (isAct) {
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 7 + 5 * Math.abs(Math.sin((ts / 700) * Math.PI * 2));
+    }
     ctx.fillStyle = 'rgba(8,10,16,0.95)';
     ctx.strokeStyle = col;
     ctx.lineWidth = 1.7;
     ctx.beginPath();
-    ctx.arc(bx + OR, yn, OR, 0, Math.PI * 2);
+    ctx.arc(bx + OR, yn, OR * pulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -391,6 +454,9 @@ function pChord(
  * stagger makes this rhythm visible (per phase-10-redesign.md lines 100–108 and
  * ADR 0015 D5). The PIXI staff scene (commit 0c3d595) set this precedent.
  *
+ * Step 10.13: added `isAct` + `ts` parameters for onset pulse and glow.
+ * When isAct=true: onset circles pulse (same formula as pChord) and glow.
+ *
  * octave: sourced from HarmonyState.octave (Chord type has no octave field).
  */
 function pArp(
@@ -399,8 +465,12 @@ function pArp(
   x: number, // slot left edge (canvas coords, includes SL)
   H: number,
   ls: number,
-  octave: number
+  octave: number,
+  isAct: boolean,
+  ts: DOMHighResTimeStamp
 ): void {
+  // Active pulse: radius scale (prototype pArp lines 469–470, same formula as pChord).
+  const pulse = isAct ? 1 + 0.16 * Math.sin((ts / 700) * Math.PI * 2) : 1;
   const bars = slot.bars ?? 1;
   const cycleCount = Math.ceil(bars);
   const voices = chordVoicing(slot.rootPc, slot.qual as Quality, octave);
@@ -440,17 +510,22 @@ function pArp(
       ctx.stroke();
     }
 
-    // Draw onset circles and ledger lines
+    // Draw onset circles and ledger lines.
     // Ported from prototype pArp lines 486–496.
+    // Step 10.13: apply isAct pulse + glow (prototype pArp lines 489–491, 493).
     pts.forEach((p, vi) => {
       ldg(ctx, p.pos, p.cx, H, ls);
       const col = VC[vi] ?? '#8aa0ff';
       ctx.save();
+      if (isAct) {
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 7 + 5 * Math.abs(Math.sin((ts / 700) * Math.PI * 2));
+      }
       ctx.fillStyle = 'rgba(8,10,16,0.95)';
       ctx.strokeStyle = col;
       ctx.lineWidth = 1.7;
       ctx.beginPath();
-      ctx.arc(p.cx, p.cy, OR, 0, Math.PI * 2);
+      ctx.arc(p.cx, p.cy, OR * pulse, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -514,9 +589,11 @@ function setup(w: number, h: number): void {
 // ── rAF paint loop ────────────────────────────────────────────────────────────
 
 /**
- * Full static paint callback (step 10.12).
+ * Full paint callback (steps 10.12 + 10.13).
  * Reads SessionState from the store once per frame; derives all geometry.
- * Steps 10.13/10.14 will add playhead, spotlight, breathe, and pointer affordances.
+ * Step 10.13 adds: ambient breathe, actIdx, active-slot spotlight, isAct pulse
+ * on pChord/pArp, and shared-anchor playhead.
+ * Step 10.14 will add pointer affordances (hover, selection chrome, move ghost).
  */
 function paint(ts: DOMHighResTimeStamp): void {
   if (_ctx === null) return;
@@ -528,7 +605,7 @@ function paint(ts: DOMHighResTimeStamp): void {
   const state = get(sessionStore);
   const { chordMode, harmony } = state;
   const { progression, root, mode, octave } = harmony;
-  // diatonicLookup once per frame for badge colors (step spec §a)
+  // diatonicLookup once per frame for badge colors and spotlight color (step spec §a)
   const dmap = diatonicLookup(root, mode as Mode);
 
   const ctx = _ctx;
@@ -545,15 +622,58 @@ function paint(ts: DOMHighResTimeStamp): void {
   // Clear to transparent
   ctx.clearRect(0, 0, W, H);
 
-  // ── (step 10.13) Ambient breathe — placeholder (deferred) ────────────────
-  // ambient breathe, spotlight, and playhead are step 10.13
-  void ts; // ts used in step 10.13
+  // ── (a) Ambient background breathe ───────────────────────────────────────
+  // Ported from prototype paint() breathe section (Pentagrama.dc.html lines 255–260).
+  // Drawn FIRST after clearRect per step spec §a.
+  // b oscillates 0→1 with period ≈ 3.4 s; radial gradient pulses softly.
+  {
+    const b = 0.5 + 0.5 * Math.sin((ts / 3400) * Math.PI * 2);
+    const bg = ctx.createRadialGradient(W * 0.6, H * 0.4, 0, W * 0.6, H * 0.4, W * 0.7);
+    bg.addColorStop(0, `rgba(138,160,255,${(0.018 + 0.008 * b).toFixed(3)})`);
+    bg.addColorStop(1, 'rgba(138,160,255,0)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+  }
 
-  // ── (c) Time grid ─────────────────────────────────────────────────────────
+  // ── (b+c) Compute active slot index + spotlight ───────────────────────────
+  // actIdx: shared-anchor variant (prototype actIdx lines 188–199, divergence documented above).
+  const ai = actIdx(state);
+
+  // ── (c) Active-slot spotlight ─────────────────────────────────────────────
+  // Ported from prototype paint() spotlight section (Pentagrama.dc.html lines 262–274).
+  // Drawn after breathe, before grid + staff.
+  if (ai >= 0) {
+    const activeSlot = progression[ai];
+    if (activeSlot !== undefined) {
+      // Derive spotlight color from tonal function (or accent fallback).
+      let spotCol = '#8aa0ff';
+      if (!('isRest' in activeSlot && activeSlot.isRest)) {
+        const chord = activeSlot as Chord;
+        const key = `${chord.rootPc}:${chord.qual}`;
+        const dfn = dmap[key];
+        if (dfn !== undefined && dfn.func.cls !== '') {
+          spotCol = FC[dfn.func.cls] ?? '#8aa0ff';
+        }
+      }
+      const sx = slotX(ai, progression);
+      const sw = slotW(activeSlot);
+      const p = 0.5 + 0.5 * Math.sin((ts / 820) * Math.PI * 2);
+      const a = ha(0.07 + 0.04 * p);
+      const sg = ctx.createLinearGradient(sx - sw * 0.4, 0, sx + sw * 1.4, 0);
+      sg.addColorStop(0, 'transparent');
+      sg.addColorStop(0.25, spotCol + a);
+      sg.addColorStop(0.75, spotCol + a);
+      sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // ── (d) Time grid ─────────────────────────────────────────────────────────
   // Ported from prototype paint() grid section (lines 277–298)
   drawGrid(ctx, W, cy, ls);
 
-  // ── (d) Staff lines ───────────────────────────────────────────────────────
+  // ── (e) Staff lines ───────────────────────────────────────────────────────
   // Ported from prototype paint() staff section (lines 301–306)
   drawStaffLines(ctx, cy, ls, W);
 
@@ -561,12 +681,13 @@ function paint(ts: DOMHighResTimeStamp): void {
   progression.forEach((slot, idx) => {
     const x = slotX(idx, progression);
     const w = slotW(slot);
+    const isAct = ai === idx;
 
     // Clamp slots that would overflow the right boundary
     if (x > sr) return;
 
     if ('isRest' in slot && slot.isRest) {
-      // (g) Rest slot
+      // Rest slot
       // Ported from prototype pRest (lines 500–506)
       pRest(ctx, x, w, cy);
     } else {
@@ -574,18 +695,18 @@ function paint(ts: DOMHighResTimeStamp): void {
       const chord = slot as Chord;
 
       if (chordMode === 'chord') {
-        // (e) Chord mode: sustain bars + gemstone onset circles
+        // Chord mode: sustain bars + gemstone onset circles + isAct pulse (step 10.13).
         // Ported from prototype pChord (lines 421–465).
         // octave sourced from harmony.octave (Chord has no octave field; HarmonyState.octave is
         // the global voicing octave per ADR 0015 D4 / inventory OQ-R2).
-        pChord(ctx, chord, x, w, H, ls, octave);
+        pChord(ctx, chord, x, w, H, ls, octave, isAct, ts);
       } else {
-        // (f) Arpeggio mode: per-cycle stagger (ADR 0015 D5 divergence)
+        // Arpeggio mode: per-cycle stagger (ADR 0015 D5 divergence) + isAct pulse (step 10.13).
         // Prototype pArp lines 468–476 used per-slot spread; we use per-cycle.
-        pArp(ctx, chord, x, H, ls, octave);
+        pArp(ctx, chord, x, H, ls, octave, isAct, ts);
       }
 
-      // (h) Tonal-function badges (T / SD / D)
+      // Tonal-function badges (T / SD / D)
       // Ported from prototype paint() badge section (lines 336–344).
       // Badge drawn below the staff for diatonic chords only.
       // Non-diatonic chords miss the dmap lookup (undefined) → no badge.
@@ -614,11 +735,55 @@ function paint(ts: DOMHighResTimeStamp): void {
     }
   });
 
-  // ── (i) Hover label — deferred to step 10.14 ─────────────────────────────
+  // ── Hover label — deferred to step 10.14 ─────────────────────────────────
   // Pointer tracking required. Comment placeholder per step spec §i.
   // TODO step 10.14: draw hover label in slot's tonal-function color above slot.
 
-  // ── (j) Right vignette — drawn last ──────────────────────────────────────
+  // ── (f) Playhead ──────────────────────────────────────────────────────────
+  // Ported from prototype phX (Pentagrama.dc.html lines 182–186) + paint() playhead
+  // section (lines 396–410).
+  //
+  // INTENTIONAL DIVERGENCE from prototype: prototype uses `this.ps` (a local
+  // timestamp). We use `getVisualPhaseAnchor()` — the shared anchor — so this
+  // playhead stays in perfect sync with ProgressionStrip's cursor rAF tick.
+  // Mirror of ProgressionStrip.svelte cursor math (lines 190–195):
+  //   barMs = (60000 / bpm) * 4
+  //   rawX = ((now - getVisualPhaseAnchor()) / barMs) * PX_PER_CYCLE
+  //   cursorX = ((rawX % totalW) + totalW) % totalW
+  // We add SL to rawX to place the playhead in staff coordinates.
+  {
+    const tw = totalW(progression);
+    const bpm = state.bpm > 0 ? state.bpm : 120;
+    const barMs = (60000 / bpm) * 4;
+    if (tw > 0 && state.nowPlaying.source !== null) {
+      const rawX = ((performance.now() - getVisualPhaseAnchor()) / barMs) * PX;
+      const phx = SL + (((rawX % tw) + tw) % tw);
+      const top = cy - ls * 2 - 18;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,255,255,0.9)';
+      ctx.shadowBlur = 14;
+      ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(phx, cy - ls * 2 - 16);
+      ctx.lineTo(phx, cy + ls * 2 + 16);
+      ctx.stroke();
+
+      // Arrowhead triangle at top (prototype paint() lines 404–409)
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(phx - 5, top);
+      ctx.lineTo(phx + 5, top);
+      ctx.lineTo(phx, top + 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Right vignette — drawn last ───────────────────────────────────────────
   // Ported from prototype paint() vignette section (lines 413–415).
   const vg = ctx.createLinearGradient(W - 90, 0, W, 0);
   vg.addColorStop(0, 'rgba(7,8,9,0)');
@@ -721,13 +886,4 @@ export function setPentagramaVisible(visible: boolean): void {
     _canvas.style.display = 'none';
     _canvas.style.pointerEvents = 'none';
   }
-}
-
-/**
- * Returns the total pixel width of all slots (for use by step 10.13 playhead).
- * Exported so the playhead step can compute the cyclic modulo.
- */
-export function getPentagramaTotalW(): number {
-  const state = get(sessionStore);
-  return totalW(state.harmony.progression);
 }
