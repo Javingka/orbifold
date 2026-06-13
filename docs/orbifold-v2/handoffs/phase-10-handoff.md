@@ -243,3 +243,157 @@ Step 10.4 rewrites `drawStaticStaff` in `harmony-staff-scene.ts` to render durat
 **Terminal commit:** `feat(harmony): Phase 10 step 10.3 — staff-hit engine, reorderSlot action, playhead fix no-op`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.4 — Duration-extent rendering + bar grid (chord mode)
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+**(a) Duration bars replacing per-NoteHead drawCircle (ADR 0014 D2)**
+
+Rewrote the note-head rendering loop in `drawStaticStaff`. Each `NoteHead` is now drawn as:
+1. A filled rounded-rect bar: `gfx.beginFill(col, 0.8); gfx.drawRoundedRect(nx, ny - 4, barWidth, 8, 2); gfx.endFill()` where `barWidth = Math.max(nh.bars * PX_PER_CYCLE, 8)` (minimum-width guard prevents invisible extents).
+2. An onset circle at the left edge: `gfx.beginFill(col, 1); gfx.drawCircle(nx, ny, NOTE_RADIUS); gfx.endFill()`.
+
+Ledger lines are drawn before the bar, unchanged from prior rendering.
+
+**(b) Rest extent bars (ADR 0014 D2)**
+
+Replaced the short thick horizontal line for rest glyphs with:
+1. A filled rounded-rect bar at `restY = stepToY(6, staffBaseY)`: width = `Math.max(rg.bars * PX_PER_CYCLE, 8)`, height = 8, corner radius = 2, fill = `COL.faint`, opacity = 60%.
+2. A short center tick (2px, `COL.faint`, 90% opacity, `REST_HALF_W = 10` half-width) at the horizontal center of the bar for legibility.
+
+**(c) `drawBarGrid` helper called from `buildHarmonyStaffScene` (ADR 0014 D6)**
+
+Added new `drawBarGrid(gfx, staffBaseY, totalBars, screenWidth): void` helper function (not exported). It draws:
+- Beat lines: x = n × (PX_PER_CYCLE / 4) = n × 12 px for n = 1 to totalBeats; 1px, `COL.faint`, 15% opacity.
+- Bar lines: when n % 4 === 0 (every 4 beats = 1 bar); 1px, `COL.faint`, 35% opacity.
+- Left boundary (x = 0): 1px, `COL.faint`, 50% opacity.
+- Vertical span: `stepToY(TREBLE_STAFF_LINES[last] + 2, staffBaseY)` to `stepToY(-6, staffBaseY)` — same as the playhead span.
+
+Called from `buildHarmonyStaffScene` before `drawStaticStaff`, using `totalBars = _staffWidth / PX_PER_CYCLE` (the total progression duration, not the canvas width).
+
+**(d) Arp mode — same bars as chord mode (documented temporary state)**
+
+In this step, `chordMode === 'arp'` draws identical duration bars as chord mode. A code comment in `drawStaticStaff` explicitly documents this temporary equivalence. Arp-specific stagger (beat-accurate onset circles + ascending connector line per ADR 0014 D7) is implemented in step 10.5.
+
+**(e) `PX_PER_CYCLE` coordination rule**
+
+`PX_PER_CYCLE` is imported from `../core/harmony/time-map.js` at line 55 (unchanged from prior steps). All bar width computations (`nh.bars * PX_PER_CYCLE`, `rg.bars * PX_PER_CYCLE`, `beatPx = PX_PER_CYCLE / 4`) use this single import. No local redeclaration present: `grep -n "PX_PER_CYCLE" src/render/harmony-staff-scene.ts` shows one import and multiple uses, no `const PX_PER_CYCLE =` anywhere in the file.
+
+**New constants added:**
+- `BAR_HEIGHT = 8` (duration bar height, px)
+- `BAR_CORNER_RADIUS = 2` (rounded rect corner radius, px)
+- `BAR_OPACITY = 0.8` (chord bar fill opacity)
+- `REST_BAR_OPACITY = 0.6` (rest bar fill opacity)
+
+### Prototype parity note
+
+No prototype equivalent for duration-extent rendering — this is a new UX feature (the prototype draws note-heads as single dots regardless of duration). Parity note confirms audio byte-identity:
+
+`git diff HEAD --name-only` → `src/render/harmony-staff-scene.ts` (the only modified file). Files in `src/core/codegen/strudel.ts`, `src/audio/`, and `src/state/phase-anchor.ts` are all **unchanged** in this step. Audio output for any given `SessionState` is byte-identical before and after this step.
+
+### Files touched
+
+- `src/render/harmony-staff-scene.ts` — `drawBarGrid` helper added; `drawStaticStaff` rewritten for duration bars; new constants added; `buildHarmonyStaffScene` updated to call `drawBarGrid` before `drawStaticStaff`.
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry.
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-01** (Duration-extent rendering: horizontal bars spanning `bars × PX_PER_CYCLE` per voice):
+- Implemented in `drawStaticStaff`: `barWidth = Math.max(nh.bars * PX_PER_CYCLE, BAR_HEIGHT)`.
+- Manual verification deferred to Pilot Checkpoint #5 (PIXI rendering not unit-testable).
+
+**A-10-02** (Rest extent rendering: grey bars at middle staff line):
+- Implemented: `restBarWidth = Math.max(rg.bars * PX_PER_CYCLE, BAR_HEIGHT)`, drawn at `stepToY(6, staffBaseY)`.
+- Manual verification deferred to Pilot Checkpoint #5.
+
+**A-10-03** (Bar grid: vertical beat and bar lines on staff canvas):
+- Implemented in `drawBarGrid`: beat lines at 12px intervals (15% opacity), bar lines at 48px intervals (35% opacity), left boundary at 50% opacity.
+- Manual verification deferred to Pilot Checkpoint #5.
+
+**A-10-15** (Audio byte-identity — no codegen changes):
+- `git diff HEAD --name-only` → one file: `src/render/harmony-staff-scene.ts`.
+- `src/core/codegen/strudel.ts`: 0 diff lines. Audio pipeline unchanged.
+
+**A-10-16** (AGPL-3.0 header in modified files):
+- `head -2 src/render/harmony-staff-scene.ts` → `// SPDX-License-Identifier: AGPL-3.0-only` (pre-existing, confirmed present).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files — no regressions, no new unit tests; PIXI rendering is not unit-tested)
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by this step)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent rendering: horizontal bars spanning `bars × PX_PER_CYCLE` per voice | — | manual | **PROXY-COVERED (code)** — implemented in `drawStaticStaff`; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-02 | Rest extent rendering: grey bars at middle staff line | — | manual | **PROXY-COVERED (code)** — implemented in `drawStaticStaff`; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-03 | Bar grid: vertical beat and bar lines on staff canvas | — | manual | **PROXY-COVERED (code)** — `drawBarGrid` implemented; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-04 | Chord / arp mode visual toggle: parallel bars vs staggered onset dots | — | manual | not covered — deferred to step 10.5 (arp mode draws same bars as chord mode in this step, documented comment) |
+| A-10-05 | Select: clicking a slot shows border, ✕ button, and resize handle | — | manual | not covered — deferred to step 10.6 |
+| A-10-06 | Delete via ✕: removes slot; ProgressionStrip reflects removal | — | manual | not covered — deferred to step 10.6 |
+| A-10-07 | Resize: right-edge drag changes duration; commits via `setChordBars`; strip updates | — | manual | not covered — deferred to step 10.6 |
+| A-10-08 | Time-move: body drag reorders slot; ProgressionStrip reflects new order | — | manual | not covered — deferred to step 10.7 |
+| A-10-09 | Playhead cyclic + matches ProgressionStrip cursor; neither visible when not playing | — | manual | NO DISCREPANCY confirmed (step 10.3); live re-verification deferred to step 10.8 |
+| A-10-10 | ProgressionStrip parity: edits on staff visible in strip and vice versa | — | manual | not covered — deferred to step 10.6 |
+| A-10-11 | `staff-hit.ts` pure engine; all exports unit-tested; no regressions | `tests/harmony/staff-hit.test.ts` | automated | **COVERED** (step 10.3) — 42 tests pass; 0 PIXI/DOM imports confirmed |
+| A-10-12 | `reorderSlot` store action: unit-tested; correct semantics; calls `requeueLive()`; no-op when fromIdx === toIdx | `tests/session.test.ts` | automated | **COVERED** (step 10.3) — 9 tests pass |
+| A-10-13 | All quality gates green: tsc, lint, vitest ≥ 447, build | multiple | automated | **PARTIAL** — all gates green this step; global sweep deferred to step 10.8 |
+| A-10-14 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts` | — | automated (proxy: grep) | not covered — deferred to step 10.8 |
+| A-10-15 | Audio byte-identical before/after visual rendering changes (no codegen changes) | — | automated (proxy: git diff) | **COVERED** — `git diff HEAD --name-only` → only `harmony-staff-scene.ts`; `strudel.ts` unchanged |
+| A-10-16 | AGPL-3.0 header in all new and modified source files | — | automated (proxy: head -2) | **COVERED for this step** — `harmony-staff-scene.ts`: AGPL header at line 1 (pre-existing, confirmed) |
+
+**Notes on partial coverage:** A-10-01, A-10-02, A-10-03 are code-implemented but require manual live verification at Pilot Checkpoint #5. The phase file's Validation section explicitly states these are "verified at Pilot manual acceptance." A-10-15 uses git diff as the proxy (no codegen changes = byte-identical audio for any given `SessionState`).
+
+**Proxy disclosures:**
+- A-10-15 audio byte-identity: `git diff HEAD --name-only` → `src/render/harmony-staff-scene.ts` only; `src/core/codegen/strudel.ts` diff is empty.
+- A-10-16 AGPL header: `head -2 src/render/harmony-staff-scene.ts` → `// SPDX-License-Identifier: AGPL-3.0-only`.
+- A-10-01/02/03 `PX_PER_CYCLE` coordination rule: `grep -n "const PX_PER_CYCLE" src/render/harmony-staff-scene.ts` → 0 matches (no local redeclaration); single import at line 55.
+
+### Decisions made (if any)
+
+- `drawBarGrid` draws beat lines up to `screenWidth` (not `_staffWidth`) to avoid overdrawing beyond the canvas. Beat line count is computed as `Math.ceil(totalBars * PX_PER_CYCLE / beatPx) + 1` to cover the full progression width, clamped by the `if (x > screenWidth) break` guard.
+- `void staffWidth` suppresses the unused-parameter lint for the `staffWidth` parameter of `drawStaticStaff` — the parameter is retained in the signature for API stability (step 10.6 may use it for affordance hit region bounds).
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/harmony-staff-scene.ts`: `drawBarGrid` added, `drawStaticStaff` rewritten for duration-extent bars.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context (only if non-obvious)
+
+Step 10.5 adds `chordMode: 'chord' | 'arp'` parameter to `drawStaticStaff` and implements the beat-accurate stagger visual for arpeggio mode (ADR 0014 D7). The temporary comment in `drawStaticStaff` documenting identical chord/arp rendering will be replaced by the branching logic.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.4 — duration-extent rendering and bar grid`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

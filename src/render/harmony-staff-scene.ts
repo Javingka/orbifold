@@ -80,11 +80,27 @@ const NOTE_OFFSET_X = 8;
 /** Half-width of ledger lines around the note-head x-center. */
 const LEDGER_HALF_W = 8;
 
-/** Rest glyph line half-width (centered in the rest's x-slot). */
+/**
+ * Rest glyph center-tick half-width.
+ * Step 10.4 (ADR 0014 D2): retained for the short center tick drawn on rest
+ * extent bars for legibility.
+ */
 const REST_HALF_W = 10;
 
 /** Sharp accidental PIXI.Text font size. */
 const ACCIDENTAL_FONT_SIZE = 11;
+
+/** Duration bar height in pixels (ADR 0014 D2). */
+const BAR_HEIGHT = 8;
+
+/** Duration bar corner radius in pixels (ADR 0014 D2). */
+const BAR_CORNER_RADIUS = 2;
+
+/** Duration bar fill opacity for chord note bars (ADR 0014 D2: 80%). */
+const BAR_OPACITY = 0.8;
+
+/** Duration bar fill opacity for rest extent bars (ADR 0014 D2: 60%). */
+const REST_BAR_OPACITY = 0.6;
 
 /**
  * Treble clef y-offset above staffBaseY.
@@ -143,11 +159,77 @@ function voiceColor(voiceIndex: 0 | 1 | 2): number {
   return COL.dom;
 }
 
+// ── drawBarGrid ───────────────────────────────────────────────────────────────
+
+/**
+ * Draw the bar and beat grid overlay on the staff canvas.
+ * Called from buildHarmonyStaffScene before note/rest rendering (ADR 0014 D6).
+ *
+ * Beat lines: every PX_PER_CYCLE / 4 = 12 px, 1px, COL.faint, 15% opacity.
+ * Bar lines: every PX_PER_CYCLE = 48 px, 1px, COL.faint, 35% opacity.
+ * Left boundary (x=0): 1px, COL.faint, 50% opacity.
+ *
+ * Vertical span mirrors the playhead span:
+ *   top  = stepToY(TREBLE_STAFF_LINES[last] + 2, staffBaseY)
+ *   bottom = stepToY(-6, staffBaseY)
+ *
+ * Not exported — internal rendering helper only.
+ */
+function drawBarGrid(
+  gfx: PIXI.Graphics,
+  staffBaseY: number,
+  totalBars: number,
+  screenWidth: number
+): void {
+  // Vertical span: top of grid (above top staff line) to below bottom staff line.
+  const gridTop = stepToY(TREBLE_STAFF_LINES[TREBLE_STAFF_LINES.length - 1] + 2, staffBaseY);
+  const gridBottom = stepToY(-6, staffBaseY);
+
+  // Beat interval: PX_PER_CYCLE / 4 = 12 px per beat.
+  const beatPx = PX_PER_CYCLE / 4;
+  // Total beats to render across the full progression width (plus one extra pass
+  // to ensure the last bar line is drawn).
+  const totalBeats = Math.ceil((totalBars * PX_PER_CYCLE) / beatPx) + 1;
+
+  for (let i = 1; i <= totalBeats; i++) {
+    const x = i * beatPx;
+    // Limit to screen width — no need to draw off-screen grid lines.
+    if (x > screenWidth) break;
+
+    const isBarLine = i % 4 === 0; // every 4 beats = 1 bar
+
+    if (isBarLine) {
+      // Bar line: 35% opacity.
+      gfx.lineStyle(1, COL.faint, 0.35);
+    } else {
+      // Beat line: 15% opacity.
+      gfx.lineStyle(1, COL.faint, 0.15);
+    }
+    gfx.moveTo(x, gridTop);
+    gfx.lineTo(x, gridBottom);
+  }
+
+  // Left boundary (x = 0): 50% opacity.
+  gfx.lineStyle(1, COL.faint, 0.5);
+  gfx.moveTo(0, gridTop);
+  gfx.lineTo(0, gridBottom);
+}
+
 // ── drawStaticStaff ──────────────────────────────────────────────────────────
 
 /**
- * Draw the five staff lines, note-heads, ledger lines, and rest glyphs
- * into _staffGfx. Clears first.
+ * Draw the five staff lines, note-heads (duration bars), ledger lines, and rest
+ * extent bars into _staffGfx. Clears first.
+ *
+ * Step 10.4 (ADR 0014 D2): replaces per-NoteHead drawCircle with duration-extent
+ * bars (filled rounded-rect + onset circle). Rest glyphs replaced with rounded-rect
+ * extent bars + center tick. See ADR 0014 D2 for full spec.
+ *
+ * Step 10.4 note — arp mode: when chordMode === 'arp', this step draws the SAME
+ * duration bars as chord mode. Arpeggio-specific stagger (beat-accurate onset
+ * circles + connector line per ADR 0014 D7) is implemented in step 10.5.
+ * This is a documented temporary state; chord mode and arp mode are visually
+ * identical in this step only.
  *
  * @param lineWidth - Horizontal extent of the five staff lines. Must equal
  *   app.screen.width (edge-to-edge) so the canvas never shows black gaps on
@@ -174,7 +256,15 @@ function drawStaticStaff(
     gfx.lineTo(lineWidth, y);
   }
 
-  // ── Note-heads, ledger lines ───────────────────────────────────────────────
+  // ── Note-heads: duration-extent bars + onset circles (ADR 0014 D2) ─────────
+  // Each NoteHead is rendered as:
+  //   1. A filled rounded-rectangle bar spanning the slot's duration in pixels.
+  //   2. An onset circle at the left edge (full opacity, voice color).
+  // Ledger lines are drawn at their diatonic-step y positions before each bar.
+  //
+  // NOTE (step 10.4): arp mode draws IDENTICAL duration bars as chord mode.
+  // The beat-accurate stagger (ADR 0014 D7) is added in step 10.5. This comment
+  // documents the temporary equivalence of chord/arp rendering in this step.
   for (const nh of layout.noteHeads) {
     const col = voiceColor(nh.voiceIndex);
     const nx = nh.x + NOTE_OFFSET_X;
@@ -190,23 +280,49 @@ function drawStaticStaff(
       }
     }
 
-    // Filled circle note-head.
+    // Duration bar: filled rounded-rect, width = bars * PX_PER_CYCLE (min 8px).
+    // ADR 0014 D2: height = BAR_HEIGHT (8px), corner radius = BAR_CORNER_RADIUS (2px),
+    // opacity = BAR_OPACITY (80%). PX_PER_CYCLE imported from time-map.ts.
+    const barWidth = Math.max(nh.bars * PX_PER_CYCLE, BAR_HEIGHT);
+    gfx.lineStyle(0);
+    gfx.beginFill(col, BAR_OPACITY);
+    gfx.drawRoundedRect(nx, ny - BAR_HEIGHT / 2, barWidth, BAR_HEIGHT, BAR_CORNER_RADIUS);
+    gfx.endFill();
+
+    // Onset circle at left edge of the bar: full opacity, voice color.
     gfx.lineStyle(0);
     gfx.beginFill(col, 1);
     gfx.drawCircle(nx, ny, NOTE_RADIUS);
     gfx.endFill();
   }
 
-  // ── Rest glyphs ────────────────────────────────────────────────────────────
-  // Rendered as a short thick horizontal line at the middle staff y-position.
-  // Middle of the five staff lines = step 6 (B4, the third staff line).
+  // ── Rest extent bars (ADR 0014 D2) ────────────────────────────────────────
+  // Each RestGlyph is rendered as:
+  //   1. A filled rounded-rectangle bar spanning the rest's duration in pixels
+  //      at restY = stepToY(6, staffBaseY) (step 6 = B4, middle staff line).
+  //   2. A short center tick for legibility (thick line, REST_HALF_W = 10px half-width).
   const restY = stepToY(6, staffBaseY);
   for (const rg of layout.restGlyphs) {
     const rx = rg.x + NOTE_OFFSET_X;
-    gfx.lineStyle(3, COL.faint, 0.8);
-    gfx.moveTo(rx - REST_HALF_W, restY);
-    gfx.lineTo(rx + REST_HALF_W, restY);
+    const restBarWidth = Math.max(rg.bars * PX_PER_CYCLE, BAR_HEIGHT);
+
+    // Rest extent bar: grey, 60% opacity, rounded rect.
+    gfx.lineStyle(0);
+    gfx.beginFill(COL.faint, REST_BAR_OPACITY);
+    gfx.drawRoundedRect(rx, restY - BAR_HEIGHT / 2, restBarWidth, BAR_HEIGHT, BAR_CORNER_RADIUS);
+    gfx.endFill();
+
+    // Center tick: short dark line at the horizontal center of the bar.
+    // Retained for legibility (ADR 0014 D2).
+    const tickCenterX = rx + restBarWidth / 2;
+    gfx.lineStyle(2, COL.faint, 0.9);
+    gfx.moveTo(tickCenterX - REST_HALF_W, restY);
+    gfx.lineTo(tickCenterX + REST_HALF_W, restY);
   }
+
+  // staffWidth is used by the caller but not within this function.
+  // Suppress unused-parameter lint without a comment directive.
+  void staffWidth;
 }
 
 // ── drawAccidentals ──────────────────────────────────────────────────────────
@@ -308,6 +424,12 @@ export function buildHarmonyStaffScene(state: SessionState): void {
     state.harmony.progression.reduce((sum, slot) => sum + (slot.bars ?? 1), 0) * PX_PER_CYCLE,
     MIN_STAFF_WIDTH
   );
+
+  // ── Draw bar grid (ADR 0014 D6) — before note/rest rendering ─────────────
+  // totalBars = _staffWidth / PX_PER_CYCLE (already computed above).
+  // screenWidth capped at app.screen.width so beat lines do not overflow the canvas.
+  const totalBars = _staffWidth / PX_PER_CYCLE;
+  drawBarGrid(_staffGfx, _staffBaseY, totalBars, app.screen.width);
 
   // ── Draw static content ───────────────────────────────────────────────────
   // lineWidth = app.screen.width: staff lines span edge-to-edge regardless of
