@@ -61,6 +61,16 @@
 //   buildHarmonyStaffScene call, if _selectedSlotIdx >= progression.length,
 //   reset to null. This prevents stale selection when the ProgressionStrip deletes
 //   a slot externally.
+//
+// Step 10.7 (ADR 0014 D4): time-move (slot reorder) gesture.
+//   Body drag on a selected slot moves it in time. A 4 px threshold disambiguates
+//   accidental moves from select-clicks. During drag, a ghost bar (40% opacity)
+//   and a thin vertical insertion indicator (2px, white, 80% opacity) are drawn
+//   at the target position. On pointerup, reorderSlot(fromIdx, toIdx) is called
+//   (no-op if indices are equal). Audio changes by design — reordering changes the
+//   arrange() Strudel output, taking effect at the next cycle.
+//   Module-level move state: _moveActive, _moveFromIdx, _moveDragPx, _moveInsertIdx,
+//   _pointerDownPx, _pointerDownOnSelected.
 //   Affordances drawn into _affordanceGfx (separate from _dynGfx/playhead layer).
 
 import * as PIXI from 'pixi.js';
@@ -71,10 +81,21 @@ import { computeStaffLayout } from '../core/harmony/staff-layout.js';
 import type { StaffLayout } from '../core/harmony/staff-layout.js';
 import { TREBLE_STAFF_LINES } from '../core/harmony/staff-map.js';
 import { PX_PER_CYCLE } from '../core/harmony/time-map.js';
-import { computeSlotBounds, hitTestSlot, hitTestResizeHandle } from '../core/harmony/staff-hit.js';
+import {
+  computeSlotBounds,
+  hitTestSlot,
+  hitTestResizeHandle,
+  nearestInsertionIndex,
+} from '../core/harmony/staff-hit.js';
 import type { SlotBounds } from '../core/harmony/staff-hit.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
-import { sessionStore, clearChordAt, setChordBars, clampBars } from '../state/session.js';
+import {
+  sessionStore,
+  clearChordAt,
+  setChordBars,
+  clampBars,
+  reorderSlot,
+} from '../state/session.js';
 import type { SessionState } from '../state/session.js';
 import { getStageRefs } from './stage.js';
 import { COL, FONT_SERIF } from './theme.js';
@@ -229,6 +250,37 @@ let _resizePreviewBars = 1;
  */
 let _slotBounds: SlotBounds[] = [];
 
+// ── Move state (step 10.7, ADR 0014 D4) ──────────────────────────────────────
+// Ephemeral: NOT in session store, NOT persisted.
+
+/** True while a move (body drag / reorder) gesture is in progress. */
+let _moveActive = false;
+
+/** Progression index of the slot being dragged (set when move activates). */
+let _moveFromIdx = -1;
+
+/** Current pointer x during drag — used to render the ghost bar. */
+let _moveDragPx = 0;
+
+/**
+ * Computed target insertion index during drag (via nearestInsertionIndex).
+ * Committed via reorderSlot(_moveFromIdx, _moveInsertIdx) on pointerup.
+ */
+let _moveInsertIdx = -1;
+
+/**
+ * Pointer x at pointerdown — used to measure displacement for the 4 px
+ * move-activation threshold (ADR 0014 D4: disambiguates select-click vs move).
+ */
+let _pointerDownPx = 0;
+
+/**
+ * True when pointerdown landed on the currently-selected slot's body
+ * (and not on the resize handle or ✕ region). The flag enables threshold
+ * tracking in pointermove. Cleared on any pointer action that consumes the event.
+ */
+let _pointerDownOnSelected = false;
+
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
 /**
@@ -341,7 +393,35 @@ function drawAffordances(): void {
   const gridTop = stepToY(TREBLE_STAFF_LINES[TREBLE_STAFF_LINES.length - 1] + 2, _staffBaseY);
   const gridBottom = stepToY(-6, _staffBaseY);
 
-  if (_resizeActive) {
+  if (_moveActive) {
+    // During move: draw a semi-transparent ghost bar at the drag position plus
+    // a thin vertical insertion indicator at the nearest slot boundary.
+    // ADR 0014 D4: ghost at 40% opacity; insertion indicator 2px, white, 80% opacity.
+
+    // Ghost bar: slot-width rectangle at current drag position.
+    const ghostWidth = bound.width;
+    const ghostLeft = _moveDragPx - ghostWidth / 2; // centre the ghost on the pointer
+    _affordanceGfx.lineStyle(0);
+    _affordanceGfx.beginFill(0xffffff, 0.4);
+    _affordanceGfx.drawRect(ghostLeft, gridTop, ghostWidth, gridBottom - gridTop);
+    _affordanceGfx.endFill();
+
+    // Insertion indicator: thin vertical line at the boundary closest to the drag x.
+    // Boundary x = _slotBounds[_moveInsertIdx]?.x (or last slot's right edge if at end).
+    let indicatorX: number;
+    if (_moveInsertIdx >= 0 && _moveInsertIdx < _slotBounds.length) {
+      indicatorX = _slotBounds[_moveInsertIdx].x;
+    } else if (_slotBounds.length > 0) {
+      // After the last slot: right edge of the last slot.
+      const last = _slotBounds[_slotBounds.length - 1];
+      indicatorX = last.x + last.width;
+    } else {
+      indicatorX = 0;
+    }
+    _affordanceGfx.lineStyle(2, 0xffffff, 0.8);
+    _affordanceGfx.moveTo(indicatorX, gridTop);
+    _affordanceGfx.lineTo(indicatorX, gridBottom);
+  } else if (_resizeActive) {
     // During resize: draw preview outline rectangle showing the new duration.
     // No ✕ button, no resize handle during active drag.
     const previewWidth = Math.max(_resizePreviewBars * PX_PER_CYCLE, BAR_HEIGHT);
@@ -710,10 +790,17 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   // (i.e., the selected slot no longer exists — e.g., deleted from the
   // ProgressionStrip externally), reset to null.
   // This prevents the interaction layer from referencing a nonexistent slot.
+  // Step 10.7: also reset move state when selection is cleared (a slot that was
+  // being dragged may have been deleted externally).
   if (_selectedSlotIdx !== null && _selectedSlotIdx >= state.harmony.progression.length) {
     _selectedSlotIdx = null;
     _resizeActive = false;
     _resizePreviewBars = 1;
+    _moveActive = false;
+    _moveFromIdx = -1;
+    _moveInsertIdx = -1;
+    _moveDragPx = 0;
+    _pointerDownOnSelected = false;
   }
 
   // ── Compute slot bounds for hit-testing (ADR 0014 D3) ────────────────────
@@ -830,48 +917,133 @@ export function onStaffPointerDown(e: PointerEvent): void {
     }
   }
 
-  // ── 3. Slot body hit → select ─────────────────────────────────────────────
+  // ── 3. Slot body hit → select or arm move ────────────────────────────────
   const hitIdx = hitTestSlot(px, _slotBounds);
   if (hitIdx !== null) {
-    _selectedSlotIdx = hitIdx;
-    _resizeActive = false;
-    drawAffordances();
+    if (hitIdx === _selectedSlotIdx) {
+      // The user pressed on the already-selected slot body.
+      // Do NOT start the move immediately — wait for a 4 px displacement in
+      // pointermove (ADR 0014 D4: threshold prevents accidental moves on tap).
+      _pointerDownOnSelected = true;
+      _pointerDownPx = px;
+      // Selection state unchanged; affordances unchanged.
+    } else {
+      // Different slot: select it normally; any in-progress move is cancelled.
+      _selectedSlotIdx = hitIdx;
+      _resizeActive = false;
+      _pointerDownOnSelected = false;
+      _moveActive = false;
+      _moveFromIdx = -1;
+      drawAffordances();
+    }
     return;
   }
 
   // ── 4. Outside all slots → deselect ──────────────────────────────────────
   _selectedSlotIdx = null;
   _resizeActive = false;
+  _pointerDownOnSelected = false;
+  _moveActive = false;
+  _moveFromIdx = -1;
   drawAffordances();
 }
 
 /**
  * Handle pointermove on the staff canvas (harmony sub-view 'staff').
  *
- * During an active resize gesture: update _resizePreviewBars and redraw
- * affordances (preview outline). No store write until pointerup.
+ * Step 10.6: during an active resize gesture: update _resizePreviewBars and
+ * redraw affordances (preview outline). No store write until pointerup.
+ *
+ * Step 10.7: during an active move gesture: update _moveDragPx and
+ * _moveInsertIdx, then redraw affordances (ghost bar + insertion indicator).
+ * Move activation threshold: 4 px displacement from pointerdown position
+ * (ADR 0014 D4). When threshold is crossed and _pointerDownOnSelected is true,
+ * transitions from select-pending to move-active.
  *
  * @param e - Native PointerEvent; e.offsetX is canvas-local.
  */
 export function onStaffPointerMove(e: PointerEvent): void {
-  if (!_resizeActive) return;
-
   const px = e.offsetX;
-  const deltaPx = px - _resizeStartPx;
-  _resizePreviewBars = clampBars(_resizeStartBars + deltaPx / PX_PER_CYCLE);
-  drawAffordances();
+
+  // ── Resize in progress ────────────────────────────────────────────────────
+  if (_resizeActive) {
+    const deltaPx = px - _resizeStartPx;
+    _resizePreviewBars = clampBars(_resizeStartBars + deltaPx / PX_PER_CYCLE);
+    drawAffordances();
+    return;
+  }
+
+  // ── Move in progress ──────────────────────────────────────────────────────
+  if (_moveActive) {
+    _moveDragPx = px;
+    _moveInsertIdx = nearestInsertionIndex(px, _slotBounds);
+    drawAffordances();
+    return;
+  }
+
+  // ── Threshold tracking (arm → activate move) ──────────────────────────────
+  // When the user pressed on the already-selected slot body (_pointerDownOnSelected),
+  // check if the pointer has moved more than 4 px. If so, activate the move gesture.
+  if (_pointerDownOnSelected && _selectedSlotIdx !== null) {
+    const displacement = Math.abs(px - _pointerDownPx);
+    if (displacement >= 4) {
+      // Threshold crossed: transition to move-active.
+      _moveActive = true;
+      _moveFromIdx = _selectedSlotIdx;
+      _moveDragPx = px;
+      _moveInsertIdx = nearestInsertionIndex(px, _slotBounds);
+      _pointerDownOnSelected = false;
+      drawAffordances();
+    }
+    // If threshold not yet crossed, no visual change needed.
+  }
 }
 
 /**
  * Handle pointerup on the staff canvas (harmony sub-view 'staff').
  *
- * If a resize gesture is active: commit via setChordBars (store write).
+ * Step 10.6: if a resize gesture is active, commit via setChordBars (store write).
  * The store write triggers App.svelte's subscription; if progression content
  * (bars) changed without a length change, updateHarmonyStaffDynamic is called
  * rather than buildHarmonyStaffScene — so we also call drawAffordances here
  * to refresh the handle position based on the new bounds.
+ *
+ * Step 10.7: if a move gesture is active, commit via reorderSlot(fromIdx, toIdx)
+ * (no-op if equal). The store write triggers a full buildHarmonyStaffScene rebuild
+ * (progression length is unchanged, but the slot order change is picked up by
+ * App.svelte's subscription when it detects a changed slot identity).
+ * After commit, reset all move state and redraw (or wait for rebuild).
  */
 export function onStaffPointerUp(): void {
+  // Always clear threshold-tracking flag on pointerup, regardless of other state.
+  _pointerDownOnSelected = false;
+
+  // ── Move commit ───────────────────────────────────────────────────────────
+  if (_moveActive) {
+    const fromIdx = _moveFromIdx;
+    const toIdx = _moveInsertIdx;
+    // Reset move state before the store write so any synchronous rebuild triggered
+    // by the store change does not re-enter the move drawing branch.
+    _moveActive = false;
+    _moveFromIdx = -1;
+    _moveInsertIdx = -1;
+    _moveDragPx = 0;
+
+    if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+      // reorderSlot handles clamping and the no-op-if-equal guard internally.
+      // It calls requeueLive() — audio will change at the next cycle (by design).
+      reorderSlot(fromIdx, toIdx);
+      // reorderSlot triggers a store write; App.svelte will call buildHarmonyStaffScene
+      // via the totalBars/chordMode/length subscription. If the length is unchanged,
+      // the subscription may not fire a rebuild — eagerly recompute _slotBounds and
+      // redraw so affordances reflect the reordered state.
+      _slotBounds = computeSlotBounds(get(sessionStore).harmony.progression, PX_PER_CYCLE);
+    }
+    drawAffordances();
+    return;
+  }
+
+  // ── Resize commit ─────────────────────────────────────────────────────────
   if (!_resizeActive) return;
 
   if (_selectedSlotIdx !== null) {

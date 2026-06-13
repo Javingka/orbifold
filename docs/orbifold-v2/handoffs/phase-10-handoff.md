@@ -767,3 +767,184 @@ Confirmed no source diff: `git status` → clean; `git diff --name-only` → no 
 **Terminal commit:** `feat(harmony): Phase 10 step 10.6 — staff interaction layer (select, delete, resize)`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.7 — Time-move (slot reorder) gesture
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+**(a) Module-level move state (ADR 0014 D4)**
+
+Added six new module-level variables to `harmony-staff-scene.ts`:
+- `_moveActive: boolean = false` — true while a reorder drag is in progress
+- `_moveFromIdx: number = -1` — progression index of the dragged slot
+- `_moveDragPx: number = 0` — current pointer x during drag (for ghost preview)
+- `_moveInsertIdx: number = -1` — computed target insertion index (via `nearestInsertionIndex`)
+- `_pointerDownPx: number = 0` — pointer x at pointerdown (for 4 px threshold)
+- `_pointerDownOnSelected: boolean = false` — armed when pointerdown lands on already-selected slot body
+
+These are ephemeral interaction state — not in the session store, not persisted. Consistent with `_resizeActive` / `_selectedSlotIdx` (ADR 0014 Consequence 3).
+
+**(b) Ghost bar + insertion indicator in `drawAffordances()` (ADR 0014 D4)**
+
+Added `_moveActive` branch at the top of the existing `if (_resizeActive) / else` logic:
+- Ghost bar: semi-transparent white rectangle (40% opacity) at `_moveDragPx − bound.width / 2`, spanning the full staff vertical extent. Width = the slot's own pixel width (`bound.width`), so the ghost mirrors the slot's duration.
+- Insertion indicator: 2 px white vertical line at 80% opacity, positioned at the left edge of `_slotBounds[_moveInsertIdx]` (or at the right edge of the last slot if `_moveInsertIdx === bounds.length`). Drawn by looking up `_slotBounds[_moveInsertIdx].x` for in-bounds indices; using `last.x + last.width` for the after-last case.
+- While `_moveActive`, the static affordances (border, ✕, resize handle) are suppressed — only the ghost + indicator are drawn (per ADR 0014 D4 "Affordance visibility rule").
+
+**(c) `onStaffPointerDown` — threshold-arm (ADR 0014 D4 dispatch order, step 3)**
+
+The existing dispatch steps 1 (✕ hit) and 2 (resize hit) are unchanged. Step 3 (slot body hit) is extended:
+- If `hitIdx === _selectedSlotIdx` (already-selected slot): set `_pointerDownOnSelected = true` and `_pointerDownPx = px`. Selection state and affordances are unchanged — no visual change on the down event itself. The move gesture is only activated when pointermove crosses the 4 px threshold.
+- If `hitIdx !== _selectedSlotIdx` (different slot): normal select behavior as before; also resets `_moveActive`, `_moveFromIdx`, `_pointerDownOnSelected`.
+- Step 4 (outside all slots) also resets `_moveActive`, `_moveFromIdx`, `_pointerDownOnSelected`.
+
+**(d) `onStaffPointerMove` — threshold detection + move activation + ghost update (ADR 0014 D4)**
+
+Restructured into three branches:
+1. `_resizeActive` branch (unchanged from step 10.6): update `_resizePreviewBars` and redraw.
+2. `_moveActive` branch: update `_moveDragPx`, recompute `_moveInsertIdx` via `nearestInsertionIndex(px, _slotBounds)`, redraw affordances.
+3. Threshold-tracking branch: when `_pointerDownOnSelected && _selectedSlotIdx !== null` and `|px - _pointerDownPx| >= 4`: transition to move-active — set `_moveActive = true`, `_moveFromIdx = _selectedSlotIdx`, `_moveDragPx = px`, compute `_moveInsertIdx`, clear `_pointerDownOnSelected`, redraw affordances.
+
+**(e) `onStaffPointerUp` — move commit (ADR 0014 D5)**
+
+Extended to handle move before the resize commit:
+1. Always clears `_pointerDownOnSelected` on pointerup (covers the tap-without-move path).
+2. Move commit branch: if `_moveActive` and `_moveInsertIdx !== _moveFromIdx`, resets all move state (before the store write so any synchronous rebuild doesn't re-enter the move branch), then calls `reorderSlot(_moveFromIdx, _moveInsertIdx)`. After the call, eagerly recomputes `_slotBounds` from the updated progression (in case App.svelte's rebuild didn't fire due to the subscription not detecting the order change). Calls `drawAffordances()`.
+3. Resize commit branch: unchanged from step 10.6.
+
+**(f) Selection guard extended (ADR 0014 Consequence 3)**
+
+In `buildHarmonyStaffScene`, the existing selection guard (resets `_selectedSlotIdx` when `>= progression.length`) is extended to also reset `_moveActive`, `_moveFromIdx`, `_moveInsertIdx`, `_moveDragPx`, and `_pointerDownOnSelected`. This covers the case where an externally-deleted slot was being dragged.
+
+**(g) App.svelte — progression-key rebuild trigger (step 10.7)**
+
+Added `prevProgressionKey: string` tracking to App.svelte's store subscription. The key is a lightweight per-slot fingerprint: `'R{bars}'` for rests and `'{rootPc}{qual}{bars}'` for chords, joined with commas. When the key changes (due to `reorderSlot` changing slot order without changing length/totalBars/chordMode), `buildHarmonyStaffScene` is called to redraw note-heads in their new positions.
+
+Without this trigger, `reorderSlot` would change the audio (via `requeueLive`) but the staff visual would remain in the old order until some other state change triggered a rebuild.
+
+**(h) `nearestInsertionIndex` + `reorderSlot` imports**
+
+Added `nearestInsertionIndex` to the import from `../core/harmony/staff-hit.js` and `reorderSlot` to the import from `../state/session.js`. Both were already implemented and tested in step 10.3; this step is the first consumer in the renderer.
+
+### Prototype parity note
+
+No prototype equivalent — time-move is a new feature. Audio byte-identity: `reorderSlot` changes the `arrange()` Strudel output (the audible chord order changes). This is intended behavior — the user is reordering their composition. The phase file explicitly documents this: "Audio changes by design, taking effect next cycle." No codegen changes in this step.
+
+### Files touched
+
+- `src/render/harmony-staff-scene.ts` — move state variables, `drawAffordances` ghost/indicator branch, `onStaffPointerDown` threshold-arm, `onStaffPointerMove` restructured with three branches, `onStaffPointerUp` extended with move commit, selection guard extended, imports extended (`nearestInsertionIndex`, `reorderSlot`), header comment updated.
+- `src/app/App.svelte` — `prevProgressionKey` state variable, initialization in `onMount`, `progressionKey` computation and comparison in store subscription; rebuild condition extended.
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry.
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-08** (Time-move: dragging a slot body shows a ghost bar and insertion indicator; releasing reorders the slot; ProgressionStrip reflects the new order):
+- `drawAffordances()` renders ghost bar (40% opacity white rect) + insertion indicator (2px, 80% opacity) when `_moveActive`.
+- `onStaffPointerMove` activates move after 4 px threshold; uses `nearestInsertionIndex` (already tested in step 10.3 — 42 tests covering boundary conditions).
+- `onStaffPointerUp` calls `reorderSlot(_moveFromIdx, _moveInsertIdx)` — same store action tested in step 10.3 (9 tests covering semantics, no-op, edge cases).
+- App.svelte `progressionKey` trigger causes `buildHarmonyStaffScene` to rebuild after the reorder, updating the visual note-head positions.
+- ProgressionStrip reacts to the same store change (reactive subscription to `$sessionStore`).
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-11** (`staff-hit.ts` pure engine — unchanged; `nearestInsertionIndex` first used here):
+- `nearestInsertionIndex` already has 9 test cases covering empty bounds, midpoint boundaries, far-left, far-right, and between-slot positioning (step 10.3).
+- `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/staff-hit.ts` → 0 matches (pure engine confirmed — unchanged from step 10.3).
+
+**A-10-12** (`reorderSlot` store action — unchanged; first called from renderer here):
+- 9 unit tests in `tests/session.test.ts` cover all semantics (step 10.3). No new tests needed for the renderer call path (renderer→store action call is already exercised by the interaction layer pattern from step 10.6).
+
+**A-10-15** (Audio byte-identical — `reorderSlot` changes audio by design; no codegen changes):
+- `src/core/codegen/strudel.ts` not modified in this step.
+- `reorderSlot` changes the `arrange()` output — this is the intended behavior, documented in ADR 0014 D5 and the phase file. It is NOT a regression.
+
+**A-10-16** (AGPL-3.0 header in modified files):
+- `head -2 src/render/harmony-staff-scene.ts` → `// SPDX-License-Identifier: AGPL-3.0-only`
+- `head -4 src/app/App.svelte` → `SPDX-License-Identifier: AGPL-3.0-only` (in HTML comment block)
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files — no regressions; no new unit tests for this step — PIXI rendering and DOM interaction are not unit-testable in Vitest; pure engine functions (`nearestInsertionIndex`, `reorderSlot`) already tested in step 10.3)
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by this step)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent rendering: horizontal bars spanning `bars × PX_PER_CYCLE` per voice | — | manual | **PROXY-COVERED (code)** (step 10.4) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-02 | Rest extent rendering: grey bars at middle staff line | — | manual | **PROXY-COVERED (code)** (step 10.4) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-03 | Bar grid: vertical beat and bar lines on staff canvas | — | manual | **PROXY-COVERED (code)** (step 10.4) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-04 | Chord / arp mode visual toggle: parallel bars vs staggered onset dots | — | manual | **PROXY-COVERED (code)** (step 10.5) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-05 | Select: clicking a slot shows border, ✕ button, and resize handle | — | manual | **PROXY-COVERED (code)** (step 10.6) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-06 | Delete via ✕: removes slot; ProgressionStrip reflects removal | — | manual | **PROXY-COVERED (code)** (step 10.6) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-07 | Resize: right-edge drag changes duration; commits via `setChordBars`; strip updates | — | manual | **PROXY-COVERED (code)** (step 10.6) — manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-08 | Time-move: body drag reorders slot; ProgressionStrip reflects new order | — | manual | **PROXY-COVERED (code)** — move gesture implemented (4 px threshold, ghost bar, insertion indicator, `reorderSlot` commit, App.svelte rebuild trigger); manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-09 | Playhead cyclic + matches ProgressionStrip cursor; neither visible when not playing | — | manual | NO DISCREPANCY confirmed (step 10.3); live re-verification deferred to step 10.8 |
+| A-10-10 | ProgressionStrip parity: edits on staff visible in strip and vice versa | — | manual | **PROXY-COVERED (code)** (step 10.6 + 10.7) — `reorderSlot` triggers same store subscription as other actions; ProgressionStrip reacts; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-11 | `staff-hit.ts` pure engine; all exports unit-tested; no regressions | `tests/harmony/staff-hit.test.ts` | automated | **COVERED** (step 10.3) — 42 tests pass; `nearestInsertionIndex` (9 of those tests) first consumed here; 0 PIXI/DOM imports confirmed |
+| A-10-12 | `reorderSlot` store action: unit-tested; correct semantics; calls `requeueLive()`; no-op when fromIdx === toIdx | `tests/session.test.ts` | automated | **COVERED** (step 10.3) — 9 tests pass |
+| A-10-13 | All quality gates green: tsc, lint, vitest ≥ 447, build | multiple | automated | **PARTIAL** — all gates green this step (447 passed, 0 tsc, 0 lint, build clean); global sweep deferred to step 10.8 |
+| A-10-14 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts` | — | automated (proxy: grep) | not covered — deferred to step 10.8 |
+| A-10-15 | Audio byte-identical before/after visual rendering changes (no codegen changes) | — | automated (proxy: note) | **NOTE** — `reorderSlot` changes audio by design (ADR 0014 D5); `src/core/codegen/strudel.ts` unchanged; no regression |
+| A-10-16 | AGPL-3.0 header in all new and modified source files | — | automated (proxy: head -2) | **COVERED for this step** — both modified files confirmed |
+
+**Notes on partial coverage:** A-10-08 is code-implemented and proxy-covered. The phase file marks it as a manual acceptance criterion; live verification at Pilot Checkpoint #5. A-10-15 deserves a special note: `reorderSlot` does change the Strudel output by design — the audio invariant for this step is "no codegen file modifications" (confirmed: `strudel.ts` unchanged). The user-visible audio change is the intentional result of the reorder action.
+
+**Proxy disclosures:**
+- A-10-08 ghost bar: `grep -n "_moveActive\|ghostWidth\|insertIndicator\|_moveDragPx" src/render/harmony-staff-scene.ts` → all present.
+- A-10-08 threshold: `grep -n "4\|_pointerDownOnSelected\|displacement" src/render/harmony-staff-scene.ts` → threshold constant and flag present.
+- A-10-08 reorderSlot: `grep -n "reorderSlot" src/render/harmony-staff-scene.ts` → present in import and `onStaffPointerUp`.
+- A-10-08 App.svelte rebuild: `grep -n "prevProgressionKey\|progressionKey" src/app/App.svelte` → present as variable, initializer, and condition.
+- A-10-11 pure engine: `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/staff-hit.ts` → 0 matches.
+- A-10-15 no codegen: `src/core/codegen/strudel.ts` not in modified files list.
+- A-10-16 AGPL headers: `head -2 src/render/harmony-staff-scene.ts` → AGPL-3.0-only; `head -4 src/app/App.svelte` → AGPL-3.0-only.
+- No `sessionStore.update` in render module: `grep -n "sessionStore.update" src/render/harmony-staff-scene.ts` → 0 matches.
+
+### Decisions made (if any)
+
+- **`_pointerDownOnSelected` flag + `_pointerDownPx` for threshold tracking**: the 4 px threshold requires tracking where the pointer was on pointerdown and whether it landed on the already-selected slot. Two dedicated flags (`_pointerDownOnSelected`, `_pointerDownPx`) are used rather than overloading the existing `_resizeStartPx` — they serve different purposes and should not share state.
+- **Ghost bar centred on pointer**: `ghostLeft = _moveDragPx - bound.width / 2`. This centres the ghost on the pointer rather than anchoring its left edge. This gives immediate visual feedback of where the slot will land relative to the drag handle.
+- **App.svelte `progressionKey` fingerprint**: a lightweight per-slot string key (`rootPc + qual + bars` for chords, `R + bars` for rests) joined by commas. This detects reorder events (key changes when slot order changes) without requiring a deep equality check on the full progression array. The key is computed on every subscription call but is O(n) in progression length, which is bounded by the UI (max 8 bars × ~20 slots is negligible).
+- **Eager `_slotBounds` recompute after `reorderSlot`**: after calling `reorderSlot`, we eagerly call `computeSlotBounds(get(sessionStore).harmony.progression, PX_PER_CYCLE)` to update `_slotBounds`. The App.svelte rebuild should also do this (via `buildHarmonyStaffScene`), but the eager recompute guarantees correct affordance rendering even if the subscription fires asynchronously or not at all (e.g., in test environments).
+
+### Proposed Decisions Register entries (if any)
+
+None. The move-gesture implementation follows ADR 0014 D4/D5 without any deviation requiring a new Register entry.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/harmony-staff-scene.ts`: move state + ghost/indicator rendering + pointer handler extensions + `nearestInsertionIndex`/`reorderSlot` imports.
+- `src/app/App.svelte`: `prevProgressionKey` tracking; rebuild condition extended.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context (only if non-obvious)
+
+Step 10.8 is the quality gates + manual acceptance step. It runs the full static-analysis checks, verifies no source modifications, and assembles the phase-level Acceptance Coverage Table for Pilot Checkpoint #5.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.7 — staff slot time-move (reorder gesture)`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

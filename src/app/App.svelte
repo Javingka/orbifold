@@ -116,10 +116,14 @@
   // Step 10.6: also track total bars sum and chordMode so a setChordBars call (which
   // changes a slot's duration without changing the progression length) triggers a full
   // rebuild — otherwise the duration-extent bars stay at their old width.
+  // Step 10.7: also track a lightweight slot-identity key so a reorderSlot call
+  // (which changes slot order without changing length/totalBars/chordMode) triggers a
+  // full rebuild — otherwise the note-head positions remain in the old order visually.
   let prevProgressionLength = 0;
   let prevOctave = 3;
   let prevTotalBars = 0;
   let prevChordMode = 'chord';
+  let prevProgressionKey = '';
 
   onMount(async () => {
     // Phase 04: start with empty session (no default rhythm seed).
@@ -131,10 +135,18 @@
     prevHarmonyMode = initState.harmony.mode;
     // Step 07.4: capture initial progression length and octave for staff scene change detection.
     // Step 10.6: also capture total bars sum and chordMode.
+    // Step 10.7: also capture slot-identity key to detect reorderSlot changes.
     prevProgressionLength = initState.harmony.progression.length;
     prevOctave = initState.harmony.octave;
     prevTotalBars = initState.harmony.progression.reduce((s, sl) => s + (sl.bars ?? 1), 0);
     prevChordMode = initState.chordMode;
+    prevProgressionKey = initState.harmony.progression
+      .map((sl) =>
+        'isRest' in sl
+          ? `R${sl.bars ?? 1}`
+          : `${(sl as { rootPc: number; qual: string }).rootPc}${(sl as { rootPc: number; qual: string }).qual}${sl.bars ?? 1}`
+      )
+      .join(',');
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
     // initStage appends app.view inside stageEl and registers resize handler.
@@ -234,22 +246,34 @@
       // bar widths all depend on the voice tracks and slot durations.
       // Step 10.6: total bars sum added so a setChordBars call (changing a slot's duration
       // without changing the progression length) triggers a rebuild and redraws the bars.
+      // Step 10.7: progression key added so a reorderSlot call (changing slot order without
+      // changing length/totalBars/chordMode) triggers a rebuild — otherwise note-heads stay
+      // in the old visual order.
       // Playhead-only changes (BPM, playback state) are handled by updateHarmonyStaffDynamic.
       const progressionLength = state.harmony.progression.length;
       const octave = state.harmony.octave;
       const totalBars = state.harmony.progression.reduce((s, sl) => s + (sl.bars ?? 1), 0);
       const chordMode = state.chordMode;
+      const progressionKey = state.harmony.progression
+        .map((sl) =>
+          'isRest' in sl
+            ? `R${sl.bars ?? 1}`
+            : `${(sl as { rootPc: number; qual: string }).rootPc}${(sl as { rootPc: number; qual: string }).qual}${sl.bars ?? 1}`
+        )
+        .join(',');
       if (
         progressionLength !== prevProgressionLength ||
         octave !== prevOctave ||
         totalBars !== prevTotalBars ||
-        chordMode !== prevChordMode
+        chordMode !== prevChordMode ||
+        progressionKey !== prevProgressionKey
       ) {
         buildHarmonyStaffScene(state);
         prevProgressionLength = progressionLength;
         prevOctave = octave;
         prevTotalBars = totalBars;
         prevChordMode = chordMode;
+        prevProgressionKey = progressionKey;
       } else {
         updateHarmonyStaffDynamic(state);
       }
