@@ -397,3 +397,149 @@ Step 10.5 adds `chordMode: 'chord' | 'arp'` parameter to `drawStaticStaff` and i
 **Terminal commit:** `feat(harmony): Phase 10 step 10.4 — duration-extent rendering and bar grid`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.5 — Arpeggio-mode stagger visual
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+**(a) `state.chordMode` read in `buildHarmonyStaffScene` and passed to `drawStaticStaff`**
+
+Added `chordMode: 'chord' | 'arp'` as the sixth parameter to `drawStaticStaff`. In `buildHarmonyStaffScene`, `state.chordMode` is passed at the call site. The call now reads:
+```
+drawStaticStaff(_staffGfx, _layout, _staffBaseY, _staffWidth, app.screen.width, state.chordMode);
+```
+`state.chordMode` is a field on `SessionState` (`'chord' | 'arp'`, default `'chord'`), confirmed in `src/state/session.ts` line 249.
+
+**(b) Conditional rendering in `drawStaticStaff` per ADR 0014 D7**
+
+The note-head rendering loop is now guarded by `if (chordMode === 'arp')` / `else`:
+
+- **`chordMode === 'arp'` branch:** groups NoteHeads by `nh.x`, computes stagger offsets, draws onset circles at the three beat-accurate positions, draws the connector polyline for complete groups.
+- **`chordMode === 'chord'` branch:** the unchanged step 10.4 duration-bar rendering (filled rounded-rect + onset circle).
+
+The temporary comment documenting identical arp/chord rendering in step 10.4 has been replaced by the working conditional code.
+
+**(c) Group NoteHeads by `nh.x` (= `startCycle × PX_PER_CYCLE`) before the rendering loop**
+
+`Map<number, NoteHead[]>` built before the per-group rendering loop. Each key (`nh.x`) identifies one slot. NoteHeads within a group retain their insertion order from `computeStaffLayout` (voice 0 → voice 1 → voice 2). Stagger x offsets per ADR 0014 D7:
+- voice 0: `slotStartX + NOTE_OFFSET_X + 0`
+- voice 1: `slotStartX + NOTE_OFFSET_X + bars × PX_PER_CYCLE / 3`
+- voice 2: `slotStartX + NOTE_OFFSET_X + 2 × bars × PX_PER_CYCLE / 3`
+
+`bars` is taken from `nhGroup[0].bars` (all NoteHeads in a slot share the same duration).
+
+**(d) Guard for incomplete groups**
+
+Connector polyline is drawn only when `nhGroup.length === 3`. Groups with 1 or 2 note-heads draw their available onset circles individually but skip the connector. The `non-null assertion` lint error (`groups.get(key)!`) was avoided by using explicit `undefined` check pattern:
+```typescript
+let group = groups.get(key);
+if (group === undefined) { group = []; groups.set(key, group); }
+group.push(nh);
+```
+
+**(e) No changes to `staff-layout.ts` or `voice-tracks.ts`**
+
+`NoteHead.bars` carries the slot duration (already populated by `computeStaffLayout` from `noteEv.bars`). The arpeggio stagger is purely a rendering concern. Zero lines changed in the core engine files.
+
+### Prototype parity note
+
+Arpeggio visual is a new feature — no prototype equivalent (the prototype draws note-heads as single dots regardless of `chordMode`). Audio byte-identity confirmed: `git diff --name-only` shows only `src/render/harmony-staff-scene.ts` was modified. `src/core/codegen/strudel.ts`, `src/audio/`, and `src/state/phase-anchor.ts` are unchanged. The known comma-vs-space difference in the Strudel string when toggling `chordMode` (`note("A,B,C")` vs `note("A B C")`) is produced by `melodyLine` / `chordToStrudel` — this step makes no codegen changes, so audio output is byte-identical before and after the visual stagger is introduced.
+
+### Files touched
+
+- `src/render/harmony-staff-scene.ts` — `drawStaticStaff` updated with `chordMode` parameter and arp/chord branching; module-level comment updated to document step 10.5.
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry.
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-04** (Chord / arp mode visual toggle: chord shows parallel bars, arp shows staggered onset dots connected by ascending line):
+- Implemented: `drawStaticStaff` branches on `chordMode`. Arp branch: `Map<number, NoteHead[]>` grouping, stagger offsets `[0, slotSpan/3, 2*slotSpan/3]`, connector polyline with `nhGroup.length === 3` guard.
+- `state.chordMode` read from `SessionState` (confirmed field name `'chord' | 'arp'` at `session.ts` line 249).
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-15** (Audio byte-identical before/after visual rendering changes):
+- `git diff --name-only` → `src/render/harmony-staff-scene.ts` only. No codegen changes. Audio pipeline unchanged.
+
+**A-10-16** (AGPL-3.0 header in modified files):
+- `head -2 src/render/harmony-staff-scene.ts` → `// SPDX-License-Identifier: AGPL-3.0-only` (pre-existing, confirmed present).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files — no regressions; no new unit tests for this step — PIXI rendering is not unit-testable)
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by this step)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent rendering: horizontal bars spanning `bars × PX_PER_CYCLE` per voice | — | manual | **PROXY-COVERED (code)** (step 10.4) — chord-mode bars unchanged; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-02 | Rest extent rendering: grey bars at middle staff line | — | manual | **PROXY-COVERED (code)** (step 10.4) — rest bars unchanged; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-03 | Bar grid: vertical beat and bar lines on staff canvas | — | manual | **PROXY-COVERED (code)** (step 10.4) — `drawBarGrid` unchanged; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-04 | Chord / arp mode visual toggle: parallel bars vs staggered onset dots | — | manual | **PROXY-COVERED (code)** — implemented; arp stagger + connector polyline + guard for incomplete groups per ADR 0014 D7; manual live verification deferred to Pilot Checkpoint #5 |
+| A-10-05 | Select: clicking a slot shows border, ✕ button, and resize handle | — | manual | not covered — deferred to step 10.6 |
+| A-10-06 | Delete via ✕: removes slot; ProgressionStrip reflects removal | — | manual | not covered — deferred to step 10.6 |
+| A-10-07 | Resize: right-edge drag changes duration; commits via `setChordBars`; strip updates | — | manual | not covered — deferred to step 10.6 |
+| A-10-08 | Time-move: body drag reorders slot; ProgressionStrip reflects new order | — | manual | not covered — deferred to step 10.7 |
+| A-10-09 | Playhead cyclic + matches ProgressionStrip cursor; neither visible when not playing | — | manual | NO DISCREPANCY confirmed (step 10.3); live re-verification deferred to step 10.8 |
+| A-10-10 | ProgressionStrip parity: edits on staff visible in strip and vice versa | — | manual | not covered — deferred to step 10.6 |
+| A-10-11 | `staff-hit.ts` pure engine; all exports unit-tested; no regressions | `tests/harmony/staff-hit.test.ts` | automated | **COVERED** (step 10.3) — 42 tests pass; 0 PIXI/DOM imports confirmed |
+| A-10-12 | `reorderSlot` store action: unit-tested; correct semantics; calls `requeueLive()`; no-op when fromIdx === toIdx | `tests/session.test.ts` | automated | **COVERED** (step 10.3) — 9 tests pass |
+| A-10-13 | All quality gates green: tsc, lint, vitest ≥ 447, build | multiple | automated | **PARTIAL** — all gates green this step (447 passed); global sweep deferred to step 10.8 |
+| A-10-14 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts` | — | automated (proxy: grep) | not covered — deferred to step 10.8 |
+| A-10-15 | Audio byte-identical before/after visual rendering changes (no codegen changes) | — | automated (proxy: git diff) | **COVERED** — `git diff --name-only` → only `harmony-staff-scene.ts`; `strudel.ts` unchanged |
+| A-10-16 | AGPL-3.0 header in all new and modified source files | — | automated (proxy: head -2) | **COVERED for this step** — `harmony-staff-scene.ts`: AGPL header at line 1 (pre-existing, confirmed) |
+
+**Notes on partial coverage:** A-10-04 is code-implemented but requires manual live verification at Pilot Checkpoint #5 (PIXI rendering not unit-testable). A-10-13 full gate deferred to step 10.8.
+
+**Proxy disclosures:**
+- A-10-04 arp stagger implementation: `grep -n "chordMode" src/render/harmony-staff-scene.ts` → present as parameter and conditional branch; `grep -n "connectorPoints" src/render/harmony-staff-scene.ts` → present in arp branch.
+- A-10-15 audio byte-identity: `git diff --name-only` → `src/render/harmony-staff-scene.ts` only; `src/core/codegen/strudel.ts` diff is empty.
+- A-10-16 AGPL header: `head -2 src/render/harmony-staff-scene.ts` → `// SPDX-License-Identifier: AGPL-3.0-only`.
+
+### Decisions made (if any)
+
+- The `Map` grouping pattern uses an explicit `undefined` check (instead of a non-null assertion) to comply with the `@typescript-eslint/no-non-null-assertion` ESLint rule. This is idiomatic TS and consistent with the rest of the codebase's no-non-null-assertion policy.
+- Ledger lines in arp mode are drawn at the staggered x position (not at `nh.x + NOTE_OFFSET_X`). This is the correct behavior: ledger lines belong to the note onset, which has moved to the staggered position.
+- `xOffsets[i] ?? 0` provides a fallback for the (unreachable in practice) case where i >= 3, satisfying strict TypeScript without a cast.
+
+### Proposed Decisions Register entries (if any)
+
+None. No new governance decisions arise from this step.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/harmony-staff-scene.ts`: `drawStaticStaff` updated with `chordMode` parameter; arp stagger branch complete per ADR 0014 D7.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context (only if non-obvious)
+
+Step 10.6 adds the PIXI interaction layer (select, delete ✕, resize) per ADR 0014 D3–D4. It imports `computeSlotBounds`, `hitTestSlot`, `hitTestResizeHandle` from `staff-hit.ts` and adds a full-canvas `_hitRect` with `pointerdown`/`pointermove`/`pointerup` listeners to `_staffContainer`.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.5 — arpeggio stagger visual`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

@@ -44,6 +44,13 @@
 //    denominator so both cursors stay in sync.)
 //
 // PX_PER_CYCLE imported from time-map.ts (vigent coordination-point rule).
+//
+// Step 10.5 (ADR 0014 D7): arpeggio-mode stagger visual.
+//   When chordMode === 'arp', each slot's three voices are drawn as staggered onset
+//   circles at beat-accurate x positions (0, 1/3, 2/3 of the slot's duration in px),
+//   connected by a thin ascending polyline (1px, white, 35% opacity).
+//   NoteHeads are grouped by nh.x (= startCycle × PX_PER_CYCLE) before the loop.
+//   Groups with fewer than 3 note-heads skip the connector; circles drawn individually.
 
 import * as PIXI from 'pixi.js';
 import { get } from 'svelte/store';
@@ -218,30 +225,37 @@ function drawBarGrid(
 // ── drawStaticStaff ──────────────────────────────────────────────────────────
 
 /**
- * Draw the five staff lines, note-heads (duration bars), ledger lines, and rest
- * extent bars into _staffGfx. Clears first.
+ * Draw the five staff lines, note-heads (duration bars or arpeggio stagger),
+ * ledger lines, and rest extent bars into _staffGfx. Clears first.
  *
  * Step 10.4 (ADR 0014 D2): replaces per-NoteHead drawCircle with duration-extent
  * bars (filled rounded-rect + onset circle). Rest glyphs replaced with rounded-rect
  * extent bars + center tick. See ADR 0014 D2 for full spec.
  *
- * Step 10.4 note — arp mode: when chordMode === 'arp', this step draws the SAME
- * duration bars as chord mode. Arpeggio-specific stagger (beat-accurate onset
- * circles + connector line per ADR 0014 D7) is implemented in step 10.5.
- * This is a documented temporary state; chord mode and arp mode are visually
- * identical in this step only.
+ * Step 10.5 (ADR 0014 D7): adds chordMode parameter. When chordMode === 'arp',
+ * NoteHeads are grouped by nh.x (= startCycle × PX_PER_CYCLE) and each group's
+ * three voices are drawn as staggered onset circles at beat-accurate positions:
+ *   voice 0: slotStart + NOTE_OFFSET_X
+ *   voice 1: slotStart + NOTE_OFFSET_X + bars×PX_PER_CYCLE/3
+ *   voice 2: slotStart + NOTE_OFFSET_X + 2×bars×PX_PER_CYCLE/3
+ * A thin ascending connector polyline (1px, 0xffffff, 35% opacity) connects the
+ * three onset positions. Groups with fewer than 3 note-heads skip the connector.
+ * When chordMode === 'chord', the step 10.4 duration bars are used unchanged.
  *
  * @param lineWidth - Horizontal extent of the five staff lines. Must equal
  *   app.screen.width (edge-to-edge) so the canvas never shows black gaps on
  *   the right when there are only a few chords. Note-head x-positions come
  *   from layout.noteHeads[].x and are independent of this value.
+ * @param chordMode - 'chord' renders duration bars per ADR 0014 D2;
+ *   'arp' renders staggered onset circles per ADR 0014 D7.
  */
 function drawStaticStaff(
   gfx: PIXI.Graphics,
   layout: StaffLayout,
   staffBaseY: number,
   staffWidth: number,
-  lineWidth: number
+  lineWidth: number,
+  chordMode: 'chord' | 'arp'
 ): void {
   gfx.clear();
 
@@ -256,44 +270,114 @@ function drawStaticStaff(
     gfx.lineTo(lineWidth, y);
   }
 
-  // ── Note-heads: duration-extent bars + onset circles (ADR 0014 D2) ─────────
-  // Each NoteHead is rendered as:
-  //   1. A filled rounded-rectangle bar spanning the slot's duration in pixels.
-  //   2. An onset circle at the left edge (full opacity, voice color).
-  // Ledger lines are drawn at their diatonic-step y positions before each bar.
-  //
-  // NOTE (step 10.4): arp mode draws IDENTICAL duration bars as chord mode.
-  // The beat-accurate stagger (ADR 0014 D7) is added in step 10.5. This comment
-  // documents the temporary equivalence of chord/arp rendering in this step.
-  for (const nh of layout.noteHeads) {
-    const col = voiceColor(nh.voiceIndex);
-    const nx = nh.x + NOTE_OFFSET_X;
-    const ny = stepToY(nh.stepY, staffBaseY);
-
-    // Ledger lines (same color as the note-head, slightly dimmed for visual hierarchy).
-    if (nh.ledgerLines.length > 0) {
-      gfx.lineStyle(1, col, 0.7);
-      for (const ledgerStep of nh.ledgerLines) {
-        const ly = stepToY(ledgerStep, staffBaseY);
-        gfx.moveTo(nx - LEDGER_HALF_W, ly);
-        gfx.lineTo(nx + LEDGER_HALF_W, ly);
+  // ── Note-heads: chord mode = duration bars; arp mode = staggered onsets ────
+  if (chordMode === 'arp') {
+    // ── Arpeggio mode (ADR 0014 D7): beat-accurate staggered onset circles ────
+    // Group NoteHeads by nh.x (= startCycle × PX_PER_CYCLE). Each group
+    // represents one slot. NoteHeads within a group are ordered by insertion
+    // order in computeStaffLayout (voice 0 → voice 1 → voice 2).
+    //
+    // For a complete group of 3, draw:
+    //   - onset circle for each voice at its staggered x position
+    //   - thin ascending connector polyline through the three onset positions
+    // For incomplete groups (< 3 note-heads), skip connector; draw circles only.
+    const groups = new Map<number, typeof layout.noteHeads>();
+    for (const nh of layout.noteHeads) {
+      const key = nh.x;
+      let group = groups.get(key);
+      if (group === undefined) {
+        group = [];
+        groups.set(key, group);
       }
+      group.push(nh);
     }
 
-    // Duration bar: filled rounded-rect, width = bars * PX_PER_CYCLE (min 8px).
-    // ADR 0014 D2: height = BAR_HEIGHT (8px), corner radius = BAR_CORNER_RADIUS (2px),
-    // opacity = BAR_OPACITY (80%). PX_PER_CYCLE imported from time-map.ts.
-    const barWidth = Math.max(nh.bars * PX_PER_CYCLE, BAR_HEIGHT);
-    gfx.lineStyle(0);
-    gfx.beginFill(col, BAR_OPACITY);
-    gfx.drawRoundedRect(nx, ny - BAR_HEIGHT / 2, barWidth, BAR_HEIGHT, BAR_CORNER_RADIUS);
-    gfx.endFill();
+    for (const [slotStartX, nhGroup] of groups) {
+      // Compute stagger offsets. All NoteHeads in a slot share the same nh.bars
+      // (the slot duration). Use the first entry to get bars.
+      const bars = nhGroup[0].bars;
+      const slotSpan = bars * PX_PER_CYCLE;
 
-    // Onset circle at left edge of the bar: full opacity, voice color.
-    gfx.lineStyle(0);
-    gfx.beginFill(col, 1);
-    gfx.drawCircle(nx, ny, NOTE_RADIUS);
-    gfx.endFill();
+      // Stagger x offsets: voice i is at offset i/3 of the slot's pixel span.
+      const xOffsets = [0, slotSpan / 3, (2 * slotSpan) / 3];
+
+      // Collect positions for the connector polyline (only when group is full).
+      const connectorPoints: Array<{ px: number; py: number }> = [];
+
+      for (let i = 0; i < nhGroup.length; i++) {
+        const nh = nhGroup[i];
+        const col = voiceColor(nh.voiceIndex);
+        // Stagger x: base is slotStartX + NOTE_OFFSET_X, then add the voice offset.
+        // If the group has fewer than 3 entries, use i-indexed offsets for the
+        // available voices (maintaining visual accuracy for whatever voices exist).
+        const px = slotStartX + NOTE_OFFSET_X + (xOffsets[i] ?? 0);
+        const py = stepToY(nh.stepY, staffBaseY);
+
+        // Ledger lines at the staggered x position.
+        if (nh.ledgerLines.length > 0) {
+          gfx.lineStyle(1, col, 0.7);
+          for (const ledgerStep of nh.ledgerLines) {
+            const ly = stepToY(ledgerStep, staffBaseY);
+            gfx.moveTo(px - LEDGER_HALF_W, ly);
+            gfx.lineTo(px + LEDGER_HALF_W, ly);
+          }
+        }
+
+        // Onset circle at the staggered position.
+        gfx.lineStyle(0);
+        gfx.beginFill(col, 1);
+        gfx.drawCircle(px, py, NOTE_RADIUS);
+        gfx.endFill();
+
+        connectorPoints.push({ px, py });
+      }
+
+      // Ascending connector polyline — only drawn when the group is complete (3 voices).
+      // ADR 0014 D7: 1px, 0xffffff, 35% opacity.
+      if (nhGroup.length === 3) {
+        gfx.lineStyle(1, 0xffffff, 0.35);
+        gfx.moveTo(connectorPoints[0].px, connectorPoints[0].py);
+        for (let i = 1; i < connectorPoints.length; i++) {
+          gfx.lineTo(connectorPoints[i].px, connectorPoints[i].py);
+        }
+      }
+    }
+  } else {
+    // ── Chord mode (ADR 0014 D2): duration-extent bars + onset circles ────────
+    // Each NoteHead is rendered as:
+    //   1. A filled rounded-rectangle bar spanning the slot's duration in pixels.
+    //   2. An onset circle at the left edge (full opacity, voice color).
+    // Ledger lines are drawn at their diatonic-step y positions before each bar.
+    for (const nh of layout.noteHeads) {
+      const col = voiceColor(nh.voiceIndex);
+      const nx = nh.x + NOTE_OFFSET_X;
+      const ny = stepToY(nh.stepY, staffBaseY);
+
+      // Ledger lines (same color as the note-head, slightly dimmed for visual hierarchy).
+      if (nh.ledgerLines.length > 0) {
+        gfx.lineStyle(1, col, 0.7);
+        for (const ledgerStep of nh.ledgerLines) {
+          const ly = stepToY(ledgerStep, staffBaseY);
+          gfx.moveTo(nx - LEDGER_HALF_W, ly);
+          gfx.lineTo(nx + LEDGER_HALF_W, ly);
+        }
+      }
+
+      // Duration bar: filled rounded-rect, width = bars * PX_PER_CYCLE (min 8px).
+      // ADR 0014 D2: height = BAR_HEIGHT (8px), corner radius = BAR_CORNER_RADIUS (2px),
+      // opacity = BAR_OPACITY (80%). PX_PER_CYCLE imported from time-map.ts.
+      const barWidth = Math.max(nh.bars * PX_PER_CYCLE, BAR_HEIGHT);
+      gfx.lineStyle(0);
+      gfx.beginFill(col, BAR_OPACITY);
+      gfx.drawRoundedRect(nx, ny - BAR_HEIGHT / 2, barWidth, BAR_HEIGHT, BAR_CORNER_RADIUS);
+      gfx.endFill();
+
+      // Onset circle at left edge of the bar: full opacity, voice color.
+      gfx.lineStyle(0);
+      gfx.beginFill(col, 1);
+      gfx.drawCircle(nx, ny, NOTE_RADIUS);
+      gfx.endFill();
+    }
   }
 
   // ── Rest extent bars (ADR 0014 D2) ────────────────────────────────────────
@@ -301,6 +385,7 @@ function drawStaticStaff(
   //   1. A filled rounded-rectangle bar spanning the rest's duration in pixels
   //      at restY = stepToY(6, staffBaseY) (step 6 = B4, middle staff line).
   //   2. A short center tick for legibility (thick line, REST_HALF_W = 10px half-width).
+  // Rest bars are rendered the same way in both chord and arp modes.
   const restY = stepToY(6, staffBaseY);
   for (const rg of layout.restGlyphs) {
     const rx = rg.x + NOTE_OFFSET_X;
@@ -434,7 +519,9 @@ export function buildHarmonyStaffScene(state: SessionState): void {
   // ── Draw static content ───────────────────────────────────────────────────
   // lineWidth = app.screen.width: staff lines span edge-to-edge regardless of
   // note content (Bug 1 fix, A-08-10). Note-head positions use _layout coordinates.
-  drawStaticStaff(_staffGfx, _layout, _staffBaseY, _staffWidth, app.screen.width);
+  // Step 10.5 (ADR 0014 D7): pass state.chordMode so drawStaticStaff can branch
+  // between duration-bar rendering (chord) and staggered-onset rendering (arp).
+  drawStaticStaff(_staffGfx, _layout, _staffBaseY, _staffWidth, app.screen.width, state.chordMode);
   drawAccidentals(_accidentalContainer, _layout, _staffBaseY);
 
   // ── Position treble clef glyph ────────────────────────────────────────────
