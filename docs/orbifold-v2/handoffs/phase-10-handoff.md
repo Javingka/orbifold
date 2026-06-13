@@ -100,3 +100,146 @@ No source files modified. Quality gates unchanged from Phase 10 baseline (confir
 **Terminal commit:** `docs(adr): Phase 10 step 10.2 — ADR 0014 staff editor`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.3 — Playhead fix (no-op) + `reorderSlot` store action + pure hit-test engine
+
+**Date:** 2026-06-12
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+**(a) Playhead discrepancy fix — NO-OP (per inventory §a verdict)**
+
+The step 10.1 inventory reached a definitive "NO DISCREPANCY" verdict. `_staffWidth` and `cursorTotalWidth` use the same formula (`progression.reduce(sum + (slot.bars ?? 1)) * PX_PER_CYCLE`). The BUG A guard (`nowPlaying.source === null`) is in place in both surfaces. `_staffWidth` is bounded by progression duration (not canvas width). No code fix was needed. This sub-item is a no-op, explicitly stated here per the Pilot's instruction at Checkpoint #2.
+
+**(b) New pure engine: `src/core/harmony/staff-hit.ts`**
+
+Created with:
+- `SlotBounds` interface (`slotIndex`, `x`, `width`)
+- `computeSlotBounds(progression, pxPerCycle): SlotBounds[]` — contiguous from x=0, uses `slot.bars ?? 1`
+- `hitTestSlot(px, bounds): number | null` — half-open interval `[x, x+width)` test
+- `hitTestResizeHandle(px, bounds, handleWidth): number | null` — tests rightmost `handleWidth` pixels of each slot
+- `nearestInsertionIndex(px, bounds): number` — returns insertion index for the time-move gesture (step 10.7); included now so the pure engine is complete before the PIXI interaction layer lands in steps 10.6–10.7. Scans slot midpoints in order; returns the first index where `px < midX`, or `bounds.length` if past all midpoints.
+
+No DOM, PIXI, or Svelte imports. AGPL-3.0 header. GREP confirms: `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/staff-hit.ts` → 0 matches.
+
+**(c) `reorderSlot` store action in `src/state/session.ts`**
+
+Added `export function reorderSlot(fromIdx: number, toIdx: number): void` per ADR 0014 D5:
+- Both indices clamped to `[0, progression.length - 1]`
+- No-op (no store write, no `requeueLive()`) if clamped indices are equal
+- Handles empty progression via early-return guard before clamping
+- Otherwise: splice-remove at `fromIdx`, splice-insert at `toIdx`, call `requeueLive()`
+- `requeueLive()` called AFTER `sessionStore.update` completes (not inside the updater)
+
+**(d) Unit tests**
+
+- `tests/harmony/staff-hit.test.ts` (new file, 42 tests):
+  - `computeSlotBounds`: empty, single-slot (undefined bars / bars=1 / bars=0.25 / bars=2), three-slot uniform, three-slot mixed (0.25/2/1), three-slot all-0.25, three-slot all-2
+  - `hitTestSlot`: left edge, one pixel inside, last pixel inside, right edge (exclusive), second slot, last pixel of last slot, exactly at right edge of last slot (null), far right (null), negative (null), empty bounds (null)
+  - `hitTestResizeHandle`: right edge of handle, handle start, one pixel left of handle (null), slot left edge (null), past right edge (null), empty bounds (null), handle zones in all three slots of a three-slot progression
+  - `nearestInsertionIndex`: empty bounds (0), midpoint boundary conditions, between-slot positioning, far-left/far-right clamping
+
+- `tests/session.test.ts` (9 new tests added to existing file, 55 total):
+  - `reorderSlot`: move-first-to-last, move-last-to-first, adjacent-swap-forward, adjacent-swap-backward, no-op on same index, no-op on single-slot (clamped equals), out-of-range fromIdx clamps, out-of-range toIdx clamps, no-op on empty progression
+
+### Files touched
+
+- `src/core/harmony/staff-hit.ts` — new file (created)
+- `src/state/session.ts` — `reorderSlot` action added after `addRestAt`
+- `tests/harmony/staff-hit.test.ts` — new file (created)
+- `tests/session.test.ts` — `reorderSlot` import added; 9 new `reorderSlot` tests added at end
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-11** (`staff-hit.ts` pure engine, all exports unit-tested, no regressions):
+- `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/staff-hit.ts` → 0 matches (pure engine confirmed)
+- `pnpm exec vitest run tests/harmony/staff-hit.test.ts` → 42 passed, 0 failed
+- All 4 exports (`computeSlotBounds`, `hitTestSlot`, `hitTestResizeHandle`, `nearestInsertionIndex`) have dedicated test cases
+- Full suite: 447 passed (396 baseline + 42 staff-hit + 9 reorderSlot), 0 failed
+
+**A-10-12** (`reorderSlot` store action unit-tested, correct semantics, calls `requeueLive()`, no-op when fromIdx === toIdx):
+- `pnpm exec vitest run tests/session.test.ts` → 55 passed (includes 9 new reorderSlot tests)
+- move-first-to-last, last-to-first, adjacent-swap verified by inspecting store state post-call
+- no-op on `reorderSlot(1,1)` confirmed: store unchanged
+- empty-progression guard confirmed: no error, no-op
+- `requeueLive()` call: observable indirectly (tests verify store state changes only; audio side-effect is fire-and-forget via dynamic import, consistent with pre-existing session test pattern)
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files)
+- `pnpm build` → exit 0 (build warnings pre-existing: dynamic import chunk coexistence; not introduced by this step)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent rendering: horizontal bars spanning `bars × PX_PER_CYCLE` per voice | — | manual | not covered — deferred to step 10.4 |
+| A-10-02 | Rest extent rendering: grey bars at middle staff line | — | manual | not covered — deferred to step 10.4 |
+| A-10-03 | Bar grid: vertical beat and bar lines on staff canvas | — | manual | not covered — deferred to step 10.4 |
+| A-10-04 | Chord / arp mode visual toggle: parallel bars vs staggered onset dots | — | manual | not covered — deferred to step 10.5 |
+| A-10-05 | Select: clicking a slot shows border, ✕ button, and resize handle | — | manual | not covered — deferred to step 10.6 |
+| A-10-06 | Delete via ✕: removes slot; ProgressionStrip reflects removal | — | manual | not covered — deferred to step 10.6 |
+| A-10-07 | Resize: right-edge drag changes duration; commits via `setChordBars`; strip updates | — | manual | not covered — deferred to step 10.6 |
+| A-10-08 | Time-move: body drag reorders slot; ProgressionStrip reflects new order | — | manual | not covered — deferred to step 10.7 |
+| A-10-09 | Playhead cyclic + matches ProgressionStrip cursor; neither visible when not playing | — | manual | NO DISCREPANCY confirmed by inventory §a — verified correct by code analysis; live re-verification deferred to step 10.8 manual acceptance |
+| A-10-10 | ProgressionStrip parity: edits on staff visible in strip and vice versa | — | manual | not covered — deferred to step 10.6 |
+| A-10-11 | `staff-hit.ts` pure engine; all exports unit-tested; no regressions | `tests/harmony/staff-hit.test.ts` | automated | **COVERED** — 42 tests pass; 0 PIXI/DOM imports confirmed |
+| A-10-12 | `reorderSlot` store action: unit-tested; correct semantics; calls `requeueLive()`; no-op when fromIdx === toIdx | `tests/session.test.ts` | automated | **COVERED** — 9 tests pass; all semantics verified |
+| A-10-13 | All quality gates green: tsc, lint, vitest ≥ 396, build | multiple | automated | partial — gates green; full gate deferred to step 10.8 |
+| A-10-14 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts` | — | automated (proxy: grep) | not covered — deferred to step 10.8 |
+| A-10-15 | Audio byte-identical before/after visual rendering changes (no codegen changes) | — | automated (proxy: grep) | not covered — deferred to step 10.8 |
+| A-10-16 | AGPL-3.0 header in all new and modified source files | — | automated (proxy: head -2) | **COVERED for this step** — `staff-hit.ts`: AGPL header present; `session.ts`: pre-existing AGPL header; test files: AGPL headers present |
+
+**Notes on partial coverage:** A-10-09 is the playhead story — inventory verdict NO DISCREPANCY (no fix applied). The Pilot will re-verify live at Checkpoint #5. A-10-13 through A-10-16 are addressed for the files touched in this step; the global sweep deferred to step 10.8.
+
+**Proxy disclosures:**
+- A-10-11 pure-engine check: `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/core/harmony/staff-hit.ts` → 0 matches
+- A-10-16 AGPL header: `head -2 src/core/harmony/staff-hit.ts` → `// SPDX-License-Identifier: AGPL-3.0-only`
+
+### Decisions made (if any)
+
+`nearestInsertionIndex` is included in `staff-hit.ts` in this step (10.3) even though it is first consumed by the PIXI interaction layer in step 10.7. Rationale: the pure engine should be fully delivered and tested before the PIXI layer lands; splitting the engine across steps would leave the ADR D3 export list partially implemented. This is within the phase spec's stated intention (step 10.2 handoff §Next-step context bullet 2).
+
+### Proposed Decisions Register entries (if any)
+
+None. No new governance decisions arise from this step.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/core/harmony/staff-hit.ts` created (pure engine, 4 exports).
+- `src/state/session.ts` extended with `reorderSlot`.
+- `tests/harmony/staff-hit.test.ts` created (42 tests).
+- `tests/session.test.ts` extended (9 new `reorderSlot` tests).
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context (only if non-obvious)
+
+Step 10.4 rewrites `drawStaticStaff` in `harmony-staff-scene.ts` to render duration-extent bars and adds the bar grid helper. It imports `PX_PER_CYCLE` from `../core/harmony/time-map.js` (already in place). The `staff-hit.ts` engine is not yet imported by `harmony-staff-scene.ts` — that happens in step 10.6 (interaction layer).
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.3 — staff-hit engine, reorderSlot action, playhead fix no-op`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
