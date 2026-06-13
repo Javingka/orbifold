@@ -718,7 +718,7 @@ No prototype equivalent — this is a new UX feature. Audio byte-identity: no ch
 
 ### Proposed Decisions Register entries (if any)
 
-None. No new governance decisions arise from this step beyond what is already in ADR 0014.
+Amend ADR 0014 D3 to record DOM routing as the canonical delivery mechanism (rationale: codebase idiom consistency — matches `tonnetz-scene.ts`/`rhythm-scene.ts`; coordinate alignment via `autoDensity: true`; D3 single-dispatch-point intent fully preserved) — pending Pilot ratification at phase close.
 
 ### Blockers resolved during this step (if any)
 
@@ -744,6 +744,23 @@ Step 10.7 adds the time-move (slot reorder) gesture. It adds `_moveActive`, `_mo
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+---
+
+### REVISE iteration 2 note (2026-06-12)
+
+**Documentation-only fix. No source code changes.**
+
+The Planner found no functional defects in iteration 1. The gap was a documentation inconsistency: the "Decisions made" section disclosed the DOM-routing deviation from ADR 0014 D3's `_hitRect` specification, but (a) "Proposed Decisions Register entries" said "None", and (b) ADR 0014 D3 still read as if `_hitRect` were the binding mechanism — silently contradicted.
+
+Fixes applied:
+
+1. `docs/adr/0014-staff-editor.md` §D3 — added "Implementation note (step 10.6, 2026-06-12)" paragraph recording the DOM-routing delivery mechanism, coordinate alignment rationale, and preservation of D3's single-dispatch-point intent.
+2. `docs/orbifold-v2/handoffs/phase-10-handoff.md` step 10.6 "Proposed Decisions Register entries" — replaced "None" with a one-line proposal to amend ADR 0014 D3 pending Pilot ratification at phase close.
+
+Confirmed no source diff: `git status` → clean; `git diff --name-only` → no output (no staged or unstaged changes to source files).
 
 ---
 

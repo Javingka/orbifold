@@ -144,6 +144,8 @@ A single transparent full-canvas hit rectangle (`_hitRect: PIXI.Graphics`) is ad
 
 **Justification:** The full-canvas hit rectangle is simpler and more robust than per-slot PIXI object interactivity — it avoids z-order and hit-area fragmentation issues, and the pure-engine dispatch model keeps all geometry math unit-testable without a browser.
 
+**Implementation note (step 10.6, 2026-06-12):** The delivery mechanism used in the implementation is native DOM canvas events routed from `App.svelte` (gated on `subview === 'staff'`, consuming `offsetX`/`offsetY`) to the three exported handlers `onStaffPointerDown`, `onStaffPointerMove`, and `onStaffPointerUp` — instead of a `_hitRect: PIXI.Graphics` with `interactive = true`. This matches the established `tonnetz-scene.ts` / `rhythm-scene.ts` idiom: all pointer routing goes through `App.svelte`'s canvas event listeners, not PIXI's own interactive system. Coordinates align correctly because the PIXI Application is created with `autoDensity: true` and `_staffContainer` sits at the canvas origin, so CSS-pixel `offsetX`/`offsetY` values equal PIXI logical-pixel coordinates without any DPR conversion. D3's core intent — a single dispatch point for all pointer events, with all hit-testing delegated to the pure-engine functions in `staff-hit.ts` — is fully preserved by this approach.
+
 ---
 
 ### D4 — Slot interaction gesture specification
