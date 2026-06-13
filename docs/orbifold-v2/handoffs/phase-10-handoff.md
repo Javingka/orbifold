@@ -1299,3 +1299,179 @@ After Pilot re-verifies A-10-01, A-10-03, A-10-04, A-10-09 at the follow-up manu
 **Terminal commit:** `fix(harmony): Phase 10 step 10.8 REVISE — playhead sync, grid color, arp stagger`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.9 — Redesign inventory (open questions OQ-R1 through OQ-R8)
+
+**Date:** 2026-06-13
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+Produced `docs/orbifold-v2/inventories/phase-10-redesign-inventory.md` resolving all eight open questions for the Canvas 2D redesign. No source files were modified.
+
+Key findings (summarised — full detail in the inventory):
+- OQ-R1: `func.cls` is the tonal-function key; `diatonicLookup` already exported; non-diatonic chords → neutral `#8aa0ff`, no badge.
+- OQ-R2: `staff-map.ts` has no `noteNameToMidi` export; render layer inlines chromatic-pc→MIDI conversion and ports prototype `m2p` verbatim (Pentagrama.dc.html lines 160–165). `noteToStaffPosition` uses an incompatible coordinate system and must NOT be used.
+- OQ-R3: `hitTestSlot(e.offsetX - SL, bounds)` is the correct call; negative adjustedPx (clef gutter) correctly returns null; `pxPerCycle = 48` matches `PX_PER_CYCLE`.
+- OQ-R4: SAFE — `registerMode` absent from `SavedHarmonySchema` and `HarmonySpecSchema`; sole call site is Header.svelte lines 407–420.
+- OQ-R5: Only `App.svelte` imports `harmony-staff-scene.ts`; nine call sites documented with exact line numbers; file can be deleted in step 10.11; `_staffContainer` has four touch-points in `stage.ts`.
+- OQ-R6: New canvas uses `z-index:1` (above PIXI at auto/0, below Hud/Legend at 3); `display:none; pointer-events:none` when hidden.
+- OQ-R7: Prototype `pArp` uses per-SLOT spread (`span = w - 24`); corrected implementation uses per-CYCLE stagger (0, PX/3, 2·PX/3 within each cycle, repeated `ceil(bars)` times). Intentional divergence.
+- OQ-R8: Baseline — 447 tests passed, 0 tsc errors, 0 lint errors.
+
+### Files touched
+
+- `docs/orbifold-v2/inventories/phase-10-redesign-inventory.md` — new file (created)
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Required behavior | Test file / Proof | Type | Status |
+|---|---|---|---|---|
+| A-10-33 | Zero codegen changes | No source files modified in this step | AUTOMATED (proxy) | PARTIAL — will be fully verified at step 10.16 |
+| A-10-34 | Quality gates baseline | 447 passed, tsc exit 0, lint exit 0 | AUTOMATED | PARTIAL — baseline confirmed; full sweep at step 10.16 |
+
+Visual acceptance IDs (A-10-17 through A-10-32) are deferred to step 10.16 manual acceptance.
+
+### Routine validations
+
+No source files modified. Quality gate baseline confirmed in OQ-R8: 447 passed, 0 tsc errors, 0 lint errors.
+
+### Decisions made (if any)
+
+None. This step resolves open questions; all binding decisions belong to the Pilot (recorded in step 10.10 ADR).
+
+### Proposed Decisions Register entries (if any)
+
+None from this step.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- Inventory produced at `docs/orbifold-v2/inventories/phase-10-redesign-inventory.md`.
+- No source files modified.
+- Quality gate baseline: 447 passed, 0 tsc errors, 0 lint errors.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context
+
+Step 10.10 writes ADR 0015 recording the seven binding decisions for steps 10.11–10.15. After ADR 0015 is committed and reviewed at Pilot Checkpoint #2, step 10.11 (code) may proceed.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `docs(orbifold-v2): Phase 10 step 10.9 — redesign inventory`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.10 — ADR 0015 (Canvas 2D Pentagrama layer)
+
+**Date:** 2026-06-13
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+Wrote `docs/adr/0015-canvas2d-pentagrama-layer.md` recording seven binding decisions for the Canvas 2D redesign. No source files were modified.
+
+**D1 — Canvas 2D dedicated layer; PIXI staff scene retired.** Amends ADR 0011 D5 (Phase 08). The Pentagrama sub-view switches from a PIXI `_staffContainer` to a dedicated Canvas 2D `<canvas>` element. Tonnetz and Rhythm remain PIXI. `harmony-staff-scene.ts` is deleted (only `App.svelte` imports it); nine call sites in `App.svelte` are removed; `_staffContainer` wiring is removed from `stage.ts`. Pure engines (`staff-hit.ts`, `voice-tracks.ts`, `staff-map.ts`, `staff-layout.ts`, `time-map.ts`) and their 447 passing tests are retained.
+
+**D2 — Drop estricto/suavizado register modes.** Amends ADR 0011 D6. The `#registerModeSeg` `<div>` (Header.svelte lines 407–420) and its `setRegisterMode` call are removed. `HarmonyState.registerMode` and `setRegisterMode` are left inert (not deleted) to minimize churn. `voice-tracks.ts` becomes visual-pipeline dead code but its tests remain. `SavedHarmonySchema` and `HarmonySpecSchema` are unaffected (registerMode was already absent from both — OQ-R4 SAFE verdict). The Phase 08 Decisions Register entries (registerMode visual-only, not persisted, audio-safe) remain accurate and are not superseded.
+
+**D3 — Responsive staff geometry.** Binding constants from the prototype: `LS = max(24, min(88, H/6))`, `cy = H/2 - LS*0.75`, staff lines at `cy - n*LS` for n in {-2..+2}, `SL = 76 px`, `PX = 48` (= `PX_PER_CYCLE`). DPR scaling contract documented. The two-anchor coordinate system (`cy` for staff lines, `H/2` for note heads via `ny()`) is preserved verbatim from the prototype.
+
+**D4 — Note-name → staff position mapping.** Binding path: `chordVoicing` string → inline MIDI conversion → `m2p(midi)` (ported verbatim from Pentagrama.dc.html lines 160–165) → `ny(pos)`. `staff-map.ts`'s `noteToStaffPosition` and `computeStaffLayout` must NOT be used (incompatible coordinate systems). This is the OQ-R2 verdict recorded as a binding architectural constraint.
+
+**D5 — Arp stagger: per-cycle, not per-slot.** Corrected behavior: voice offsets 0, PX/3, 2·PX/3 within each cycle; repeated `ceil(bars)` times. Intentional divergence from prototype `pArp` (per-slot `span = w - 24` spread). Justified by Strudel arp codegen producing `note("A B C")` once per cycle. Prototype lines 468–476 cited as the divergence source.
+
+**D6 — DOM pointer events directly on Canvas 2D element.** The new `<canvas>` registers its own `pointerdown/move/up` listeners (not routed through `App.svelte`'s PIXI canvas listeners). Hit-testing via `staff-hit.ts` with `SL` offset subtraction. `canvas.setPointerCapture`/`releasePointerCapture` for drag continuity. Same store actions as ProgressionStrip.
+
+**D7 — Lifecycle owned by `pentagrama-scene.ts` module singleton.** Exports `initPentagrama`, `destroyPentagrama`, `setPentagramaVisible`. rAF loop reads `sessionStore` via `get()` each frame. ResizeObserver triggers `setup(w, h)`. CSS `z-index:1`, `display:none/pointer-events:none` when hidden (OQ-R6 strategy).
+
+### Files touched
+
+- `docs/adr/0015-canvas2d-pentagrama-layer.md` — new file (created)
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Required behavior | Test file / Proof | Type | Status |
+|---|---|---|---|---|
+| A-10-17 | Canvas 2D `<canvas>` mounts in `#stage`; DPR scaling correct; show/hide lifecycle | ADR 0015 D7 and D3 record the binding contract | MANUAL + tsc | not covered — deferred to step 10.11 (code) |
+| A-10-18 | PIXI staff wiring removed; `harmony-staff-scene.ts` retired; `_staffContainer` removed | ADR 0015 D1 records retirement plan (sourced from inventory OQ-R5) | AUTOMATED (tsc) | not covered — deferred to step 10.11 |
+| A-10-19 | Register toggle removed from Header; no schema/agent breakage | ADR 0015 D2 records removal scope (sourced from inventory OQ-R4) | AUTOMATED (grep + tsc) | not covered — deferred to step 10.11 |
+| A-10-20 through A-10-32 | Visual + interaction acceptance criteria | ADR 0015 D3–D7 record the binding contracts | MANUAL | not covered — deferred to steps 10.12–10.14 |
+| A-10-33 | Zero codegen changes | No source files modified in this step | AUTOMATED (git diff) | PARTIAL — will be verified at step 10.16 |
+| A-10-34 | Quality gates: tsc 0 errors, lint 0 errors, test ≥ 447, build exit 0 | Quality gates unchanged (no source modifications) | AUTOMATED | PARTIAL — baseline from OQ-R8 holds; full sweep at step 10.16 |
+
+### Routine validations
+
+No source files modified. Quality gates unchanged from step 10.9 baseline (447 passed, 0 tsc errors, 0 lint errors).
+
+### Decisions made (if any)
+
+- `HarmonyState.registerMode` is left inert (not deleted) per D2. The rationale: removing it requires updating all `HarmonyState` construction sites, which is more disruptive than leaving a harmless dead field. A future cleanup phase may remove it if desired.
+- `voice-tracks.ts` is left inert per D1. Its tests remain in force. The engine is correct; leaving it in place preserves the option to reactivate it for a future orbital view or register-mode revival without any code recovery from git history.
+
+### Proposed Decisions Register entries (if any)
+
+**P1 — ADR 0015 D1: Canvas 2D as rendering technology for Pentagrama (amendment to ADR 0011 D5).**
+The Phase 08 Register entry "STEP_PX = 16 / HALF_STEP_PX = 8 / staffBaseY — constantes de geometría del pentagrama" referenced `harmony-staff-scene.ts` as the authoritative renderer. With that file retired, the entry should be superseded: the binding geometry for the Pentagrama sub-view is now the prototype's `LS = max(24, min(88, H/6))` responsive constants (recorded in ADR 0015 D3), not the PIXI `STEP_PX`/`staffBaseY` constants. Pilot should ratify whether the Phase 08 Register entry is to be marked superseded and replaced with a new entry pointing to ADR 0015 D3.
+
+**P2 — ADR 0015 D2: estricto/suavizado toggle removed from UI; Phase 08 Register entries remain accurate but the UI toggle no longer exists.**
+The Phase 08 Register entries ("registerMode is visual-only" and "harmony.subview and harmony.registerMode are ephemeral") remain technically accurate (the field is still in the store type, still not persisted). However, the practical effect has changed: there is no longer any UI to set `registerMode`. The Pilot should ratify whether a one-sentence addendum to those entries ("The Header.svelte toggle was removed in Phase 10 step 10.11; the field remains inert in the store type") would help future Devs understand the current state without misleading them.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `docs/adr/0015-canvas2d-pentagrama-layer.md` created.
+- No source files modified.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context
+
+Step 10.11 (first code step of the redesign) implements:
+(a) New `src/render/pentagrama-scene.ts` with skeleton rAF loop (clears canvas each frame).
+(b) Removal of `harmony-staff-scene.ts` import block and nine call sites from `App.svelte`.
+(c) Deletion of `harmony-staff-scene.ts`.
+(d) Removal of `_staffContainer` from `stage.ts` (four touch-points per inventory OQ-R5).
+(e) Removal of `#registerModeSeg` block from `Header.svelte` and the hint text update (App.svelte lines 484–486).
+
+Step 10.11 does not proceed until Pilot Checkpoint #2 approval of this ADR.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `docs(adr): Phase 10 step 10.10 — ADR 0015 Canvas 2D Pentagrama layer`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
