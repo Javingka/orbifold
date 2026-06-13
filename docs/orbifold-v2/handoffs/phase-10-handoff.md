@@ -1154,3 +1154,148 @@ This is the final step of Phase 10. After Pilot Checkpoint #5 manual acceptance:
 **Terminal commit:** `docs(harmony): Phase 10 step 10.8 — quality gates and manual acceptance`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 10.8 REVISE — Checkpoint #5 REVISE: functional bug fixes
+
+**Date:** 2026-06-13
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 2 of 5 (REVISE)
+
+### Bugs found at Checkpoint #5
+
+Three confirmed bugs and one non-bug item surfaced during Pilot manual acceptance:
+
+| ID | Description | Status |
+|---|---|---|
+| A-10-03 | Bar grid lines invisible | BUG — fixed |
+| A-10-04 | Arpeggio stagger doesn't match audio repetition | BUG — fixed |
+| A-10-01, A-10-09 | Playhead desync after slot resize | BUG — fixed |
+| A-10-08 | Rest reorder audio follows on next cycle | NOT A BUG — design behavior |
+
+### Root causes and fixes
+
+**(Bug 1 — A-10-03: Grid lines invisible)**
+
+Root cause: `drawBarGrid` used `COL.faint` (0x39404f — dark blue-grey) as the line color. On the dark background `COL.bg = 0x0b0d12`, near-black lines at 15%–50% alpha produce virtually invisible grid lines.
+
+Fix: changed the line color from `COL.faint` to `0xffffff` (white) at all three opacity levels, keeping the same opacity values:
+- Beat lines: 1px, 0xffffff, 15% opacity
+- Bar lines: 1px, 0xffffff, 35% opacity
+- Left boundary (x=0): 1px, 0xffffff, 50% opacity
+
+**(Bug 2 — A-10-04: Arpeggio stagger vs audio)**
+
+Root cause: the previous arp stagger distributed the 3 voice onsets across the FULL slot span (`slotSpan = bars × PX_PER_CYCLE`). But Strudel codegen for arp mode emits `note("[n0 n1 n2]")` inside `arrange()`, which repeats the 3-note pattern once per cycle inside the slot. A 2-bar slot plays the group twice; the visual showed only one group spanning 2 bars instead of 2 groups each spanning 1 bar.
+
+Fix: changed the stagger to span ONE cycle (`PX_PER_CYCLE`), and repeat the group for each cycle in the slot. Key changes:
+- `numGroups = Math.max(1, Math.ceil(bars))` — one group per cycle
+- `cycleStart = slotStartX + cycleIndex * PX_PER_CYCLE` — each group starts at its cycle boundary
+- `xOffsets = [0, PX_PER_CYCLE / 3, (2 * PX_PER_CYCLE) / 3]` — stagger within one cycle
+- A 1-bar slot still shows 1 group (same visual as before but stagger compressed to 1 cycle); a 2-bar slot shows 2 groups; a 0.5-bar slot shows 1 group compressed within its half-cycle.
+
+Accidentals are rendered by `drawAccidentals()` separately and use `nh.x` (the raw slot start from layout). They are not affected by this stagger change.
+
+**(Bug 3 — A-10-01, A-10-09: Playhead desync after resize)**
+
+Root cause: `updateHarmonyStaffDynamic` computed `playheadX` using the module-level `_staffWidth` cache. `_staffWidth` is updated in `buildHarmonyStaffScene`, but when `setChordBars` is called (e.g., via the resize gesture), App.svelte's rebuild condition fires on `totalBars` change — however, `updateHarmonyStaffDynamic` runs every tick and may use the stale cache value between the store write and the next rebuild.
+
+Fix: in `updateHarmonyStaffDynamic`, compute the staff width directly from `state.harmony.progression` before the playhead computation:
+```typescript
+const staffWidth = Math.max(
+  state.harmony.progression.reduce((sum, sl) => sum + (sl.bars ?? 1), 0) * PX_PER_CYCLE,
+  MIN_STAFF_WIDTH
+);
+if (staffWidth <= 0) return;
+const playheadX = ((rawX % staffWidth) + staffWidth) % staffWidth;
+```
+
+The module-level `_staffWidth` variable is retained (still set in `buildHarmonyStaffScene`) because it is used by `drawBarGrid` for `totalBars`. Only the playhead x computation in `updateHarmonyStaffDynamic` uses the locally recomputed value.
+
+**(Non-bug — A-10-08: Rest reorder audio follows on next cycle)**
+
+Verified: `reorderSlot` in `session.ts` calls `requeueLive()` after the store update. `setChordBars` also calls `requeueLive()`. Both are confirmed at lines 979 and 903 of `session.ts`. The audio following on the next cycle boundary is expected design behavior, consistent with the "live changes requeue to the next cycle" invariant in CLAUDE.md §6. No code change needed. Note for Pilot: a "next-cycle" visual indicator (e.g., a brief flash on the ProgressionStrip) could improve UX clarity in a future phase.
+
+### Files touched
+
+- `src/render/harmony-staff-scene.ts` — Bug 1 (grid color), Bug 2 (arp stagger), Bug 3 (playhead defensive width); header comment updated.
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry.
+
+### Gate results
+
+| Gate | Command | Result |
+|---|---|---|
+| TypeScript | `pnpm exec tsc --noEmit` | exit 0 — 0 errors |
+| Lint | `pnpm lint` | exit 0 — 0 ESLint errors, 0 Prettier issues |
+| Tests | `pnpm exec vitest run` | 447 passed (14 files), 0 failed |
+| Build | `pnpm build` | exit 0 — 1,068 kB bundle; pre-existing warnings only |
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / Proof | Type | Status (REVISE) |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent rendering: chord slots render as horizontal bars at correct width | Code: `drawStaticStaff` chord branch (unchanged); Bug 3 fix: playhead now recomputes width live, ensuring correct loop | MANUAL | **REVISED** — playhead desync fixed; Checkpoint #5 re-verification needed |
+| A-10-02 | Rest extent rendering: grey bars at middle staff line | Code: `drawStaticStaff` rest branch (unchanged) | MANUAL | PROXY-COVERED (unchanged from step 10.4) |
+| A-10-03 | Bar grid: visible vertical beat and bar lines on staff canvas | Code: `drawBarGrid` — color changed from `COL.faint` to `0xffffff`; same opacity values | MANUAL | **REVISED** — color bug fixed; Checkpoint #5 re-verification needed |
+| A-10-04 | Chord/arp mode visual toggle: arp shows staggered onset dots matching audio cycle | Code: arp branch now uses per-cycle groups with `numGroups = ceil(bars)` | MANUAL | **REVISED** — stagger now matches audio; Checkpoint #5 re-verification needed |
+| A-10-05 | Select: clicking a slot highlights it | Code: interaction layer (step 10.6, unchanged) | MANUAL | PROXY-COVERED (unchanged) |
+| A-10-06 | Delete via ✕ | Code: `clearChordAt` dispatch (step 10.6, unchanged) | MANUAL | PROXY-COVERED (unchanged) |
+| A-10-07 | Resize: right-edge drag changes duration | Code: `setChordBars` commit (step 10.6, unchanged) | MANUAL | PROXY-COVERED (unchanged) |
+| A-10-08 | Time-move: body drag reorders slot | Code: `reorderSlot` dispatch (step 10.7, unchanged) | MANUAL | PROXY-COVERED — next-cycle audio is by design |
+| A-10-09 | Playhead cyclic and matches ProgressionStrip cursor | Bug 3 fix: `updateHarmonyStaffDynamic` now reads live progression width | MANUAL | **REVISED** — desync fixed; Checkpoint #5 re-verification needed |
+| A-10-10 | ProgressionStrip parity | Code: shared store actions (step 10.6/10.7, unchanged) | MANUAL | PROXY-COVERED (unchanged) |
+| A-10-11 | `staff-hit.ts` pure engine; all exports unit-tested | `tests/harmony/staff-hit.test.ts` — 42 tests (unchanged) | AUTOMATED | **COVERED** |
+| A-10-12 | `reorderSlot` store action unit-tested | `tests/session.test.ts` — 9 tests (unchanged) | AUTOMATED | **COVERED** |
+| A-10-13 | All quality gates green | Fresh run: 447 passed, tsc exit 0, lint exit 0, build exit 0 | AUTOMATED | **COVERED** |
+| A-10-14 | `registerMode` and `subview` absent from saved schema | grep confirms (unchanged) | AUTOMATED (proxy: grep) | **COVERED** |
+| A-10-15 | Audio byte-identical before/after visual rendering changes | Only `harmony-staff-scene.ts` modified; `strudel.ts` unchanged | AUTOMATED (proxy: grep) | **COVERED** |
+| A-10-16 | AGPL-3.0 header in all modified files | `head -2 src/render/harmony-staff-scene.ts` → AGPL-3.0-only | AUTOMATED (proxy: head -2) | **COVERED** |
+
+### Revised status for flagged acceptance IDs
+
+- **A-10-01** (Duration-extent bars): REVISED — Bug 3 playhead fix ensures the playhead loops correctly in the visual extent context. Bar rendering itself was unchanged; the bug was in the playhead width computation used during live playback.
+- **A-10-03** (Bar grid): REVISED — color changed from invisible near-black to visible white; same opacity hierarchy preserved.
+- **A-10-04** (Arp stagger): REVISED — stagger groups now repeat per cycle, matching the audio repetition of `note("[n0 n1 n2]")` inside `arrange()`.
+- **A-10-09** (Playhead cyclic): REVISED — live width recomputation in `updateHarmonyStaffDynamic` eliminates the stale-cache desync.
+
+### Decisions made (if any)
+
+- Module-level `_staffWidth` is retained (still set by `buildHarmonyStaffScene`) because `drawBarGrid` uses `totalBars = _staffWidth / PX_PER_CYCLE`. Only `updateHarmonyStaffDynamic` switches to the locally recomputed value. This is the minimum-surface fix — no other callsite is changed.
+- Arp stagger now uses `Math.ceil(bars)` for `numGroups`. For non-integer bar values (e.g., bars=0.5), `ceil(0.5) = 1` — one group rendered at `cycleStart = slotStartX`, stagger within `PX_PER_CYCLE`. For bars=1.5, `ceil(1.5) = 2` — two groups, second at `slotStartX + PX_PER_CYCLE`. This matches the audio: Strudel always repeats the mini-pattern at cycle boundaries within the arrange slot.
+
+### Proposed Decisions Register entries (if any)
+
+None. These are bug fixes, not governance decisions.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/render/harmony-staff-scene.ts`: Bug 1 (grid color), Bug 2 (arp stagger per cycle), Bug 3 (live playhead width) all fixed.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build clean.
+- Branch: `orbifold-v2/phase-10`.
+
+### Next-step context
+
+After Pilot re-verifies A-10-01, A-10-03, A-10-04, A-10-09 at the follow-up manual acceptance:
+- If the Pilot approves: Phase 10 is closed. Begin scoping Phase 11.
+- If further issues are found: iterate.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `fix(harmony): Phase 10 step 10.8 REVISE — playhead sync, grid color, arp stagger`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

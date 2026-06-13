@@ -34,14 +34,16 @@
 //
 // Playhead (Phase 08 ADR 0011 Amendment D6): cyclic modulo wrap.
 //   rawX = (now − getVisualPhaseAnchor()) / barMs × PX_PER_CYCLE
-//   _staffWidth = totalBars × PX_PER_CYCLE  (post-verification fix, A-08-08)
-//   playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth
-//   Guard: if _staffWidth <= 0, return early without drawing.
+//   staffWidth (local) = live recompute from progression (Bug 3 fix, A-10-01/A-10-09)
+//   playheadX = ((rawX % staffWidth) + staffWidth) % staffWidth
+//   Guard: if staffWidth <= 0, return early without drawing.
 //   Guard: if nowPlaying.source === null, clear and return (BUG A, post-verification REVISE II).
 //   where barMs = (60000 / bpm) × 4 (one 4/4 bar in ms)
 //   (Fixes Phase 07 A-07-11 / A-08-08: playhead loops continuously instead of
-//    clamping at the last note position; _staffWidth matches ProgressionStrip
+//    clamping at the last note position; staffWidth matches ProgressionStrip
 //    denominator so both cursors stay in sync.)
+//   Bug 3 fix: updateHarmonyStaffDynamic recomputes width from the live progression
+//   rather than relying on the cached _staffWidth, which may lag behind setChordBars.
 //
 // PX_PER_CYCLE imported from time-map.ts (vigent coordination-point rule).
 //
@@ -341,18 +343,19 @@ function drawBarGrid(
     const isBarLine = i % 4 === 0; // every 4 beats = 1 bar
 
     if (isBarLine) {
-      // Bar line: 35% opacity.
-      gfx.lineStyle(1, COL.faint, 0.35);
+      // Bar line: 1px, white, 35% opacity. White on dark bg is visible;
+      // COL.faint (0x39404f) was near-invisible on bg (0x0b0d12). Bug 1 fix.
+      gfx.lineStyle(1, 0xffffff, 0.35);
     } else {
-      // Beat line: 15% opacity.
-      gfx.lineStyle(1, COL.faint, 0.15);
+      // Beat line: 1px, white, 15% opacity.
+      gfx.lineStyle(1, 0xffffff, 0.15);
     }
     gfx.moveTo(x, gridTop);
     gfx.lineTo(x, gridBottom);
   }
 
-  // Left boundary (x = 0): 50% opacity.
-  gfx.lineStyle(1, COL.faint, 0.5);
+  // Left boundary (x = 0): 1px, white, 50% opacity.
+  gfx.lineStyle(1, 0xffffff, 0.5);
   gfx.moveTo(0, gridTop);
   gfx.lineTo(0, gridBottom);
 }
@@ -540,49 +543,58 @@ function drawStaticStaff(
       // Compute stagger offsets. All NoteHeads in a slot share the same nh.bars
       // (the slot duration). Use the first entry to get bars.
       const bars = nhGroup[0].bars;
-      const slotSpan = bars * PX_PER_CYCLE;
+      // Bug 2 fix (A-10-04): Strudel codegen for arp mode generates
+      // note("[n0 n1 n2]") inside arrange(), so the 3-note sequence repeats
+      // ONCE PER CYCLE within the slot. A 2-bar slot plays the group twice.
+      // The stagger must span ONE cycle (PX_PER_CYCLE), not the full slot span.
+      // We repeat the visual group for each whole cycle in the slot.
+      const numGroups = Math.max(1, Math.ceil(bars));
 
-      // Stagger x offsets: voice i is at offset i/3 of the slot's pixel span.
-      const xOffsets = [0, slotSpan / 3, (2 * slotSpan) / 3];
+      for (let cycleIndex = 0; cycleIndex < numGroups; cycleIndex++) {
+        const cycleStart = slotStartX + cycleIndex * PX_PER_CYCLE;
 
-      // Collect positions for the connector polyline (only when group is full).
-      const connectorPoints: Array<{ px: number; py: number }> = [];
+        // Stagger x offsets within a single cycle: voice i at i/3 of PX_PER_CYCLE.
+        const xOffsets = [0, PX_PER_CYCLE / 3, (2 * PX_PER_CYCLE) / 3];
 
-      for (let i = 0; i < nhGroup.length; i++) {
-        const nh = nhGroup[i];
-        const col = voiceColor(nh.voiceIndex);
-        // Stagger x: base is slotStartX + NOTE_OFFSET_X, then add the voice offset.
-        // If the group has fewer than 3 entries, use i-indexed offsets for the
-        // available voices (maintaining visual accuracy for whatever voices exist).
-        const px = slotStartX + NOTE_OFFSET_X + (xOffsets[i] ?? 0);
-        const py = stepToY(nh.stepY, staffBaseY);
+        // Collect positions for the connector polyline (only when group is full).
+        const connectorPoints: Array<{ px: number; py: number }> = [];
 
-        // Ledger lines at the staggered x position.
-        if (nh.ledgerLines.length > 0) {
-          gfx.lineStyle(1, col, 0.7);
-          for (const ledgerStep of nh.ledgerLines) {
-            const ly = stepToY(ledgerStep, staffBaseY);
-            gfx.moveTo(px - LEDGER_HALF_W, ly);
-            gfx.lineTo(px + LEDGER_HALF_W, ly);
+        for (let i = 0; i < nhGroup.length; i++) {
+          const nh = nhGroup[i];
+          const col = voiceColor(nh.voiceIndex);
+          // Stagger x: base is cycleStart + NOTE_OFFSET_X, then add the voice offset.
+          // If the group has fewer than 3 entries, use i-indexed offsets for the
+          // available voices (maintaining visual accuracy for whatever voices exist).
+          const px = cycleStart + NOTE_OFFSET_X + (xOffsets[i] ?? 0);
+          const py = stepToY(nh.stepY, staffBaseY);
+
+          // Ledger lines at the staggered x position.
+          if (nh.ledgerLines.length > 0) {
+            gfx.lineStyle(1, col, 0.7);
+            for (const ledgerStep of nh.ledgerLines) {
+              const ly = stepToY(ledgerStep, staffBaseY);
+              gfx.moveTo(px - LEDGER_HALF_W, ly);
+              gfx.lineTo(px + LEDGER_HALF_W, ly);
+            }
           }
+
+          // Onset circle at the staggered position.
+          gfx.lineStyle(0);
+          gfx.beginFill(col, 1);
+          gfx.drawCircle(px, py, NOTE_RADIUS);
+          gfx.endFill();
+
+          connectorPoints.push({ px, py });
         }
 
-        // Onset circle at the staggered position.
-        gfx.lineStyle(0);
-        gfx.beginFill(col, 1);
-        gfx.drawCircle(px, py, NOTE_RADIUS);
-        gfx.endFill();
-
-        connectorPoints.push({ px, py });
-      }
-
-      // Ascending connector polyline — only drawn when the group is complete (3 voices).
-      // ADR 0014 D7: 1px, 0xffffff, 35% opacity.
-      if (nhGroup.length === 3) {
-        gfx.lineStyle(1, 0xffffff, 0.35);
-        gfx.moveTo(connectorPoints[0].px, connectorPoints[0].py);
-        for (let i = 1; i < connectorPoints.length; i++) {
-          gfx.lineTo(connectorPoints[i].px, connectorPoints[i].py);
+        // Ascending connector polyline — only drawn when the group is complete (3 voices).
+        // ADR 0014 D7: 1px, 0xffffff, 35% opacity.
+        if (nhGroup.length === 3) {
+          gfx.lineStyle(1, 0xffffff, 0.35);
+          gfx.moveTo(connectorPoints[0].px, connectorPoints[0].py);
+          for (let j = 1; j < connectorPoints.length; j++) {
+            gfx.lineTo(connectorPoints[j].px, connectorPoints[j].py);
+          }
         }
       }
     }
@@ -1093,11 +1105,17 @@ export function updateHarmonyStaffDynamic(state: SessionState): void {
   // nowPlaying.source === null means no transport is active.
   if (state.nowPlaying.source === null) return;
 
-  // Guard: if staff width is zero or negative, return without drawing.
-  // _staffWidth is always Math.max(_layout.totalWidth, MIN_STAFF_WIDTH) so it
-  // should be ≥ MIN_STAFF_WIDTH (200). This guard satisfies the spec requirement
-  // and prevents a division-by-zero / NaN in the modulo expression.
-  if (_staffWidth <= 0) return;
+  // Bug 3 fix (A-10-01, A-10-09): compute staff width defensively from the current
+  // progression instead of relying solely on the module-level _staffWidth cache.
+  // _staffWidth is updated by buildHarmonyStaffScene, but setChordBars may change
+  // the progression duration without triggering a full rebuild in all code paths.
+  // Using the live progression ensures the playhead loops at the correct boundary
+  // even immediately after a resize commit.
+  const staffWidth = Math.max(
+    state.harmony.progression.reduce((sum, sl) => sum + (sl.bars ?? 1), 0) * PX_PER_CYCLE,
+    MIN_STAFF_WIDTH
+  );
+  if (staffWidth <= 0) return;
 
   const bpm = state.bpm > 0 ? state.bpm : 120;
   const barMs = (60000 / bpm) * 4;
@@ -1106,7 +1124,7 @@ export function updateHarmonyStaffDynamic(state: SessionState): void {
   // Phase 08 (ADR 0011 Amendment D6): cyclic modulo wrap replaces the old clamp.
   // Positive-modulo guard handles briefly-negative rawX (phase anchor in the future
   // after a re-anchor event). ((rawX % w) + w) % w is always in [0, w).
-  const playheadX = ((rawX % _staffWidth) + _staffWidth) % _staffWidth;
+  const playheadX = ((rawX % staffWidth) + staffWidth) % staffWidth;
 
   // Vertical span: from top staff line (step 10) to bottom of ledger zone (step −8).
   // Top: step 10 + 2 extra steps margin
