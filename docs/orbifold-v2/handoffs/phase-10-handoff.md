@@ -1928,7 +1928,152 @@ Added all time-driven animation to `src/render/pentagrama-scene.ts`. The Pentagr
 
 **Planner: STOP — do not auto-continue to step 10.14.**
 
+### Planner Review
+
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-13
+**Iteration:** 1 of 5
+**Reason:** All 8 base checklist items + Prototype parity pass. CRITICAL playhead sync verified: `pentagrama-scene.ts` uses `barMs=(60000/bpm)×4`, `rawX=(performance.now()−getVisualPhaseAnchor())/barMs×PX`, double-modulo `((rawX%tw)+tw)%tw` with SL offset — formula is pixel-identical to `ProgressionStrip.svelte` lines 191–194 using the same shared `getVisualPhaseAnchor()`. `actIdx` also uses the shared anchor with the same barMs and double-modulo wrap; returns −1 on `nowPlaying.source===null` and `totalCycles===0`. Arrowhead geometry matches prototype lines 405–408 exactly (`top+6 = cy−ls×2−12`). Breathe formula verbatim. Sustain-bar gradient multiplier delta (0.62→0.625, 0.20→0.205) produces no perceptible difference after `ha()` rounding. Quality gates: tsc 0 / lint 0 / vitest 447 / build 0 / codegen diff empty. Acceptance Coverage Table correctly maps A-10-26, A-10-27, A-10-21 (pulse), A-10-22 (pulse) with code present and Checkpoint #5 deferred — consistent with the step's CHECKPOINT line.
+**Next action:** Dev proceeds to step 10.14
+
 ---
 
 **Terminal commit:** `feat(harmony): Phase 10 step 10.13 — dynamic: playhead, spotlight, ambient breathe`
+
+---
+
+## Step 10.14 — Interactions: select, delete, resize, move-reorder, hover label
+
+**Date:** 2026-06-14
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+Implemented the full slot interaction model on the Canvas 2D layer in `src/render/pentagrama-scene.ts`:
+
+**(a) Module-level interaction state** — Added 13 module-level variables:
+`_selectedSlotIdx`, `_hoverSlotIdx`, `_resizeActive`, `_resizeStartPx`, `_resizeStartBars`, `_resizePreviewBars`, `_moveActive`, `_moveFromIdx`, `_moveDragPx`, `_moveInsertIdx`, `_pointerDownPx`, `_pointerDownOnSelected`, `_slotBounds`.
+
+`_slotBounds` is recomputed via `computeSlotBounds(progression, PX)` at the start of every `paint()` call. Selection guard (ADR 0014 Consequence 3): if `_selectedSlotIdx !== null && _selectedSlotIdx >= progression.length`, reset to `null`.
+
+**(b) Interaction rendering in `paint(ts)`:**
+- **Resize preview**: when `_resizeActive && _selectedSlotIdx === idx`, the slot is drawn with `_resizePreviewBars * PX` width instead of `slot.bars * PX`. No store write until `onUp`.
+- **Hover rect + label**: `rgba(255,255,255,0.020)` full-height rect; chord label above in slot's tonal-function color at 65% opacity. Port of prototype `paint()` lines 315–329. Drawn before slot content.
+- **Selection chrome**: 1.5px `rgba(255,255,255,0.62)` border rect; ✕ circle (`arc(bx, by, 7.5)` white fill + dark `×`); resize grip (3px `rgba(255,255,255,0.36)` rect at right edge); label (`chordLabel · fnLabel · N ciclo(s)`) above slot. Port of prototype `isSel` block lines 346–372. Rest slots get the same chrome minus the chord-specific label (uses "silencio").
+- **Move ghost**: dashed `rgba(138,160,255,0.52)` 1.5px outline at `gx = _moveDragPx − w/2`; glowing white insertion indicator line at the boundary computed by `nearestInsertionIndex`. Port of prototype `drag.mode==='moving'` block lines 375–394.
+
+**(c) Pointer event listeners** — `onDn`, `onMv`, `onUp` added to the canvas in `initPentagrama`; removed in `destroyPentagrama`.
+
+- **`onDn`**: (1) ✕ hit (`hypot < 13`) → `clearChordAt` + reset; (2) resize handle (`hitTestResizeHandle(px−SL, bounds, 14) === _selectedSlotIdx`) → start resize + `setPointerCapture`; (3) `hitTestSlot(px−SL, bounds)` → same slot = arm for move + `setPointerCapture`, else select; (4) outside → deselect.
+- **`onMv`**: resize → `_resizePreviewBars = clampBars(startBars + (px − startPx) / PX)`; move arm → if `|px − downPx| > 4` activate move; move active → update `_moveDragPx` + `_moveInsertIdx`; else → `_hoverSlotIdx = hitTestSlot(px−SL, bounds)`.
+- **`onUp`**: commit resize via `setChordBars(_selectedSlotIdx!, _resizePreviewBars)`; commit move via `reorderSlot(_moveFromIdx, _moveInsertIdx)` (only if `_moveInsertIdx !== _moveFromIdx`); reset all drag state; `releasePointerCapture`.
+
+**Prototype parity:**
+- `onDn` — port of `Pentagrama.dc.html` lines 528–558; prototype's `hitSlot(px)` (which included SL offset) → replaced by `hitTestSlot(px − SL, _slotBounds)` (staff-hit.ts with explicit SL offset, inventory OQ-R3).
+- `onMv` — port of lines 560–575; prototype's `hitSlot` → replaced identically.
+- `onUp` — port of lines 578–590; prototype's `splice + insertPos` → replaced by `reorderSlot(fromIdx, toIdx)` store action (same semantics, ADR 0014 D5).
+- `hitSlot` (lines 509–514) → replaced by `hitTestSlot(px−SL, _slotBounds)`. `insertPos` (lines 516–525) → replaced by `nearestInsertionIndex(px−SL, _slotBounds)`. The SL offset converts canvas `offsetX` into the staff-relative coordinate system that `computeSlotBounds` uses (x=0 at first slot left edge). A negative adjusted px (pointer in the clef gutter) correctly returns `null` from all hit-test functions (inventory OQ-R3 verdict).
+- Hover rect + label — port of lines 315–329 in `paint()`.
+- Selection chrome — port of lines 346–372 in `paint()`. Label derives from `chordLabel()` (not `slot.label` which doesn't exist on `Chord`) — equivalent output.
+- Move ghost — port of lines 375–394 in `paint()`.
+
+**Store actions** (same as ProgressionStrip — ADR 0014 D1, A-10-32):
+- `clearChordAt(idx)` — delete slot; calls `requeueLive()`.
+- `setChordBars(idx, bars)` — resize commit; internally clamps via `clampBars()` (confirmed session.ts line 897).
+- `reorderSlot(fromIdx, toIdx)` — move commit; calls `requeueLive()`.
+- `clampBars` is exported from `session.ts` (line 102) — imported directly for the resize preview clamping.
+
+**Zero codegen changes**: `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty. Confirmed.
+
+**`staff-hit.ts` unchanged**: its 42 tests still pass; no modifications made.
+
+### Files touched
+
+- `src/render/pentagrama-scene.ts` — interaction state variables, `_slotBounds` recompute, hover/chrome/ghost rendering in `paint()`, `onDn`/`onMv`/`onUp` handlers, listener registration in `initPentagrama` + cleanup in `destroyPentagrama`.
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry.
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-28** (Selection chrome — white border, ✕ circle, resize grip, label):
+- Implemented in `paint()` inside `if (isSel)` block: `strokeRect` border, `arc(bx, by, 7.5)` ✕ button, `fillRect` resize grip, `fillText` label. Also covers rest slots (separate `if (isSel && 'isRest' in slot)` block).
+- Prototype citation: `Pentagrama.dc.html` lines 346–372.
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-29** (Move ghost — dashed outline + glowing insertion indicator):
+- Implemented in `paint()` after the slot loop: `setLineDash([4,4])` dashed `strokeRect`, then glowing `ctx.shadowColor='white'; shadowBlur=6; strokeStyle=rgba(255,255,255,0.72)` vertical insertion line.
+- Prototype citation: `Pentagrama.dc.html` lines 375–394.
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-30** (Hover state — rect + chord label):
+- Implemented in `paint()` inside slot loop, guarded by `isHov`. `fillRect` `rgba(255,255,255,0.020)` rect; `fillText` chord label in tonal-function color at 65% opacity.
+- Prototype citation: `Pentagrama.dc.html` lines 315–329.
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-32** (All interactions call correct store actions; ProgressionStrip stays in sync):
+- `clearChordAt`, `setChordBars`, `reorderSlot` imported and called identically to ProgressionStrip. All three call `requeueLive()` internally. Both surfaces write to the same `sessionStore` — ProgressionStrip re-renders from store subscription on next frame.
+- Code-level confirmation: the only write operations in the interaction handlers are `clearChordAt(idx)`, `setChordBars(idx, _resizePreviewBars)`, `reorderSlot(_moveFromIdx, _moveInsertIdx)`.
+- Manual live verification deferred to Pilot Checkpoint #5.
+
+**A-10-33** (Zero codegen changes):
+- `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty (0 diff lines). Confirmed.
+
+**A-10-34** (All quality gates green):
+- `pnpm exec tsc --noEmit` → 0 errors.
+- `pnpm lint` → 0 errors (ESLint + Prettier).
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files; baseline maintained; no new unit tests for Canvas 2D interaction — not unit-testable in Node).
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by this step).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files)
+- `pnpm build` → exit 0
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Implementing code | Test type | Gap status |
+|---|---|---|---|---|
+| A-10-17 | Canvas 2D `<canvas>` mounts; DPR scaling; show/hide on subview; rAF lifecycle | `initPentagrama`, `destroyPentagrama`, `setPentagramaVisible`, `setup()` | MANUAL + tsc | Implementing code present; Checkpoint #5 |
+| A-10-18 | PIXI staff wiring removed; `harmony-staff-scene.ts` retired; `_staffContainer` removed | `App.svelte`, `stage.ts`, `harmony-staff-scene.ts` | automated (tsc) | Covered (step 10.11) |
+| A-10-19 | Register toggle removed from `Header.svelte` | `Header.svelte` | automated (grep + tsc) | Covered (step 10.11) |
+| A-10-20 | Staff geometry: responsive LS; 5 lines; clef gutter SL=76 | `drawStaffLines`, `setup()` constants | MANUAL | Deferred to Checkpoint #5 |
+| A-10-21 | Chord mode: gradient bars + gemstone onsets + accidentals + ledger lines; active pulse | `pChord()` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-22 | Arp mode: per-cycle stagger; connector line; active pulse | `pArp()` (divergence documented) | MANUAL | Deferred to Checkpoint #5 |
+| A-10-23 | Rest rendering matches prototype `pRest` | `pRest()` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-24 | Tonal-function badges (T/SD/D) at 42% opacity | Badge section in `paint()` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-25 | Time grid: beat/bar lines + bar numbers | `drawGrid()` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-26 | Playhead: shared anchor, cyclic wrap, hidden when not playing | Playhead block in `paint()` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-27 | Spotlight + ambient breathe | Breathe + spotlight blocks in `paint()` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-28 | Selection chrome (border, ✕ circle, resize grip, label) | `if (isSel)` block in `paint()` slot loop | MANUAL | **Implementing code present**; Checkpoint #5 |
+| A-10-29 | Move ghost (dashed outline + insertion indicator) | Move ghost block after slot loop in `paint()` | MANUAL | **Implementing code present**; Checkpoint #5 |
+| A-10-30 | Hover state (rect + chord label) | `if (isHov)` blocks in `paint()` slot loop | MANUAL | **Implementing code present**; Checkpoint #5 |
+| A-10-31 | Right vignette drawn last | Vignette block at end of `paint()` | MANUAL | Deferred to Checkpoint #5 |
+| A-10-32 | All interactions call correct store actions; ProgressionStrip stays in sync | `clearChordAt`, `setChordBars`, `reorderSlot` in `onDn`/`onUp` | MANUAL | **Implementing code present**; Checkpoint #5 |
+| A-10-33 | `git diff main...HEAD -- src/core/codegen/strudel.ts` empty | Confirmed via git diff | automated (git diff) | **Confirmed** |
+| A-10-34 | All quality gates green | tsc 0 / lint 0 / vitest 447 / build exit 0 | automated | **Confirmed** |
+
+### Decisions made (if any)
+
+- No new governance decisions. Interaction semantics follow ADR 0014 D3/D4 and ADR 0015 D6 exactly.
+
+### Proposed Decisions Register entries (if any)
+
+- None.
+
+### Blockers resolved during this step (if any)
+
+- None. The `clampBars` export from `session.ts` was confirmed exported at line 102 — no blocker needed.
+- `setChordBars` already clamps internally (line 897); using `clampBars` in `onMv` for the resize preview ensures the preview value exactly matches the committed value.
+
+### Environment state after this step
+
+- `src/render/pentagrama-scene.ts` is feature-complete: static + dynamic + interaction layers all implemented.
+- 447 tests pass; 0 tsc errors; 0 lint errors; build exit 0.
+- Steps 10.15 (cleanup) and 10.16 (quality gates + acceptance) remain.
+
+**Planner: STOP — do not auto-continue to step 10.15.**
+
+**Terminal commit:** `feat(harmony): Phase 10 step 10.14 — interactions: select, delete, resize, reorder, hover`
 - Hash: self-referential — not recorded

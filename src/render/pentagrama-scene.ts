@@ -9,10 +9,11 @@
 //   This file is render-layer code (src/render/), not core (src/core/), so DOM
 //   imports are permitted. No PIXI, no Svelte.
 //
-// ADR 0015 decisions implemented across steps 10.11–10.13:
+// ADR 0015 decisions implemented across steps 10.11–10.14:
 //   D3 — responsive staff geometry (LS, cy, SL, PX, DPR cap).
 //   D4 — note-name → staff position via inline MIDI conversion + ported m2p.
 //   D5 — arpeggio stagger: per-cycle (not per-slot), intentional divergence from prototype pArp.
+//   D6 — interaction wiring: DOM pointer events on the Canvas 2D element.
 //   D7 — lifecycle: rAF loop + ResizeObserver owned by this module.
 //
 // Step 10.12: adds full static paint(ts) layer — staff lines, clef, time grid,
@@ -22,6 +23,12 @@
 //   actIdx helper, active-slot spotlight, pChord/pArp onset pulse (isAct branch),
 //   and playhead driven by getVisualPhaseAnchor() (shared anchor, not prototype's
 //   local this.ps — ensures sync with ProgressionStrip cursor).
+//
+// Step 10.14: adds full slot interaction model — module-level interaction state,
+//   hover rendering, selection chrome, move ghost, resize preview, and pointer
+//   event listeners (onDn/onMv/onUp). Hit-testing delegates to staff-hit.ts with
+//   the SL offset (ADR 0015 D6). Store actions: clearChordAt, setChordBars,
+//   reorderSlot — same as ProgressionStrip (ADR 0014 D1). No codegen changes.
 //
 // Prototype parity source: docs/orbifold-v2/reference/Pentagrama.dc.html
 //   m2p:         lines 160–165
@@ -40,18 +47,34 @@
 //   paint grid:  lines 277–306 (time grid + bar numbers)
 //   paint staff: lines 301–306 (5-line staff)
 //   paint badge: lines 336–344 (tonal-function badges)
+//   paint hover: lines 315–329 (hover rect + label)
+//   paint selection chrome: lines 346–372 (isSel block)
+//   paint move ghost: lines 375–394 (drag.mode==='moving' block)
 //   phX:         lines 182–186 (playhead — DIVERGENCE: shared anchor not this.ps)
 //   actIdx:      lines 188–199 (active-slot index — DIVERGENCE: shared anchor not this.ps)
 //   paint vign:  lines 413–415 (right vignette)
+//   hitSlot:     lines 509–514 (REPLACED by staff-hit.ts hitTestSlot with SL offset)
+//   insertPos:   lines 516–525 (REPLACED by staff-hit.ts nearestInsertionIndex with SL offset)
+//   onDn:        lines 528–558 (ported; staff-hit.ts replaces hitSlot/insertPos)
+//   onMv:        lines 560–575 (ported; staff-hit.ts replaces hitSlot)
+//   onUp:        lines 578–590 (ported; reorderSlot store action replaces prototype splice)
 
 import { get } from 'svelte/store';
 import { sessionStore } from '../state/session.js';
 import type { ProgressionSlot, Chord, SessionState } from '../state/session.js';
+import { clearChordAt, setChordBars, reorderSlot, clampBars } from '../state/session.js';
 import type { Quality } from '../core/theory/chords.js';
-import { chordVoicing } from '../core/theory/chords.js';
+import { chordVoicing, chordLabel } from '../core/theory/chords.js';
 import { diatonicLookup } from '../core/theory/scales.js';
 import type { Mode } from '../core/theory/scales.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
+import {
+  computeSlotBounds,
+  hitTestSlot,
+  hitTestResizeHandle,
+  nearestInsertionIndex,
+} from '../core/harmony/staff-hit.js';
+import type { SlotBounds } from '../core/harmony/staff-hit.js';
 
 // ── Constants (ADR 0015 D3) ──────────────────────────────────────────────────
 
@@ -567,6 +590,40 @@ let _H = 0;
 let _rafHandle = 0;
 let _observer: ResizeObserver | null = null;
 
+// ── Module-level interaction state (step 10.14, ADR 0015 D6, ADR 0014 D3/D4) ─
+//
+// Mirrors ADR 0014 D3/D4 semantics, now in Canvas 2D. Selection guard
+// (ADR 0014 Consequence 3): at start of each paint, if
+// _selectedSlotIdx !== null && _selectedSlotIdx >= progression.length → reset to null.
+//
+// Prototype parity: prototype uses this.state.selectedSlot / this.drag object
+// (Pentagrama.dc.html state at lines 528–558, 560–575, 578–590). Here these are
+// module-level variables — same semantics, different housing.
+
+let _selectedSlotIdx: number | null = null;
+let _hoverSlotIdx: number | null = null;
+
+// Resize state
+let _resizeActive = false;
+let _resizeStartPx = 0;
+let _resizeStartBars = 1;
+let _resizePreviewBars = 1;
+
+// Move state
+let _moveActive = false;
+let _moveFromIdx = -1;
+let _moveDragPx = 0;
+let _moveInsertIdx = -1;
+
+// Pointer-down state (for move-arm threshold)
+let _pointerDownPx = 0;
+let _pointerDownOnSelected = false;
+
+// Slot bounds — recomputed at the start of each paint() from current progression.
+// computeSlotBounds(progression, PX) returns bounds with x=0 at the first slot;
+// the SL offset is applied before calling hitTest* functions (ADR 0015 D6, OQ-R3).
+let _slotBounds: SlotBounds[] = [];
+
 // ── Geometry helpers (ADR 0015 D3) ──────────────────────────────────────────
 
 /**
@@ -589,11 +646,13 @@ function setup(w: number, h: number): void {
 // ── rAF paint loop ────────────────────────────────────────────────────────────
 
 /**
- * Full paint callback (steps 10.12 + 10.13).
+ * Full paint callback (steps 10.12–10.14).
  * Reads SessionState from the store once per frame; derives all geometry.
  * Step 10.13 adds: ambient breathe, actIdx, active-slot spotlight, isAct pulse
  * on pChord/pArp, and shared-anchor playhead.
- * Step 10.14 will add pointer affordances (hover, selection chrome, move ghost).
+ * Step 10.14 adds: slot interaction rendering — hover, selection chrome,
+ * move ghost, resize preview. Also recomputes _slotBounds each frame and
+ * applies the selection guard (ADR 0014 Consequence 3).
  */
 function paint(ts: DOMHighResTimeStamp): void {
   if (_ctx === null) return;
@@ -609,6 +668,17 @@ function paint(ts: DOMHighResTimeStamp): void {
   const dmap = diatonicLookup(root, mode as Mode);
 
   const ctx = _ctx;
+
+  // ── Recompute slot bounds + selection guard (step 10.14 §a) ──────────────
+  // computeSlotBounds(progression, PX): x starts at 0 (staff-relative, no SL).
+  // Hit-tests subtract SL from e.offsetX before calling these (OQ-R3, ADR 0015 D6).
+  _slotBounds = computeSlotBounds(progression, PX);
+
+  // ADR 0014 Consequence 3: if the selected slot index is now out of range
+  // (e.g., the progression shrank due to clearChordAt), reset selection.
+  if (_selectedSlotIdx !== null && _selectedSlotIdx >= progression.length) {
+    _selectedSlotIdx = null;
+  }
 
   // Responsive geometry (ADR 0015 D3)
   const ls = Math.max(24, Math.min(88, H / 6));
@@ -680,11 +750,24 @@ function paint(ts: DOMHighResTimeStamp): void {
   // ── Slots ─────────────────────────────────────────────────────────────────
   progression.forEach((slot, idx) => {
     const x = slotX(idx, progression);
-    const w = slotW(slot);
+    // When a resize is in progress on this slot, use the preview width.
+    // The store is NOT written until onUp — local preview only.
+    const rawW = slotW(slot);
+    const w = _resizeActive && _selectedSlotIdx === idx ? _resizePreviewBars * PX : rawW;
     const isAct = ai === idx;
+    const isSel = _selectedSlotIdx === idx;
+    const isHov = _hoverSlotIdx === idx && !isSel;
 
     // Clamp slots that would overflow the right boundary
     if (x > sr) return;
+
+    // ── Hover rect (step 10.14 §b — port of prototype paint() lines 315–318) ─
+    // Drawn BEFORE the slot content so it sits behind the slot rendering.
+    // Prototype: `ctx.fillStyle='rgba(255,255,255,0.020)'; ctx.fillRect(x, cy-ls*2.5, w, ls*5)`
+    if (isHov) {
+      ctx.fillStyle = 'rgba(255,255,255,0.020)';
+      ctx.fillRect(x, cy - ls * 2.5, w, ls * 5);
+    }
 
     if ('isRest' in slot && slot.isRest) {
       // Rest slot
@@ -704,6 +787,23 @@ function paint(ts: DOMHighResTimeStamp): void {
         // Arpeggio mode: per-cycle stagger (ADR 0015 D5 divergence) + isAct pulse (step 10.13).
         // Prototype pArp lines 468–476 used per-slot spread; we use per-cycle.
         pArp(ctx, chord, x, H, ls, octave, isAct, ts);
+      }
+
+      // ── Hover label (step 10.14 §b — port of prototype paint() lines 320–329) ─
+      // Chord label above slot in tonal-function color, 65% opacity.
+      // Prototype: slot.label (computed); here we derive via chordLabel().
+      if (isHov) {
+        ctx.save();
+        ctx.font = '500 9.5px "IBM Plex Mono", monospace';
+        const key = `${chord.rootPc}:${chord.qual}`;
+        const dfn = dmap[key];
+        ctx.fillStyle =
+          dfn !== undefined && dfn.func.cls !== '' ? (FC[dfn.func.cls] ?? '#9097a6') : '#9097a6';
+        ctx.globalAlpha = 0.65;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(chordLabel(chord.rootPc, chord.qual as Quality), x + w / 2, cy - ls * 2 - 5);
+        ctx.restore();
       }
 
       // Tonal-function badges (T / SD / D)
@@ -732,12 +832,141 @@ function paint(ts: DOMHighResTimeStamp): void {
           ctx.restore();
         }
       }
+
+      // ── Selection chrome (step 10.14 §b — port of prototype isSel block lines 346–372) ─
+      if (isSel) {
+        // White 1.5px border rect.
+        // Prototype: `ctx.strokeRect(x + 0.75, cy - ls*2 + 0.75, w - 1.5, ls*4 - 1.5)`
+        ctx.strokeStyle = 'rgba(255,255,255,0.62)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        ctx.strokeRect(x + 0.75, cy - ls * 2 + 0.75, w - 1.5, ls * 4 - 1.5);
+
+        // ✕ circle button (prototype lines 353–358).
+        // bx = x+w-10, by = cy-ls*2-11
+        const bx = x + w - 10;
+        const by = cy - ls * 2 - 11;
+        ctx.fillStyle = 'rgba(255,255,255,0.80)';
+        ctx.beginPath();
+        ctx.arc(bx, by, 7.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0a0b12';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('×', bx, by + 0.5);
+
+        // Resize grip: 3px white-ish rect at right edge (prototype lines 361–362).
+        ctx.fillStyle = 'rgba(255,255,255,0.36)';
+        ctx.fillRect(x + w - 4, cy - ls * 2, 3, ls * 4);
+
+        // Label: chord name + tonal-function + cycle count (prototype lines 364–371).
+        // Prototype: `slot.label + (slot.func ? ' · ' + fs[slot.func] : '')`
+        // Here we derive slot.label from chordLabel() and fnLabel from func.cls.
+        {
+          const fnLabels: Record<string, string> = { tonic: 'T', subdom: 'SD', dom: 'D' };
+          const fnLabel =
+            dfn !== undefined && dfn.func.cls !== '' ? (fnLabels[dfn.func.cls] ?? '') : '';
+          const bars = slot.bars ?? 1;
+          const barCount = bars === 1 ? '1 ciclo' : `${bars} ciclos`;
+          const labelStr =
+            chordLabel(chord.rootPc, chord.qual as Quality) +
+            (fnLabel ? ' · ' + fnLabel : '') +
+            ' · ' +
+            barCount;
+          const labelCol =
+            dfn !== undefined && dfn.func.cls !== '' ? (FC[dfn.func.cls] ?? '#eaedf4') : '#eaedf4';
+          ctx.save();
+          ctx.font = '500 10px "IBM Plex Mono", monospace';
+          ctx.fillStyle = labelCol;
+          ctx.globalAlpha = 0.84;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(labelStr, x + 4, cy - ls * 2 - 3);
+          ctx.restore();
+        }
+      }
+    }
+
+    // ── Rest slot selection chrome ────────────────────────────────────────────
+    // Selection chrome for rest slots (same visual, no label since no chord label).
+    if (isSel && 'isRest' in slot && slot.isRest) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.62)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.strokeRect(x + 0.75, cy - ls * 2 + 0.75, w - 1.5, ls * 4 - 1.5);
+
+      const bx = x + w - 10;
+      const by = cy - ls * 2 - 11;
+      ctx.fillStyle = 'rgba(255,255,255,0.80)';
+      ctx.beginPath();
+      ctx.arc(bx, by, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0a0b12';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('×', bx, by + 0.5);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.36)';
+      ctx.fillRect(x + w - 4, cy - ls * 2, 3, ls * 4);
+
+      const bars = slot.bars ?? 1;
+      const barCount = bars === 1 ? '1 ciclo' : `${bars} ciclos`;
+      ctx.save();
+      ctx.font = '500 10px "IBM Plex Mono", monospace';
+      ctx.fillStyle = '#eaedf4';
+      ctx.globalAlpha = 0.84;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('silencio · ' + barCount, x + 4, cy - ls * 2 - 3);
+      ctx.restore();
     }
   });
 
-  // ── Hover label — deferred to step 10.14 ─────────────────────────────────
-  // Pointer tracking required. Comment placeholder per step spec §i.
-  // TODO step 10.14: draw hover label in slot's tonal-function color above slot.
+  // ── Move ghost + insertion indicator (step 10.14 §b) ─────────────────────
+  // Port of prototype paint() drag.mode==='moving' block (lines 375–394).
+  // gx = _moveDragPx - w/2 (centre the ghost on the drag position).
+  // Insertion indicator uses nearestInsertionIndex to find the boundary line x.
+  if (_moveActive && _moveFromIdx >= 0 && _moveFromIdx < progression.length) {
+    const moveSlot = progression[_moveFromIdx];
+    if (moveSlot !== undefined) {
+      const w = slotW(moveSlot);
+      const gx = _moveDragPx - w / 2;
+
+      // Dashed outline ghost (prototype lines 380–383):
+      // `ctx.strokeStyle='rgba(138,160,255,0.52)'; ctx.setLineDash([4,4]); strokeRect(...)`
+      ctx.strokeStyle = 'rgba(138,160,255,0.52)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(gx + 0.75, cy - ls * 2 + 0.75, w - 1.5, ls * 4 - 1.5);
+      ctx.setLineDash([]);
+
+      // Glowing white insertion indicator at nearest boundary (prototype lines 384–393).
+      // nearestInsertionIndex takes staff-relative x (no SL), same as computeSlotBounds x=0.
+      const ins =
+        _moveInsertIdx >= 0 ? _moveInsertIdx : nearestInsertionIndex(_moveDragPx - SL, _slotBounds);
+      // Boundary x: if ins >= bounds.length → after last slot; else at bounds[ins].x
+      let lx: number;
+      if (ins >= _slotBounds.length) {
+        const last = _slotBounds[_slotBounds.length - 1];
+        lx = last !== undefined ? SL + last.x + last.width : SL;
+      } else {
+        const b = _slotBounds[ins];
+        lx = b !== undefined ? SL + b.x : SL;
+      }
+      ctx.save();
+      ctx.shadowColor = 'white';
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(lx, cy - ls * 2 - 6);
+      ctx.lineTo(lx, cy + ls * 2 + 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 
   // ── (f) Playhead ──────────────────────────────────────────────────────────
   // Ported from prototype phX (Pentagrama.dc.html lines 182–186) + paint() playhead
@@ -799,6 +1028,205 @@ function loop(ts: DOMHighResTimeStamp): void {
   _rafHandle = requestAnimationFrame(loop);
 }
 
+// ── Pointer event handlers (step 10.14 §c, ADR 0015 D6) ─────────────────────
+//
+// Registered on the Canvas 2D <canvas> element in initPentagrama.
+// Removed in destroyPentagrama.
+//
+// All hit-tests pass (e.offsetX - SL) to the staff-hit.ts engine functions,
+// which operate in staff-relative coordinates (x=0 at first slot left edge).
+// A negative adjusted px (pointer in the clef gutter) safely returns null from
+// all hit-test functions (OQ-R3 verdict, ADR 0015 D6).
+//
+// Prototype parity:
+//   onDn  — port of prototype Pentagrama.dc.html lines 528–558 (onDn method).
+//           prototype's hitSlot(px) → replaced by hitTestSlot(px-SL, _slotBounds).
+//           prototype's slot.splice() → replaced by clearChordAt(idx) store action.
+//   onMv  — port of prototype lines 560–575 (onMv method).
+//           prototype's hitSlot(px) → replaced by hitTestSlot(px-SL, _slotBounds).
+//           prototype's clamp formula → replaced by clampBars (same math).
+//   onUp  — port of prototype lines 578–590 (onUp method).
+//           prototype's splice + insertPos → replaced by reorderSlot(fromIdx, toIdx).
+//
+// Store actions called (same as ProgressionStrip — ADR 0014 D1, A-10-32):
+//   clearChordAt(idx)     — delete slot; calls requeueLive().
+//   setChordBars(idx, bars) — resize commit; internally clamps via clampBars().
+//   reorderSlot(from, to) — move commit; calls requeueLive().
+//
+// NOTE: setChordBars already clamps internally via clampBars (session.ts line 897).
+// We also apply clampBars before calling setChordBars for the resize preview
+// (_resizePreviewBars) so the preview matches the committed value exactly.
+
+function onDn(e: PointerEvent): void {
+  if (_canvas === null) return;
+  const state = get(sessionStore);
+  const { harmony } = state;
+  // Belt-and-suspenders guard: do nothing if staff is not visible (ADR 0015 D6).
+  if (!(state.view === 'harmony' && harmony.subview === 'staff')) return;
+
+  const px = e.offsetX;
+  const py = e.offsetY;
+  const progression = harmony.progression;
+
+  // Recompute bounds at event time (progression may have changed since last paint).
+  // _slotBounds was computed in the last paint(); reuse it — it is always current
+  // because paint() runs on every rAF frame and updates _slotBounds first.
+
+  // (1) ✕ hit-test: if a slot is selected and pointer is within 13px of ✕ centre.
+  // ✕ centre = (x+w-10, cy-ls*2-11) in canvas coords (matches selection chrome).
+  // Prototype: `Math.hypot(px-(sx+sw-10), py-(cy-ls*2-11)) < 13` (lines 537–539).
+  if (_selectedSlotIdx !== null) {
+    const selSlot = progression[_selectedSlotIdx];
+    if (selSlot !== undefined) {
+      // Derive geometry matching paint() — use _H for ls/cy.
+      const ls = Math.max(24, Math.min(88, _H / 6));
+      const cy = _H / 2 - ls * 0.75;
+      const sx = slotX(_selectedSlotIdx, progression);
+      const sw = _resizeActive ? _resizePreviewBars * PX : slotW(selSlot);
+      const bx = sx + sw - 10;
+      const by = cy - ls * 2 - 11;
+      if (Math.hypot(px - bx, py - by) < 13) {
+        clearChordAt(_selectedSlotIdx);
+        _selectedSlotIdx = null;
+        _resizeActive = false;
+        _moveActive = false;
+        _pointerDownOnSelected = false;
+        return;
+      }
+
+      // (2) Resize handle hit-test (right-edge zone, handle width = 14px).
+      // hitTestResizeHandle takes staff-relative x (e.offsetX - SL).
+      // Returns the slotIndex of the handle, or null.
+      // Prototype: `if (px > sx + sw - 14 && px < sx + sw + 5)` (lines 541–544).
+      const adjPx = px - SL;
+      const resizeHit = hitTestResizeHandle(adjPx, _slotBounds, 14);
+      if (resizeHit === _selectedSlotIdx) {
+        _resizeActive = true;
+        _resizeStartPx = px;
+        _resizeStartBars = selSlot.bars ?? 1;
+        _resizePreviewBars = _resizeStartBars;
+        _pointerDownOnSelected = false;
+        _moveActive = false;
+        _canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+  }
+
+  // (3) Body hit-test: which slot was clicked?
+  // hitTestSlot takes staff-relative x (e.offsetX - SL). Returns slotIndex|null.
+  // Prototype: `const hit = this.hitSlot(px)` where hitSlot includes the SL offset.
+  // Here hitSlot was replaced by hitTestSlot(px-SL, bounds) (inventory OQ-R3).
+  const adjPx = px - SL;
+  const hit = hitTestSlot(adjPx, _slotBounds);
+  if (hit !== null) {
+    if (_selectedSlotIdx === hit) {
+      // Already selected → arm for move (4px threshold in onMv).
+      // Prototype: `if (selectedSlot === hit) { Object.assign(this.drag, {mode:'arm', ...})`
+      _pointerDownPx = px;
+      _pointerDownOnSelected = true;
+      _moveFromIdx = hit;
+      _moveActive = false;
+      _canvas.setPointerCapture(e.pointerId);
+    } else {
+      // New slot → select it.
+      _selectedSlotIdx = hit;
+      _pointerDownOnSelected = false;
+      _resizeActive = false;
+      _moveActive = false;
+    }
+  } else {
+    // (4) Outside all slots → deselect.
+    _selectedSlotIdx = null;
+    _resizeActive = false;
+    _moveActive = false;
+    _pointerDownOnSelected = false;
+  }
+}
+
+function onMv(e: PointerEvent): void {
+  const px = e.offsetX;
+  const state = get(sessionStore);
+  const { harmony } = state;
+
+  if (!(state.view === 'harmony' && harmony.subview === 'staff')) return;
+
+  if (_resizeActive) {
+    // Update resize preview (no store write — committed in onUp).
+    // Prototype: `const nd = Math.max(0.25, Math.min(8, Math.round((od + (px-sx)/PX)*4)/4))`
+    // We use clampBars which applies the same 0.25-step / [0.25,8] clamp.
+    _resizePreviewBars = clampBars(_resizeStartBars + (px - _resizeStartPx) / PX);
+    return;
+  }
+
+  if (_pointerDownOnSelected && !_moveActive) {
+    // Move arm: activate if pointer moved > 4px.
+    // Prototype: `else if (mode==='arm' && Math.abs(px-sx) > 4) { this.drag.mode='moving' }`
+    if (Math.abs(px - _pointerDownPx) > 4) {
+      _moveActive = true;
+      _moveDragPx = px;
+      _moveInsertIdx = nearestInsertionIndex(px - SL, _slotBounds);
+    }
+    return;
+  }
+
+  if (_moveActive) {
+    // Update move drag position and insertion index.
+    // Prototype: `this.drag.cx = px; this.forceUpdate()`
+    _moveDragPx = px;
+    _moveInsertIdx = nearestInsertionIndex(px - SL, _slotBounds);
+    return;
+  }
+
+  // Hover: update hover slot when not dragging.
+  // Prototype: `const h = this.hitSlot(px); if (h !== this.state.hoverSlot) setState({hoverSlot:h})`
+  const newHover = hitTestSlot(px - SL, _slotBounds);
+  _hoverSlotIdx = newHover;
+}
+
+function onUp(e: PointerEvent): void {
+  const state = get(sessionStore);
+  const { harmony } = state;
+
+  if (!(state.view === 'harmony' && harmony.subview === 'staff')) {
+    _resizeActive = false;
+    _moveActive = false;
+    _pointerDownOnSelected = false;
+    if (_canvas !== null) _canvas.releasePointerCapture(e.pointerId);
+    return;
+  }
+
+  if (_resizeActive && _selectedSlotIdx !== null) {
+    // Commit resize: write clamped bars to the store (setChordBars also clamps internally).
+    // Prototype: modifies slot.duration directly; we use the store action.
+    setChordBars(_selectedSlotIdx, _resizePreviewBars);
+  }
+
+  if (_moveActive && _moveFromIdx >= 0 && _moveInsertIdx >= 0) {
+    // Commit move: reorder only if the insertion index differs from current position.
+    // Prototype: `const fi = Math.max(0, ins > slot ? ins - 1 : ins)` then splice.
+    // reorderSlot handles absolute-index semantics (ADR 0014 D5).
+    // ADR 0014 D5: reorderSlot is a no-op if clampedFrom === clampedTo.
+    if (_moveInsertIdx !== _moveFromIdx) {
+      reorderSlot(_moveFromIdx, _moveInsertIdx);
+    }
+  }
+
+  // Reset all drag state.
+  _resizeActive = false;
+  _resizeStartPx = 0;
+  _resizeStartBars = 1;
+  _resizePreviewBars = 1;
+  _moveActive = false;
+  _moveFromIdx = -1;
+  _moveDragPx = 0;
+  _moveInsertIdx = -1;
+  _pointerDownPx = 0;
+  _pointerDownOnSelected = false;
+
+  if (_canvas !== null) _canvas.releasePointerCapture(e.pointerId);
+}
+
 // ── Public API (ADR 0015 D7) ─────────────────────────────────────────────────
 
 /**
@@ -839,6 +1267,14 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
   });
   _observer.observe(stageEl);
 
+  // Pointer event listeners (step 10.14 §c, ADR 0015 D6).
+  // Direct listeners on the Canvas 2D element (not routed through App.svelte).
+  // pointer-events:auto is set when visible (setPentagramaVisible); these listeners
+  // receive events only when the canvas is visible and interactive.
+  _canvas.addEventListener('pointerdown', onDn);
+  _canvas.addEventListener('pointermove', onMv);
+  _canvas.addEventListener('pointerup', onUp);
+
   // Start rAF loop.
   _rafHandle = requestAnimationFrame(loop);
 }
@@ -846,8 +1282,9 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
 /**
  * Clean up the Canvas 2D Pentagrama layer.
  *
- * Cancels the rAF loop, disconnects the ResizeObserver, and removes the canvas
- * from the DOM. Called from App.svelte onDestroy.
+ * Cancels the rAF loop, disconnects the ResizeObserver, removes the pointer
+ * event listeners (step 10.14 §c), and removes the canvas from the DOM.
+ * Called from App.svelte onDestroy.
  */
 export function destroyPentagrama(): void {
   if (_rafHandle !== 0) {
@@ -859,10 +1296,29 @@ export function destroyPentagrama(): void {
     _observer = null;
   }
   if (_canvas !== null) {
+    // Remove pointer event listeners (step 10.14 §c — symmetric with initPentagrama).
+    _canvas.removeEventListener('pointerdown', onDn);
+    _canvas.removeEventListener('pointermove', onMv);
+    _canvas.removeEventListener('pointerup', onUp);
     _canvas.remove();
     _canvas = null;
   }
   _ctx = null;
+
+  // Reset interaction state so a subsequent initPentagrama starts clean.
+  _selectedSlotIdx = null;
+  _hoverSlotIdx = null;
+  _resizeActive = false;
+  _resizeStartPx = 0;
+  _resizeStartBars = 1;
+  _resizePreviewBars = 1;
+  _moveActive = false;
+  _moveFromIdx = -1;
+  _moveDragPx = 0;
+  _moveInsertIdx = -1;
+  _pointerDownPx = 0;
+  _pointerDownOnSelected = false;
+  _slotBounds = [];
 }
 
 /**
