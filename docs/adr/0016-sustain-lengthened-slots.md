@@ -1,4 +1,4 @@
-# ADR 0016 — Sustain (not re-attack) for lengthened harmony slots
+# ADR 0016 — Each variable-duration harmony slot plays exactly once (sustain on lengthen, no over-sustain on shorten)
 
 - **Status:** Accepted
 - **Date:** 2026-06-15
@@ -50,9 +50,40 @@ extend ring-out but do **not** suppress the cycle-boundary re-strike.
 ## Decision
 
 In `melodyLine()`'s `arrange()` branch, append `.slow(numCycles)` to a **chord/arp**
-segment **iff `numCycles > 1`**. Unit (`= 1`) and sub-cycle (`< 1`) slots are left
-byte-identical — they never re-attacked, and `.slow(<1)` has fraught speed-up
-semantics not requested here. Rest segments (`[N, silence]`) are unchanged.
+segment **iff `numCycles !== 1`** (lengthened OR shortened). Rest segments
+(`[N, silence]`) and `bars === 1` slots are unchanged.
+
+### Why this cancels `arrange`'s internal `.fast`
+
+The pinned engine defines (paraphrased):
+
+```js
+arrange(...segs) {
+  const total = segs.reduce((s, [n]) => s + n, 0);
+  return timeCat(...segs.map(([u, p]) => [u, p.fast(u)])).slow(total);
+}
+```
+
+`arrange` **`.fast(u)`-es every segment internally**. For a lengthened slot that
+replays the chord `u` times (the re-attack); for a *shortened* slot it is
+`.fast(0.5)` = `.slow(2)`, which **stretches the chord past its 0.5-cycle slot,
+overlapping the next slot and de-syncing the loop** (the second bug the Pilot
+reported: shortened notes over-sustain, then alternate silent / overlapping across
+loops). Pre-applying `.slow(numCycles)` cancels the internal `.fast(numCycles)`
+exactly (`slow(u).fast(u) = identity`), so each segment plays its chord/arp once
+across its true span — for any `u`, lengthened or shortened. `bars === 1` needs
+nothing (`.fast(1)` is already identity), so it is left byte-identical.
+
+### Shortening — empirical confirmation (5 chords, last 2 at bars:0.5, over 2 loops)
+
+| | cyc 3 (shortened pair) | cyc 7 (2nd loop) |
+|---|---|---|
+| **without `.slow`** | `F 3.0→4.0` (full cycle!), `G 3.5→4.5` (overlaps cyc 4) | **silence** — loop de-synced |
+| **with `.slow(0.5)`** | `F 3.0→3.5`, `G 3.5→4.0` (each exactly ½ cycle, no overlap) | `F 7.0→7.5`, `G 7.5→8.0` — clean loop |
+
+Arpeggio shortened (`.slow(0.5)`): the 3-note arp compresses once into its 0.5-cycle
+slot (`f4 3.00→3.17, a4 3.17→3.33, c5 3.33→3.50`), adjacent to the next slot with no
+overlap.
 
 ### Why this does not violate the ADR 0005 `.fast`/`.slow` ban
 
@@ -74,18 +105,21 @@ No `.slow` is added to composition tracks or to `silence` segments.
 
 ## Consequences
 
-- A lengthened chord/arp now sounds for its full span with one attack — the
-  behavior the Pilot asked for.
+- A lengthened chord/arp now sounds for its full span with one attack; a shortened
+  one sounds once within its slot without over-sustaining or de-syncing the loop —
+  the behavior the Pilot asked for.
 - ADR 0010's "no `.fast`/`.slow`" framing is amended: the arrange path may carry a
-  per-segment `.slow(N)` for duration when `N > 1`.
-- Codegen output for `bars > 1` chord slots changes (adds `.slow(N)`); the one
-  affected golden test (codegen `Test 2`) was updated and two regression tests added.
-- Uniform-duration progressions (slowcat form) and `bars <= 1` slots are unchanged
+  per-segment `.slow(N)` for duration whenever `N !== 1`.
+- Codegen output for any `bars !== 1` chord slot changes (adds `.slow(N)`); the one
+  affected golden test (codegen `Test 2`) was updated and regression tests added for
+  lengthened (bars 2, 3) and shortened (bars 0.5) chords and a lengthened arp.
+- Uniform-duration progressions (slowcat form) and `bars === 1` slots are unchanged
   — byte-identical to pre-fix `main`.
 
 ## Verification
 
 - `pnpm test` — codegen golden + ADR-0016 regression tests green.
-- Behavioral proof: the onset-count table above, reproduced against `@strudel/web@1.0.3`.
+- Behavioral proof: the onset tables above, reproduced against `@strudel/web@1.0.3`
+  (lengthen, shorten, arp, and clean 2-loop looping).
 - Live acceptance: Pilot to confirm by ear in the browser that a doubled chord/arp
-  sustains across its span.
+  sustains across its span and a halved one ends on time without overlap.
