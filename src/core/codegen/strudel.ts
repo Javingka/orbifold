@@ -72,8 +72,11 @@ export function chordToStrudel(
  *   existing `<…>` slowcat form. Output is byte-identical to pre-Phase-02 `main`.
  * - Variable case (at least one chord has `bars !== 1`): emits an `arrange(…)` form
  *   where each chord is an independent segment with its own absolute cycle count and
- *   inline gain. No `.fast`/`.slow` — duration is expressed via the `numCycles`
- *   argument to `arrange()`, preserving the `setcps` invariant.
+ *   inline gain. A *lengthened* segment (`bars > 1`) is additionally `.slow(bars)`-ed
+ *   so the chord/arp SUSTAINS as one attack across its whole span instead of
+ *   re-attacking once per cycle (ADR 0016, amending ADR 0010). This `.slow` is a
+ *   scoped, per-segment DURATION expression — NOT the global TEMPO time-stretch the
+ *   `.fast`/`.slow` ban (ADR 0005) targets; tempo is still owned by `setcps`.
  *
  * Returns `''` when the progression is empty.
  *
@@ -117,10 +120,18 @@ export function melodyLine(
       // Rest slot — ADR 0012 D3: [bars, silence] with two leading spaces.
       return `  [${numCycles}, silence]`;
     }
-    // Chord slot (unchanged from ADR 0010).
+    // Chord slot. ADR 0016 (Phase 10, Pilot-authorized 2026-06-15): a lengthened
+    // slot (bars > 1) must SUSTAIN as a single attack across its span, not re-attack
+    // each cycle. arrange() replays its segment once per cycle, so we slow the segment
+    // by numCycles to stretch the one chord/arp across the whole span. Verified by
+    // hap-onset query in the live @strudel/web@1.0.3 engine (1 onset over N cycles, vs
+    // N onsets for the un-slowed baseline). Unit/sub-cycle slots (bars <= 1) are left
+    // byte-identical — they never re-attacked. .slow here is per-segment DURATION, not
+    // the global TEMPO time-stretch the ADR 0005 ban targets.
     const voicing = chordVoicing(slot.rootPc, slot.qual, octave).join(sep);
     const g = (slot.gain == null ? 0.6 : slot.gain).toFixed(2);
-    return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)]`;
+    const sustain = numCycles > 1 ? `.slow(${numCycles})` : '';
+    return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)${sustain}]`;
   });
   return `arrange(\n${segments.join(',\n')}\n)`;
 }
