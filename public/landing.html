@@ -137,7 +137,7 @@
           <div style="flex:0 0 auto;">{{ harmonyMotif }}</div>
         </div>
         <p style="font-size:15px; line-height:1.6; color:#b6bccb; margin:14px 0 0;">
-          Cada triángulo es un acorde: <span style="color:#eaedf4;">▲ mayor</span>, <span style="color:#eaedf4;">▼ menor</span>. Toca uno y aparecen sus vecinos <strong style="color:#8aa0ff;">P · L · R</strong> —las tres transformaciones que mueven una sola voz— y el camino mínimo hacia cada uno.
+          Cada triángulo es un acorde: <span style="color:#eaedf4;">▲ mayor</span>, <span style="color:#eaedf4;">▼ menor</span>. Toca uno y aparecen sus vecinos <strong style="color:#8aa0ff;">P · L · R</strong> —las tres transformaciones que mueven una sola voz— y el camino mínimo hacia cada uno. Alterna al <em>Pentagrama</em> para ver las voces de tu progresión sobre una pauta musical con líneas adicionales y accidentales.
         </p>
       </div>
       <div data-reveal style="padding:30px; border-radius:22px; background:rgba(20,23,30,0.56); backdrop-filter:blur(24px); border:1px solid rgba(86,207,196,.26); box-shadow:0 12px 44px rgba(0,0,0,.4);">
@@ -272,7 +272,7 @@
       <div data-reveal>
         <h2 style="font-family:'Fraunces',serif; font-weight:400; font-size:clamp(28px,3.6vw,44px); line-height:1.1; margin:0 0 18px;">No es una maqueta. Es un patch en vivo.</h2>
         <p style="font-size:16.5px; line-height:1.65; color:#b6bccb; margin:0 0 16px;">
-          Todo lo que tocas se traduce a <strong style="color:#8aa0ff;">Strudel</strong>, el lenguaje de live-coding musical. Abre el cajón de código y verás exactamente qué suena.
+          Todo lo que tocas se traduce a <strong style="color:#8aa0ff;">Strudel</strong>, el lenguaje de live-coding musical. Abre la vista <strong style="color:#8aa0ff;">Código Strudel</strong> y verás exactamente qué suena.
         </p>
         <p style="font-size:15px; line-height:1.6; color:#9097a6; margin:0;">
           Cambia un número, ejecútalo y escucha el resultado sin parar la música —o encólalo para que entre limpio en el próximo ciclo. El groove y la armonía pueden sonar solos o juntos en una misma <em>sesión</em>.
@@ -407,11 +407,11 @@ class Component extends DCLogic {
     // ── steps ──
     const steps=[
       {num:'01', color:amber,  title:'Elige tu clave', body:'Fija la raíz y el modo —mayor, menor, dórico, frigio, lidio…—. Todo lo que construyas vive dentro de esa tonalidad.'},
-      {num:'02', color:accent, title:'Toca la geometría', body:'En la vista Armonía, cada triángulo es un acorde: ▲ mayor, ▼ menor. Al elegir uno ves sus vecinos P·L·R y el voice-leading mínimo hacia ellos.'},
+      {num:'02', color:accent, title:'Toca la geometría', body:'En la vista Armonía, cada triángulo es un acorde: ▲ mayor, ▼ menor. Al elegir uno ves sus vecinos P·L·R y el voice-leading mínimo hacia ellos. Cambia al Pentagrama para ver las voces sobre una pauta musical.'},
       {num:'03', color:teal,   title:'Arma tu progresión', body:'Los acordes que tocas caen como fichas en la barra inferior. Arrástralas, reordénalas o súbelas y bájalas de grado.'},
       {num:'04', color:pink,   title:'Cambia a Ritmo', body:'Dibuja órbitas euclidianas E(k,n): k golpes repartidos en n pasos, con rotación. Visualízalas como reloj radial o pista lineal.'},
       {num:'05', color:amber,  title:'Pulsa ▶ Sesión', body:'Ritmo y armonía se combinan en un solo stack de Strudel y suenan juntos, en tempo. O escucha cada motor por separado.'},
-      {num:'06', color:accent, title:'Pide ayuda o edita el código', body:'El co-compositor IA propone variaciones que suenan al instante; o abre el cajón de código Strudel y modifícalo en vivo.'},
+      {num:'06', color:accent, title:'Pide ayuda o edita el código', body:'El co-compositor IA propone variaciones que suenan al instante; o cambia a la vista Código Strudel y modifícalo en vivo desde el editor integrado.'},
     ];
 
     return { heroVisual, ideaMotif, harmonyMotif, rhythmMotif, steps };
