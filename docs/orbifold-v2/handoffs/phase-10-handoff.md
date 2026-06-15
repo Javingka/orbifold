@@ -2247,6 +2247,216 @@ None.
 
 ### Planner Review
 
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-15
+**Iteration:** 1 of 5
+**Reason:** All 8 base checklist items pass. Judgment call on checks (a) and (b) resolved: "0 matches expected" is satisfied functionally. Independently verified by grep: check (a) yields 5 comment-only matches (App.svelte:157 retirement note; ProgressionStrip.svelte:141,147,185 formula-equivalence docs; voice-tracks.ts:51 pipeline description) — zero live import statements, confirmed by `ls src/render/harmony-staff-scene.ts` returning no such file and tsc reporting 0 errors. Check (b) yields 4 comment-only matches in stage.ts (lines 9,29,110,183 — file header, variable-list note, initStage inline comment, setHarmonySubview JSDoc) — zero live variable declarations or code references. These are retirement-notice and formula-provenance comments; removing them would destroy historically useful context with no safety gain. Step 10.16's own check table already codifies this tolerance ("0 matches or only the retired stub"). Checks (c)–(d): voice-tracks and staff-layout not in pentagrama-scene.ts — 0 matches confirmed. Check (e): registerMode in Header.svelte yields 3 comment-only matches (lines 47,404,407 — removal notes); setRegisterMode in App.svelte yields 0 matches; registerMode in core/audio yields 0 audio-path matches (voice-tracks.ts inert engine only). Check (f): core/** purity 0 matches. Check (g): AGPL headers confirmed on pentagrama-scene.ts, App.svelte, stage.ts, Header.svelte. Check (h): codegen diff empty. Gates: tsc 0 / lint 0 / vitest 447 / build exit 0.
+**Next action:** Dev proceeds to step 10.16
+
+---
+
+**Terminal commit:** `chore(harmony): Phase 10 step 10.15 — remove dead PIXI staff code, confirm cleanup`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+- Hash: self-referential — not recorded
+
+---
+
+## Step 10.16 — Quality gates + Acceptance Coverage Table + manual Checkpoint #5
+
+**Date:** 2026-06-15
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+No source files were modified in this step. All work is documentation and validation.
+
+---
+
+### 1. Static-analysis results table
+
+All commands run against the post-10.15 codebase from project root.
+
+| # | Check | Command | Actual output | Status |
+|---|---|---|---|---|
+| 1 | No PIXI/PIXI-ns imports in Canvas 2D renderer | `grep -n "from 'pixi\|from 'svelte\|from '@pixi" src/render/pentagrama-scene.ts` | line 62: `import { get } from 'svelte/store';` | **NOTED** — `svelte/store`'s `get()` is the Svelte store-read utility, not a Svelte component API. `pentagrama-scene.ts` is render-layer code (`src/render/`, not `src/core/`), so Svelte utility imports are permitted per methodology. No PIXI import present. |
+| 2 | `core/**` purity (no DOM/PIXI/Svelte/canvas) | `grep -rn "from 'pixi\|from 'svelte\|from '@pixi\|canvas" src/core/` | `/src/core/harmony/staff-hit.ts:19: * Pixel extent of a single progression slot on the staff canvas.` | **PASS** — the single match is a comment word ("canvas"), not a live import. Zero PIXI/Svelte imports in any `core/**` file. |
+| 3 | `harmony-staff-scene.ts` retired | `grep -rn "harmony-staff-scene" src/` | 5 matches — `ProgressionStrip.svelte:141,147,185`; `voice-tracks.ts:51`; `App.svelte:157` — all comments | **PASS** — comment-only matches (per step 10.15 Planner ruling and step 10.16 spec "comment-only matches acceptable"). No live import statements. File `src/render/harmony-staff-scene.ts` does not exist. |
+| 4 | `_staffContainer` removed from stage.ts | `grep -n "_staffContainer" src/render/stage.ts` | lines 9, 29, 110, 183 — all in comments | **PASS** — comment-only (step 10.15 Planner ruling: all 4 are retirement-notice and provenance comments, zero live code references). |
+| 5 | Register toggle removed | `grep -n "registerModeSeg\|setRegisterMode" src/ui/Header.svelte` | line 46: comment (`// setRegisterMode removed…`); line 404: comment (`Phase 10 redesign…`) | **PASS** — comment-only. No live HTML or JS references. |
+| 6 | `registerMode` not in `SavedHarmonySchema` | `grep -n "registerMode" src/lib/persistence.ts` | lines 227, 229 in function body (ephemeral defaults post-parse, outside `SavedHarmonySchema`) | **PASS** — `SavedHarmonySchema` is defined lines 52–60 and contains only `root`, `mode`, `octave`, `progression`. The matches are in the session-load reconstruction function setting ephemeral runtime defaults (explicitly documented with a comment referencing ADR 0011). |
+| 7 | `registerMode` not in agent schema | `grep -n "registerMode" src/agent/schema.ts` | (no output, exit 1) | **PASS** — 0 matches. |
+| 8 | `voice-tracks`/`computeVoiceTracks` not in pentagrama-scene | `grep -n "voice-tracks\|computeVoiceTracks" src/render/pentagrama-scene.ts` | (no output, exit 1) | **PASS** — 0 matches. |
+| 9 | Zero codegen changes | `git diff main...HEAD -- src/core/codegen/strudel.ts` | (empty) | **PASS** — empty diff. Audio is byte-identical before and after the entire Phase 10 redesign. |
+| 10 | AGPL-3.0 headers | `head -4 src/render/pentagrama-scene.ts` | line 1: `// SPDX-License-Identifier: AGPL-3.0-only` | **PASS** |
+| 10b | AGPL-3.0 — all modified files | `head -3` on App.svelte, stage.ts, Header.svelte, staff-hit.ts, session.ts, staff-hit.test.ts, session.test.ts | All have SPDX line in first 3 lines | **PASS** — confirmed by step 10.15 check (g) and step 10.11–10.14 individual handoffs |
+| 11 | `PX = 48` (local or imported) | `grep -n "const PX " src/render/pentagrama-scene.ts` | line 81: `const PX = 48; // pixels per cycle (= PX_PER_CYCLE from time-map.ts)` | **PASS** — local const `PX = 48` is a file-level constant matching `PX_PER_CYCLE` (canonical value from `time-map.ts`). Comment explicitly equates the two. ADR 0015 D3 records `PX = 48 = PX_PER_CYCLE`. |
+| 12 | `staff-hit.ts` pure engine (no PIXI/Svelte) | `grep -n "from 'pixi\|from 'svelte" src/core/harmony/staff-hit.ts` | (no output, exit 1) | **PASS** — 0 matches. Pure engine confirmed. |
+
+**Summary:** All 12 checks pass. Item 1 (`svelte/store`) is a real import and correctly present — render-layer code uses `get()` from `svelte/store` to read the session store in the rAF loop (ADR 0015 D7 binding contract); this is not a Svelte component API import and is permitted in `src/render/`. The step spec note "(note: comment-only)" was applied consistently per the Planner's step 10.15 ruling.
+
+---
+
+### 2. Automated gate results
+
+All four gates run fresh after step 10.15.
+
+| Gate | Command | Result |
+|---|---|---|
+| TypeScript | `pnpm exec tsc --noEmit` | **exit 0** — 0 errors |
+| Lint | `pnpm lint` | **exit 0** — 0 ESLint errors, 0 Prettier issues |
+| Tests | `pnpm exec vitest run` | **447 passed** (14 files), 0 failed — no regressions |
+| Build | `pnpm build` | **exit 0** — 1,071 kB bundle; pre-existing chunk-size and dynamic-import warnings only |
+
+Test count breakdown (447 total, unchanged from step 10.3 baseline):
+- `tests/harmony/staff-hit.test.ts`: 42
+- `tests/session.test.ts`: 55 (9 new `reorderSlot` tests from step 10.3)
+- `tests/harmony/staff-map.test.ts`: 73
+- `tests/harmony/voice-tracks.test.ts`: 18
+- `tests/harmony/voice-tracks-register.test.ts`: 24
+- `tests/euclid.test.ts`: 25
+- `tests/harmony/staff-layout.test.ts`: 32
+- `tests/codegen.test.ts`: 39
+- `tests/tonnetz.test.ts`: 31
+- `tests/persistence.test.ts`: 42
+- `tests/schema.test.ts`: 41
+- `tests/voice-leading.test.ts`: 8
+- `tests/harmony/time-map.test.ts`: 13
+- `tests/phase-anchor.test.ts`: 4
+
+---
+
+### 3. Complete Acceptance Coverage Table (A-10-01 through A-10-34)
+
+#### A-10-01 through A-10-10 (original PIXI-based slot editor — manual, visual behaviors superseded by A-10-20..A-10-32)
+
+Per the phase file §"Note on prior IDs A-10-01..A-10-10": the visual behaviors specified there (PIXI-based duration bars, bar grid, arp stagger, select/delete/resize/reorder) are **superseded** by the Canvas 2D redesign's equivalent behaviors (A-10-20..A-10-32). The automated IDs A-10-11..A-10-16 remain in force and are re-verified below.
+
+| ID | Description | Proof / Mapping | Type | Status |
+|---|---|---|---|---|
+| A-10-01 | Duration-extent bars (PIXI) — superseded by A-10-21 | Canvas 2D `pChord` gradient sustain bars + `pArp` staggered circles replace PIXI bars; A-10-21 is the authoritative acceptance criterion | SUPERSEDED | Covered by A-10-21 |
+| A-10-02 | Rest extent bars (PIXI) — superseded by A-10-23 | Canvas 2D `pRest` replaces PIXI rest bars; A-10-23 is the authoritative criterion | SUPERSEDED | Covered by A-10-23 |
+| A-10-03 | Bar grid (PIXI) — superseded by A-10-25 | Canvas 2D `drawGrid` replaces PIXI `drawBarGrid`; A-10-25 is the authoritative criterion | SUPERSEDED | Covered by A-10-25 |
+| A-10-04 | Chord/arp toggle (PIXI) — superseded by A-10-21/A-10-22 | Canvas 2D `pChord`/`pArp` replace PIXI branches; A-10-21 (chord) and A-10-22 (arp) are the authoritative criteria | SUPERSEDED | Covered by A-10-21 + A-10-22 |
+| A-10-05 | Select: border, ✕ button, resize handle (PIXI) — superseded by A-10-28 | Canvas 2D selection chrome (`if (isSel)` block) replaces PIXI `drawAffordances`; A-10-28 is the authoritative criterion | SUPERSEDED | Covered by A-10-28 |
+| A-10-06 | Delete via ✕ (PIXI) — superseded by A-10-32 | `clearChordAt` called from Canvas 2D `onDn`; A-10-32 is the authoritative criterion | SUPERSEDED | Covered by A-10-32 |
+| A-10-07 | Resize: `setChordBars`, strip updates (PIXI) — superseded by A-10-32 | `setChordBars` called from Canvas 2D `onUp`; A-10-32 is the authoritative criterion | SUPERSEDED | Covered by A-10-32 |
+| A-10-08 | Time-move reorder (PIXI) — superseded by A-10-29 + A-10-32 | `reorderSlot` called from Canvas 2D `onUp`; move ghost rendered in Canvas 2D; A-10-29 + A-10-32 are the authoritative criteria | SUPERSEDED | Covered by A-10-29 + A-10-32 |
+| A-10-09 | Playhead cyclic + ProgressionStrip cursor sync (PIXI) — superseded by A-10-26 | Canvas 2D playhead uses shared `getVisualPhaseAnchor()` (same formula as ProgressionStrip); A-10-26 is the authoritative criterion | SUPERSEDED | Covered by A-10-26 |
+| A-10-10 | ProgressionStrip parity (PIXI) — superseded by A-10-32 | Same store actions used by both surfaces; A-10-32 is the authoritative criterion | SUPERSEDED | Covered by A-10-32 |
+
+#### A-10-11 through A-10-16 (retained automated — re-verified)
+
+| ID | Description | Proof | Type | Status |
+|---|---|---|---|---|
+| A-10-11 | `staff-hit.ts` pure engine (no DOM/PIXI/Svelte); all 4 exports unit-tested (42 tests); no regressions | `grep -n "from 'pixi\|from 'svelte" src/core/harmony/staff-hit.ts` → 0 matches; `pnpm exec vitest run` → 447 passed including 42 staff-hit tests | automated | **COVERED** |
+| A-10-12 | `reorderSlot` store action unit-tested; correct semantics; `requeueLive()`; no-op when fromIdx === toIdx | `tests/session.test.ts` — 9 `reorderSlot` tests; all pass in 447-test suite | automated | **COVERED** |
+| A-10-13 | `tsc --noEmit` 0 errors, `pnpm lint` 0 errors, `pnpm test` ≥ 447 passed, `pnpm build` exit 0 | Fresh run §2 above: tsc exit 0, lint exit 0, 447 passed, build exit 0 | automated | **COVERED** |
+| A-10-14 | `registerMode` and `subview` absent from `SavedHarmonySchema` and `agent/schema.ts` | `SavedHarmonySchema` (persistence.ts lines 52–60): contains only `root`, `mode`, `octave`, `progression`. grep check #6 above confirms matches are only in reconstruction function body, not schema definition. `agent/schema.ts`: 0 matches (check #7 above) | automated (grep) | **COVERED** |
+| A-10-15 | `git diff main...HEAD -- src/core/codegen/strudel.ts` empty (zero codegen changes) | Check #9 above: empty diff confirmed | automated (git diff) | **COVERED** |
+| A-10-16 | AGPL-3.0 header in all new and modified source files | Check #10/#10b above: all 9 modified/new source files carry `SPDX-License-Identifier: AGPL-3.0-only` | automated (head -2) | **COVERED** |
+
+#### A-10-17 through A-10-34 (Canvas 2D redesign)
+
+| ID | Description | Implementing code | Type | Status |
+|---|---|---|---|---|
+| A-10-17 | Canvas 2D `<canvas>` mounts in `#stage`; DPR scaling `Math.min(dpr,2)`; visible only when `view==='harmony' && subview==='staff'`; `display:none/pointer-events:none` otherwise; rAF + ResizeObserver lifecycle; no memory leaks on destroy | `initPentagrama` / `destroyPentagrama` / `setPentagramaVisible` / `setup()` in `pentagrama-scene.ts`; `tsc` 0 errors (type-checked); wiring in `App.svelte` (`initPentagrama(stageEl)` in `onMount`, `destroyPentagrama()` in `onDestroy`, `setPentagramaVisible(...)` in store subscription) | MANUAL + tsc | **tsc PASS; visual** — Checkpoint #5 item 1 (sub-items: blank canvas when staff, invisible otherwise, register toggle absent) |
+| A-10-18 | PIXI staff wiring removed from `App.svelte`; `harmony-staff-scene.ts` retired/deleted; `_staffContainer` removed from `stage.ts`; 0 tsc errors | `harmony-staff-scene.ts` deleted (checks #3); 6 imports + 9 call sites removed from `App.svelte` (step 10.11); 4 `_staffContainer` touch-points removed from `stage.ts` (checks #4); `tsc` 0 errors (§2) | automated (tsc) | **COVERED** |
+| A-10-19 | Register toggle removed from `Header.svelte`; 0 references to `setRegisterMode`/`registerModeSeg` in HTML; no schema/agent breakage | `#registerModeSeg` block deleted (check #5); `SavedHarmonySchema` absent (check #6); `agent/schema.ts` absent (check #7); `tsc` 0 errors | automated (grep + tsc) | **COVERED** |
+| A-10-20 | Staff geometry: responsive `LS = max(24, min(88, H/6))`; `cy = H/2−LS×0.75`; 5 staff lines; `SL = 76px`; staff content matches prototype layout | `drawStaffLines()` in `pentagrama-scene.ts`; constants in `paint()` body; line 80–91 of the file | MANUAL | Checkpoint #5 item 1 |
+| A-10-21 | Chord mode: attack→decay gradient sustain bars + gemstone onset circles + accidentals + ledger lines; active-slot pulse and glow | `pChord()` with `isAct` branch (step 10.12 + 10.13) | MANUAL | Checkpoint #5 item 2 |
+| A-10-22 | Arp mode: per-cycle stagger (0, PX/3, 2×PX/3 within each cycle, repeated `ceil(bars)` times); connector line; active pulse. Divergence from prototype `pArp` documented (ADR 0015 D5) | `pArp()` with corrected per-cycle stagger + `isAct` pulse (step 10.12 + 10.13) | MANUAL | Checkpoint #5 item 4 |
+| A-10-23 | Rest rendering: rounded-rect `rgba(140,145,162,0.38)`, height BH=10, inset 5px; center tick `rgba(255,255,255,0.30)` 1.5px 22px height | `pRest()` (ported verbatim from prototype lines 500–506) | MANUAL | Checkpoint #5 item 3 |
+| A-10-24 | Tonal-function badges (T/SD/D) at 42% opacity in voice color; non-diatonic chords have no badge | Badge section in `paint()` — `diatonicLookup(root, mode)` → `func.cls` key → `{tonic:'T',subdom:'SD',dom:'D'}[cls]` at 42% opacity; `cls===''` → no badge | MANUAL | Checkpoint #5 item 5 |
+| A-10-25 | Time grid: beat lines at 12px (`rgba(255,255,255,0.028)`), bar lines at 48px (`rgba(255,255,255,0.08/0.22)`), bar numbers IBM Plex Mono 500 8.5px; vertical span `cy±ls×2.6` | `drawGrid()` (ported from prototype lines 277–298) | MANUAL | Checkpoint #5 item 6 |
+| A-10-26 | Playhead: glowing vertical line (`rgba(255,255,255,0.88)`, 1.5px, `shadowBlur=14`), arrowhead triangle; position via `getVisualPhaseAnchor()`; cyclic `((rawX%totalW)+totalW)%totalW` with SL offset; hidden when `nowPlaying.source===null`; synced with ProgressionStrip cursor | Playhead block in `paint()` (step 10.13) — mirrors ProgressionStrip.svelte lines 190–195 exactly | MANUAL | Checkpoint #5 item 8 (playing portion), item 9 (not-playing gate) |
+| A-10-27 | Active-slot spotlight: `linear-gradient` in tonal-function color at 7–11% opacity, breathing at `sin(ts/820×2π)`; ambient background breathe (`rgba(138,160,255, 0.018+0.008×sin(ts/3400×2π))`) on every frame | Breathe section + spotlight section in `paint()` (step 10.13) | MANUAL | Checkpoint #5 item 7 |
+| A-10-28 | Selection chrome: `rgba(255,255,255,0.62)` 1.5px border rect; ✕ circle (`r=7.5`); resize grip (3px); label above slot | `if (isSel)` block in `paint()` slot loop (step 10.14) — port of prototype lines 346–372 | MANUAL | Checkpoint #5 item 11 |
+| A-10-29 | Move ghost: dashed `rgba(138,160,255,0.52)` 1.5px outline at drag position; glowing white insertion indicator line via `nearestInsertionIndex` | Move ghost block after slot loop in `paint()` (step 10.14) — port of prototype lines 375–394 | MANUAL | Checkpoint #5 item 14 (ghost portion) |
+| A-10-30 | Hover: `rgba(255,255,255,0.020)` rect + chord label above in tonal-function color at 65% opacity | `if (isHov)` blocks in `paint()` slot loop (step 10.14) — port of prototype lines 315–329 | MANUAL | Checkpoint #5 item 10 |
+| A-10-31 | Right vignette: `linear-gradient(W−90→W)` transparent to `rgba(7,8,9,0.52)`, 90px, drawn last | Vignette block at end of `paint()` (step 10.12) — port of prototype lines 413–415 | MANUAL | Checkpoint #5 item 1 (visual appearance) |
+| A-10-32 | All interactions call `clearChordAt` (✕), `setChordBars` (resize), `reorderSlot` (reorder); ProgressionStrip reflects all changes; both playheads stay in sync | `onDn`/`onUp` handlers in `pentagrama-scene.ts` (step 10.14) — same store actions as ProgressionStrip | MANUAL | Checkpoint #5 items 12 (delete), 13 (resize), 14 (reorder) |
+| A-10-33 | `git diff main...HEAD -- src/core/codegen/strudel.ts` empty (zero codegen changes) | Check #9 above: empty diff confirmed | automated (git diff) | **COVERED** |
+| A-10-34 | All quality gates green: tsc 0 errors, lint 0 errors, test ≥ 447, build exit 0 | Fresh run §2 above: all four gates green | automated | **COVERED** |
+
+**Coverage summary:**
+- A-10-01..A-10-10 (original PIXI): superseded by Canvas 2D equivalents (A-10-20..A-10-32).
+- A-10-11..A-10-16 (retained automated): all **COVERED** by code and running gate suite.
+- A-10-17..A-10-32 (Canvas 2D redesign): A-10-18, A-10-19, A-10-33, A-10-34 fully automated and **COVERED**; A-10-17 partially covered (tsc pass; visual portion → Checkpoint #5); A-10-20..A-10-32 (visual/interaction) → implementing code present, all deferred to Pilot Checkpoint #5.
+- No gaps. All 34 IDs accounted for (10 superseded with explicit mapping, 6 automated-covered, 18 manual).
+
+---
+
+### 4. Manual Checkpoint #5 checklist (16 items, verbatim from phase spec)
+
+Dev server available at http://localhost:5175/orbifold/ (or `pnpm dev`). Navigate to Armonía → Pentagrama sub-toggle.
+
+1. Staff lines (5), clef glyph, and grid visible in Pentagrama sub-view. Tonnetz sub-view unchanged.
+2. Chord mode: each chord slot shows three colored sustain bars (attack→decay gradient) with gemstone onset circles at left edge. Voice colors correct (tonic/subdom/dom).
+3. Rest slots: grey rounded-rect bars at staff center.
+4. Arp mode: three staggered onset circles per cycle with diagonal connector line.
+5. Tonal-function badges (T / SD / D) at bottom of each slot in voice color.
+6. Bar numbers above the grid; beat/bar grid lines at correct intervals.
+7. Ambient breathe visible on canvas background.
+8. Playing a progression: active-slot spotlight pulses; gemstone onsets glow; playhead advances cyclically; stays in sync with ProgressionStrip cursor.
+9. Playhead hidden when not playing.
+10. Hover: chord label appears above slot on hover.
+11. Click to select: white border, ✕ circle button, resize grip appear.
+12. ✕ deletes the slot; ProgressionStrip reflects immediately.
+13. Resize grip: drag changes slot width; ProgressionStrip segment width matches.
+14. Body drag (4px threshold): ghost bar and insertion indicator appear; drop reorders; ProgressionStrip reflects new order.
+15. Register toggle absent from Header.
+16. No JavaScript errors in console.
+
+---
+
+### Files touched
+
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry (step 10.16).
+
+No source files modified.
+
+### Validation evidence
+
+All automated IDs verified — see tables in §1 (static analysis) and §2 (gate results). Manual IDs have implementing code present from steps 10.11–10.14 and are deferred to Pilot Checkpoint #5. No gaps.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed (14 files), 0 failed
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by this phase)
+
+### Decisions made (if any)
+
+None. This step is documentation and validation only.
+
+### Proposed Decisions Register entries (if any)
+
+- **P1 (from step 10.10)** — Phase 08 Decisions Register entry "STEP_PX = 16 / HALF_STEP_PX = 8 / staffBaseY" referenced `harmony-staff-scene.ts` as the authoritative renderer. With that file retired, the Pilot should consider marking that entry superseded, with a new entry pointing to ADR 0015 D3 (responsive geometry: `LS = max(24, min(88, H/6))`, `cy = H/2−LS×0.75`).
+- **P2 (from step 10.10)** — The Phase 08 Register entries ("registerMode is visual-only" and "harmony.subview and harmony.registerMode are ephemeral") remain technically accurate but the toggle no longer exists in the UI. A one-sentence addendum ("The Header.svelte toggle was removed in Phase 10 step 10.11") would help future Devs.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- No source files modified. Phase 10 redesign complete pending Pilot Checkpoint #5 manual acceptance.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build exit 0.
+- Branch: `orbifold-v2/phase-05` (the branch for the Phase 10 redesign work).
+
+### Next-step context
+
+This is the final step of Phase 10 redesign (and Phase 10 overall). After Pilot Checkpoint #5 manual acceptance:
+- If approved: Phase 10 is closed. The Pilot should merge and begin scoping Phase 11.
+- If the Pilot finds regressions: return to the relevant step for a targeted fix.
+
+**This step ends at Pilot Checkpoint #5. Dev stops here and does not push to origin until after the Pilot's manual acceptance.**
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**
@@ -2257,7 +2467,6 @@ None.
 
 ---
 
-**Terminal commit:** `chore(harmony): Phase 10 step 10.15 — remove dead PIXI staff code, confirm cleanup`
+**Terminal commit:** `feat(harmony): Phase 10 step 10.16 — quality gates and manual acceptance (Canvas 2D Pentagrama)`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
-- Hash: self-referential — not recorded
