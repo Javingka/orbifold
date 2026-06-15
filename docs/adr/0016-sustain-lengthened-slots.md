@@ -96,6 +96,27 @@ The geometry and voice-leading are unaffected: the same voicing sounds, once, fo
 its intended span. The Pilot ratified this scoping ("acotar el veto solo al tempo")
 in advance, conditional on the empirical verification above — which passed.
 
+### Visual consequence — Pentagrama arpeggio rendering (supersedes ADR 0015 D5)
+
+The audio change has a matching visual obligation. The Pentagrama's arpeggio
+renderer (`pArp` in `src/render/pentagrama-scene.ts`) drew the arpeggio group
+**once per cycle** (`cycleCount = Math.ceil(bars)`), an intentional divergence
+(ADR 0015 D5) chosen to mirror the *old* per-cycle re-attack audio: a 2-bar arp
+was drawn twice. Now that the arp plays **once across its whole span**, that visual
+repetition is wrong — the Pilot reported it directly ("el sonido está ok, es solo
+la representación visual que no acompaña … que está solamente sonando 1 vez cada
+nota del acorde a lo largo del tiempo del acorde").
+
+`pArp` is revised to a **per-slot spread**: the `n` voices divide the slot into `n`
+equal horizontal portions (`seg = w / n`), each voice rendered once at its onset
+fraction (`vi/n`) with its own sustain bar across that portion — restoring the
+prototype's original behavior (Pentagrama.dc.html lines 468–476) and matching the
+audio onsets (verified `c@0→⅓, e@⅓→⅔, g@⅔→1` for a 1-cycle arp). **ADR 0015 D5's
+per-cycle stagger is superseded.** `pChord` already drew one full-width sustain bar
+per voice (correct for a sustained block chord) and is unchanged. This is render-only
+(Canvas 2D, no unit tests); verified via `tsc`/`lint`/`build` clean and Pilot visual
+acceptance.
+
 ### Scope boundary — composition/rhythm `arrange` is NOT affected
 
 The composition-track codegen also uses `arrange([bars, code])` for drum/groove

@@ -460,100 +460,109 @@ function pChord(
 // ── Arpeggio slot rendering ───────────────────────────────────────────────────
 
 /**
- * Render an arpeggio slot: per-cycle staggered onset circles + connector.
+ * Render an arpeggio slot: the voices spread ONCE across the whole slot, in
+ * sequence, each with its own sustain bar + gemstone onset circle + connector.
  *
- * INTENTIONAL DIVERGENCE from prototype pArp (Pentagrama.dc.html lines 468–476):
- * The prototype uses a per-SLOT spread: `span = w - 24`, each voice at
- * `x + 12 + (vi / max(n-1, 2)) * span` — spread once across the entire slot.
+ * REVISED (ADR 0016, 2026-06-15): per-SLOT spread — restores the prototype's
+ * original behavior (Pentagrama.dc.html lines 468–476: voices spread once across
+ * the entire slot). The earlier per-CYCLE stagger (ADR 0015 D5) repeated the
+ * arpeggio group once per cycle to mirror the old per-cycle re-attack audio. ADR
+ * 0016 made the arpeggio play exactly ONCE across its whole span (`.slow(bars)`),
+ * so the visual must match: each note sounds once, spread across the slot's time —
+ * not repeated per cycle. The audio onsets land at vi/n of the span (verified:
+ * a 1-cycle arp = c@0→⅓, e@⅓→⅔, g@⅔→1), so each voice gets the [vi/n, (vi+1)/n]
+ * horizontal portion of the slot.
  *
- * This implementation uses per-CYCLE stagger (ADR 0015 D5, corrected behavior):
- * For each cycle in 0..ceil(bars)-1:
- *   voice 0: x + cycleIdx * PX
- *   voice 1: x + cycleIdx * PX + PX/3  (≈16px)
- *   voice 2: x + cycleIdx * PX + 2*PX/3 (≈32px)
- *
- * Rationale: Strudel arp codegen = note("A B C") inside arrange([bars, code]).
- * A/B/C play in each cycle. A 2-bar slot plays the group twice — the per-cycle
- * stagger makes this rhythm visible (per phase-10-redesign.md lines 100–108 and
- * ADR 0015 D5). The PIXI staff scene (commit 0c3d595) set this precedent.
- *
- * Step 10.13: added `isAct` + `ts` parameters for onset pulse and glow.
- * When isAct=true: onset circles pulse (same formula as pChord) and glow.
- *
+ * Step 10.13 carry-over: `isAct` + `ts` drive the onset pulse and glow.
  * octave: sourced from HarmonyState.octave (Chord type has no octave field).
  */
 function pArp(
   ctx: CanvasRenderingContext2D,
   slot: Chord,
   x: number, // slot left edge (canvas coords, includes SL)
+  w: number, // slot pixel width
   H: number,
   ls: number,
   octave: number,
   isAct: boolean,
   ts: DOMHighResTimeStamp
 ): void {
-  // Active pulse: radius scale (prototype pArp lines 469–470, same formula as pChord).
   const pulse = isAct ? 1 + 0.16 * Math.sin((ts / 700) * Math.PI * 2) : 1;
-  const bars = slot.bars ?? 1;
-  const cycleCount = Math.ceil(bars);
   const voices = chordVoicing(slot.rootPc, slot.qual as Quality, octave);
+  const n = voices.length;
+  if (n === 0) return;
 
-  for (let cycleIdx = 0; cycleIdx < cycleCount; cycleIdx++) {
-    const cycleStart = x + cycleIdx * PX;
+  // Each voice occupies the [vi/n, (vi+1)/n] horizontal portion of the slot,
+  // mirroring where it actually sounds (audio onset at vi/n of the span).
+  const seg = w / n;
+  const pts = voices.map((noteName, vi) => {
+    const midi = noteNameToMidi(noteName);
+    const { pos, sh } = m2p(midi);
+    return { x0: x + vi * seg + 4, segW: seg, cy: ny(pos, H, ls), pos, sh, vi };
+  });
 
-    // Compute per-cycle onset x positions and y positions.
-    // Per-cycle stagger: voice i at cycleStart + (i/3)*PX (ADR 0015 D5):
-    //   voice 0: cycleStart + 0
-    //   voice 1: cycleStart + PX/3  ≈ cycleStart + 16 px
-    //   voice 2: cycleStart + 2*PX/3 ≈ cycleStart + 32 px
-    const pts = voices.map((noteName, vi) => {
-      const midi = noteNameToMidi(noteName);
-      const { pos } = m2p(midi);
-      return {
-        cx: cycleStart + (vi / 3) * PX, // 0, PX/3, 2*PX/3
-        cy: ny(pos, H, ls),
-        pos,
-      };
-    });
+  // Sustain bars: one per note, sequential — shows each note sounding once across
+  // its portion of the slot's time (attack→decay gradient, same style as pChord).
+  pts.forEach((p) => {
+    const col = VC[p.vi] ?? '#8aa0ff';
+    ldg(ctx, p.pos, p.x0 + OR, H, ls);
+    const a = isAct ? 0.88 : 0.72;
+    const bw = Math.max(4, p.segW - 8);
+    const g = ctx.createLinearGradient(p.x0, 0, p.x0 + bw, 0);
+    g.addColorStop(0, col + ha(a));
+    g.addColorStop(0.45, col + ha(a * 0.625));
+    g.addColorStop(1, col + ha(a * 0.205));
+    ctx.fillStyle = g;
+    rr(ctx, p.x0, p.cy - BH / 2, bw, BH, 2);
+    ctx.fill();
+  });
 
-    // Connector line between the three circles within this cycle
-    // Ported from prototype pArp lines 479–484 (adapted for per-cycle positions).
-    if (pts.length >= 2) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.26)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      const first = pts[0];
-      if (first !== undefined) {
-        ctx.moveTo(first.cx, first.cy);
-        for (let i = 1; i < pts.length; i++) {
-          const pt = pts[i];
-          if (pt !== undefined) ctx.lineTo(pt.cx, pt.cy);
-        }
+  // Connector line between the onset circles (sequence cue).
+  // Ported from prototype pArp lines 479–484 (per-slot positions).
+  if (pts.length >= 2) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.26)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const first = pts[0];
+    if (first !== undefined) {
+      ctx.moveTo(first.x0 + OR, first.cy);
+      for (let i = 1; i < pts.length; i++) {
+        const pt = pts[i];
+        if (pt !== undefined) ctx.lineTo(pt.x0 + OR, pt.cy);
       }
-      ctx.stroke();
     }
-
-    // Draw onset circles and ledger lines.
-    // Ported from prototype pArp lines 486–496.
-    // Step 10.13: apply isAct pulse + glow (prototype pArp lines 489–491, 493).
-    pts.forEach((p, vi) => {
-      ldg(ctx, p.pos, p.cx, H, ls);
-      const col = VC[vi] ?? '#8aa0ff';
-      ctx.save();
-      if (isAct) {
-        ctx.shadowColor = col;
-        ctx.shadowBlur = 7 + 5 * Math.abs(Math.sin((ts / 700) * Math.PI * 2));
-      }
-      ctx.fillStyle = 'rgba(8,10,16,0.95)';
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.7;
-      ctx.beginPath();
-      ctx.arc(p.cx, p.cy, OR * pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    });
+    ctx.stroke();
   }
+
+  // Onset circles + accidentals.
+  // Ported from prototype pArp lines 486–496; isAct pulse + glow from step 10.13.
+  pts.forEach((p) => {
+    const col = VC[p.vi] ?? '#8aa0ff';
+    ctx.save();
+    if (isAct) {
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 7 + 5 * Math.abs(Math.sin((ts / 700) * Math.PI * 2));
+    }
+    ctx.fillStyle = 'rgba(8,10,16,0.95)';
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.7;
+    ctx.beginPath();
+    ctx.arc(p.x0 + OR, p.cy, OR * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    if (p.sh) {
+      ctx.save();
+      ctx.font = '11px "IBM Plex Mono", monospace';
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.82;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('♯', p.x0 - 5, p.cy);
+      ctx.restore();
+    }
+  });
 }
 
 // ── Rest slot rendering ───────────────────────────────────────────────────────
@@ -784,9 +793,10 @@ function paint(ts: DOMHighResTimeStamp): void {
         // the global voicing octave per ADR 0015 D4 / inventory OQ-R2).
         pChord(ctx, chord, x, w, H, ls, octave, isAct, ts);
       } else {
-        // Arpeggio mode: per-cycle stagger (ADR 0015 D5 divergence) + isAct pulse (step 10.13).
-        // Prototype pArp lines 468–476 used per-slot spread; we use per-cycle.
-        pArp(ctx, chord, x, H, ls, octave, isAct, ts);
+        // Arpeggio mode: per-slot spread — each note sounds once across its portion of
+        // the slot (ADR 0016 revision; restores prototype pArp lines 468–476, supersedes
+        // the ADR 0015 D5 per-cycle stagger) + isAct pulse (step 10.13).
+        pArp(ctx, chord, x, w, H, ls, octave, isAct, ts);
       }
 
       // ── Hover label (step 10.14 §b — port of prototype paint() lines 320–329) ─
