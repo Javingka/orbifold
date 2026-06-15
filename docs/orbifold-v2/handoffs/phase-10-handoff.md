@@ -2075,5 +2075,189 @@ Implemented the full slot interaction model on the Canvas 2D layer in `src/rende
 
 **Planner: STOP — do not auto-continue to step 10.15.**
 
+### Planner Review
+
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-14
+**Iteration:** 1 of 5
+**Reason:** All 13 interaction state vars present. `_slotBounds` recomputed via `computeSlotBounds(progression, PX)` at paint start; selection guard (ADR 0014 Consequence 3) resets out-of-range `_selectedSlotIdx`. Paint renders hover rect+label, selection chrome (border/✕ circle/grip/label), move ghost (dashed outline + glowing insertion indicator via `nearestInsertionIndex`), and resize preview (`_resizePreviewBars * PX`, no store write during drag). CRITICAL SL offset verified at all 6 hit-test call sites (onDn lines 1101/1121, onMv lines 1168/1177/1183, paint line 948) — raw `px - SL` passed consistently; `computeSlotBounds` uses `PX = 48`. Store actions: only `clearChordAt`, `setChordBars`, `reorderSlot` — no new actions introduced; `setChordBars` clamps internally; `clampBars` applied to resize preview so preview matches committed value exactly. `setPointerCapture` in onDn for resize and move-arm; `releasePointerCapture` in onUp — correctly paired. ✕ hit-test uses consistent `cy = H/2 − ls*0.75` in both render and handler (diverges from prototype's `H/2`, but internally self-consistent — both render and hit-test use the same formula, so the button appears where it is clicked). `staff-hit.ts` confirmed unchanged. Listeners removed in `destroyPentagrama`. Prototype parity fully cited with line ranges; `hitSlot`/`insertPos` substitution documented. Coverage Table maps A-10-28/29/30/32 correctly as manual, deferred to Checkpoint #5; A-10-33/34 confirmed. All gates green (tsc 0 / lint 0 / vitest 447 / build 0; codegen diff empty).
+**Next action:** Dev proceeds to step 10.15
+
 **Terminal commit:** `feat(harmony): Phase 10 step 10.14 — interactions: select, delete, resize, reorder, hover`
+
+---
+
+## Step 10.15 — Cleanup: remove dead PIXI staff code, confirm `harmony-staff-scene.ts` retired
+
+**Date:** 2026-06-14
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+All eight static-analysis checks (a)–(h) executed against the post-10.14 codebase. No source
+files required modification — all clean states were established by steps 10.11–10.14. This
+step is verification-only. Handoff entry is the only output.
+
+**(a) `harmony-staff-scene.ts` retirement confirmed.**
+`grep -rn "harmony-staff-scene" src/` returned 5 matches, all in **comments** (not import
+statements or live code):
+
+- `src/ui/ProgressionStrip.svelte` lines 141, 147, 185 — historical method-documentation
+  comments noting the old `_staffWidth` formula equivalence.
+- `src/core/harmony/voice-tracks.ts` line 51 — comment describing the old visual pipeline.
+- `src/app/App.svelte` line 157 — comment in the resize handler noting the retirement.
+
+The file `src/render/harmony-staff-scene.ts` does not exist (`ls` → no such file or directory).
+No live import of `harmony-staff-scene` exists anywhere in the codebase. PASS.
+
+**(b) `_staffContainer` removed from `stage.ts` confirmed.**
+`grep -n "_staffContainer" src/render/stage.ts` returned 4 matches, all in **comments**
+(file header lines 9–10, variable-list comment line 29, inline comment line 110, JSDoc
+comment line 183). No live variable declaration, no live code reference. PASS.
+
+**(c) `voice-tracks` not imported by Canvas 2D layer.**
+`grep -n "voice-tracks" src/render/pentagrama-scene.ts` → 0 matches.
+`grep -n "computeVoiceTracks" src/render/pentagrama-scene.ts` → 0 matches.
+`voice-tracks.ts` remains in `src/core/harmony/` (inert — not consumed by the Canvas 2D
+renderer, per ADR 0015 D2). PASS.
+
+**(d) `staff-layout.ts` not imported by Canvas 2D layer.**
+`grep -n "staff-layout" src/render/pentagrama-scene.ts` → 0 matches.
+The Canvas 2D layer uses `chordVoicing` + inline `m2p` (ADR 0015 D4), not `computeStaffLayout`. PASS.
+
+**(e) Register toggle audit.**
+`grep -n "registerMode" src/ui/Header.svelte` → 3 matches, all in **comments** (lines 47, 404,
+407 — retirement notes left from step 10.11). No live HTML or JS references to `registerMode`
+or `#registerModeSeg` in Header.
+`grep -n "setRegisterMode" src/app/App.svelte` → 0 matches.
+`grep -rn "registerMode" src/core/ src/audio/` → 4 matches, all in
+`src/core/harmony/voice-tracks.ts` (the `RegisterMode` type definition and its usage inside
+`computeVoiceTracks`) — expected; this is the inert pure engine, not consumed by audio
+codegen or the Canvas 2D layer. No audio codegen or agent path broken. PASS.
+
+**(f) `core/**` purity check.**
+`grep -rn "from 'pixi\|from 'svelte\|from '@pixi\|import.*canvas" src/core/` → 0 matches.
+`pentagrama-scene.ts` is in `src/render/` (not `src/core/`). PASS.
+
+**(g) AGPL-3.0 headers.**
+`head -2 src/render/pentagrama-scene.ts` → `// SPDX-License-Identifier: AGPL-3.0-only`.
+`head -2 src/app/App.svelte` → `<!-- SPDX-License-Identifier: AGPL-3.0-only` (inside HTML
+comment, correct for `.svelte`).
+`head -2 src/render/stage.ts` → `// SPDX-License-Identifier: AGPL-3.0-only`.
+`head -2 src/ui/Header.svelte` → `<!-- SPDX-License-Identifier: AGPL-3.0-only`.
+All four files modified in steps 10.11–10.14 carry the AGPL-3.0 header. PASS.
+
+**(h) Codegen immutability.**
+`git diff main...HEAD -- src/core/codegen/strudel.ts` → empty (0 diff lines).
+Audio is byte-identical before and after the entire redesign. PASS.
+
+### Check results table
+
+| Check | Command | Expected | Actual | Status |
+|---|---|---|---|---|
+| (a) `harmony-staff-scene.ts` retired | `grep -rn "harmony-staff-scene" src/` | 0 live imports | 5 matches, all in comments; file deleted | PASS |
+| (b) `_staffContainer` removed from stage.ts | `grep -n "_staffContainer" src/render/stage.ts` | 0 live code refs | 4 matches, all in comments | PASS |
+| (c) `voice-tracks` not in pentagrama-scene.ts | two greps on `pentagrama-scene.ts` | 0 matches | 0 matches | PASS |
+| (d) `staff-layout` not in pentagrama-scene.ts | `grep -n "staff-layout" src/render/pentagrama-scene.ts` | 0 matches | 0 matches | PASS |
+| (e) Register toggle audit | three greps (Header, App, core/audio) | 0 live UI/code refs | 0 live refs; comments only + voice-tracks.ts inert engine | PASS |
+| (f) core/** purity | `grep -rn "from 'pixi..."` in `src/core/` | 0 matches | 0 matches | PASS |
+| (g) AGPL-3.0 headers | `head -2` on 4 modified files | SPDX line | Present on all 4 | PASS |
+| (h) Codegen immutability | `git diff main...HEAD -- src/core/codegen/strudel.ts` | empty | empty | PASS |
+
+### Files touched
+
+- `docs/orbifold-v2/handoffs/phase-10-handoff.md` — this entry (no source files modified)
+
+### Validation evidence (per Acceptance ID)
+
+**A-10-18** (PIXI staff wiring removed; `harmony-staff-scene.ts` retired; `_staffContainer` removed):
+
+- Check (a): file deleted, 0 live imports confirmed.
+- Check (b): `_staffContainer` absent from live code in `stage.ts`.
+- `pnpm exec tsc --noEmit` → 0 errors (no broken imports).
+- PASS.
+
+**A-10-19** (Register toggle removed from `Header.svelte`; no schema/agent breakage):
+
+- Check (e): 0 live HTML or JS references to `registerMode` in Header; `setRegisterMode` absent
+  from App.svelte; no audio or agent path broken.
+- PASS.
+
+**A-10-15/A-10-33** (Codegen immutability confirmed):
+
+- Check (h): `git diff main...HEAD -- src/core/codegen/strudel.ts` → empty. PASS.
+
+**A-10-16** (AGPL-3.0 headers):
+
+- Check (g): all 4 modified files carry `SPDX-License-Identifier: AGPL-3.0-only`. PASS.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → exit 0, 0 errors
+- `pnpm lint` → exit 0, 0 ESLint errors, 0 Prettier issues
+- `pnpm exec vitest run` → 447 passed, 0 failed (14 test files; baseline maintained)
+- `pnpm build` → exit 0 (pre-existing chunk-size and dynamic-import warnings; not introduced by this step)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test/Check | Type | Gap status |
+| A-10-15 | Audio byte-identical; zero codegen changes | Check (h): `git diff main...HEAD -- src/core/codegen/strudel.ts` | automated (git diff) | **CONFIRMED** |
+| A-10-16 | AGPL-3.0 header in all modified files | Check (g): `head -2` on 4 files | automated (head -2) | **CONFIRMED** |
+| A-10-18 | PIXI staff wiring removed; `harmony-staff-scene.ts` retired; `_staffContainer` removed; 0 tsc errors | Checks (a)+(b)+tsc gate | automated (grep + tsc) | **CONFIRMED** |
+| A-10-19 | Register toggle removed; 0 live `setRegisterMode`/`registerModeSeg` references; no schema/agent breakage | Check (e) | automated (grep) | **CONFIRMED** |
+| A-10-33 | `git diff main...HEAD -- src/core/codegen/strudel.ts` empty | Check (h) | automated (git diff) | **CONFIRMED** |
+| A-10-34 | All quality gates green: tsc 0, lint 0, vitest ≥ 447, build exit 0 | Gate suite | automated | **CONFIRMED** — tsc 0 / lint 0 / vitest 447 / build exit 0 |
+
+Note on (c)+(d): checks confirming that `voice-tracks.ts` and `staff-layout.ts` are not imported
+by the Canvas 2D layer also re-verify the core-purity invariant stated in ADR 0015. They are
+not mapped to individual Acceptance IDs but support A-10-18 (clean retirement).
+
+**Notes on partial coverage:** All automated IDs in scope for this step are fully confirmed.
+Manual-verification IDs (A-10-20 through A-10-32) remain deferred to Pilot Checkpoint #5
+(step 10.16).
+
+**Proxy disclosures:**
+
+- A-10-18 (no orphan imports): verified by grep + 0 tsc errors; no live import of the retired file found.
+- A-10-19 (register toggle removed): verified by grep; 0 live HTML/JS references to `registerMode`
+  in Header.svelte or App.svelte.
+
+### Decisions made (if any)
+
+No new decisions. Historical comment references to `harmony-staff-scene.ts` in ProgressionStrip.svelte,
+voice-tracks.ts, and App.svelte are informational (retirement notes or formula-equivalence
+documentation) — they do not import the file and do not require modification. Leaving them in
+place is correct: they explain the historical context without polluting live code.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- No source files modified. Verification-only step.
+- Quality gates: 447 passed, 0 tsc errors, 0 lint errors, build exit 0.
+- Branch: `orbifold-v2/phase-10`.
+- Step 10.16 (quality gates + acceptance + manual Checkpoint #5) remains.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `chore(harmony): Phase 10 step 10.15 — remove dead PIXI staff code, confirm cleanup`
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
 - Hash: self-referential — not recorded
