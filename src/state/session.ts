@@ -181,7 +181,7 @@ export type ProgressionSlot = Chord | RestSlot;
 export interface HarmonyState {
   root: number; // pitch class 0–11; default 0 (C)
   mode: string; // 'major' | 'minor' | other SCALE_INTERVALS keys
-  octave: number; // default 3
+  octave: number; // default 4 (Checkpoint #5: centers voices on the staff)
   progression: ProgressionSlot[]; // ordered list; empty = silent
   /**
    * Active harmony sub-view.
@@ -267,7 +267,7 @@ export const DEFAULT_SESSION_STATE: SessionState = {
   harmony: {
     root: 0,
     mode: 'major',
-    octave: 3,
+    octave: 4, // Pilot decision (Checkpoint #5, 2026-06-15): octave 4 centers chord voices on the staff
     progression: [],
     // Phase 08 (step 08.5): ephemeral UI defaults — not persisted.
     subview: 'tonnetz', // Pilot decision: Tonnetz visible by default (reversibility)

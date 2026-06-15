@@ -304,7 +304,12 @@ describe('requeueLive()', () => {
       harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: [C_MAJ] },
       nowPlaying: { label: 'Sesión', source: 'session' },
     });
-    const expected = buildSession([BD_LAYER], [C_MAJ], 'chord', 3);
+    const expected = buildSession(
+      [BD_LAYER],
+      [C_MAJ],
+      'chord',
+      DEFAULT_SESSION_STATE.harmony.octave
+    );
     expect(requeueLive()).toBe(expected);
   });
 
@@ -315,7 +320,11 @@ describe('requeueLive()', () => {
       nowPlaying: { label: 'Armonía', source: 'harmony' },
     });
     // Prototype line 1312: code = melodyLine().trim()
-    const expected = melodyLine([C_MAJ, A_MIN], 'chord', 3).trim();
+    const expected = melodyLine(
+      [C_MAJ, A_MIN],
+      'chord',
+      DEFAULT_SESSION_STATE.harmony.octave
+    ).trim();
     expect(requeueLive()).toBe(expected);
   });
 
@@ -327,7 +336,13 @@ describe('requeueLive()', () => {
       nowPlaying: { label: 'Acorde', source: 'chord' },
     });
     // Prototype line 1313: last chord in progression
-    const expected = chordToStrudel(A_MIN.rootPc, A_MIN.qual, A_MIN.gain, 'chord', 3);
+    const expected = chordToStrudel(
+      A_MIN.rootPc,
+      A_MIN.qual,
+      A_MIN.gain,
+      'chord',
+      DEFAULT_SESSION_STATE.harmony.octave
+    );
     expect(requeueLive()).toBe(expected);
   });
 
