@@ -4,13 +4,14 @@
 // ADR 0006: WebGL detection via canvas.getContext before PIXI Application creation.
 // ADR 0007: PIXI Application as a module-level singleton.
 //
-// Phase 08 (step 08.5): harmonyLayer now has two child sub-containers:
+// Phase 08 (step 08.5): harmonyLayer has one child sub-container:
 //   _tonnetzContainer — holds the seven Tonnetz scene objects (hGrid…hLabels).
-//   _staffContainer   — holds the four staff scene objects (_staffGfx…_dynGfx).
-// setHarmonySubview() toggles exactly one container visible at a time.
-// Default: _tonnetzContainer.visible = true, _staffContainer.visible = false.
-// (Reversibility: with subview='tonnetz', harmony view is byte-identical to Phase 07.)
-// ADR 0011 Amendment §D5.
+// Phase 10 redesign (step 10.11): _staffContainer removed (ADR 0015 D1).
+//   The Pentagrama sub-view is now rendered by a dedicated Canvas 2D <canvas>
+//   element managed by src/render/pentagrama-scene.ts, not a PIXI container.
+// setHarmonySubview() now only toggles _tonnetzContainer.visible.
+// Default: _tonnetzContainer.visible = true.
+// ADR 0011 Amendment §D5 (amended by ADR 0015 D1).
 
 import * as PIXI from 'pixi.js';
 
@@ -23,11 +24,11 @@ let _app: PIXI.Application | null = null;
 let harmonyLayer: PIXI.Container | null = null;
 let rhythmLayer: PIXI.Container | null = null;
 
-// Phase 08 (step 08.5): Sub-containers inside harmonyLayer (ADR 0011 Amendment §D5).
+// Phase 08 (step 08.5): Sub-container inside harmonyLayer (ADR 0011 Amendment §D5).
 // _tonnetzContainer holds the seven Tonnetz scene objects; visible by default.
-// _staffContainer holds the four staff scene objects; hidden by default.
+// Phase 10 redesign (step 10.11): _staffContainer removed (ADR 0015 D1).
+// The Pentagrama staff is now a Canvas 2D element managed by pentagrama-scene.ts.
 let _tonnetzContainer: PIXI.Container | null = null;
-let _staffContainer: PIXI.Container | null = null;
 
 // Harmony scene children — prototype line 920–922
 // addChild order per prototype line 923: hGrid, hPath, hDyn, hNRG, hNodes, hNRL, hLabels
@@ -104,14 +105,13 @@ export async function initStage(stageEl: HTMLElement): Promise<PIXI.Application 
   rhythmLayer.visible = false; // prototype line 917
   _app.stage.addChild(harmonyLayer, rhythmLayer); // prototype line 918
 
-  // ── Phase 08 (step 08.5): Create sub-containers inside harmonyLayer ─────────
-  // ADR 0011 Amendment §D5: _tonnetzContainer (Tonnetz behind staff by z-order).
-  // Default: Tonnetz visible, staff hidden — reversibility preserved.
+  // ── Phase 08 (step 08.5): Create sub-container inside harmonyLayer ──────────
+  // ADR 0011 Amendment §D5: _tonnetzContainer holds the Tonnetz scene objects.
+  // Phase 10 redesign (step 10.11): _staffContainer removed (ADR 0015 D1).
+  // The Pentagrama sub-view is a Canvas 2D element; no PIXI child needed.
   _tonnetzContainer = new PIXI.Container();
   _tonnetzContainer.visible = true;
-  _staffContainer = new PIXI.Container();
-  _staffContainer.visible = false;
-  harmonyLayer.addChild(_tonnetzContainer, _staffContainer);
+  harmonyLayer.addChild(_tonnetzContainer);
 
   // ── Create harmony scene children — prototype lines 920–922 ─────────────────
   // Phase 08: children added to _tonnetzContainer (not harmonyLayer directly).
@@ -180,18 +180,19 @@ export function setView(view: 'harmony' | 'rhythm' | 'composition' | 'session' |
 /**
  * Switch the harmony sub-view between Tonnetz and Pentagrama (staff).
  *
- * Exactly one of the two sub-containers is visible at a time:
- *   'tonnetz' → _tonnetzContainer.visible = true, _staffContainer.visible = false
- *   'staff'   → _tonnetzContainer.visible = false, _staffContainer.visible = true
+ * Phase 10 redesign (step 10.11, ADR 0015 D1): _staffContainer removed.
+ * Only _tonnetzContainer visibility is managed here. The Pentagrama Canvas 2D
+ * layer's show/hide is handled by setPentagramaVisible() in pentagrama-scene.ts,
+ * called from App.svelte's store subscription.
+ *
+ *   'tonnetz' → _tonnetzContainer.visible = true
+ *   'staff'   → _tonnetzContainer.visible = false
  *
  * The parent harmonyLayer.visible is unchanged (managed by setView).
- * Default on init: 'tonnetz' — reversibility invariant: byte-identical to Phase 07.
- *
- * ADR 0011 Amendment §D5.
+ * ADR 0011 Amendment §D5 (amended by ADR 0015 D1).
  */
 export function setHarmonySubview(subview: 'tonnetz' | 'staff'): void {
   if (_tonnetzContainer !== null) _tonnetzContainer.visible = subview === 'tonnetz';
-  if (_staffContainer !== null) _staffContainer.visible = subview === 'staff';
 }
 
 /**
@@ -212,8 +213,8 @@ export interface StageRefs {
   harmonyLayer: PIXI.Container;
   /** Phase 08 (step 08.5): sub-container holding the seven Tonnetz scene objects. */
   tonnetzContainer: PIXI.Container;
-  /** Phase 08 (step 08.5): sub-container holding the four staff scene objects. */
-  staffContainer: PIXI.Container;
+  // staffContainer removed in Phase 10 redesign step 10.11 (ADR 0015 D1).
+  // The Pentagrama Canvas 2D element is not a PIXI child.
   hGrid: PIXI.Graphics;
   hPath: PIXI.Graphics;
   hNodes: PIXI.Graphics;
@@ -236,7 +237,6 @@ export function getStageRefs(): StageRefs {
     harmonyLayer === null ||
     rhythmLayer === null ||
     _tonnetzContainer === null ||
-    _staffContainer === null ||
     hGrid === null ||
     hPath === null ||
     hNodes === null ||
@@ -254,7 +254,7 @@ export function getStageRefs(): StageRefs {
     app: _app,
     harmonyLayer,
     tonnetzContainer: _tonnetzContainer,
-    staffContainer: _staffContainer,
+    // staffContainer removed — Pentagrama is now a Canvas 2D element (ADR 0015 D1).
     hGrid,
     hPath,
     hNodes,

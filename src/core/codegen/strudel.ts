@@ -72,8 +72,13 @@ export function chordToStrudel(
  *   existing `<…>` slowcat form. Output is byte-identical to pre-Phase-02 `main`.
  * - Variable case (at least one chord has `bars !== 1`): emits an `arrange(…)` form
  *   where each chord is an independent segment with its own absolute cycle count and
- *   inline gain. No `.fast`/`.slow` — duration is expressed via the `numCycles`
- *   argument to `arrange()`, preserving the `setcps` invariant.
+ *   inline gain. Any segment whose span is not one cycle (`bars !== 1`) is additionally
+ *   `.slow(bars)`-ed so the chord/arp plays EXACTLY ONCE across its whole span — this
+ *   cancels the `.fast(bars)` that `arrange()` applies internally, which otherwise makes
+ *   a lengthened slot re-attack each cycle and a shortened slot over-sustain into the
+ *   next slot (ADR 0016, amending ADR 0010). This `.slow` is a scoped, per-segment
+ *   DURATION expression — NOT the global TEMPO time-stretch the `.fast`/`.slow` ban
+ *   (ADR 0005) targets; tempo is still owned by `setcps`.
  *
  * Returns `''` when the progression is empty.
  *
@@ -117,10 +122,23 @@ export function melodyLine(
       // Rest slot — ADR 0012 D3: [bars, silence] with two leading spaces.
       return `  [${numCycles}, silence]`;
     }
-    // Chord slot (unchanged from ADR 0010).
+    // Chord slot. ADR 0016 (Phase 10, Pilot-authorized 2026-06-15): a slot whose span
+    // is not exactly one cycle (bars !== 1) must play its chord/arp EXACTLY ONCE across
+    // that span. arrange() internally `.fast(numCycles)`-es each segment (see engine:
+    // arrange = timeCat(...segs.map(([u,p]) => [u, p.fast(u)])).slow(total)); for a
+    // lengthened slot that replays the chord N times (re-attack), and for a shortened
+    // slot (.fast(0.5) = .slow(2)) it stretches the chord past its slot, overlapping the
+    // next slot and de-syncing the loop. Pre-applying `.slow(numCycles)` cancels that
+    // internal `.fast(numCycles)` exactly (slow(u).fast(u) = identity), so each segment
+    // sounds once across its true span. Verified by hap-onset query in the live
+    // @strudel/web@1.0.3 engine for bars 2, 3, 0.5 (chord + arp), incl. clean looping.
+    // bars === 1 is left byte-identical (arrange's .fast(1) is already identity).
+    // This `.slow` is per-segment DURATION, not the global TEMPO time-stretch the ADR
+    // 0005 ban targets.
     const voicing = chordVoicing(slot.rootPc, slot.qual, octave).join(sep);
     const g = (slot.gain == null ? 0.6 : slot.gain).toFixed(2);
-    return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)]`;
+    const sustain = numCycles !== 1 ? `.slow(${numCycles})` : '';
+    return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)${sustain}]`;
   });
   return `arrange(\n${segments.join(',\n')}\n)`;
 }

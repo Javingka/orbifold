@@ -164,11 +164,73 @@ describe('melodyLine — dual-mode (ADR 0010)', () => {
       'chord',
       3
     );
+    // ADR 0016: every segment whose span !== 1 cycle is .slow(bars)-ed so it plays
+    // exactly once across its span — bars:2 sustains across both cycles, bars:0.5 plays
+    // once in half a cycle (without it, arrange's internal .fast(0.5)=.slow(2) would
+    // stretch the chord past its slot and de-sync the loop).
     expect(result).toBe(
       'arrange(\n' +
-        '  [2, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)],\n' +
-        '  [0.5, note("[F3,G#3,C4]").s("sawtooth").lpf(1200).gain(0.80).room(0.3)]\n' +
+        '  [2, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3).slow(2)],\n' +
+        '  [0.5, note("[F3,G#3,C4]").s("sawtooth").lpf(1200).gain(0.80).room(0.3).slow(0.5)]\n' +
         ')'
+    );
+  });
+
+  // ADR 0016 — a shortened slot (bars < 1) gets .slow(bars) so it plays once in its slot
+  // instead of over-sustaining into the next (the overlap/loop-desync bug the Pilot
+  // reported). Verified behaviorally: bars:0.5 chord sounds 0.0->0.5 with clean looping.
+  it('ADR 0016 — shortened chord (bars:0.5) gets .slow(0.5), no over-sustain', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 1 },
+        { rootPc: 9, qual: 'min', gain: 0.6, bars: 0.5 },
+      ],
+      'chord',
+      3
+    );
+    expect(result).toContain(
+      '[0.5, note("[A3,C4,E4]").s("sawtooth").lpf(1200).gain(0.60).room(0.3).slow(0.5)]'
+    );
+    // The bars:1 slot must NOT be slowed.
+    expect(result).toContain(
+      '[1, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)]'
+    );
+  });
+
+  // ADR 0016 — sustain regression: a lengthened slot (bars > 1) gets .slow(bars) so it
+  // holds across its whole span; bars===1 slots do not. Verified behaviorally by
+  // hap-onset query in the live @strudel/web engine (1 onset over N cycles).
+  it('ADR 0016 — lengthened chord (bars:3) gets .slow(3) for single sustained attack', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 3 },
+        { rootPc: 9, qual: 'min', gain: 0.6, bars: 1 },
+      ],
+      'chord',
+      3
+    );
+    expect(result).toContain(
+      '[3, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3).slow(3)]'
+    );
+    // The bars:1 slot must NOT be slowed.
+    expect(result).toContain(
+      '[1, note("[A3,C4,E4]").s("sawtooth").lpf(1200).gain(0.60).room(0.3)]'
+    );
+    expect(result).not.toContain('.slow(1)');
+  });
+
+  it('ADR 0016 — lengthened arp (bars:2) gets .slow(2) so the arpeggio spans the whole span', () => {
+    // A rest forces the arrange path; the arp chord at bars:2 must be .slow(2)-ed.
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 },
+        { isRest: true, bars: 1 },
+      ],
+      'arp',
+      3
+    );
+    expect(result).toContain(
+      '[2, note("[C3 E3 G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3).slow(2)]'
     );
   });
 

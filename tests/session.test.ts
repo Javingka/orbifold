@@ -43,8 +43,9 @@ import {
   setChordBars,
   clampBars,
   barsLabel,
+  reorderSlot,
 } from '../src/state/session.js';
-import type { SessionState, Chord } from '../src/state/session.js';
+import type { SessionState, Chord, ProgressionSlot } from '../src/state/session.js';
 
 // ── Test fixtures ──────────────────────────────────────────────────────────
 
@@ -303,7 +304,12 @@ describe('requeueLive()', () => {
       harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: [C_MAJ] },
       nowPlaying: { label: 'Sesión', source: 'session' },
     });
-    const expected = buildSession([BD_LAYER], [C_MAJ], 'chord', 3);
+    const expected = buildSession(
+      [BD_LAYER],
+      [C_MAJ],
+      'chord',
+      DEFAULT_SESSION_STATE.harmony.octave
+    );
     expect(requeueLive()).toBe(expected);
   });
 
@@ -314,7 +320,11 @@ describe('requeueLive()', () => {
       nowPlaying: { label: 'Armonía', source: 'harmony' },
     });
     // Prototype line 1312: code = melodyLine().trim()
-    const expected = melodyLine([C_MAJ, A_MIN], 'chord', 3).trim();
+    const expected = melodyLine(
+      [C_MAJ, A_MIN],
+      'chord',
+      DEFAULT_SESSION_STATE.harmony.octave
+    ).trim();
     expect(requeueLive()).toBe(expected);
   });
 
@@ -326,7 +336,13 @@ describe('requeueLive()', () => {
       nowPlaying: { label: 'Acorde', source: 'chord' },
     });
     // Prototype line 1313: last chord in progression
-    const expected = chordToStrudel(A_MIN.rootPc, A_MIN.qual, A_MIN.gain, 'chord', 3);
+    const expected = chordToStrudel(
+      A_MIN.rootPc,
+      A_MIN.qual,
+      A_MIN.gain,
+      'chord',
+      DEFAULT_SESSION_STATE.harmony.octave
+    );
     expect(requeueLive()).toBe(expected);
   });
 
@@ -531,5 +547,95 @@ describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
       composition: { blocks: [], tracks: [] },
     });
     expect(result.success).toBe(true);
+  });
+});
+
+// ── reorderSlot — Phase 10 step 10.3 (A-10-12) ───────────────────────────────
+// Verifies that reorderSlot correctly reorders progression slots, clamps out-of-range
+// indices, is a no-op when fromIdx === toIdx, and calls requeueLive() indirectly
+// (observable by the store state changing).
+//
+// Note: requeueLive() calls into the audio module via dynamic import. In the test
+// environment there is no audio module loaded, so the requeueLive() side-effect
+// (queueing audio) is not directly observable. We verify the store state change
+// instead — this is the same pattern used by setChordBars tests above.
+//
+// ADR 0014 D5. Phase 10 (step 10.3).
+
+describe('reorderSlot — A-10-12', () => {
+  // Fixtures: three distinct chords to track their reordering.
+  const SLOT_A: Chord = { rootPc: 0, qual: 'maj', gain: 0.6 }; // C major
+  const SLOT_B: Chord = { rootPc: 4, qual: 'min', gain: 0.6 }; // E minor
+  const SLOT_C: Chord = { rootPc: 7, qual: 'maj', gain: 0.6 }; // G major
+
+  function setProgression(slots: ProgressionSlot[]): void {
+    sessionStore.set({
+      ...DEFAULT_SESSION_STATE,
+      harmony: { ...DEFAULT_SESSION_STATE.harmony, progression: slots },
+    });
+  }
+
+  function getProgression(): ProgressionSlot[] {
+    return get(sessionStore).harmony.progression;
+  }
+
+  it('move first to last: [A,B,C] reorderSlot(0,2) → [B,C,A]', () => {
+    setProgression([SLOT_A, SLOT_B, SLOT_C]);
+    reorderSlot(0, 2);
+    expect(getProgression()).toEqual([SLOT_B, SLOT_C, SLOT_A]);
+  });
+
+  it('move last to first: [A,B,C] reorderSlot(2,0) → [C,A,B]', () => {
+    setProgression([SLOT_A, SLOT_B, SLOT_C]);
+    reorderSlot(2, 0);
+    expect(getProgression()).toEqual([SLOT_C, SLOT_A, SLOT_B]);
+  });
+
+  it('adjacent swap forward: [A,B,C] reorderSlot(0,1) → [B,A,C]', () => {
+    setProgression([SLOT_A, SLOT_B, SLOT_C]);
+    reorderSlot(0, 1);
+    expect(getProgression()).toEqual([SLOT_B, SLOT_A, SLOT_C]);
+  });
+
+  it('adjacent swap backward: [A,B,C] reorderSlot(1,0) → [B,A,C]', () => {
+    setProgression([SLOT_A, SLOT_B, SLOT_C]);
+    reorderSlot(1, 0);
+    expect(getProgression()).toEqual([SLOT_B, SLOT_A, SLOT_C]);
+  });
+
+  it('no-op when fromIdx === toIdx: [A,B,C] reorderSlot(1,1) → [A,B,C] unchanged', () => {
+    setProgression([SLOT_A, SLOT_B, SLOT_C]);
+    const before = [...getProgression()];
+    reorderSlot(1, 1);
+    expect(getProgression()).toEqual(before);
+  });
+
+  it('no-op when both indices clamp to same value: reorderSlot(0,0) on single-slot', () => {
+    setProgression([SLOT_A]);
+    const before = [...getProgression()];
+    reorderSlot(0, 0);
+    expect(getProgression()).toEqual(before);
+  });
+
+  it('clamps out-of-range fromIdx above: reorderSlot(99,0) clamps to [2,0]', () => {
+    setProgression([SLOT_A, SLOT_B, SLOT_C]);
+    reorderSlot(99, 0);
+    // clampedFrom=2 (clamped from 99), clampedTo=0 → moves slot C to front
+    expect(getProgression()).toEqual([SLOT_C, SLOT_A, SLOT_B]);
+  });
+
+  it('clamps out-of-range toIdx above: reorderSlot(0,99) clamps to [0,2]', () => {
+    setProgression([SLOT_A, SLOT_B, SLOT_C]);
+    reorderSlot(0, 99);
+    // clampedFrom=0, clampedTo=2 (clamped from 99) → moves slot A to end
+    expect(getProgression()).toEqual([SLOT_B, SLOT_C, SLOT_A]);
+  });
+
+  it('no-op on empty progression: reorderSlot(0,1) leaves store unchanged', () => {
+    setProgression([]);
+    const before = [...getProgression()];
+    reorderSlot(0, 1);
+    expect(getProgression()).toEqual(before);
+    expect(getProgression().length).toBe(0);
   });
 });

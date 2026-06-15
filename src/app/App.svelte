@@ -41,10 +41,10 @@
     getLayerLabelPos,
   } from '../render/rhythm-scene.js';
   import {
-    buildHarmonyStaffScene,
-    updateHarmonyStaffDynamic,
-    tickHarmonyStaff,
-  } from '../render/harmony-staff-scene.js';
+    initPentagrama,
+    destroyPentagrama,
+    setPentagramaVisible,
+  } from '../render/pentagrama-scene.js';
 
   // ── State ─────────────────────────────────────────────────────────────────
   let stageEl: HTMLDivElement;
@@ -108,10 +108,11 @@
   let prevHarmonyRoot = -1;
   let prevHarmonyMode = '';
 
-  // Step 07.4: track previous progression length and octave to detect when
-  // buildHarmonyStaffScene must be called (structural change) vs updateHarmonyStaffDynamic.
-  let prevProgressionLength = 0;
-  let prevOctave = 3;
+  // Phase 10 redesign (step 10.11): the Canvas 2D pentagrama-scene redraws on
+  // every rAF frame, so no progression-tracking variables are needed here.
+  // prevProgressionLength / prevOctave / prevTotalBars / prevChordMode /
+  // prevProgressionKey removed (were used for buildHarmonyStaffScene rebuild
+  // detection, which is now retired per ADR 0015 D1).
 
   onMount(async () => {
     // Phase 04: start with empty session (no default rhythm seed).
@@ -121,9 +122,6 @@
     // Round-2 fix (Defect A): capture initial harmony key/mode for change detection.
     prevHarmonyRoot = initState.harmony.root;
     prevHarmonyMode = initState.harmony.mode;
-    // Step 07.4: capture initial progression length and octave for staff scene change detection.
-    prevProgressionLength = initState.harmony.progression.length;
-    prevOctave = initState.harmony.octave;
 
     // OD-3 resolution: PIXI targets div#stage full-screen wrapper.
     // initStage appends app.view inside stageEl and registers resize handler.
@@ -147,32 +145,30 @@
     // Prototype: buildTonnetz() called at lines 928–929 from initPixi().
     buildTonnetz(get(sessionStore));
     buildRhythmScene(get(sessionStore));
-    // Step 07.4: build harmony staff scene after Tonnetz and rhythm scenes are ready.
-    // The guard in updateHarmonyStaffDynamic (_dynGfx === null || _staffBaseY === 0)
-    // ensures safe no-ops if the ticker fires before buildHarmonyStaffScene completes,
-    // but we call build first to minimise the window of no-op tick calls.
-    buildHarmonyStaffScene(get(sessionStore));
+
+    // Phase 10 redesign (step 10.11, ADR 0015 D7): initialise the Canvas 2D
+    // Pentagrama layer after PIXI's stage is ready. The canvas is appended to
+    // stageEl with display:none; pointer-events:none until setPentagramaVisible
+    // is called by the store subscription below.
+    initPentagrama(stageEl);
 
     // Wire the resize callback: rebuild both scenes when the window is resized.
     // Prototype lines 935–943: resize calls buildTonnetz() and buildRhythmScene().
+    // Phase 10 redesign: harmony-staff-scene rebuild removed; Canvas 2D layer uses
+    // ResizeObserver internally (no explicit rebuild call needed).
     onResize(() => {
       buildTonnetz(get(sessionStore));
       buildRhythmScene(get(sessionStore));
-      // Step 07.4: rebuild harmony staff scene on resize (canvas dimensions change).
-      buildHarmonyStaffScene(get(sessionStore));
       // After rebuild, restore dynamic overlays.
       updateTonnetzDynamic(get(sessionStore));
-      updateHarmonyStaffDynamic(get(sessionStore));
     });
 
     // ── Step 03.4: register ticker ─────────────────────────────────────────
     // Prototype: app.ticker.add(tick) at line 931.
     registerTicker(app);
-    // Step 07.4: register harmony staff ticker as a parallel ticker.
-    // registerTicker dispatches tickHarmony/tickRhythm only; tickHarmonyStaff
-    // is a separate scene module requiring its own ticker registration.
-    // tickHarmonyStaff guards internally on view === 'harmony' (per spec).
-    app.ticker.add(tickHarmonyStaff);
+    // Phase 10 redesign (step 10.11): tickHarmonyStaff removed (PIXI staff
+    // scene retired per ADR 0015 D1). The Canvas 2D rAF loop in pentagrama-scene.ts
+    // is browser-native and does not require PIXI ticker registration.
 
     // ── Step 03.4: initial dynamic state after build ───────────────────────
     updateTonnetzDynamic(get(sessionStore));
@@ -217,19 +213,10 @@
         updateRhythmDynamic(state);
       }
 
-      // Step 07.4: harmony staff scene updates.
-      // Structural changes (progression length or octave) require a full rebuild
-      // because note-heads, ledger lines, and staff width all depend on the voice tracks.
-      // Playhead-only changes (BPM, playback state) are handled by updateHarmonyStaffDynamic.
-      const progressionLength = state.harmony.progression.length;
-      const octave = state.harmony.octave;
-      if (progressionLength !== prevProgressionLength || octave !== prevOctave) {
-        buildHarmonyStaffScene(state);
-        prevProgressionLength = progressionLength;
-        prevOctave = octave;
-      } else {
-        updateHarmonyStaffDynamic(state);
-      }
+      // Phase 10 redesign (step 10.11, ADR 0015 D7): show/hide the Canvas 2D
+      // Pentagrama layer based on current view + subview. The Canvas 2D rAF loop
+      // redraws every frame — no rebuild dispatch needed here.
+      setPentagramaVisible(state.view === 'harmony' && state.harmony.subview === 'staff');
     });
 
     // ── Canvas pointer routing ─────────────────────────────────────────────
@@ -239,7 +226,14 @@
     canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       const state = get(sessionStore);
       if (state.view === 'harmony') {
-        tonnetzPointerDown(e);
+        // Phase 10 redesign (step 10.11): staff sub-view pointer events are handled
+        // directly by the Canvas 2D element (pentagrama-scene.ts D6 wiring).
+        // When subview === 'staff' the Canvas 2D canvas (z-index:1) sits above the
+        // PIXI canvas and receives events directly; no routing needed here.
+        if (state.harmony.subview === 'tonnetz') {
+          // Tonnetz sub-view: route to Tonnetz chord picker.
+          tonnetzPointerDown(e);
+        }
       } else if (state.view === 'rhythm') {
         rhythmPointerDown(e);
       } else {
@@ -257,8 +251,10 @@
       }
     });
 
-    // Pointer move: hover layer detection for DOM overlay (rhythm view only).
+    // Pointer move: rhythm hover layer detection.
     // Prototype: app.view.addEventListener('pointermove', onStageHover) at line 2159.
+    // Phase 10 redesign (step 10.11): staff pointermove removed from PIXI canvas routing.
+    // The Canvas 2D element (pentagrama-scene.ts) handles its own pointermove directly.
     canvas.addEventListener('pointermove', (e: PointerEvent) => {
       const state = get(sessionStore);
       if (state.view === 'rhythm') {
@@ -310,6 +306,9 @@
       unsubStore();
       unsubStore = null;
     }
+    // Phase 10 redesign (step 10.11, ADR 0015 D7): destroy Canvas 2D layer on
+    // component teardown — cancels rAF, disconnects ResizeObserver, removes canvas.
+    destroyPentagrama();
   });
 
   // ── Layer overlay button handlers ────────────────────────────────────────
@@ -415,8 +414,8 @@
       <div class="hint">{$hudStore.hint}</div>
     {:else}
       <div class="hint">
-        3 voces en color — tónica, subdominante, dominante. Cambia modo registro: suavizado
-        (contornos suaves) o estricto (posición absoluta).
+        3 voces en color — tónica (naranja), subdominante (turquesa), dominante (rosa). Clic para
+        seleccionar · arrastrar para mover · borde derecho para redimensionar.
       </div>
     {/if}
   {:else if $sessionStore.view === 'rhythm'}

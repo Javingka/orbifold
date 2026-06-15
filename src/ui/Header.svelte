@@ -37,13 +37,16 @@
     setView,
     setHarmonyKey,
     setHarmonySubview,
-    setRegisterMode,
     setChordMode,
     addEuclidLayer,
     addEmptyLayer,
     previewEuclid,
     hushAll,
   } from '../state/session.js';
+  // setRegisterMode removed in Phase 10 redesign step 10.11 (ADR 0015 D2).
+  // The estricto/suavizado register toggle (#registerModeSeg) is removed from
+  // the UI. The Canvas 2D Pentagrama layer uses raw chordVoicing() pitches
+  // directly — no octave-continuity algorithm (no register mode needed).
   import { setMorphTarget } from '../render/rhythm-scene.js';
   import { agentCtx } from '../state/agentCtx.js';
 
@@ -398,26 +401,12 @@
     </div>
 
     <!--
-      Phase 08 (step 08.5): Voice register mode toggle.
-      Toggles harmony.registerMode between 'suavizado' and 'estricto'.
-      Calls setRegisterMode() from session.ts which updates the store only
-      (visual-only: audio is byte-identical; no requeueLive).
-      ADR 0011 Amendment §D6.
+      Phase 10 redesign (step 10.11, ADR 0015 D2): #registerModeSeg removed.
+      The estricto/suavizado toggle was a Phase 08 addition. The Canvas 2D
+      Pentagrama layer uses raw chordVoicing() pitches directly — no register
+      mode needed. The HarmonyState.registerMode field remains in the store
+      type (inert, not rendered); voice-tracks.ts is left inert (not deleted).
     -->
-    <div class="seg" id="registerModeSeg">
-      <button
-        class={$sessionStore.harmony.registerMode === 'suavizado' ? 'active' : ''}
-        on:click={() => setRegisterMode('suavizado')}
-      >
-        suavizado
-      </button>
-      <button
-        class={$sessionStore.harmony.registerMode === 'estricto' ? 'active' : ''}
-        on:click={() => setRegisterMode('estricto')}
-      >
-        estricto
-      </button>
-    </div>
 
     <!--
       Phase 08 (step 08.6): Chord-mode segmented control relocated from HarmonyControls.svelte.

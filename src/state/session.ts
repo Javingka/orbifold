@@ -181,7 +181,7 @@ export type ProgressionSlot = Chord | RestSlot;
 export interface HarmonyState {
   root: number; // pitch class 0–11; default 0 (C)
   mode: string; // 'major' | 'minor' | other SCALE_INTERVALS keys
-  octave: number; // default 3
+  octave: number; // default 4 (Checkpoint #5: centers voices on the staff)
   progression: ProgressionSlot[]; // ordered list; empty = silent
   /**
    * Active harmony sub-view.
@@ -267,7 +267,7 @@ export const DEFAULT_SESSION_STATE: SessionState = {
   harmony: {
     root: 0,
     mode: 'major',
-    octave: 3,
+    octave: 4, // Pilot decision (Checkpoint #5, 2026-06-15): octave 4 centers chord voices on the staff
     progression: [],
     // Phase 08 (step 08.5): ephemeral UI defaults — not persisted.
     subview: 'tonnetz', // Pilot decision: Tonnetz visible by default (reversibility)
@@ -937,6 +937,43 @@ export function addRestAt(index: number): void {
       newSlot,
       ...progression.slice(clamped),
     ];
+    return { ...s, harmony: { ...s.harmony, progression: newProgression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Reorder a slot in the progression by moving it from `fromIdx` to `toIdx`.
+ *
+ * Both indices are clamped to `[0, progression.length − 1]`. If the clamped
+ * indices are equal, this is a no-op (no store write, no `requeueLive()` call).
+ * Otherwise: removes the slot at `fromIdx` (splice-out), inserts it at `toIdx`
+ * (splice-in). This is an absolute-index reorder — `toIdx` is the desired final
+ * position of the slot, not a relative offset.
+ *
+ * Calls `requeueLive()` after the store update so the reordered pattern takes
+ * effect at the next cycle boundary (consistent with the "live changes requeue
+ * to the next cycle" invariant).
+ *
+ * Effect on audio: reordering changes the `arrange()` Strudel output (the
+ * audible sequence of chords changes). This is intentional — the user is
+ * editing their composition. NOT a regression (ADR 0014 D5, Consequence 4).
+ *
+ * Phase 10 (step 10.3) — ADR 0014 D5.
+ *
+ * @param fromIdx - Current index of the slot to move (0-based, clamped).
+ * @param toIdx   - Target index of the slot after the move (0-based, clamped).
+ */
+export function reorderSlot(fromIdx: number, toIdx: number): void {
+  sessionStore.update((s) => {
+    const progression = s.harmony.progression;
+    if (progression.length === 0) return s;
+    const clampedFrom = Math.max(0, Math.min(fromIdx, progression.length - 1));
+    const clampedTo = Math.max(0, Math.min(toIdx, progression.length - 1));
+    if (clampedFrom === clampedTo) return s;
+    const newProgression = [...progression];
+    const [removed] = newProgression.splice(clampedFrom, 1);
+    newProgression.splice(clampedTo, 0, removed);
     return { ...s, harmony: { ...s.harmony, progression: newProgression } };
   });
   requeueLive();
