@@ -25,6 +25,16 @@ See `references/decisions-register-convention.md` for entry format.
 **Source:** `docs/adr/0011-harmony-view-architecture.md` Consequence 3.
 **Applies to:** `time-map.ts`, `ProgressionStrip.svelte`, and any future harmony-view layer rendering on the cycle grid.
 
+---
+
+### `orbifold.lang` is the cross-surface language contract
+
+**Decision:** The active UI language is persisted in `localStorage` under the exact key `orbifold.lang`, holding one of the codes `es` / `en` / `pt` / `zh`. Both the marketing pages (`public/landing.html`, `public/tutorial.html`) and the Svelte app **must read AND write this same key and code set**. The resolution order is identical on both surfaces: `?lang=` URL param → `localStorage['orbifold.lang']` → `navigator.language` (with the `zh`-prefix special case) → `'es'` default. Language is **UI-only ephemeral state**: it never enters `SessionState`, the `SavedSchema` (`src/lib/persistence.ts`), or any `src/agent/schema.ts` type, so saved-session bytes for identical content are unaffected by the active language.
+**Decided:** Phase 11, 2026-06-16
+**Why:** The marketing pages shipped i18n first (merged in `068817e`) and established this key as the persistence point so the language chosen on the landing/tutorial pages carries into the app. The app and marketing are separate codebases with no shared module; a divergence in the key string or code set silently breaks the marketing→app handoff with no compile-time error to catch it (the same class of cross-surface coordination hazard as `PX_PER_CYCLE`). Keeping language out of the persistence/agent schemas preserves the byte-identical saved-session guarantee and mirrors the `registerMode`/`subview` ephemeral-state rule (Phase 08).
+**Source:** `docs/adr/0017-i18n-architecture.md`; `docs/orbifold-v2/phases/phase-11.md`; `public/landing.html` (`LS_KEY`, `pickLang`).
+**Applies to:** `src/i18n/**`, the header language selector, `public/landing.html`, `public/tutorial.html`, and any future surface that selects or persists the UI language.
+
 ## Superseded decisions
 
 (empty)
