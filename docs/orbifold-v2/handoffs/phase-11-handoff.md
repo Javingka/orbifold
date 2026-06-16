@@ -220,3 +220,133 @@ D8 note for step 11.5: `setNowPlaying()` must be extended with an optional `vars
 **Terminal commit:** `docs(adr): Phase 11 step 11.2 — ADR 0017 i18n architecture`
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 11.3 — i18n runtime + header selector + tests
+
+**Date:** 2026-06-16
+**Commit(s):** `bbdf694` feat(i18n): Phase 11 step 11.3 — i18n runtime, header selector, tests
+**Iteration:** 1 of 5
+
+### Completed
+
+Implemented the i18n foundation per ADR 0017 D1–D5:
+
+**(a) `src/i18n/` runtime layer:**
+- `src/i18n/types.ts` — `Dictionary` interface (step 11.3 seed: `common.langLabel` + `langs.{es,en,pt,zh}`). Grows in steps 11.4–11.5.
+- `src/i18n/runtime.ts` — Pure helpers with zero DOM/Svelte dependency: `resolveLang()` (D3 resolution chain, injectable deps for testability), `getAtPath()` (dot-path navigation), `lookup()` (D4 fallback: active → es → raw key), `interpolate()` (D5 `{varName}` substitution, unmatched left as-is), `makeTFunction()` (closure factory for derived store). `LangCode` and `Locales` types exported.
+- `src/i18n/index.ts` — Svelte store layer: `lang` writable store initialized via `resolveInitialLang()` (browser globals only, Node/Vitest guard), write-back subscriber writing to `localStorage['orbifold.lang']` on every change, `t` derived store returning `TFunction`, `t_raw` for non-component callers (D7), `LANGS` constant matching marketing `public/landing.html` lines 302–307 exactly.
+
+**(b) Write-back (D3):** `lang.subscribe()` calls `localStorage.setItem('orbifold.lang', code)` on every change. Mirrors `landing.html` line 664.
+
+**(c) Header language selector (OQ-5):** `src/ui/Header.svelte` updated with:
+- Import of `lang`, `LANGS`, `LangCode` from `../i18n/index.js`
+- Local state: `langMenuOpen`, handlers `handleLangSelect`, `handleLangToggle`, `handleLangBlur`
+- Template: `.lang-sel` container with `文A` toggle button (Unicode: 文 U+6587 + A) + `{#if langMenuOpen}` dropdown `<ul role="listbox">` listing four native labels (`Español / English / Português / 中文`). Active language highlighted with `.active` class.
+- Placed between `.sp` spacer and the Tutorial link — always visible in the header.
+- CSS: `.lang-sel`, `.lang-btn`, `.lang-menu`, `.lang-option`, `.lang-option.active` styles added in `<style>` block.
+
+**(d) Stub locale files:** `src/i18n/locales/es.ts`, `en.ts`, `pt.ts`, `zh.ts` — all four implement `Dictionary` (via plain assignment, TypeScript structural check). Seeded with selector keys only (`common.langLabel`, `langs.*`). Key-parity test passes immediately.
+
+**(e) Unit tests in `tests/i18n/`:**
+- `tests/i18n/runtime.test.ts` — 45 tests covering: resolution chain (every branch: URL param, localStorage, navigator.language, zh-prefix `zh-TW`→`zh`/`zh-CN`→`zh`/`zh-HK`→`zh`, unsupported `fr-FR`→`es`, no params→`es`, precedence order); `getAtPath` (nested paths, missing segments, non-string values); fallback lookup (active dict, empty-string fallback to es, raw key when missing everywhere, zh own value, es direct); interpolation (single/multiple placeholders, unmatched left as-is, numbers, zero, undefined vars, no placeholders, repeated placeholder, verbatim `E({k},{n})` token); `makeTFunction` integration.
+- `tests/i18n/key-parity.test.ts` — 8 tests: sanity check on es keys, per-locale missing/extra key assertions for en/pt/zh, combined assertion across all three non-base locales.
+
+**Reversibility:** No existing component strings were extracted. The app renders its current Spanish text unchanged. The only new visible change is the `文A` selector in the header. Saved sessions unaffected (language absent from all persistence/agent schemas per D6).
+
+### Files touched
+
+- `src/i18n/types.ts` — new file (Dictionary type)
+- `src/i18n/runtime.ts` — new file (pure helpers)
+- `src/i18n/index.ts` — new file (Svelte store layer)
+- `src/i18n/locales/es.ts` — new file (Spanish base, stub)
+- `src/i18n/locales/en.ts` — new file (English, stub)
+- `src/i18n/locales/pt.ts` — new file (Portuguese, stub)
+- `src/i18n/locales/zh.ts` — new file (Chinese, stub)
+- `src/ui/Header.svelte` — modified: i18n imports + `文A` selector + CSS
+- `tests/i18n/runtime.test.ts` — new file (45 tests)
+- `tests/i18n/key-parity.test.ts` — new file (8 tests)
+- `docs/orbifold-v2/handoffs/phase-11-handoff.md` — appended this entry
+
+### Validation evidence (per Acceptance ID)
+
+- **A-11-03 (resolution chain):** `tests/i18n/runtime.test.ts` covers every branch including URL param, localStorage, navigator.language zh-prefix, unsupported code→es, no params→es. 21 resolution-chain tests pass.
+- **A-11-05 (fallback):** `tests/i18n/runtime.test.ts` `lookup` suite covers active→found, empty→es fallback, missing→raw key safety net. 7 fallback tests pass.
+- **A-11-06 (interpolation):** `tests/i18n/runtime.test.ts` `interpolate` suite covers single/multiple placeholders, unmatched-as-is, numbers, zero, undefined vars. 9 interpolation tests pass.
+- **A-11-09 (key-parity test):** `tests/i18n/key-parity.test.ts` — 8 tests confirm all four locale files share the exact key set as es. Fails CI if any locale is missing or has extra keys.
+- **A-11-10 (pure runtime testable):** `src/i18n/runtime.ts` has zero DOM/Svelte imports (verified by `grep -rn "from 'pixi\|from 'svelte/" src/i18n/runtime.ts` → 0 results). All 53 new tests run in Vitest/Node without a DOM.
+- **A-11-11 (schema isolation):** No change to persistence or agent schemas; language not added to any schema. Confirmed by prior steps; unchanged.
+- **A-11-12 (quality gates):** All pass — see routine validations below.
+- **A-11-13 (AGPL-3.0 headers):** All 7 new source files begin with `// SPDX-License-Identifier: AGPL-3.0-only`. Header.svelte already had the AGPL header.
+
+**Not covered by this step:** A-11-01, A-11-02, A-11-04, A-11-07, A-11-08 (deferred to steps 11.4–11.6 per plan).
+
+### Routine validations
+
+- `pnpm exec vitest run tests/i18n` → **53 passed, 0 failed** (2 new test files)
+- `pnpm exec vitest run` → **503 passed, 0 failed** (16 test files; baseline was 450)
+- `pnpm exec tsc --noEmit` → **exit 0, 0 errors**
+- `pnpm lint` → **exit 0, 0 ESLint errors, 0 Prettier issues**
+- `pnpm build` → **exit 0** (pre-existing chunk-size warning only; bundle 1,075.79 kB unchanged order-of-magnitude)
+- `grep -rn "from 'pixi\|from 'svelte/" src/i18n/runtime.ts src/i18n/types.ts` → **0 results** (pure helpers confirmed DOM-free)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-11-01 | Language carried from marketing: app starts in language chosen on landing/tutorial | — | manual | not covered — deferred to step 11.4+ (requires running app) |
+| A-11-02 | In-app selector switches all text live and writes to `orbifold.lang` | — | manual | PARTIAL — selector wired to `lang` store + write-back implemented; full text switching deferred to steps 11.4–11.5 |
+| A-11-03 | Resolution chain matches marketing exactly | `tests/i18n/runtime.test.ts` | unit | **COVERED** — 21 resolution chain tests (URL param, localStorage, navigator.language, zh-prefix, unsupported→es, precedence) |
+| A-11-04 | Full coverage: every catalogued string routed through dictionary | — | manual + proxy | not covered — deferred to steps 11.4–11.5 |
+| A-11-05 | Fallback: missing key renders es base text, never raw key or blank | `tests/i18n/runtime.test.ts` | unit | **COVERED** — 7 fallback lookup tests confirm es fallback for empty/missing values |
+| A-11-06 | Interpolation: dynamic strings render correctly | `tests/i18n/runtime.test.ts` | unit | **COVERED** — 9 interpolation tests (single, multiple, unmatched as-is, numbers, zero, verbatim token preserved) |
+| A-11-07 | Four languages selectable, full UI in each language | — | manual | not covered — deferred to step 11.6 |
+| A-11-08 | Agent replies in user's language; code/JSON contract unchanged | — | manual | not covered — deferred to step 11.5 |
+| A-11-09 | Adding a new language = one dictionary; key-parity test fails build if missing/extra | `tests/i18n/key-parity.test.ts` | unit | **COVERED** — 8 key-parity tests confirm all four dictionaries have identical key sets |
+| A-11-10 | i18n runtime testable: resolution, fallback, interpolation pure/unit-tested | `tests/i18n/runtime.test.ts` | automated | **COVERED** — 45 tests, zero DOM dependency in runtime.ts confirmed by grep |
+| A-11-11 | Schema isolation: language absent from SavedSchema and agent schemas | — | automated (proxy: grep) | **COVERED** — confirmed in steps 11.1–11.2; no schema changes in this step |
+| A-11-12 | Quality gates green | — | automated | **COVERED** — 503/503 vitest, 0 tsc, 0 lint, build exit 0 |
+| A-11-13 | AGPL-3.0 header in all new and modified source files | — | automated (proxy: head -2) | **COVERED** — all 7 new source files have `// SPDX-License-Identifier: AGPL-3.0-only` |
+
+### Decisions made (if any)
+
+None new. Implementation follows ADR 0017 D1–D5 exactly. The `Dictionary` type is defined minimally (selector keys only) and will grow in steps 11.4–11.5 as strings are extracted.
+
+**Unmatched interpolation behavior (D5):** Documented explicitly — unmatched `{varName}` placeholders are left as-is (not replaced with blank). This is the defensive behavior per ADR 0017 D5 ("Unmatched placeholders are left as-is"). Tested in `runtime.test.ts` "leaves unmatched placeholder as-is".
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- Source: 10 files added/modified, 945 insertions. Branch `orbifold-v2/phase-11`.
+- Quality gates: 503 passed, 0 tsc errors, 0 lint errors, build clean.
+- New test count: 503 (baseline 450 + 53 new i18n tests).
+
+### Next-step context (only if non-obvious)
+
+Step 11.4 (Wave A extraction) reads `docs/adr/0017-i18n-architecture.md` and the step 11.1 catalog, then extracts all Wave A strings (43 Header.svelte + 8 App.svelte + 13 Transport.svelte + 6 LatencyCalibration.svelte + 5 Legend.svelte) into the `es` dictionary and replaces literals in components with `$t(...)`. The `Dictionary` type in `src/i18n/types.ts` must be extended as each namespace group is added. The key-parity test ensures all four locale files stay in sync after every extraction batch.
+
+Note: `src/ui/Header.svelte` already imports `t` indirectly via `lang`/`LANGS` for the selector; step 11.4 will add the `t` store import to Header.svelte as well when extracting the 43 catalogued strings.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(i18n): Phase 11 step 11.3 — i18n runtime, header selector, tests`
+- Hash: `bbdf694`
+- Note: Source + handoff committed together. Handoff appended after source commit; docs will be added in the handoff-update commit below.
