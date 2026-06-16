@@ -43,6 +43,10 @@
     previewEuclid,
     hushAll,
   } from '../state/session.js';
+
+  // Phase 11 step 11.3: i18n store + language selector (ADR 0017 D1, D3, OQ-5).
+  import { lang, LANGS } from '../i18n/index.js';
+  import type { LangCode } from '../i18n/index.js';
   // setRegisterMode removed in Phase 10 redesign step 10.11 (ADR 0015 D2).
   // The estricto/suavizado register toggle (#registerModeSeg) is removed from
   // the UI. The Canvas 2D Pentagrama layer uses raw chordVoicing() pitches
@@ -127,6 +131,30 @@
 
   function handleAddEmpty(): void {
     addEmptyLayer(euclidSound);
+  }
+
+  // ── Language selector (Phase 11 step 11.3, ADR 0017 OQ-5) ────────────────
+  // The 文A button opens an inline dropdown listing the four native labels.
+  // Clicking a language writes to the `lang` store (which triggers write-back
+  // to localStorage['orbifold.lang'] per D3) and closes the dropdown.
+
+  let langMenuOpen = false;
+
+  function handleLangSelect(code: LangCode): void {
+    lang.set(code);
+    langMenuOpen = false;
+  }
+
+  function handleLangToggle(): void {
+    langMenuOpen = !langMenuOpen;
+  }
+
+  // Close the dropdown if the user clicks outside it.
+  function handleLangBlur(e: FocusEvent): void {
+    // relatedTarget is null when focus leaves the browser; close the menu.
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) {
+      langMenuOpen = false;
+    }
   }
 
   // ── Key selector ───────────────────────────────────────────────────────────
@@ -488,6 +516,36 @@
   <!-- Spacer: pushes right-side controls to the right. Prototype: .sp (line 388). -->
   <div class="sp"></div>
 
+  <!--
+    Language selector (Phase 11 step 11.3 — ADR 0017 OQ-5).
+    The 文A button (CJK + Latin glyph, Wikipedia/Google-style language globe idiom)
+    opens a dropdown listing the four native language labels. Always visible.
+    Clicking a language writes to the `lang` store → triggers localStorage write-back
+    to 'orbifold.lang' (D3 contract). The dropdown closes on selection or focus-out.
+  -->
+  <div class="lang-sel" role="group" aria-label="Language selector" on:focusout={handleLangBlur}>
+    <button
+      class="lang-btn"
+      title="Language / Idioma / Língua / 语言"
+      aria-haspopup="listbox"
+      aria-expanded={langMenuOpen}
+      on:click={handleLangToggle}>文A</button
+    >
+    {#if langMenuOpen}
+      <ul class="lang-menu" role="listbox" aria-label="Select language">
+        {#each LANGS as { code, label }}
+          <li role="option" aria-selected={$lang === code}>
+            <button
+              class="lang-option"
+              class:active={$lang === code}
+              on:click={() => handleLangSelect(code)}>{label}</button
+            >
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+
   <a href="./tutorial.html" class="tutorial-link" target="_blank" rel="noopener" title="Guía de uso"
     >Tutorial</a
   >
@@ -666,5 +724,87 @@
     background: rgba(86, 207, 196, 0.2);
     border-color: rgba(86, 207, 196, 0.5);
     color: var(--subdom);
+  }
+
+  /*
+   * Language selector (Phase 11 step 11.3 — ADR 0017 OQ-5).
+   * .lang-sel is a positioned container so the dropdown (.lang-menu) can
+   * be absolutely positioned below the toggle button.
+   */
+  .lang-sel {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  /* 文A toggle button — matches .tutorial-link visual weight. */
+  .lang-btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 9px;
+    border-radius: 8px;
+    border: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--faint);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+    line-height: 1.2;
+  }
+
+  .lang-btn:hover {
+    color: var(--text);
+    border-color: var(--stroke-2);
+  }
+
+  /* Dropdown list */
+  .lang-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    background: var(--bg, #0f1117);
+    border: 1px solid var(--stroke);
+    border-radius: 10px;
+    min-width: 110px;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .lang-menu li {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Individual language option button */
+  .lang-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition:
+      background 0.1s,
+      color 0.1s;
+    white-space: nowrap;
+  }
+
+  .lang-option:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+  }
+
+  /* Active (currently selected) language */
+  .lang-option.active {
+    color: var(--accent);
   }
 </style>
