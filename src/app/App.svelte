@@ -24,6 +24,8 @@
   import Legend from '../ui/Legend.svelte';
   import Tooltip from '../ui/Tooltip.svelte';
   import { get } from 'svelte/store';
+  // Phase 11 step 11.4: i18n store for Wave A string extraction.
+  import { t } from '../i18n/index.js';
   import { initStage, onResize, setView } from '../render/stage.js';
   import {
     buildTonnetz,
@@ -414,13 +416,12 @@
       <div class="hint">{$hudStore.hint}</div>
     {:else}
       <div class="hint">
-        3 voces en color — tónica (naranja), subdominante (turquesa), dominante (rosa). Clic para
-        seleccionar · arrastrar para mover · borde derecho para redimensionar.
+        {$t('app.hint.staff')}
       </div>
     {/if}
   {:else if $sessionStore.view === 'rhythm'}
     <div class="hint">
-      Elige E(k,n) y añade órbitas euclidianas. Click derecho sobre una órbita para silenciarla.
+      {$t('app.hint.rhythm')}
     </div>
   {/if}
 
@@ -461,7 +462,7 @@
       hoveredLayerIndex = -1;
     }}
     role="toolbar"
-    aria-label="Layer controls"
+    aria-label={$t('app.layerCtl.ariaLabel')}
   >
     <!--
       Solo button: active state when layer.solo === true.
@@ -470,8 +471,8 @@
     <button
       class:on={$sessionStore.rhythm.layers[hoveredLayerIndex]?.solo === true}
       data-a="solo"
-      title="sonar sola (solo)"
-      on:click={handleLayerSolo}>S</button
+      title={$t('app.layerCtl.soloTitle')}
+      on:click={handleLayerSolo}>{$t('app.layerCtl.soloKey')}</button
     >
     <!--
       Mute button: active state when layer.muted === true.
@@ -480,13 +481,15 @@
     <button
       class:on={$sessionStore.rhythm.layers[hoveredLayerIndex]?.muted === true}
       data-a="mute"
-      title="silenciar (mute)"
-      on:click={handleLayerMute}>M</button
+      title={$t('app.layerCtl.muteTitle')}
+      on:click={handleLayerMute}>{$t('app.layerCtl.muteKey')}</button
     >
     <!--
       Delete button: prototype line 337 hover → rgba(232,123,172,.4).
     -->
-    <button data-a="del" title="eliminar órbita" on:click={handleLayerDelete}>🗑</button>
+    <button data-a="del" title={$t('app.layerCtl.deleteTitle')} on:click={handleLayerDelete}
+      >🗑</button
+    >
   </div>
 {/if}
 

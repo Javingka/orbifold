@@ -29,6 +29,8 @@
     hushAll,
     setBpm,
   } from '../state/session.js';
+  // Phase 11 step 11.4: i18n store for Wave A string extraction.
+  import { t } from '../i18n/index.js';
   import LatencyCalibration from './LatencyCalibration.svelte';
 
   // ── BPM conversion helpers ─────────────────────────────────────────────────
@@ -121,15 +123,15 @@
   <div class="now" id="nowPlaying" class:live={$sessionStore.nowPlaying.source !== null}>
     <span class="dot"></span>
     <div>
-      <div class="nlbl">sonando</div>
+      <div class="nlbl">{$t('transport.nowPlaying.label')}</div>
       <div class="nval" id="nowLabel">
-        {$sessionStore.nowPlaying.label ?? 'silencio'}
+        {$sessionStore.nowPlaying.label ?? $t('transport.nowPlaying.silencio')}
       </div>
     </div>
   </div>
 
   <!-- Engine label. Prototype: .eng-lbl "tocar" (line 491). -->
-  <span class="eng-lbl">tocar</span>
+  <span class="eng-lbl">{$t('transport.engineLabel')}</span>
 
   <!--
     Engine buttons group. Prototype: .engines (lines 492–496).
@@ -140,26 +142,26 @@
     <button
       class="ebtn rhythm"
       id="rhythmPlay"
-      title="Suena SOLO el groove (motor rítmico)"
+      title={$t('transport.rhythmPlayTitle')}
       on:click={() => void playGroove()}
     >
-      ▶ Ritmo
+      {$t('transport.rhythmPlay')}
     </button>
     <button
       class="ebtn harmony"
       id="progPlay"
-      title="Suena SOLO la progresión de acordes (motor armónico)"
+      title={$t('transport.harmonyPlayTitle')}
       on:click={() => void playProgression()}
     >
-      ▶ Armonía
+      {$t('transport.harmonyPlay')}
     </button>
     <button
       class="play-session"
       id="sessionPlay"
-      title="Combina ritmo + armonía en un solo stack() y los toca juntos"
+      title={$t('transport.sessionPlayTitle')}
       on:click={() => void playSession()}
     >
-      ▶ Sesión <span class="mini">ritmo + armonía</span>
+      {$t('transport.sessionPlay')} <span class="mini">{$t('transport.sessionPlaySub')}</span>
     </button>
   </div>
 
@@ -167,7 +169,9 @@
     Silence button. Prototype: .tbtn.warm#hushBtn (line 497).
     CSS: .tbtn.warm { color:var(--dom); border-color:rgba(232,123,172,.4); } (line 215).
   -->
-  <button class="tbtn warm" id="hushBtn" on:click={() => void hushAll()}> ■ silencio </button>
+  <button class="tbtn warm" id="hushBtn" on:click={() => void hushAll()}
+    >{$t('transport.hush')}</button
+  >
 
   <!--
     BPM slider + readout + tap-tempo.
@@ -193,9 +197,9 @@
       id="tapBtn"
       class:flash={tapFlash}
       on:click={registerTap}
-      title="Pulsar al ritmo para ajustar el tempo"
+      title={$t('transport.tapTitle')}
     >
-      TAP
+      {$t('transport.tap')}
     </button>
   </div>
 

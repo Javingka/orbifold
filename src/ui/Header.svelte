@@ -45,7 +45,8 @@
   } from '../state/session.js';
 
   // Phase 11 step 11.3: i18n store + language selector (ADR 0017 D1, D3, OQ-5).
-  import { lang, LANGS } from '../i18n/index.js';
+  // Phase 11 step 11.4: `t` store imported for Wave A string extraction.
+  import { lang, LANGS, t } from '../i18n/index.js';
   import type { LangCode } from '../i18n/index.js';
   // setRegisterMode removed in Phase 10 redesign step 10.11 (ADR 0015 D2).
   // The estricto/suavizado register toggle (#registerModeSeg) is removed from
@@ -195,7 +196,7 @@
   <div class="brand">
     <span class="glyph">꩜</span>
     <h1>Orbifold</h1>
-    <span class="tag">geometría sonora</span>
+    <span class="tag">{$t('header.tagline')}</span>
   </div>
 
   <!--
@@ -212,28 +213,28 @@
       class={$sessionStore.view === 'harmony' ? 'active' : ''}
       on:click={() => handleViewChange('harmony')}
     >
-      Armonía
+      {$t('header.nav.harmony')}
     </button>
     <button
       data-view="rhythm"
       class={$sessionStore.view === 'rhythm' ? 'active' : ''}
       on:click={() => handleViewChange('rhythm')}
     >
-      Ritmo
+      {$t('header.nav.rhythm')}
     </button>
     <button
       data-view="composition"
       class={$sessionStore.view === 'composition' ? 'active' : ''}
       on:click={() => handleViewChange('composition')}
     >
-      Composición
+      {$t('header.nav.composition')}
     </button>
     <button
       data-view="code"
       class={$sessionStore.view === 'code' ? 'active' : ''}
       on:click={() => handleViewChange('code')}
     >
-      Código Strudel
+      {$t('header.nav.code')}
     </button>
   </div>
 
@@ -255,11 +256,11 @@
       <button
         class="rk"
         id="layoutToggle"
-        data-tip="Alterna entre el reloj radial y una pista lineal, con transición animada."
+        data-tip={$t('header.rhythm.morphTip')}
         style="background:rgba(138,160,255,.14);border-color:rgba(138,160,255,.4);color:var(--accent)"
         on:click={handleMorphToggle}
       >
-        {morphTarget === 0 ? '▭ lineal' : '▭ radial'}
+        {morphTarget === 0 ? $t('header.rhythm.morphLinear') : $t('header.rhythm.morphRadial')}
       </button>
 
       <span class="r-sep">│</span>
@@ -270,17 +271,13 @@
       <span
         data-tip="Ritmo euclidiano: reparte k golpes lo más uniformemente posible entre n pasos. Base de muchos patrones del mundo."
       >
-        órbita euclidiana
+        {$t('header.rhythm.euclidLabel')}
       </span>
 
       <!--
         Sound select. Prototype lines 430–434.
       -->
-      <select
-        id="euclidSound"
-        bind:value={euclidSound}
-        data-tip="Sonido/muestra de esta órbita (bombo bd, caja sd, hi-hats hh/oh, palmas cp, toms lt/mt/ht…)."
-      >
+      <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')}>
         <option value="bd">bd</option>
         <option value="sd">sd</option>
         <option value="hh" selected>hh</option>
@@ -295,10 +292,7 @@
       <!--
         E(k,n) readout. Prototype line 435.
       -->
-      <span
-        data-tip="E(k,n): k golpes distribuidos en n pasos. Ej: E(3,8) = tresillo; E(5,8) = cinquillo."
-        >E(<b>{euclidK}</b>,<b>{euclidN}</b>)</span
-      >
+      <span data-tip={$t('header.rhythm.euclidInfoTip')}>E(<b>{euclidK}</b>,<b>{euclidN}</b>)</span>
 
       <!--
         k slider. Prototype line 436.
@@ -309,7 +303,7 @@
         min="1"
         max="16"
         bind:value={euclidK}
-        data-tip="k = número de golpes (onsets) a repartir."
+        data-tip={$t('header.rhythm.kTip')}
       />
 
       <!--
@@ -321,22 +315,20 @@
         min="2"
         max="16"
         bind:value={euclidN}
-        data-tip="n = número de pasos (subdivisiones) del ciclo."
+        data-tip={$t('header.rhythm.nTip')}
       />
 
       <!--
         rot readout + slider. Prototype lines 438–439.
       -->
-      <span data-tip="rot = rotación: desplaza el patrón r pasos, cambiando en qué pulso empieza."
-        >rot <b>{euclidR}</b></span
-      >
+      <span data-tip={$t('header.rhythm.rotTip')}>rot <b>{euclidR}</b></span>
       <input
         type="range"
         id="euclidR"
         min="0"
         max={euclidRMax}
         bind:value={euclidR}
-        data-tip="rot = rotación: desplaza el patrón r pasos."
+        data-tip={$t('header.rhythm.rotSliderTip')}
       />
 
       <!--
@@ -350,13 +342,13 @@
       <button
         class="rk"
         id="euclidPreview"
-        data-tip="Oír solo esta órbita euclidiana antes de añadirla."
+        data-tip={$t('header.rhythm.previewTip')}
         style={isPreviewing
           ? 'background:rgba(232,123,172,.16);border-color:rgba(232,123,172,.4);color:var(--dom)'
           : 'background:rgba(86,207,196,.16);border-color:rgba(86,207,196,.4);color:var(--subdom)'}
         on:click={handlePreviewToggle}
       >
-        {isPreviewing ? '■ stop' : '▶ oír'}
+        {isPreviewing ? $t('header.rhythm.stopLabel') : $t('header.rhythm.listenLabel')}
       </button>
 
       <!--
@@ -365,10 +357,10 @@
       <button
         class="rk"
         id="addEuclid"
-        data-tip="Añadir esta órbita euclidiana como una nueva capa."
+        data-tip={$t('header.rhythm.addOrbitTip')}
         on:click={handleAddEuclid}
       >
-        + órbita
+        {$t('header.rhythm.addOrbit')}
       </button>
 
       <!--
@@ -377,11 +369,11 @@
       <button
         class="rk"
         id="addLayerEmpty"
-        data-tip="Añadir una capa vacía de 16 pasos para dibujarla a mano."
+        data-tip={$t('header.rhythm.addEmptyTip')}
         style="background:rgba(255,255,255,.05);border-color:var(--stroke);color:var(--muted)"
         on:click={handleAddEmpty}
       >
-        + capa vacía
+        {$t('header.rhythm.addEmpty')}
       </button>
 
       <!--
@@ -392,8 +384,9 @@
       <button
         class="rk r-ctx-btn"
         class:active={$agentCtx.includeRhythm}
-        title="Enviar el groove al agente como base rítmica"
-        on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}>📨 base</button
+        title={$t('header.rhythm.sendBaseTitle')}
+        on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}
+        >{$t('header.rhythm.sendBaseLabel')}</button
       >
     </div>
   {/if}
@@ -418,13 +411,13 @@
         class={$sessionStore.harmony.subview === 'tonnetz' ? 'active' : ''}
         on:click={() => setHarmonySubview('tonnetz')}
       >
-        Tonnetz
+        {$t('header.harmony.subviewTonnetz')}
       </button>
       <button
         class={$sessionStore.harmony.subview === 'staff' ? 'active' : ''}
         on:click={() => setHarmonySubview('staff')}
       >
-        Pentagrama
+        {$t('header.harmony.subviewStaff')}
       </button>
     </div>
 
@@ -447,18 +440,18 @@
       <button
         class={$sessionStore.chordMode === 'chord' ? 'active' : ''}
         data-mode="chord"
-        data-tip="Toca el acorde como bloque (todas las notas a la vez)."
+        data-tip={$t('header.harmony.chordTip')}
         on:click={() => setChordMode('chord')}
       >
-        ◧ acorde
+        {$t('header.harmony.chordLabel')}
       </button>
       <button
         class={$sessionStore.chordMode === 'arp' ? 'active' : ''}
         data-mode="arp"
-        data-tip="Arpegia el acorde (notas en sucesión, duración por subdivisión)."
+        data-tip={$t('header.harmony.arpTip')}
         on:click={() => setChordMode('arp')}
       >
-        ⋯ arpegio
+        {$t('header.harmony.arpLabel')}
       </button>
     </div>
 
@@ -471,14 +464,14 @@
     <button
       class="marco-btn"
       class:active={$agentCtx.includeHarmony}
-      title="Enviar la clave + progresión al agente como marco armónico"
+      title={$t('header.harmony.sendMarcoTitle')}
       on:click={() => agentCtx.update((c) => ({ ...c, includeHarmony: true }))}
     >
-      📨 marco
+      {$t('header.harmony.sendMarcoLabel')}
     </button>
 
     <div class="field">
-      <span>clave</span>
+      <span>{$t('header.harmony.keyLabel')}</span>
 
       <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
       <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
@@ -490,14 +483,14 @@
 
       <!-- Mode select. Prototype: #melMode (lines 373–382). -->
       <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
-        <option value="major">mayor</option>
-        <option value="minor">menor</option>
-        <option value="dorian">dórico</option>
-        <option value="phrygian">frigio</option>
-        <option value="lydian">lidio</option>
-        <option value="mixolydian">mixolidio</option>
-        <option value="locrian">locrio</option>
-        <option value="harmonic:minor">menor armónica</option>
+        <option value="major">{$t('header.harmony.modeMajor')}</option>
+        <option value="minor">{$t('header.harmony.modeMinor')}</option>
+        <option value="dorian">{$t('header.harmony.modeDorian')}</option>
+        <option value="phrygian">{$t('header.harmony.modePhrygian')}</option>
+        <option value="lydian">{$t('header.harmony.modeLydian')}</option>
+        <option value="mixolydian">{$t('header.harmony.modeMixolydian')}</option>
+        <option value="locrian">{$t('header.harmony.modeLocrian')}</option>
+        <option value="harmonic:minor">{$t('header.harmony.modeHarmonicMinor')}</option>
       </select>
 
       <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
@@ -546,8 +539,12 @@
     {/if}
   </div>
 
-  <a href="./tutorial.html" class="tutorial-link" target="_blank" rel="noopener" title="Guía de uso"
-    >Tutorial</a
+  <a
+    href="./tutorial.html"
+    class="tutorial-link"
+    target="_blank"
+    rel="noopener"
+    title={$t('header.tutorialTitle')}>{$t('header.tutorialLabel')}</a
   >
 
   <!--

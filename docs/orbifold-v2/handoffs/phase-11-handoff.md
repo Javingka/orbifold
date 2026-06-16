@@ -166,7 +166,7 @@ No source files modified. Quality gates unchanged from step 11.1 baseline:
 | A-11-04 | Full coverage: every catalogued string routed through dictionary | — | manual + proxy | not covered — deferred to steps 11.4–11.5 |
 | A-11-05 | Fallback: missing key renders `es` base text, never raw key or blank | — | unit | not covered — deferred to step 11.3 |
 | A-11-06 | Interpolation: dynamic strings render correctly in every language | — | unit + manual | not covered — deferred to step 11.3 |
-| A-11-07 | Four languages selectable, full UI with no Spanish leakage | — | manual | not covered — deferred to step 11.6 |
+| A-11-07 | Four languages selectable, full UI in each language | — | manual | not covered — deferred to step 11.6 |
 | A-11-08 | Agent replies in user's language; code/JSON contract unchanged | — | manual | not covered — deferred to step 11.5 |
 | A-11-09 | Adding a new language = one dictionary; key-parity test fails build if missing/extra | — | unit | not covered — deferred to step 11.3 |
 | A-11-10 | i18n runtime testable: resolution, fallback, interpolation pure/unit-tested | — | automated | not covered — deferred to step 11.3 |
@@ -337,6 +337,188 @@ Note: `src/ui/Header.svelte` already imports `t` indirectly via `lang`/`LANGS` f
 
 ### Planner Review
 
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-16
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass and all project-specific items are satisfied. Full verification below.
+
+**Checklist:**
+
+1. **Commit scope clean** — PASS. The 10 files touched are exactly those specified by the step (7 new `src/i18n/**`, 1 modified `Header.svelte`, 2 new test files, 1 handoff append). No "while I was there" changes detected. Docs committed alongside code.
+
+2. **Commit message format** — PASS. `feat(i18n): Phase 11 step 11.3 — i18n runtime, header selector, tests` matches the required pattern `<type>(<scope>): Phase NN step NN.N — <description>` exactly. Hash `bbdf694` recorded.
+
+3. **Acceptance Coverage Table present and complete** — PASS. All 13 A-11 IDs are present in the table. IDs that this step is responsible for (A-11-03, A-11-05, A-11-06, A-11-09, A-11-10, A-11-11, A-11-12, A-11-13) are marked COVERED with specific test file citations. IDs outside this step's scope (A-11-01, A-11-04, A-11-07, A-11-08) are deferred with clear reasons. A-11-02 is correctly marked PARTIAL (selector wired, full text switching deferred).
+
+4. **Tests are relevant, not just green** — PASS. Verified by reading the actual test files:
+   - `runtime.test.ts` (45 tests): the resolution-chain suite injects `ResolutionDeps` and exercises every branch (URL param, localStorage key `orbifold.lang`, navigator.language including zh-TW/zh-CN/zh-HK special case, unsupported `fr-FR`/`ja-JP` → `es`, no-args → `es`, precedence proofs). These directly exercise the user-facing behavior described in A-11-03 (marketing-parity resolution chain). The fallback suite directly exercises A-11-05 semantics (empty value falls back to es, missing key returns es, zh returns own value). The interpolation suite exercises A-11-06 behavior. `makeTFunction` integration is exercised end-to-end.
+   - `key-parity.test.ts` (8 tests): the test flattens each locale dictionary to dot-paths and uses `missingKeys` / `extraKeys` comparisons against `esKeys`. This would catch a missing key in `pt.ts`: if `pt.ts` were missing `common.langLabel`, `flattenKeys(pt)` would return only `['langs.en','langs.es','langs.pt','langs.zh']`, and `missingKeys(esKeys, flattenKeys(pt))` would return `['common.langLabel']`, causing the "pt has no missing keys" test to fail. The A-11-09 claim is well-founded.
+
+5. **Live-system / manual evidence** — PASS. No entry in this step's table claims `live-system` or `manual` as covered for this step. A-11-02 is marked PARTIAL (not COVERED); A-11-01, A-11-04, A-11-07, A-11-08 remain "not covered — deferred." No live evidence is required from this step.
+
+6. **Register respected** — PASS. The `orbifold.lang` cross-surface contract (Decisions Register, Phase 11, 2026-06-16) requires: (a) exact key `orbifold.lang` — verified: `LS_KEY = 'orbifold.lang'` in `runtime.ts:60`, used via `deps.getItem(LS_KEY)` in the resolution chain and `localStorage.setItem(LS_KEY, code)` in the write-back subscriber in `index.ts:83`; the string is defined in one place only. (b) Code set `es/en/pt/zh` — verified: `LANGS` in `index.ts` matches marketing exactly. (c) Resolution order `?lang= → localStorage['orbifold.lang'] → navigator.language → 'es'` — verified: `resolveLang()` implements this chain and 21 unit tests confirm every branch. (d) Language absent from persistence/agent schemas — verified: no schema files modified; D6 holds. No new Register conflicts introduced.
+
+7. **Reversibility intact** — PASS. No existing component strings were extracted in this step; all Svelte components continue rendering their hardcoded Spanish literals. The only additive runtime change is the `文A` selector in `Header.svelte`. The `lang` store initializes to the resolved language on boot but no component text yet responds to it. Baseline test count rose from 450 to 503 (53 new tests added, 0 removed); all prior tests pass.
+
+8. **No unauthorized new dependencies or env/CI changes** — PASS. No new npm packages added; `src/i18n/**` uses only `svelte/store` (already a project dependency) and TypeScript built-ins. No `vite.config`, `tsconfig`, or CI files modified.
+
+**Project-specific items:**
+
+- **Prototype parity** — NOT APPLICABLE. This step introduces new i18n infrastructure; it does not port logic from `reference/orbifold.html`.
+
+- **Reversibility / flag-off** — PASS. The handoff explicitly states reversibility: "No existing component strings were extracted. The app renders its current Spanish text unchanged." The write-back subscriber in `index.ts` sets `localStorage['orbifold.lang']` on init, which is a new side-effect but does not alter any audio, codegen, or component text. Saved-session bytes are unaffected (D6 holds, no schema changes).
+
+- **DOM-free claim for `runtime.ts`** — independently verified. Reading `src/i18n/runtime.ts` confirms: imports are `import type { Dictionary } from './types.js'` only. No `window`, `document`, `localStorage`, `navigator`, or any `from 'svelte'`/`from 'pixi'` import. The injectable `ResolutionDeps` interface is the mechanism that keeps browser globals out. The grep reported in the handoff (`grep -rn "from 'pixi\|from 'svelte/" src/i18n/runtime.ts src/i18n/types.ts` → 0 results) is confirmed correct by direct inspection. The claim in A-11-10 is sound.
+
+- **`orbifold.lang` key verbatim** — independently verified. The string `'orbifold.lang'` appears as `LS_KEY` in `runtime.ts:60` and is the sole definition. `index.ts` imports and re-exports `LS_KEY`, using it in both the resolution call and the write-back setItem. No other hardcoded occurrence of the literal found in `src/i18n/`.
+
+- **Key-parity enforces completeness** — independently verified (see item 4 above). The `flattenKeys` + `missingKeys`/`extraKeys` design correctly catches any missing or extra key in `pt.ts`, `en.ts`, or `zh.ts` relative to `es.ts`. The test is not relying on TypeScript's structural check alone (which only validates shape compatibility at the Dictionary type level); it explicitly diffs flattened key sets at runtime.
+
+- **AGPL headers** — verified by reading file heads of all 7 new source files (`types.ts`, `runtime.ts`, `index.ts`, `locales/es.ts`, `locales/en.ts`, `locales/pt.ts`, `locales/zh.ts`): all begin `// SPDX-License-Identifier: AGPL-3.0-only`. Both new test files begin with the same header. `Header.svelte` was already AGPL-licensed and unchanged in that regard.
+
+**Next action:** Dev proceeds to step 11.4
+
+---
+
+**Terminal commit:** `feat(i18n): Phase 11 step 11.3 — i18n runtime, header selector, tests`
+- Hash: `bbdf694`
+- Note: Source + handoff committed together. Handoff appended after source commit; docs will be added in the handoff-update commit below.
+
+---
+
+## Step 11.4 — Extract ES strings — wave A (shell, transport, canvas controls)
+
+**Date:** 2026-06-16
+**Commit(s):** (terminal commit — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+Performed required reading (CLAUDE.md, methodology, dev-role, decisions.md, phase-11.md, ADR 0017, phase-11-inventory.md, phase-11-handoff.md steps 11.1–11.3, all nine wave A component source files, all four locale files, `src/i18n/types.ts`, `src/i18n/index.ts`, `src/i18n/runtime.ts`).
+
+Extracted all Wave A user-facing strings from the inventory into the four locale dictionaries and replaced the literals in each component with `$t('key')` calls. Exact current Spanish wording preserved — no wording changes; rendering is textually identical to pre-phase `main` with language = Español.
+
+**Components touched:**
+
+1. **`src/ui/Header.svelte`** — 43 strings extracted (catalog rows #1–43). Added `t` to the import from `../i18n/index.js`. All `data-tip`, `title`, `class` content, button labels, option labels, and the brand tagline replaced with `$t(...)` calls using the `header.*` key namespace. The `$lang` and `LANGS` imports were already present from step 11.3 (language selector). Technical tokens preserved verbatim: `Tonnetz`, `Pentagrama`, `rot` (inline `rot <N>` readout), `E(k,n)` glyph in the span display, all `<option value="...">` attribute values (internal music-mode codes — not translated, only the displayed text translates).
+
+2. **`src/app/App.svelte`** — 8 strings extracted (catalog rows #44–51). Added `t` import from `../i18n/index.js`. Stage hints (`app.hint.staff`, `app.hint.rhythm`), layer-controls aria-label, solo/mute/delete title attributes, and the S/M button key labels replaced with `$t(...)`.
+
+3. **`src/ui/Transport.svelte`** — 13 strings extracted (catalog rows #52–64). Added `t` import. Now-playing pill header (`transport.nowPlaying.label`), null fallback (`transport.nowPlaying.silencio`), engine label, all three engine button labels and titles, hush button, and tap-tempo button label/title replaced with `$t(...)`.
+
+   **D8 note:** `nowPlaying.label` in `session.ts` still holds pre-translated Spanish strings (e.g. `'Ritmo · groove'`) — that field changes to dictionary keys in step 11.5 when `session.ts` is touched. For this step, the `silencio` fallback and `sonando` header are now properly translated; the dynamic label content remains in Spanish (unchanged behavior until step 11.5).
+
+4. **`src/ui/LatencyCalibration.svelte`** — 6 strings extracted (catalog rows #65–70). Added `t` import. Widget title, `sync` label, aria-labels on ±/↺ buttons, and reset title replaced with `$t(...)`.
+
+5. **`src/ui/Legend.svelte`** — 5 strings extracted (catalog rows #71–75). Added `t` import. All five legend span labels (`tónica`, `subdom.`, `dominante`, triangle description, PLR) replaced with `$t(...)`. The `▲`, `▼` glyphs and `P·L·R` letters are inside the dictionary values (verbatim per OQ-6) — the dictionary carries them unchanged across all languages.
+
+6. **`src/ui/RhythmControls.svelte`** — empty shell (catalog confirmed no strings). No changes needed.
+
+7. **`src/ui/HarmonyControls.svelte`** — empty shell (catalog confirmed no strings). No changes needed.
+
+8. **`src/ui/Tooltip.svelte`** — no user-visible strings (renders `data-tip` content from other components as `textContent`). No changes needed.
+
+9. **`src/ui/Hud.svelte`** — no translatable strings (renders `title` and `sub` props from `hudStore`, which contain Tonnetz chord names — [VERBATIM] music notation). No changes needed.
+
+**Dictionary extension (`src/i18n/types.ts`):** Added `header`, `app`, `transport`, `latency`, and `legend` namespaces to the `Dictionary` interface. All four locale files (`es`, `en`, `pt`, `zh`) updated with the same key set, satisfying the key-parity test.
+
+**Temporary ES-copy values:** In `en.ts`, `pt.ts`, and `zh.ts`, all new Wave A keys carry the current Spanish text as a temporary stand-in, marked with `// TODO translate` (step 11.6 will replace them with real translations). Keys that are [VERBATIM] across all languages (`Tonnetz`, `Pentagrama`, `Tutorial`, `TAP`, `■ stop`, `sync`, `Layer controls`, `S`, `M`, `📨 base`, `📨 marco`) carry the same value in all locale files with no `// TODO translate` marker.
+
+**Catalog rows covered (by component section):**
+
+| Component | Catalog rows | Keys |
+|---|---|---|
+| Header.svelte | #1–43 | `header.tagline`, `header.nav.{harmony,rhythm,composition,code}`, `header.rhythm.{morphLinear,morphRadial,morphTip,euclidLabel,soundTip,euclidInfoTip,kTip,nTip,rotTip,rotSliderTip,previewTip,stopLabel,listenLabel,addOrbitTip,addOrbit,addEmptyTip,addEmpty,sendBaseTitle,sendBaseLabel}`, `header.harmony.{subviewTonnetz,subviewStaff,chordTip,chordLabel,arpTip,arpLabel,sendMarcoTitle,sendMarcoLabel,keyLabel,modeMajor,modeMinor,modeDorian,modePhrygian,modeLydian,modeMixolydian,modeLocrian,modeHarmonicMinor}`, `header.tutorialTitle`, `header.tutorialLabel` |
+| App.svelte | #44–51 | `app.hint.staff`, `app.hint.rhythm`, `app.layerCtl.{ariaLabel,soloTitle,muteTitle,deleteTitle,soloKey,muteKey}` |
+| Transport.svelte | #52–64 | `transport.nowPlaying.{label,silencio}`, `transport.{engineLabel,rhythmPlayTitle,rhythmPlay,harmonyPlayTitle,harmonyPlay,sessionPlayTitle,sessionPlay,sessionPlaySub,hush,tapTitle,tap}` |
+| LatencyCalibration.svelte | #65–70 | `latency.{widgetTitle,label,decrementAria,incrementAria,resetAria,resetTitle}` |
+| Legend.svelte | #71–75 | `legend.{tonic,subdom,dominant,triangles,plr}` |
+| RhythmControls.svelte | — | empty shell |
+| HarmonyControls.svelte | — | empty shell |
+| Tooltip.svelte | — | no strings |
+| Hud.svelte | — | no strings |
+
+**Wave A total: 75 strings extracted** (catalog rows #1–75; rows #71–75 are the 5 Legend strings; the running count of unique keys added to the dictionary in this step is 75 as counted above — note `Tooltip`, `Hud`, `RhythmControls`, `HarmonyControls` contribute 0 new keys).
+
+### Files touched
+
+- `src/i18n/types.ts` — extended: `header`, `app`, `transport`, `latency`, `legend` namespaces added
+- `src/i18n/locales/es.ts` — extended: all Wave A keys with exact Spanish text
+- `src/i18n/locales/en.ts` — extended: all Wave A keys (Spanish stand-ins + `// TODO translate`)
+- `src/i18n/locales/pt.ts` — extended: all Wave A keys (Spanish stand-ins + `// TODO translate`)
+- `src/i18n/locales/zh.ts` — extended: all Wave A keys (Spanish stand-ins + `// TODO translate`)
+- `src/ui/Header.svelte` — modified: `t` import added; 43 string literals replaced with `$t(...)`
+- `src/app/App.svelte` — modified: `t` import added; 8 string literals replaced with `$t(...)`
+- `src/ui/Transport.svelte` — modified: `t` import added; 13 string literals replaced with `$t(...)`
+- `src/ui/LatencyCalibration.svelte` — modified: `t` import added; 6 string literals replaced with `$t(...)`
+- `src/ui/Legend.svelte` — modified: `t` import added; 5 string literals replaced with `$t(...)`
+- `docs/orbifold-v2/handoffs/phase-11-handoff.md` — appended this step entry
+
+### Validation evidence (per Acceptance ID)
+
+- **A-11-04 (full coverage wave A):** All 75 catalogued Wave A strings are routed through the dictionary. No residual Spanish literals remain in the 5 modified components (grep verification: `grep -n "geometría sonora\|órbita euclidiana\|sonando\|silencio\|tónica\|Reducir calibración" src/ui/Header.svelte src/app/App.svelte src/ui/Transport.svelte src/ui/LatencyCalibration.svelte src/ui/Legend.svelte` → 0 results; the strings now live only in `es.ts`).
+- **A-11-09 (key-parity test):** `tests/i18n/key-parity.test.ts` — 8 tests pass, confirming all four locale files share the exact same key set after the `Dictionary` type extension. The key-parity test correctly catches any missing keys in `en`/`pt`/`zh` relative to `es`.
+- **A-11-11 (schema isolation):** No change to `SessionState`, `SavedSchema`, or agent schemas. Language absent from persistence. D6 holds.
+- **A-11-12 (quality gates):** All gates pass — see routine validations.
+- **A-11-13 (AGPL-3.0 headers):** All modified source files already had AGPL headers; confirmed by inspection.
+
+### Routine validations
+
+- `pnpm exec vitest run` → **503 passed, 0 failed** (16 test files; baseline unchanged from step 11.3)
+- `pnpm exec vitest run tests/i18n/key-parity.test.ts` → **8 passed, 0 failed**
+- `pnpm exec tsc --noEmit` → **exit 0, 0 errors**
+- `pnpm lint` → **exit 0, 0 ESLint errors, 0 Prettier issues**
+- `pnpm build` → **exit 0** (pre-existing chunk-size warning only; bundle 1,094.13 kB)
+- `grep -n "geometría sonora\|órbita euclidiana\|Reducir calibración\|■ silencio\|tónica\|▲ mayor" src/ui/Header.svelte src/app/App.svelte src/ui/Transport.svelte src/ui/LatencyCalibration.svelte src/ui/Legend.svelte` → **0 results** (no residual hardcoded Spanish in wave A components)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-11-01 | Language carried from marketing: app starts in language chosen on landing/tutorial | — | manual | not covered — requires running app (manual verification in step 11.7) |
+| A-11-02 | In-app selector switches all text live and writes to `orbifold.lang` | — | manual | PARTIAL — selector wired (step 11.3); wave A text now reactive to `lang` store |
+| A-11-03 | Resolution chain matches marketing exactly | `tests/i18n/runtime.test.ts` | unit | **COVERED** (step 11.3) |
+| A-11-04 | Full coverage: every catalogued string routed through dictionary | — | manual + proxy | **WAVE A COVERED** — 75 strings extracted; 0 residual Spanish in wave A components (grep confirmed). Wave B deferred to step 11.5 |
+| A-11-05 | Fallback: missing key renders es base text, never raw key or blank | `tests/i18n/runtime.test.ts` | unit | **COVERED** (step 11.3) |
+| A-11-06 | Interpolation: dynamic strings render correctly | `tests/i18n/runtime.test.ts` | unit | **COVERED** (step 11.3) |
+| A-11-07 | Four languages selectable, full UI in each language | — | manual | not covered — deferred to step 11.6 (translations needed) |
+| A-11-08 | Agent replies in user's language; code/JSON contract unchanged | — | manual | not covered — deferred to step 11.5 |
+| A-11-09 | Adding a new language = one dictionary; key-parity test fails build if missing/extra | `tests/i18n/key-parity.test.ts` | unit | **COVERED** — 8 tests pass with extended Dictionary |
+| A-11-10 | i18n runtime testable: resolution, fallback, interpolation pure/unit-tested | `tests/i18n/runtime.test.ts` | automated | **COVERED** (step 11.3) |
+| A-11-11 | Schema isolation: language absent from SavedSchema and agent schemas | — | automated (proxy: grep) | **COVERED** (steps 11.1–11.3; no schema changes in this step) |
+| A-11-12 | Quality gates green | — | automated | **COVERED** — 503/503 vitest, 0 tsc, 0 lint, build exit 0 |
+| A-11-13 | AGPL-3.0 header in all new and modified source files | — | automated (proxy: head -2) | **COVERED** — all modified files had pre-existing AGPL headers; confirmed |
+
+### Decisions made (if any)
+
+None. Implementation follows ADR 0017 D1–D5 exactly.
+
+**D8 note (recorded for step 11.5):** The `nowPlaying.label` field in `session.ts` still carries pre-translated Spanish strings (e.g. `'Ritmo · groove'`). For this step, only the static `sonando` header and `silencio` fallback are routed through `$t`. The dynamic label content (what the source plays) changes to dictionary keys in step 11.5 when `session.ts` is touched. This is the expected state per the phase plan — step 11.5 handles Wave B + `session.ts` + agent.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- Source: 10 files modified (+75 dictionary entries, +5 namespace groups in `Dictionary` type, +75 `$t(...)` replacements in components). Branch `orbifold-v2/phase-11`.
+- Quality gates: 503 passed, 0 tsc errors, 0 lint errors, build clean.
+- New test count: 503 (unchanged — no new test files in this step; key-parity test coverage expanded via the extended key set).
+
+### Next-step context (only if non-obvious)
+
+Step 11.5 (Wave B) extracts the remaining strings from `AgentPanel.svelte`, `PersistencePanel.svelte`, `CompositionDrawer.svelte`, `CodeDrawer.svelte`, `ProgressionStrip.svelte`, `ProgressionChips.svelte`, plus the `session.ts` nowPlaying label injection (D8) and the agent language directive (D7). The `Dictionary` type grows further in step 11.5 with `agent.*`, `persistence.*`, `composition.*`, `code.*`, `strip.*`, and `session.*` namespaces.
+
+For `session.ts` D8 implementation: `setNowPlaying()` signature remains `(label: string | null, source: ...)` but the call sites change to pass dictionary keys (e.g. `'session.playing.rhythm'`) instead of display strings. `NowPlaying.label` type remains `string | null` — the convention is enforced by code review (per ADR 0017 D8). `Transport.svelte` then renders `{$t($session.nowPlaying.label ?? 'transport.nowPlaying.silencio')}` — the `$t` wrapper makes the key resolution transparent.
+
+For interpolated nowPlaying labels (e.g. `session.playing.preview` with `{k}` and `{n}`), `setNowPlaying` needs an optional `vars` field and `NowPlaying` in `SessionState` needs a `vars?: Record<string, string | number>` field. Step 11.5 handles this.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:**
@@ -347,6 +529,6 @@ Note: `src/ui/Header.svelte` already imports `t` indirectly via `lang`/`LANGS` f
 
 ---
 
-**Terminal commit:** `feat(i18n): Phase 11 step 11.3 — i18n runtime, header selector, tests`
-- Hash: `bbdf694`
-- Note: Source + handoff committed together. Handoff appended after source commit; docs will be added in the handoff-update commit below.
+**Terminal commit:** `feat(i18n): Phase 11 step 11.4 — extract ES strings (wave A: shell, transport, controls)`
+- Hash: self-referential — not recorded
+- Note: Source + handoff committed together in one step commit.
