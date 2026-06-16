@@ -7,6 +7,7 @@
 //            with "// TODO translate" so step 11.6 can find and replace them.
 //            Keys that are [VERBATIM] (technical tokens, proper nouns) are kept
 //            as-is with no TODO marker.
+// Step 11.5: added all Wave B keys with Spanish stand-ins and // TODO translate markers.
 
 import type { Dictionary } from '../types.js';
 
@@ -137,6 +138,122 @@ const pt: Dictionary = {
     triangles: '▲ mayor · ▼ menor', // TODO translate (mayor/menor → maior/menor)
     // P·L·R is [VERBATIM]
     plr: 'P·L·R vecinos', // TODO translate
+  },
+
+  // ── Wave B (step 11.5) ───────────────────────────────────────────────────
+
+  agent: {
+    tabLabel: '꩜ AGENTE IA', // TODO translate
+    panelTitle: 'Agente', // TODO translate
+    closeTitle: 'Cerrar panel', // TODO translate
+    providerTitle: 'Proveedor de IA', // TODO translate
+    modelPlaceholder: 'modelo', // TODO translate
+    modelTitle: 'Modelo de IA', // TODO translate
+    // API key label — [VERBATIM] in all languages per OQ-6
+    keyTitle: 'API key',
+    autoplay: 'auto-tocar', // TODO translate
+    autofix: '🔧 auto-corregir', // TODO translate
+    inputPlaceholder: 'pídele un acompañamiento, una variación, una progresión…', // TODO translate
+    sendTitle: 'Enviar', // TODO translate
+    runCodeLabel: '▶ tocar esto', // TODO translate
+    quick: {
+      grooveLabel: '🥁 Groove',
+      groovePrompt:
+        'Crea un groove de batería con bombo, caja y hi-hats que pegue con el tempo actual.', // TODO translate
+      progressionLabel: '🎹 Progresión', // TODO translate
+      progressionPrompt:
+        'Crea una progresión de 4 acordes con voice-leadings suaves en una clave que propongas.', // TODO translate
+      bothLabel: '🎶 Ritmo + armonía', // TODO translate
+      bothPrompt: 'Crea un groove y una progresión que combinen bien como base.', // TODO translate
+      euclidLabel: '🌀 Euclidiano', // TODO translate
+      euclidPrompt: 'Crea un ritmo con capas euclidianas (bombo y hats) con sabor afro.', // TODO translate
+      variationLabel: '🔁 Variación', // TODO translate
+      variationPrompt: 'Modifica el ritmo actual para hacerlo más interesante sin perder el pulso.', // TODO translate
+    },
+    autofixLoading: '🔧 corrigiendo…', // TODO translate
+    autofixFailed: '⚠️ No pude obtener corrección del agente.', // TODO translate
+    execError: '⚠️ Error al ejecutar: {error}', // TODO translate
+    execErrorGiveUp: '\n(no pude corregirlo tras varios intentos; revísalo en el editor)', // TODO translate
+    execErrorEnableAutofix: '\n(activa 🔧 auto-corregir)', // TODO translate
+    languageDirective: 'Responda em {languageName}.',
+  },
+
+  persistence: {
+    btnTitle: 'Sesiones guardadas', // TODO translate
+    panelTitle: 'Sesiones', // TODO translate
+    closeTitle: 'Cerrar panel', // TODO translate
+    saveNamePlaceholder: 'nombre de sesión…', // TODO translate
+    saveBtn: '💾 Guardar', // TODO translate
+    emptyState: 'Sin sesiones guardadas.', // TODO translate
+    loadTitle: 'Cargar sesión', // TODO translate
+    deleteTitle: 'Eliminar sesión', // TODO translate
+    shareBtn: '📤 Compartir URL', // TODO translate
+    shareFeedback: '✓ Copiado', // TODO translate
+  },
+
+  composition: {
+    heading: 'composición — arregla ritmos y armonías ya montados', // TODO translate
+    headingHint: 'guarda bloques y ordénalos en el tiempo (cada uno dura N compases)', // TODO translate
+    col1Title: '1 · guardar bloques', // TODO translate
+    col1Hint: 'captura lo que tienes montado ahora mismo como un bloque reutilizable.', // TODO translate
+    saveGroove: '💾 groove actual', // TODO translate
+    saveHarmony: '💾 armonía actual', // TODO translate
+    saveSession: '💾 sesión actual', // TODO translate
+    emptyBlocks: 'aún no hay bloques — guarda uno arriba.', // TODO translate
+    col2Title: '2 · línea de tiempo', // TODO translate
+    timelineHint:
+      'pistas apiladas = suenan a la vez · bloques en fila = en secuencia · arrastra el borde derecho para los compases', // TODO translate
+    addTrack: '+ pista', // TODO translate
+    trackLabel: 'pista {N}', // TODO translate
+    deleteTrackTitle: 'eliminar pista', // TODO translate
+    noBlocksHint: 'guarda bloques arriba', // TODO translate
+    barsUnit: 'comp.', // TODO translate
+    play: '▶ tocar', // TODO translate
+    pause: '⏸ pausa', // TODO translate
+    stop: '■ stop',
+    clearAll: 'limpiar todo', // TODO translate
+    playing: '▶ compás {bar} / {total}', // TODO translate
+    paused: '⏸ compás {bar} / {total}', // TODO translate
+    trackSingular: '{count} pista', // TODO translate
+    trackPlural: '{count} pistas', // TODO translate
+    barSingular: '{count} compás', // TODO translate
+    barPlural: '{count} compases', // TODO translate
+    blockTypeRhythm: 'ritmo', // TODO translate
+    blockTypeHarmony: 'armonía', // TODO translate
+    blockTypeSession: 'sesión', // TODO translate
+    addBlockOption: '＋ bloque…', // TODO translate
+    addBlockEntry: '+ {type}: {name}',
+  },
+
+  code: {
+    heading: 'código Strudel', // TODO translate
+    headingHint: 'lo que suena ahora — edítalo y ejecútalo', // TODO translate
+    runNow: '▶ ejecutar (ahora)', // TODO translate
+    queue: '↻ encolar (próximo ciclo)', // TODO translate
+  },
+
+  strip: {
+    label: 'progresión', // TODO translate
+    empty: 'toca acordes en el Tonnetz…', // TODO translate
+    restTitle: 'silencio · ✕ para quitar', // TODO translate
+    resizeRestAria: 'Redimensionar duración del silencio', // TODO translate
+    chordTitle: 'mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar', // TODO translate
+    resizeDurAria: 'Redimensionar duración', // TODO translate
+    addRest: '+ silencio', // TODO translate
+  },
+
+  session: {
+    playing: {
+      rhythm: 'Ritmo · groove', // TODO translate
+      harmony: 'Armonía · progresión', // TODO translate
+      session: 'Sesión · ritmo + armonía', // TODO translate
+      preview: 'Vista previa · E({k},{n})', // TODO translate
+      editor: 'Editor',
+      block: 'Bloque · {name}', // TODO translate
+      composition: 'Composición', // TODO translate
+      compositionPaused: 'Composición · pausa', // TODO translate
+      agent: 'Código del agente', // TODO translate
+    },
   },
 };
 

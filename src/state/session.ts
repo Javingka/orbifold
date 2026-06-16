@@ -216,6 +216,11 @@ export interface RhythmState {
  *   merged with the label shown in the prototype UI.
  */
 export interface NowPlaying {
+  /**
+   * i18n translation key (e.g. 'session.playing.rhythm') or null when silent.
+   * ADR 0017 D8: stores a key, not a pre-translated Spanish string.
+   * Transport.svelte renders via $t(label, vars).
+   */
   label: string | null;
   source:
     | 'rhythm'
@@ -228,6 +233,11 @@ export interface NowPlaying {
     | 'agent'
     | 'editor'
     | null;
+  /**
+   * Optional interpolation variables for the label key.
+   * ADR 0017 D8: e.g. { k: '3', n: '8' } for 'session.playing.preview'.
+   */
+  vars?: Record<string, string | number>;
 }
 
 /**
@@ -363,11 +373,17 @@ export function sessionCode(state: SessionState): string {
  * State-only port: updates `nowPlaying.label` and `nowPlaying.source`.
  *
  * Prototype: `setNowPlaying(label, source)` lines 1477–1486.
+ * ADR 0017 D8: `label` is now a translation key (e.g. 'session.playing.rhythm'), not
+ * a pre-translated Spanish string. `vars` carries interpolation variables for the key.
  */
-export function setNowPlaying(label: string | null, source: NowPlaying['source']): void {
+export function setNowPlaying(
+  label: string | null,
+  source: NowPlaying['source'],
+  vars?: Record<string, string | number>
+): void {
   sessionStore.update((s) => ({
     ...s,
-    nowPlaying: { label, source },
+    nowPlaying: { label, source, vars },
   }));
 }
 
@@ -416,7 +432,7 @@ export async function playGroove(): Promise<void> {
   if (!code) return;
   // Set source before runNow so concurrent requeueLive calls see source='rhythm'.
   // Prototype: setNowPlaying is synchronous alongside runNow in transport handlers.
-  setNowPlaying('Ritmo · groove', 'rhythm');
+  setNowPlaying('session.playing.rhythm', 'rhythm');
   const a = await getAudio();
   await a.initAudio();
   a.setTempo(state.bpm);
@@ -439,7 +455,7 @@ export async function playProgression(): Promise<void> {
   const a = await getAudio();
   await a.initAudio();
   await a.runNow(code);
-  setNowPlaying('Armonía · progresión', 'harmony');
+  setNowPlaying('session.playing.harmony', 'harmony');
 }
 
 /**
@@ -457,7 +473,7 @@ export async function playSession(): Promise<void> {
   const a = await getAudio();
   await a.initAudio();
   await a.runNow(code);
-  setNowPlaying('Sesión · ritmo + armonía', 'session');
+  setNowPlaying('session.playing.session', 'session');
 }
 
 /**
@@ -802,7 +818,7 @@ export async function previewEuclid(
   const a = await getAudio();
   await a.initAudio();
   await a.runNow(code);
-  setNowPlaying(`Vista previa · E(${k},${n})`, 'preview');
+  setNowPlaying('session.playing.preview', 'preview', { k: String(k), n: String(n) });
 }
 
 /**
@@ -819,7 +835,7 @@ export async function runEditor(code: string): Promise<void> {
   const a = await getAudio();
   await a.initAudio();
   await a.runNow(code);
-  setNowPlaying('Editor', 'editor');
+  setNowPlaying('session.playing.editor', 'editor');
 }
 
 /**
@@ -1096,7 +1112,7 @@ export async function playBlockById(blockId: string): Promise<void> {
   const a = await getAudio();
   await a.initAudio();
   await a.runNow(block.code);
-  setNowPlaying('Bloque · ' + block.name, 'block');
+  setNowPlaying('session.playing.block', 'block', { name: block.name });
 }
 
 /**
@@ -1409,7 +1425,7 @@ export async function playComposition(): Promise<void> {
       : performance.now();
   setCompPlaying(start);
   await a.runNow(code);
-  setNowPlaying('Composición', 'composition');
+  setNowPlaying('session.playing.composition', 'composition');
 }
 
 /**
@@ -1443,7 +1459,7 @@ export async function pauseComposition(): Promise<void> {
   // Update nowPlaying label only (keep source = 'composition').
   sessionStore.update((s) => ({
     ...s,
-    nowPlaying: { label: 'Composición · pausa', source: 'composition' },
+    nowPlaying: { label: 'session.playing.compositionPaused', source: 'composition' },
   }));
 }
 

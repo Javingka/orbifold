@@ -109,6 +109,7 @@
   import { chordLabel } from '../core/theory/chords.js';
   import { diatonicLookup } from '../core/theory/scales.js';
   import type { Mode } from '../core/theory/scales.js';
+  import { t } from '../i18n/index.js';
 
   /**
    * Pixels per Strudel cycle in the absolute-grid model (Phase 03 step 03.4).
@@ -490,9 +491,9 @@
   Prototype: .prog wrapper (lines 505–508), .prog-empty (line 234).
 -->
 <div class="strip">
-  <span class="lbl">progresión</span>
+  <span class="lbl">{$t('strip.label')}</span>
   {#if $sessionStore.harmony.progression.length === 0}
-    <span class="strip-empty">toca acordes en el Tonnetz…</span>
+    <span class="strip-empty">{$t('strip.empty')}</span>
   {:else}
     <!--
       Phase 03 step 03.4: shared scroll wrapper ensures ruler and segments
@@ -549,7 +550,7 @@
                 width: {segPx}px;
                 flex: 0 0 {segPx}px;
               "
-              title="silencio · ✕ para quitar"
+              title={$t('strip.restTitle')}
               role="presentation"
               tabindex="-1"
             >
@@ -565,7 +566,7 @@
                 class="resize-handle"
                 role="separator"
                 aria-orientation="vertical"
-                aria-label="Redimensionar duración del silencio"
+                aria-label={$t('strip.resizeRestAria')}
                 on:pointerdown={(e) => handleResizePointerDown(e, i)}
                 on:pointermove={(e) => handleResizePointerMove(e, i)}
                 on:pointerup={(e) => handleResizePointerUp(e, i)}
@@ -610,7 +611,7 @@
                     rgba(255,255,255,0.07) {PX_PER_CYCLE / 4}px
                   )
               "
-              title="mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar"
+              title={$t('strip.chordTitle')}
               role="button"
               tabindex="0"
               on:pointerdown={(e) => handlePointerDown(e, i)}
@@ -633,7 +634,7 @@
                 class="resize-handle"
                 role="separator"
                 aria-orientation="vertical"
-                aria-label="Redimensionar duración"
+                aria-label={$t('strip.resizeDurAria')}
                 on:pointerdown={(e) => handleResizePointerDown(e, i)}
                 on:pointermove={(e) => handleResizePointerMove(e, i)}
                 on:pointerup={(e) => handleResizePointerUp(e, i)}
@@ -648,7 +649,7 @@
           Calls appendRest() which appends { isRest: true, bars: 1 } and requeueLive().
         -->
         {#if $sessionStore.harmony.progression.length < 16}
-          <button class="add-rest-btn" on:click={appendRest}>+ silencio</button>
+          <button class="add-rest-btn" on:click={appendRest}>{$t('strip.addRest')}</button>
         {/if}
       </div>
     </div>

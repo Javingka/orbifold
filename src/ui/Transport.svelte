@@ -125,7 +125,9 @@
     <div>
       <div class="nlbl">{$t('transport.nowPlaying.label')}</div>
       <div class="nval" id="nowLabel">
-        {$sessionStore.nowPlaying.label ?? $t('transport.nowPlaying.silencio')}
+        {$sessionStore.nowPlaying.label
+          ? $t($sessionStore.nowPlaying.label, $sessionStore.nowPlaying.vars)
+          : $t('transport.nowPlaying.silencio')}
       </div>
     </div>
   </div>

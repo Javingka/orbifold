@@ -17,6 +17,9 @@
 //
 // Step 11.4: added header, app, transport, latency, and legend namespaces
 // (Wave A extraction — shell, transport, canvas controls).
+//
+// Step 11.5: added agent, persistence, composition, code, strip, and
+// session namespaces (Wave B extraction — panels, drawers, progression).
 
 export interface Dictionary {
   /** Common cross-component labels. */
@@ -154,5 +157,145 @@ export interface Dictionary {
     triangles: string;
     /** P·L·R is [VERBATIM] */
     plr: string;
+  };
+
+  // ── Wave B namespaces (step 11.5) ────────────────────────────────────────
+
+  /** AgentPanel.svelte strings */
+  agent: {
+    tabLabel: string;
+    panelTitle: string;
+    closeTitle: string;
+    providerTitle: string;
+    modelPlaceholder: string;
+    modelTitle: string;
+    /** API key label — [VERBATIM] in all languages */
+    keyTitle: string;
+    autoplay: string;
+    autofix: string;
+    inputPlaceholder: string;
+    sendTitle: string;
+    runCodeLabel: string;
+    /** Quick prompt labels (emoji + label) */
+    quick: {
+      grooveLabel: string;
+      /** Agent prompt text — sent directly to agent */
+      groovePrompt: string;
+      progressionLabel: string;
+      progressionPrompt: string;
+      bothLabel: string;
+      bothPrompt: string;
+      euclidLabel: string;
+      euclidPrompt: string;
+      variationLabel: string;
+      variationPrompt: string;
+    };
+    /** Agent chat / runtime messages */
+    autofixLoading: string;
+    autofixFailed: string;
+    /** Error message — {error} is the interpolated error string */
+    execError: string;
+    execErrorGiveUp: string;
+    execErrorEnableAutofix: string;
+    /** Dynamic language directive appended to agent requests — {languageName} interpolated */
+    languageDirective: string;
+  };
+
+  /** PersistencePanel.svelte strings */
+  persistence: {
+    btnTitle: string;
+    panelTitle: string;
+    closeTitle: string;
+    saveNamePlaceholder: string;
+    saveBtn: string;
+    emptyState: string;
+    loadTitle: string;
+    deleteTitle: string;
+    shareBtn: string;
+    shareFeedback: string;
+  };
+
+  /** CompositionDrawer.svelte strings */
+  composition: {
+    heading: string;
+    headingHint: string;
+    col1Title: string;
+    col1Hint: string;
+    saveGroove: string;
+    saveHarmony: string;
+    saveSession: string;
+    emptyBlocks: string;
+    col2Title: string;
+    timelineHint: string;
+    addTrack: string;
+    /** Track N label — {N} interpolated */
+    trackLabel: string;
+    deleteTrackTitle: string;
+    noBlocksHint: string;
+    /** "compases" abbreviation after the bars number input */
+    barsUnit: string;
+    play: string;
+    pause: string;
+    stop: string;
+    clearAll: string;
+    /** Playing position label — {bar} and {total} interpolated */
+    playing: string;
+    /** Paused position label — {bar} and {total} interpolated */
+    paused: string;
+    /** Track count (singular) — {count} interpolated */
+    trackSingular: string;
+    /** Track count (plural) — {count} interpolated */
+    trackPlural: string;
+    /** Bar count (singular) — {count} interpolated */
+    barSingular: string;
+    /** Bar count (plural) — {count} interpolated */
+    barPlural: string;
+    /** Block type tag labels */
+    blockTypeRhythm: string;
+    blockTypeHarmony: string;
+    blockTypeSession: string;
+    /** Drop selector default option */
+    addBlockOption: string;
+    /** Drop selector per-block option — {type} and {name} interpolated */
+    addBlockEntry: string;
+  };
+
+  /** CodeDrawer.svelte strings */
+  code: {
+    /** Drawer title — "Strudel" is [VERBATIM] */
+    heading: string;
+    headingHint: string;
+    runNow: string;
+    queue: string;
+  };
+
+  /** ProgressionStrip.svelte / ProgressionChips.svelte shared strings */
+  strip: {
+    label: string;
+    /** Empty state — "Tonnetz" is [VERBATIM] */
+    empty: string;
+    restTitle: string;
+    resizeRestAria: string;
+    chordTitle: string;
+    resizeDurAria: string;
+    addRest: string;
+  };
+
+  /** session.ts nowPlaying label keys (D8) */
+  session: {
+    playing: {
+      rhythm: string;
+      harmony: string;
+      session: string;
+      /** Preview label — {k} and {n} interpolated; E(...) is [VERBATIM] */
+      preview: string;
+      editor: string;
+      /** Block label — {name} interpolated */
+      block: string;
+      composition: string;
+      compositionPaused: string;
+      /** Agent code label */
+      agent: string;
+    };
   };
 }

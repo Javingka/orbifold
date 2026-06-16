@@ -8,6 +8,8 @@
 // Step 11.3: seeded with only the keys needed for the header language selector.
 // Step 11.4: added all Wave A strings (header, app, transport, latency, legend).
 //            Exact current Spanish wording preserved — no changes to rendered text.
+// Step 11.5: added all Wave B strings (agent, persistence, composition, code, strip,
+//            session nowPlaying keys). Exact current Spanish wording preserved.
 
 import type { Dictionary } from '../types.js';
 
@@ -139,6 +141,135 @@ const es: Dictionary = {
     triangles: '▲ mayor · ▼ menor',
     // P·L·R is [VERBATIM]
     plr: 'P·L·R vecinos',
+  },
+
+  // ── Wave B (step 11.5) ───────────────────────────────────────────────────
+
+  agent: {
+    // ꩜ decorative glyph stays verbatim in all languages
+    tabLabel: '꩜ AGENTE IA',
+    panelTitle: 'Agente',
+    closeTitle: 'Cerrar panel',
+    providerTitle: 'Proveedor de IA',
+    modelPlaceholder: 'modelo',
+    modelTitle: 'Modelo de IA',
+    // API key label — [VERBATIM] in all languages per OQ-6
+    keyTitle: 'API key',
+    autoplay: 'auto-tocar',
+    autofix: '🔧 auto-corregir',
+    inputPlaceholder: 'pídele un acompañamiento, una variación, una progresión…',
+    sendTitle: 'Enviar',
+    runCodeLabel: '▶ tocar esto',
+    quick: {
+      grooveLabel: '🥁 Groove',
+      // Agent prompt text — voice-leadings [VERBATIM]
+      groovePrompt:
+        'Crea un groove de batería con bombo, caja y hi-hats que pegue con el tempo actual.',
+      progressionLabel: '🎹 Progresión',
+      progressionPrompt:
+        'Crea una progresión de 4 acordes con voice-leadings suaves en una clave que propongas.',
+      bothLabel: '🎶 Ritmo + armonía',
+      bothPrompt: 'Crea un groove y una progresión que combinen bien como base.',
+      euclidLabel: '🌀 Euclidiano',
+      euclidPrompt: 'Crea un ritmo con capas euclidianas (bombo y hats) con sabor afro.',
+      variationLabel: '🔁 Variación',
+      variationPrompt: 'Modifica el ritmo actual para hacerlo más interesante sin perder el pulso.',
+    },
+    autofixLoading: '🔧 corrigiendo…',
+    autofixFailed: '⚠️ No pude obtener corrección del agente.',
+    // {error} interpolated from Strudel runtime error string
+    execError: '⚠️ Error al ejecutar: {error}',
+    execErrorGiveUp: '\n(no pude corregirlo tras varios intentos; revísalo en el editor)',
+    execErrorEnableAutofix: '\n(activa 🔧 auto-corregir)',
+    // {languageName} interpolated — e.g. "español", "inglés"
+    languageDirective: 'Responde en {languageName}.',
+  },
+
+  persistence: {
+    btnTitle: 'Sesiones guardadas',
+    panelTitle: 'Sesiones',
+    closeTitle: 'Cerrar panel',
+    saveNamePlaceholder: 'nombre de sesión…',
+    saveBtn: '💾 Guardar',
+    emptyState: 'Sin sesiones guardadas.',
+    loadTitle: 'Cargar sesión',
+    deleteTitle: 'Eliminar sesión',
+    shareBtn: '📤 Compartir URL',
+    shareFeedback: '✓ Copiado',
+  },
+
+  composition: {
+    heading: 'composición — arregla ritmos y armonías ya montados',
+    headingHint: 'guarda bloques y ordénalos en el tiempo (cada uno dura N compases)',
+    col1Title: '1 · guardar bloques',
+    col1Hint: 'captura lo que tienes montado ahora mismo como un bloque reutilizable.',
+    saveGroove: '💾 groove actual',
+    saveHarmony: '💾 armonía actual',
+    saveSession: '💾 sesión actual',
+    emptyBlocks: 'aún no hay bloques — guarda uno arriba.',
+    col2Title: '2 · línea de tiempo',
+    timelineHint:
+      'pistas apiladas = suenan a la vez · bloques en fila = en secuencia · arrastra el borde derecho para los compases',
+    addTrack: '+ pista',
+    // {N} interpolated — track number (1-indexed)
+    trackLabel: 'pista {N}',
+    deleteTrackTitle: 'eliminar pista',
+    noBlocksHint: 'guarda bloques arriba',
+    // "compases" abbreviation after bars input
+    barsUnit: 'comp.',
+    play: '▶ tocar',
+    pause: '⏸ pausa',
+    stop: '■ stop',
+    clearAll: 'limpiar todo',
+    // {bar} and {total} interpolated
+    playing: '▶ compás {bar} / {total}',
+    paused: '⏸ compás {bar} / {total}',
+    // {count} interpolated — plural rules vary by language
+    trackSingular: '{count} pista',
+    trackPlural: '{count} pistas',
+    barSingular: '{count} compás',
+    barPlural: '{count} compases',
+    blockTypeRhythm: 'ritmo',
+    blockTypeHarmony: 'armonía',
+    blockTypeSession: 'sesión',
+    addBlockOption: '＋ bloque…',
+    // {type} and {name} interpolated
+    addBlockEntry: '+ {type}: {name}',
+  },
+
+  code: {
+    // "Strudel" is [VERBATIM]
+    heading: 'código Strudel',
+    headingHint: 'lo que suena ahora — edítalo y ejecútalo',
+    runNow: '▶ ejecutar (ahora)',
+    queue: '↻ encolar (próximo ciclo)',
+  },
+
+  strip: {
+    label: 'progresión',
+    // "Tonnetz" is [VERBATIM]
+    empty: 'toca acordes en el Tonnetz…',
+    restTitle: 'silencio · ✕ para quitar',
+    resizeRestAria: 'Redimensionar duración del silencio',
+    chordTitle: 'mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar',
+    resizeDurAria: 'Redimensionar duración',
+    addRest: '+ silencio',
+  },
+
+  session: {
+    playing: {
+      rhythm: 'Ritmo · groove',
+      harmony: 'Armonía · progresión',
+      session: 'Sesión · ritmo + armonía',
+      // {k} and {n} interpolated; E(...) notation is [VERBATIM]
+      preview: 'Vista previa · E({k},{n})',
+      editor: 'Editor',
+      // {name} interpolated — block.name
+      block: 'Bloque · {name}',
+      composition: 'Composición',
+      compositionPaused: 'Composición · pausa',
+      agent: 'Código del agente',
+    },
   },
 };
 
