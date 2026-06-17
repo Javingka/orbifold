@@ -138,8 +138,15 @@
   // The 文A button opens an inline dropdown listing the four native labels.
   // Clicking a language writes to the `lang` store (which triggers write-back
   // to localStorage['orbifold.lang'] per D3) and closes the dropdown.
+  //
+  // Checkpoint #5 bug-fix: dropdown is now position:fixed so it escapes the
+  // header stacking context and renders above the PIXI canvas (z-index:9000).
+  // The button's getBoundingClientRect() is used to anchor the menu position.
 
   let langMenuOpen = false;
+  let langBtnEl: HTMLButtonElement;
+  let menuTop = 0;
+  let menuLeft = 0;
 
   function handleLangSelect(code: LangCode): void {
     lang.set(code);
@@ -147,6 +154,11 @@
   }
 
   function handleLangToggle(): void {
+    if (!langMenuOpen) {
+      const r = langBtnEl.getBoundingClientRect();
+      menuTop = r.bottom + 4;
+      menuLeft = r.right;
+    }
     langMenuOpen = !langMenuOpen;
   }
 
@@ -268,9 +280,7 @@
       <!--
         Euclidean section header. Prototype line 429.
       -->
-      <span
-        data-tip="Ritmo euclidiano: reparte k golpes lo más uniformemente posible entre n pasos. Base de muchos patrones del mundo."
-      >
+      <span data-tip={$t('header.rhythm.euclidSectionTip')}>
         {$t('header.rhythm.euclidLabel')}
       </span>
 
@@ -518,6 +528,7 @@
   -->
   <div class="lang-sel" role="group" aria-label="Language selector" on:focusout={handleLangBlur}>
     <button
+      bind:this={langBtnEl}
       class="lang-btn"
       title="Language / Idioma / Língua / 语言"
       aria-haspopup="listbox"
@@ -525,13 +536,21 @@
       on:click={handleLangToggle}>文A</button
     >
     {#if langMenuOpen}
-      <ul class="lang-menu" role="listbox" aria-label="Select language">
+      <!-- position:fixed menu anchored via JS coords — escapes header stacking context -->
+      <ul
+        class="lang-menu"
+        role="listbox"
+        aria-label="Select language"
+        style="top:{menuTop}px; left:{menuLeft}px;"
+        on:pointerdown|stopPropagation
+        on:mousedown|stopPropagation
+      >
         {#each LANGS as { code, label }}
           <li role="option" aria-selected={$lang === code}>
             <button
               class="lang-option"
               class:active={$lang === code}
-              on:click={() => handleLangSelect(code)}>{label}</button
+              on:click|stopPropagation={() => handleLangSelect(code)}>{label}</button
             >
           </li>
         {/each}
@@ -725,13 +744,15 @@
 
   /*
    * Language selector (Phase 11 step 11.3 — ADR 0017 OQ-5).
-   * .lang-sel is a positioned container so the dropdown (.lang-menu) can
-   * be absolutely positioned below the toggle button.
+   * Checkpoint #5 bug-fix: .lang-sel uses flex-shrink:0 + white-space:nowrap
+   * so the button never wraps in the crowded Rhythm view header.
+   * .lang-menu is position:fixed so it escapes the header stacking context
+   * and renders above the PIXI canvas at z-index:9000.
    */
   .lang-sel {
-    position: relative;
     display: flex;
     align-items: center;
+    flex-shrink: 0;
   }
 
   /* 文A toggle button — matches .tutorial-link visual weight. */
@@ -745,6 +766,7 @@
     color: var(--faint);
     cursor: pointer;
     white-space: nowrap;
+    min-width: 2.4em;
     transition:
       color 0.15s,
       border-color 0.15s;
@@ -756,11 +778,12 @@
     border-color: var(--stroke-2);
   }
 
-  /* Dropdown list */
+  /* Dropdown list — position:fixed escapes header stacking context; z-index:9000
+   * renders above PIXI canvas (~60), AgentPanel (60) and any other overlay.
+   * transform:translateX(-100%) right-aligns the menu under the toggle button. */
   .lang-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
+    position: fixed;
+    transform: translateX(-100%);
     list-style: none;
     margin: 0;
     padding: 4px 0;
@@ -768,7 +791,7 @@
     border: 1px solid var(--stroke);
     border-radius: 10px;
     min-width: 110px;
-    z-index: 200;
+    z-index: 9000;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
 

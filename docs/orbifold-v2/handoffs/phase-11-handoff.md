@@ -1376,3 +1376,140 @@ If APPROVED: Phase 11 is complete. Archive the `orbifold-v2/phase-11` branch or 
 **Terminal commit:** `feat(i18n): Phase 11 step 11.7 — quality gates and manual acceptance`
 - Hash: self-referential — not recorded
 - Note: Handoff-only commit. No source files modified.
+
+---
+
+## Step 11.7 — Checkpoint #5 bug-fix
+
+**Date:** 2026-06-17
+**Commit(s):** (terminal commit — see below)
+**Iteration:** post-step correction (appended to step 11.7 entry)
+
+### Four bugs fixed
+
+The Pilot's Checkpoint #5 manual acceptance run identified four defects.
+All fixed in a single commit, appended here per the Pilot's directive.
+
+---
+
+#### Bug 1 — Language dropdown z-index: rendered behind PIXI canvas and note-info bar
+
+**Root cause:** `.lang-menu` used `position: absolute` inside the header's stacking
+context, giving it an effective z-index lower than the PIXI canvas and the note-info
+bar in harmony view.
+
+**Fix applied (`src/ui/Header.svelte`):**
+- Changed `.lang-menu` to `position: fixed` with `transform: translateX(-100%)` for
+  right-alignment and `z-index: 9000` (above PIXI canvas at ~60, AgentPanel at 60,
+  and any future overlay).
+- Bound the toggle button via `bind:this={langBtnEl}` and computed `menuTop` /
+  `menuLeft` from `langBtnEl.getBoundingClientRect()` in `handleLangToggle()` so the
+  menu anchors correctly below the button regardless of scroll or layout shift.
+- Removed `position: relative` from `.lang-sel` (no longer needed for the fixed child).
+- Added `flex-shrink: 0` to `.lang-sel` and `min-width: 2.4em` to `.lang-btn` (see Bug 3).
+
+---
+
+#### Bug 2 — Clicking language option activates Tonnetz triangle underneath
+
+**Root cause:** `click` events on the `<li>` / `<button>` elements propagated through
+to the PIXI canvas, which interpreted `pointerdown` as a chord selection.
+
+**Fix applied (`src/ui/Header.svelte`):**
+- Added `on:pointerdown|stopPropagation` and `on:mousedown|stopPropagation` to the
+  `<ul class="lang-menu">` element so all pointer events are consumed before reaching
+  the canvas.
+- Added `on:click|stopPropagation` to the per-language `<button>` inside each `<li>`
+  to explicitly stop click propagation as well.
+
+---
+
+#### Bug 3 — Rhythm view: language selector wraps to a second line / button compressed
+
+**Root cause:** `.lang-sel` had no `flex-shrink` rule, so the header's flex layout
+compressed the selector in the crowded Rhythm view.
+
+**Fix applied (`src/ui/Header.svelte`):**
+- Added `flex-shrink: 0` to `.lang-sel`.
+- Added `white-space: nowrap` (already on `.lang-btn`; confirmed present).
+- Added `min-width: 2.4em` to `.lang-btn` so "文A" never clips on narrow layouts.
+- Since `.lang-menu` is now `position: fixed` (Bug 1 fix), option-list truncation is
+  no longer possible — the menu overlays everything at full width.
+
+---
+
+#### Bug 4a — Tonnetz hint text: hardcoded Spanish in `hud.ts`
+
+**Root cause:** `DEFAULT_HINT` in `src/state/hud.ts` was the full Spanish string
+`'Toca un triángulo para elegir un acorde…'`. App.svelte rendered `{$hudStore.hint}`
+directly — bypassing `$t`, so the hint never translated.
+
+**Fix applied:**
+- `src/state/hud.ts`: changed `DEFAULT_HINT` to `'app.hint.tonnetz'` (a translation
+  key, following the same ADR 0017 D8 pattern as `setNowPlaying()`).
+- `src/app/App.svelte`: changed the hint render from `{$hudStore.hint}` to
+  `{$hudStore.hint ? $t($hudStore.hint) : ''}` so the key is resolved via the
+  reactive `$t` store and updates live on language switch.
+- Added `app.hint.tonnetz` key to `src/i18n/types.ts` (`Dictionary.app.hint`),
+  `src/i18n/locales/es.ts` (exact original Spanish text),
+  `src/i18n/locales/en.ts` (English translation),
+  `src/i18n/locales/pt.ts` (Portuguese translation),
+  `src/i18n/locales/zh.ts` (Simplified Chinese translation).
+- The key-parity test (8 tests) confirms all four locale files have the new key.
+
+---
+
+#### Bug 4b — Euclidean section span: hardcoded Spanish `data-tip` tooltip
+
+**Root cause:** `src/ui/Header.svelte` line 272: `data-tip="Ritmo euclidiano: reparte k
+golpes lo más uniformemente posible entre n pasos. Base de muchos patrones del mundo."`
+was hardcoded Spanish — not in the step 11.1 inventory, not routed through `$t`.
+
+**Fix applied:**
+- Added new key `header.rhythm.euclidSectionTip` to `src/i18n/types.ts`,
+  `es.ts` (exact original Spanish text), `en.ts`, `pt.ts`, and `zh.ts`.
+- Replaced the hardcoded `data-tip="..."` with `data-tip={$t('header.rhythm.euclidSectionTip')}`.
+
+---
+
+### Files touched
+
+- `src/ui/Header.svelte` — Bugs 1, 2, 3, 4b: `position:fixed` menu, event
+  stopPropagation, `flex-shrink:0`, `bind:this`, BoundingClientRect anchor,
+  `euclidSectionTip` key binding
+- `src/state/hud.ts` — Bug 4a: `DEFAULT_HINT` changed to translation key
+- `src/app/App.svelte` — Bug 4a: hint rendered via `$t($hudStore.hint)`
+- `src/i18n/types.ts` — Bugs 4a+4b: `app.hint.tonnetz` and
+  `header.rhythm.euclidSectionTip` added to `Dictionary`
+- `src/i18n/locales/es.ts` — Bugs 4a+4b: new keys with Spanish text
+- `src/i18n/locales/en.ts` — Bugs 4a+4b: new keys with English translations
+- `src/i18n/locales/pt.ts` — Bugs 4a+4b: new keys with Portuguese translations
+- `src/i18n/locales/zh.ts` — Bugs 4a+4b: new keys with Simplified Chinese translations
+- `docs/orbifold-v2/handoffs/phase-11-handoff.md` — this sub-entry appended
+
+### Quality gates
+
+- `pnpm exec tsc --noEmit` → **exit 0, 0 errors**
+- `pnpm lint` → **exit 0, 0 ESLint errors, 0 Prettier issues**
+- `pnpm exec vitest run` → **503 passed, 0 failed** (16 test files; key-parity 8/8)
+- `pnpm build` → **exit 0** (pre-existing chunk-size warning only; bundle 1,111.94 kB)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Status after fix |
+|---|---|---|---|---|
+| A-11-01 | Language carried from marketing | — | manual | **PENDING PILOT** — unchanged |
+| A-11-02 | In-app selector live switch + write-back | — | manual | **PENDING PILOT** — Bug 1/2/3 fixes make the selector usable in all views |
+| A-11-03 | Resolution chain matches marketing | `tests/i18n/runtime.test.ts` | unit | **COVERED** |
+| A-11-04 | Full string coverage; no residual hardcoded UI Spanish | — | manual + proxy | **KNOWN GAP CLOSED** — `Header.svelte:272` tooltip and `hud.ts` `DEFAULT_HINT` were the two remaining hardcoded Spanish strings; both now route through `$t`. No new Spanish literals added. |
+| A-11-05 | Fallback: missing key → es base text | `tests/i18n/runtime.test.ts` | unit | **COVERED** |
+| A-11-06 | Interpolation correct in every language | `tests/i18n/runtime.test.ts` | unit | **COVERED** |
+| A-11-07 | Four languages selectable, no Spanish leakage | — | manual | **PENDING PILOT** — real translations provided for both new keys |
+| A-11-08 | Agent replies in user's language | — | manual (proxy) | **PROXY-COVERED** — unchanged |
+| A-11-09 | Adding a language = one dictionary; key-parity | `tests/i18n/key-parity.test.ts` | unit | **COVERED** — 8 parity tests pass with 2 new keys added |
+| A-11-10 | i18n runtime pure/unit-tested | `tests/i18n/runtime.test.ts` | automated | **COVERED** |
+| A-11-11 | Schema isolation: lang absent from all schemas | — | automated (proxy: grep) | **COVERED** — no schema changes |
+| A-11-12 | Quality gates green | — | automated | **COVERED** — 503/503, 0 tsc, 0 lint, build exit 0 |
+| A-11-13 | AGPL-3.0 headers present | — | automated (proxy: head) | **COVERED** — all modified files had pre-existing headers |
+
+**Terminal commit:** `fix(i18n): Phase 11 — Checkpoint #5 bug-fix (dropdown z-index, pointer bleed, hint i18n, missing tooltip)`

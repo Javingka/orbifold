@@ -39,6 +39,8 @@ const pt: Dictionary = {
       morphRadial: '▭ radial',
       morphTip: 'Alterna entre o relógio radial e uma faixa linear, com transição animada.',
       euclidLabel: 'órbita euclidiana',
+      euclidSectionTip:
+        'Ritmo euclidiano: distribui k batidas o mais uniformemente possível em n passos. Base de muitos padrões rítmicos do mundo.',
       // sample codes bd/sd/hh/oh/cp/toms are [VERBATIM]
       soundTip:
         'Som/amostra desta órbita (bumbo bd, caixa sd, hi-hats hh/oh, palmas cp, tons lt/mt/ht…).',
@@ -87,6 +89,9 @@ const pt: Dictionary = {
 
   app: {
     hint: {
+      // P·L·R is [VERBATIM]
+      tonnetz:
+        'Toque um triângulo para escolher um acorde (▲ maior ▼ menor). Verá seus vizinhos P·L·R e o voice-leading mínimo. Abaixo você escolhe o que soa.',
       staff:
         '3 vozes coloridas — tônica (laranja), subdominante (turquesa), dominante (rosa). Clique para selecionar · arraste para mover · borda direita para redimensionar.',
       // E(k,n) is [VERBATIM]

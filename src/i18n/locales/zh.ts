@@ -39,6 +39,8 @@ const zh: Dictionary = {
       morphRadial: '▭ 放射',
       morphTip: '在放射时钟与线性轨道之间切换，带动画过渡。',
       euclidLabel: '欧几里得轨道',
+      euclidSectionTip:
+        '欧几里得节奏：将 k 个击点尽可能均匀地分布在 n 个步骤中。世界各地众多节奏型的基础。',
       // sample codes bd/sd/hh/oh/cp/toms are [VERBATIM]
       soundTip: '此轨道的音色/采样（底鼓 bd、军鼓 sd、踩镲 hh/oh、拍掌 cp、通鼓 lt/mt/ht…）。',
       // E(k,n), E(3,8), E(5,8) are [VERBATIM]
@@ -86,6 +88,9 @@ const zh: Dictionary = {
 
   app: {
     hint: {
+      // P·L·R is [VERBATIM]
+      tonnetz:
+        '点击三角形选择和弦（▲ 大调 ▼ 小调）。您将看到其 P·L·R 相邻和弦及最小 voice-leading。下方选择播放内容。',
       staff:
         '3 个彩色声部——主音（橙色）、下属音（青色）、属音（粉色）。点击选择 · 拖动移位 · 右边缘调整时值。',
       // E(k,n) is [VERBATIM]

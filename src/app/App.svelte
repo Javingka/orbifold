@@ -413,7 +413,7 @@
   -->
   {#if $sessionStore.view === 'harmony'}
     {#if $sessionStore.harmony.subview === 'tonnetz'}
-      <div class="hint">{$hudStore.hint}</div>
+      <div class="hint">{$hudStore.hint ? $t($hudStore.hint) : ''}</div>
     {:else}
       <div class="hint">
         {$t('app.hint.staff')}

@@ -55,6 +55,8 @@ export interface Dictionary {
       morphRadial: string;
       morphTip: string;
       euclidLabel: string;
+      /** Tooltip on the euclidean section header span (Bug 4b fix) */
+      euclidSectionTip: string;
       soundTip: string;
       /** E(k,n) explanation — E(k,n), E(3,8), E(5,8) are [VERBATIM] */
       euclidInfoTip: string;
@@ -103,6 +105,8 @@ export interface Dictionary {
   /** App.svelte strings */
   app: {
     hint: {
+      /** Tonnetz stage hint (Bug 4a fix) — P·L·R is [VERBATIM] */
+      tonnetz: string;
       /** Pentagrama stage hint — E(k,n) is [VERBATIM] */
       staff: string;
       /** Rhythm stage hint — E(k,n) is [VERBATIM] */

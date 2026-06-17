@@ -39,6 +39,8 @@ const en: Dictionary = {
       morphRadial: '▭ radial',
       morphTip: 'Toggle between the radial clock and a linear track, with an animated transition.',
       euclidLabel: 'Euclidean orbit',
+      euclidSectionTip:
+        'Euclidean rhythm: distributes k hits as evenly as possible across n steps. The basis of many rhythmic patterns worldwide.',
       // sample codes bd/sd/hh/oh/cp/toms are [VERBATIM]
       soundTip:
         'Sound/sample for this orbit (kick bd, snare sd, hi-hats hh/oh, claps cp, toms lt/mt/ht…).',
@@ -87,6 +89,9 @@ const en: Dictionary = {
 
   app: {
     hint: {
+      // P·L·R is [VERBATIM]
+      tonnetz:
+        'Tap a triangle to select a chord (▲ major ▼ minor). You will see its P·L·R neighbors and minimal voice-leading. Below you choose what plays.',
       // 3 voices in color — tonic/subdom/dom functional colors are descriptive
       staff:
         '3 color-coded voices — tonic (orange), subdominant (teal), dominant (pink). Click to select · drag to move · right edge to resize.',
