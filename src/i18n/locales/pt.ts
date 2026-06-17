@@ -27,6 +27,7 @@ const pt: Dictionary = {
 
   header: {
     tagline: 'geometria sonora',
+    brandTitle: 'Ir para a página inicial',
     nav: {
       harmony: 'Harmonia',
       rhythm: 'Ritmo',

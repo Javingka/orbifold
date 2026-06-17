@@ -27,6 +27,7 @@ const en: Dictionary = {
 
   header: {
     tagline: 'sonic geometry',
+    brandTitle: 'Go to the landing page',
     nav: {
       harmony: 'Harmony',
       rhythm: 'Rhythm',

@@ -139,14 +139,15 @@
   // Clicking a language writes to the `lang` store (which triggers write-back
   // to localStorage['orbifold.lang'] per D3) and closes the dropdown.
   //
-  // Checkpoint #5 bug-fix: dropdown is now position:fixed so it escapes the
-  // header stacking context and renders above the PIXI canvas (z-index:9000).
-  // The button's getBoundingClientRect() is used to anchor the menu position.
+  // Checkpoint #5 bug-fix (round 2): the dropdown is position:absolute anchored
+  // to .lang-sel (position:relative). The whole header is given its own raised
+  // stacking context (position:relative; z-index) above #stage, so the menu
+  // renders over the PIXI canvas and the Legend bar without needing JS coords.
+  // (The previous position:fixed approach failed because .glass sets
+  // backdrop-filter, which traps fixed descendants inside the header's own
+  // stacking context — see app.css .glass.)
 
   let langMenuOpen = false;
-  let langBtnEl: HTMLButtonElement;
-  let menuTop = 0;
-  let menuLeft = 0;
 
   function handleLangSelect(code: LangCode): void {
     lang.set(code);
@@ -154,11 +155,6 @@
   }
 
   function handleLangToggle(): void {
-    if (!langMenuOpen) {
-      const r = langBtnEl.getBoundingClientRect();
-      menuTop = r.bottom + 4;
-      menuLeft = r.right;
-    }
     langMenuOpen = !langMenuOpen;
   }
 
@@ -204,14 +200,24 @@
        margin:10px 12px 0; border-radius:18px; flex-wrap:wrap; } (lines 69–72).
 -->
 <header class="glass">
-  <!-- Brand: glyph + title + tag. Prototype lines 359–363. -->
-  <div class="brand">
-    <span class="glyph">꩜</span>
-    <h1>Orbifold</h1>
-    <span class="tag">{$t('header.tagline')}</span>
-  </div>
-
   <!--
+    Top row: primary navigation + language + tutorial (Phase 11 Checkpoint #5
+    redesign). Always-present global controls live here; section-specific
+    controls move to the bottom row so the Tutorial/language never wrap.
+  -->
+  <div class="hdr-row hdr-top">
+    <!--
+      Brand: glyph + title + tag. Prototype lines 359–363.
+      Phase 11 Checkpoint #5: the brand is now a link to the landing page.
+      "Orbifold" stays a [VERBATIM] token (OQ-6); only the title attr translates.
+    -->
+    <a class="brand" href="./landing.html" title={$t('header.brandTitle')}>
+      <span class="glyph">꩜</span>
+      <h1>Orbifold</h1>
+      <span class="tag">{$t('header.tagline')}</span>
+    </a>
+
+    <!--
     4-tab primary navigation segmented control.
     Phase 09 step 09.4: expanded from 2 buttons (Armonía · Ritmo) to 4 equal-weight
     buttons (Armonía · Ritmo · Composición · Código Strudel). ADR 0013 D1.
@@ -219,38 +225,98 @@
     tab can dominate via font size or padding differences.
     Active class applied to the currently-selected view.
   -->
-  <div class="seg" id="viewSeg">
-    <button
-      data-view="harmony"
-      class={$sessionStore.view === 'harmony' ? 'active' : ''}
-      on:click={() => handleViewChange('harmony')}
+    <div class="seg" id="viewSeg">
+      <button
+        data-view="harmony"
+        class={$sessionStore.view === 'harmony' ? 'active' : ''}
+        on:click={() => handleViewChange('harmony')}
+      >
+        {$t('header.nav.harmony')}
+      </button>
+      <button
+        data-view="rhythm"
+        class={$sessionStore.view === 'rhythm' ? 'active' : ''}
+        on:click={() => handleViewChange('rhythm')}
+      >
+        {$t('header.nav.rhythm')}
+      </button>
+      <button
+        data-view="composition"
+        class={$sessionStore.view === 'composition' ? 'active' : ''}
+        on:click={() => handleViewChange('composition')}
+      >
+        {$t('header.nav.composition')}
+      </button>
+      <button
+        data-view="code"
+        class={$sessionStore.view === 'code' ? 'active' : ''}
+        on:click={() => handleViewChange('code')}
+      >
+        {$t('header.nav.code')}
+      </button>
+    </div>
+
+    <!-- Spacer: pushes right-side controls to the right. Prototype: .sp (line 388). -->
+    <div class="sp"></div>
+
+    <!--
+      Language selector (Phase 11 step 11.3 — ADR 0017 OQ-5).
+      The 文A button (CJK + Latin glyph, Wikipedia/Google-style language globe idiom)
+      opens a dropdown listing the four native language labels. Always visible.
+      Clicking a language writes to the `lang` store → triggers localStorage write-back
+      to 'orbifold.lang' (D3 contract). The dropdown closes on selection or focus-out.
+    -->
+    <div class="lang-sel" role="group" aria-label="Language selector" on:focusout={handleLangBlur}>
+      <button
+        class="lang-btn"
+        title="Language / Idioma / Língua / 语言"
+        aria-haspopup="listbox"
+        aria-expanded={langMenuOpen}
+        on:click={handleLangToggle}>文A</button
+      >
+      {#if langMenuOpen}
+        <!-- position:absolute anchored to .lang-sel; the header's raised stacking
+             context (header { position:relative; z-index } below) lifts it above
+             the PIXI canvas and the Legend bar. -->
+        <ul
+          class="lang-menu"
+          role="listbox"
+          aria-label="Select language"
+          on:pointerdown|stopPropagation
+          on:mousedown|stopPropagation
+        >
+          {#each LANGS as { code, label }}
+            <li role="option" aria-selected={$lang === code}>
+              <button
+                class="lang-option"
+                class:active={$lang === code}
+                on:click|stopPropagation={() => handleLangSelect(code)}>{label}</button
+              >
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+
+    <a
+      href="./tutorial.html"
+      class="tutorial-link"
+      target="_blank"
+      rel="noopener"
+      title={$t('header.tutorialTitle')}>{$t('header.tutorialLabel')}</a
     >
-      {$t('header.nav.harmony')}
-    </button>
-    <button
-      data-view="rhythm"
-      class={$sessionStore.view === 'rhythm' ? 'active' : ''}
-      on:click={() => handleViewChange('rhythm')}
-    >
-      {$t('header.nav.rhythm')}
-    </button>
-    <button
-      data-view="composition"
-      class={$sessionStore.view === 'composition' ? 'active' : ''}
-      on:click={() => handleViewChange('composition')}
-    >
-      {$t('header.nav.composition')}
-    </button>
-    <button
-      data-view="code"
-      class={$sessionStore.view === 'code' ? 'active' : ''}
-      on:click={() => handleViewChange('code')}
-    >
-      {$t('header.nav.code')}
-    </button>
   </div>
 
   <!--
+    Bottom row: section-specific controls (Phase 11 Checkpoint #5 redesign).
+    Always present so the template stays a balanced tree; collapsed via
+    .hidden for views without inline controls (composition / code).
+  -->
+  <div
+    class="hdr-row hdr-bottom"
+    class:hidden={!($sessionStore.view === 'rhythm' || $sessionStore.view === 'harmony')}
+  >
+    <!--
     Rhythm controls (Phase 09 step 09.5).
     Moved from RhythmControls.svelte overlay (ADR 0013 D3).
     All rhythm-specific controls inline here, gated by view === 'rhythm'.
@@ -259,179 +325,181 @@
     so that it wraps gracefully on narrow viewports without overflowing the header.
     The inner .rhythm-ctl div acts as the flex-wrap container.
   -->
-  {#if $sessionStore.view === 'rhythm'}
-    <div class="rhythm-ctl">
-      <!--
+    {#if $sessionStore.view === 'rhythm'}
+      <div class="rhythm-ctl">
+        <!--
         Morph toggle. Prototype: button#layoutToggle.mk (line 427).
         Toggles morphTarget (0|1) and calls setMorphTarget() from rhythm-scene.ts.
       -->
-      <button
-        class="rk"
-        id="layoutToggle"
-        data-tip={$t('header.rhythm.morphTip')}
-        style="background:rgba(138,160,255,.14);border-color:rgba(138,160,255,.4);color:var(--accent)"
-        on:click={handleMorphToggle}
-      >
-        {morphTarget === 0 ? $t('header.rhythm.morphLinear') : $t('header.rhythm.morphRadial')}
-      </button>
+        <button
+          class="rk"
+          id="layoutToggle"
+          data-tip={$t('header.rhythm.morphTip')}
+          style="background:rgba(138,160,255,.14);border-color:rgba(138,160,255,.4);color:var(--accent)"
+          on:click={handleMorphToggle}
+        >
+          {morphTarget === 0 ? $t('header.rhythm.morphLinear') : $t('header.rhythm.morphRadial')}
+        </button>
 
-      <span class="r-sep">│</span>
+        <span class="r-sep">│</span>
 
-      <!--
+        <!--
         Euclidean section header. Prototype line 429.
       -->
-      <span data-tip={$t('header.rhythm.euclidSectionTip')}>
-        {$t('header.rhythm.euclidLabel')}
-      </span>
+        <span data-tip={$t('header.rhythm.euclidSectionTip')}>
+          {$t('header.rhythm.euclidLabel')}
+        </span>
 
-      <!--
+        <!--
         Sound select. Prototype lines 430–434.
       -->
-      <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')}>
-        <option value="bd">bd</option>
-        <option value="sd">sd</option>
-        <option value="hh" selected>hh</option>
-        <option value="oh">oh</option>
-        <option value="cp">cp</option>
-        <option value="rim">rim</option>
-        <option value="lt">lt</option>
-        <option value="mt">mt</option>
-        <option value="ht">ht</option>
-      </select>
+        <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')}>
+          <option value="bd">bd</option>
+          <option value="sd">sd</option>
+          <option value="hh" selected>hh</option>
+          <option value="oh">oh</option>
+          <option value="cp">cp</option>
+          <option value="rim">rim</option>
+          <option value="lt">lt</option>
+          <option value="mt">mt</option>
+          <option value="ht">ht</option>
+        </select>
 
-      <!--
+        <!--
         E(k,n) readout. Prototype line 435.
       -->
-      <span data-tip={$t('header.rhythm.euclidInfoTip')}>E(<b>{euclidK}</b>,<b>{euclidN}</b>)</span>
+        <span data-tip={$t('header.rhythm.euclidInfoTip')}
+          >E(<b>{euclidK}</b>,<b>{euclidN}</b>)</span
+        >
 
-      <!--
+        <!--
         k slider. Prototype line 436.
       -->
-      <input
-        type="range"
-        id="euclidK"
-        min="1"
-        max="16"
-        bind:value={euclidK}
-        data-tip={$t('header.rhythm.kTip')}
-      />
+        <input
+          type="range"
+          id="euclidK"
+          min="1"
+          max="16"
+          bind:value={euclidK}
+          data-tip={$t('header.rhythm.kTip')}
+        />
 
-      <!--
+        <!--
         n slider. Prototype line 437.
       -->
-      <input
-        type="range"
-        id="euclidN"
-        min="2"
-        max="16"
-        bind:value={euclidN}
-        data-tip={$t('header.rhythm.nTip')}
-      />
+        <input
+          type="range"
+          id="euclidN"
+          min="2"
+          max="16"
+          bind:value={euclidN}
+          data-tip={$t('header.rhythm.nTip')}
+        />
 
-      <!--
+        <!--
         rot readout + slider. Prototype lines 438–439.
       -->
-      <span data-tip={$t('header.rhythm.rotTip')}>rot <b>{euclidR}</b></span>
-      <input
-        type="range"
-        id="euclidR"
-        min="0"
-        max={euclidRMax}
-        bind:value={euclidR}
-        data-tip={$t('header.rhythm.rotSliderTip')}
-      />
+        <span data-tip={$t('header.rhythm.rotTip')}>rot <b>{euclidR}</b></span>
+        <input
+          type="range"
+          id="euclidR"
+          min="0"
+          max={euclidRMax}
+          bind:value={euclidR}
+          data-tip={$t('header.rhythm.rotSliderTip')}
+        />
 
-      <!--
+        <!--
         Named pattern info. Prototype line 440.
       -->
-      <span class="euclid-info">{euclidInfo}</span>
+        <span class="euclid-info">{euclidInfo}</span>
 
-      <!--
+        <!--
         Preview toggle button. Prototype line 441 / lines 863–876.
       -->
-      <button
-        class="rk"
-        id="euclidPreview"
-        data-tip={$t('header.rhythm.previewTip')}
-        style={isPreviewing
-          ? 'background:rgba(232,123,172,.16);border-color:rgba(232,123,172,.4);color:var(--dom)'
-          : 'background:rgba(86,207,196,.16);border-color:rgba(86,207,196,.4);color:var(--subdom)'}
-        on:click={handlePreviewToggle}
-      >
-        {isPreviewing ? $t('header.rhythm.stopLabel') : $t('header.rhythm.listenLabel')}
-      </button>
+        <button
+          class="rk"
+          id="euclidPreview"
+          data-tip={$t('header.rhythm.previewTip')}
+          style={isPreviewing
+            ? 'background:rgba(232,123,172,.16);border-color:rgba(232,123,172,.4);color:var(--dom)'
+            : 'background:rgba(86,207,196,.16);border-color:rgba(86,207,196,.4);color:var(--subdom)'}
+          on:click={handlePreviewToggle}
+        >
+          {isPreviewing ? $t('header.rhythm.stopLabel') : $t('header.rhythm.listenLabel')}
+        </button>
 
-      <!--
+        <!--
         Add euclid orbit. Prototype line 442.
       -->
-      <button
-        class="rk"
-        id="addEuclid"
-        data-tip={$t('header.rhythm.addOrbitTip')}
-        on:click={handleAddEuclid}
-      >
-        {$t('header.rhythm.addOrbit')}
-      </button>
+        <button
+          class="rk"
+          id="addEuclid"
+          data-tip={$t('header.rhythm.addOrbitTip')}
+          on:click={handleAddEuclid}
+        >
+          {$t('header.rhythm.addOrbit')}
+        </button>
 
-      <!--
+        <!--
         Add empty layer. Prototype line 443.
       -->
-      <button
-        class="rk"
-        id="addLayerEmpty"
-        data-tip={$t('header.rhythm.addEmptyTip')}
-        style="background:rgba(255,255,255,.05);border-color:var(--stroke);color:var(--muted)"
-        on:click={handleAddEmpty}
-      >
-        {$t('header.rhythm.addEmpty')}
-      </button>
+        <button
+          class="rk"
+          id="addLayerEmpty"
+          data-tip={$t('header.rhythm.addEmptyTip')}
+          style="background:rgba(255,255,255,.05);border-color:var(--stroke);color:var(--muted)"
+          on:click={handleAddEmpty}
+        >
+          {$t('header.rhythm.addEmpty')}
+        </button>
 
-      <!--
+        <!--
         Context capture button: send current groove to the agent as rhythmic base.
         Prototype: button#rhythmToCtx in footer (line 511).
         Active state when $agentCtx.includeRhythm is true.
       -->
-      <button
-        class="rk r-ctx-btn"
-        class:active={$agentCtx.includeRhythm}
-        title={$t('header.rhythm.sendBaseTitle')}
-        on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}
-        >{$t('header.rhythm.sendBaseLabel')}</button
-      >
-    </div>
-  {/if}
+        <button
+          class="rk r-ctx-btn"
+          class:active={$agentCtx.includeRhythm}
+          title={$t('header.rhythm.sendBaseTitle')}
+          on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}
+          >{$t('header.rhythm.sendBaseLabel')}</button
+        >
+      </div>
+    {/if}
 
-  <!--
+    <!--
     Key selector: root pitch-class, mode, octave.
     Prototype: .field with #melRoot / #melMode / #melOctave selects (lines 370–386).
     On change calls setHarmonyKey(root, mode, octave) (session.ts step 04.2).
     Step 01.2: hidden in all non-harmony views (Rhythm / Composition / Session).
     The view-toggle (#viewSeg) above must never be hidden.
   -->
-  {#if $sessionStore.view === 'harmony'}
-    <!--
+    {#if $sessionStore.view === 'harmony'}
+      <!--
       Phase 08 (step 08.5): Tonnetz ⇄ Pentagrama sub-toggle.
       Toggles harmony.subview between 'tonnetz' and 'staff'.
       Calls setHarmonySubview() from session.ts which updates the store and
       calls setHarmonySubview() from stage.ts (via lazy import).
       ADR 0011 Amendment §D5.
     -->
-    <div class="seg" id="subviewSeg">
-      <button
-        class={$sessionStore.harmony.subview === 'tonnetz' ? 'active' : ''}
-        on:click={() => setHarmonySubview('tonnetz')}
-      >
-        {$t('header.harmony.subviewTonnetz')}
-      </button>
-      <button
-        class={$sessionStore.harmony.subview === 'staff' ? 'active' : ''}
-        on:click={() => setHarmonySubview('staff')}
-      >
-        {$t('header.harmony.subviewStaff')}
-      </button>
-    </div>
+      <div class="seg" id="subviewSeg">
+        <button
+          class={$sessionStore.harmony.subview === 'tonnetz' ? 'active' : ''}
+          on:click={() => setHarmonySubview('tonnetz')}
+        >
+          {$t('header.harmony.subviewTonnetz')}
+        </button>
+        <button
+          class={$sessionStore.harmony.subview === 'staff' ? 'active' : ''}
+          on:click={() => setHarmonySubview('staff')}
+        >
+          {$t('header.harmony.subviewStaff')}
+        </button>
+      </div>
 
-    <!--
+      <!--
       Phase 10 redesign (step 10.11, ADR 0015 D2): #registerModeSeg removed.
       The estricto/suavizado toggle was a Phase 08 addition. The Canvas 2D
       Pentagrama layer uses raw chordVoicing() pitches directly — no register
@@ -439,132 +507,87 @@
       type (inert, not rendered); voice-tracks.ts is left inert (not deleted).
     -->
 
-    <!--
+      <!--
       Phase 08 (step 08.6): Chord-mode segmented control relocated from HarmonyControls.svelte.
       Prototype: .seg2#chordModeSeg (HTML lines 449–452); moved here per ADR 0011 Amendment §D6.
       Two buttons: ◧ acorde (block) / ⋯ arpegio (arpeggio).
       Active state driven by $sessionStore.chordMode.
       On click: calls setChordMode() from session.ts which also calls requeueLive().
     -->
-    <div class="seg" id="chordModeSeg">
-      <button
-        class={$sessionStore.chordMode === 'chord' ? 'active' : ''}
-        data-mode="chord"
-        data-tip={$t('header.harmony.chordTip')}
-        on:click={() => setChordMode('chord')}
-      >
-        {$t('header.harmony.chordLabel')}
-      </button>
-      <button
-        class={$sessionStore.chordMode === 'arp' ? 'active' : ''}
-        data-mode="arp"
-        data-tip={$t('header.harmony.arpTip')}
-        on:click={() => setChordMode('arp')}
-      >
-        {$t('header.harmony.arpLabel')}
-      </button>
-    </div>
+      <div class="seg" id="chordModeSeg">
+        <button
+          class={$sessionStore.chordMode === 'chord' ? 'active' : ''}
+          data-mode="chord"
+          data-tip={$t('header.harmony.chordTip')}
+          on:click={() => setChordMode('chord')}
+        >
+          {$t('header.harmony.chordLabel')}
+        </button>
+        <button
+          class={$sessionStore.chordMode === 'arp' ? 'active' : ''}
+          data-mode="arp"
+          data-tip={$t('header.harmony.arpTip')}
+          on:click={() => setChordMode('arp')}
+        >
+          {$t('header.harmony.arpLabel')}
+        </button>
+      </div>
 
-    <!--
+      <!--
       Phase 08 (step 08.6): Marco context button relocated from HarmonyControls.svelte.
       Prototype: button#harmonyToCtx in footer (line 510); moved to top bar per ADR 0011 Amendment §D6.
       Active state when $agentCtx.includeHarmony is true.
       On click: sets agentCtx.includeHarmony = true so the next agent send includes the harmony context.
     -->
-    <button
-      class="marco-btn"
-      class:active={$agentCtx.includeHarmony}
-      title={$t('header.harmony.sendMarcoTitle')}
-      on:click={() => agentCtx.update((c) => ({ ...c, includeHarmony: true }))}
-    >
-      {$t('header.harmony.sendMarcoLabel')}
-    </button>
-
-    <div class="field">
-      <span>{$t('header.harmony.keyLabel')}</span>
-
-      <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
-      <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
-      <select id="melRoot" value={String($sessionStore.harmony.root)} on:change={handleRootChange}>
-        {#each NOTE_NAMES as name, i}
-          <option value={String(i)}>{name}</option>
-        {/each}
-      </select>
-
-      <!-- Mode select. Prototype: #melMode (lines 373–382). -->
-      <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
-        <option value="major">{$t('header.harmony.modeMajor')}</option>
-        <option value="minor">{$t('header.harmony.modeMinor')}</option>
-        <option value="dorian">{$t('header.harmony.modeDorian')}</option>
-        <option value="phrygian">{$t('header.harmony.modePhrygian')}</option>
-        <option value="lydian">{$t('header.harmony.modeLydian')}</option>
-        <option value="mixolydian">{$t('header.harmony.modeMixolydian')}</option>
-        <option value="locrian">{$t('header.harmony.modeLocrian')}</option>
-        <option value="harmonic:minor">{$t('header.harmony.modeHarmonicMinor')}</option>
-      </select>
-
-      <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
-      <select
-        id="melOctave"
-        value={String($sessionStore.harmony.octave)}
-        on:change={handleOctaveChange}
+      <button
+        class="marco-btn"
+        class:active={$agentCtx.includeHarmony}
+        title={$t('header.harmony.sendMarcoTitle')}
+        on:click={() => agentCtx.update((c) => ({ ...c, includeHarmony: true }))}
       >
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-      </select>
-    </div>
-  {/if}
+        {$t('header.harmony.sendMarcoLabel')}
+      </button>
 
-  <!-- Spacer: pushes right-side controls to the right. Prototype: .sp (line 388). -->
-  <div class="sp"></div>
+      <div class="field">
+        <span>{$t('header.harmony.keyLabel')}</span>
 
-  <!--
-    Language selector (Phase 11 step 11.3 — ADR 0017 OQ-5).
-    The 文A button (CJK + Latin glyph, Wikipedia/Google-style language globe idiom)
-    opens a dropdown listing the four native language labels. Always visible.
-    Clicking a language writes to the `lang` store → triggers localStorage write-back
-    to 'orbifold.lang' (D3 contract). The dropdown closes on selection or focus-out.
-  -->
-  <div class="lang-sel" role="group" aria-label="Language selector" on:focusout={handleLangBlur}>
-    <button
-      bind:this={langBtnEl}
-      class="lang-btn"
-      title="Language / Idioma / Língua / 语言"
-      aria-haspopup="listbox"
-      aria-expanded={langMenuOpen}
-      on:click={handleLangToggle}>文A</button
-    >
-    {#if langMenuOpen}
-      <!-- position:fixed menu anchored via JS coords — escapes header stacking context -->
-      <ul
-        class="lang-menu"
-        role="listbox"
-        aria-label="Select language"
-        style="top:{menuTop}px; left:{menuLeft}px;"
-        on:pointerdown|stopPropagation
-        on:mousedown|stopPropagation
-      >
-        {#each LANGS as { code, label }}
-          <li role="option" aria-selected={$lang === code}>
-            <button
-              class="lang-option"
-              class:active={$lang === code}
-              on:click|stopPropagation={() => handleLangSelect(code)}>{label}</button
-            >
-          </li>
-        {/each}
-      </ul>
+        <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
+        <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
+        <select
+          id="melRoot"
+          value={String($sessionStore.harmony.root)}
+          on:change={handleRootChange}
+        >
+          {#each NOTE_NAMES as name, i}
+            <option value={String(i)}>{name}</option>
+          {/each}
+        </select>
+
+        <!-- Mode select. Prototype: #melMode (lines 373–382). -->
+        <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
+          <option value="major">{$t('header.harmony.modeMajor')}</option>
+          <option value="minor">{$t('header.harmony.modeMinor')}</option>
+          <option value="dorian">{$t('header.harmony.modeDorian')}</option>
+          <option value="phrygian">{$t('header.harmony.modePhrygian')}</option>
+          <option value="lydian">{$t('header.harmony.modeLydian')}</option>
+          <option value="mixolydian">{$t('header.harmony.modeMixolydian')}</option>
+          <option value="locrian">{$t('header.harmony.modeLocrian')}</option>
+          <option value="harmonic:minor">{$t('header.harmony.modeHarmonicMinor')}</option>
+        </select>
+
+        <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
+        <select
+          id="melOctave"
+          value={String($sessionStore.harmony.octave)}
+          on:change={handleOctaveChange}
+        >
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+      </div>
     {/if}
   </div>
-
-  <a
-    href="./tutorial.html"
-    class="tutorial-link"
-    target="_blank"
-    rel="noopener"
-    title={$t('header.tutorialTitle')}>{$t('header.tutorialLabel')}</a
-  >
 
   <!--
     Right side: mic button deferred to a later phase (not in Phase 04 scope).
@@ -578,21 +601,64 @@
    * Header layout. Prototype lines 69–72.
    * .glass applied via global app.css utility class.
    */
+  /*
+   * Phase 11 Checkpoint #5 redesign: the header is now a two-row column.
+   * Top row = global nav + language + tutorial; bottom row = section controls.
+   * position:relative + z-index:6 raises the header's stacking context above
+   * the Legend bar (z-index:3) and the PIXI canvas (both painted in #app's
+   * context), so the absolutely-positioned language menu renders over them.
+   * It stays below the agent panel (#agent z-index:7) so opening the agent
+   * still overlays the header as before. (.glass sets backdrop-filter, which
+   * forms a stacking context; without an explicit positive z-index it landed
+   * below the Legend's z-index:3 — that trapped the old position:fixed menu.)
+   */
   header {
     display: flex;
-    align-items: center;
-    gap: 18px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
     padding: 11px 20px;
     margin: 10px 12px 0;
     border-radius: 18px;
+    position: relative;
+    z-index: 6;
+  }
+
+  /* A single horizontal control row inside the header. */
+  .hdr-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
     flex-wrap: wrap;
   }
 
-  /* Brand group: glyph + h1 + tag. Prototype lines 73–76. */
+  /* Bottom row of section-specific controls; tighter gap, smaller text. */
+  .hdr-bottom {
+    gap: 14px;
+  }
+
+  /* Collapse the bottom row entirely when the active view has no controls. */
+  .hdr-bottom.hidden {
+    display: none;
+  }
+
+  /* Brand group: glyph + h1 + tag. Prototype lines 73–76.
+     Now an <a> to the landing page — strip link styling, keep the layout. */
   .brand {
     display: flex;
     align-items: baseline;
     gap: 10px;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    transition: background 0.15s;
+  }
+
+  .brand:hover {
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .brand .glyph {
@@ -753,6 +819,7 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
+    position: relative;
   }
 
   /* 文A toggle button — matches .tutorial-link visual weight. */
@@ -778,12 +845,14 @@
     border-color: var(--stroke-2);
   }
 
-  /* Dropdown list — position:fixed escapes header stacking context; z-index:9000
-   * renders above PIXI canvas (~60), AgentPanel (60) and any other overlay.
-   * transform:translateX(-100%) right-aligns the menu under the toggle button. */
+  /* Dropdown list — position:absolute anchored to .lang-sel, right-aligned under
+   * the 文A button. The header's raised stacking context (header z-index:50)
+   * lifts the whole menu above the PIXI canvas and the Legend bar; the high
+   * local z-index keeps it above sibling header controls. */
   .lang-menu {
-    position: fixed;
-    transform: translateX(-100%);
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
     list-style: none;
     margin: 0;
     padding: 4px 0;

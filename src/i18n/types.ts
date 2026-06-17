@@ -41,6 +41,8 @@ export interface Dictionary {
   header: {
     /** Brand tagline under h1 */
     tagline: string;
+    /** Title/tooltip on the clickable brand (navigates to the landing page) */
+    brandTitle: string;
     /** Primary navigation tabs */
     nav: {
       harmony: string;

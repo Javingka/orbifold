@@ -27,6 +27,7 @@ const zh: Dictionary = {
 
   header: {
     tagline: '声音几何',
+    brandTitle: '前往首页',
     nav: {
       harmony: '和声',
       rhythm: '节奏',

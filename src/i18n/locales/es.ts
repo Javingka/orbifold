@@ -28,6 +28,7 @@ const es: Dictionary = {
 
   header: {
     tagline: 'geometría sonora',
+    brandTitle: 'Ir a la página de inicio',
     nav: {
       harmony: 'Armonía',
       rhythm: 'Ritmo',
