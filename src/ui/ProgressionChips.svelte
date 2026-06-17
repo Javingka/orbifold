@@ -29,6 +29,7 @@
   import { chordLabel } from '../core/theory/chords.js';
   import { diatonicLookup } from '../core/theory/scales.js';
   import type { Mode } from '../core/theory/scales.js';
+  import { t } from '../i18n/index.js';
 
   /**
    * Returns the CSS background gradient for a chip based on its gain.
@@ -151,9 +152,9 @@
   .lbl label and #progChips flex container.
 -->
 <div class="prog">
-  <span class="lbl">progresión</span>
+  <span class="lbl">{$t('strip.label')}</span>
   {#if $sessionStore.harmony.progression.length === 0}
-    <span class="prog-empty">toca acordes en el Tonnetz…</span>
+    <span class="prog-empty">{$t('strip.empty')}</span>
   {:else}
     {#each $sessionStore.harmony.progression as ch, i (i)}
       {@const label = chordLabel(ch.rootPc, ch.qual)}
@@ -167,7 +168,7 @@
       <div
         class="prog-chip {tcls}"
         style="background: {chipGainCss(displayGain)}"
-        title="mantener y arrastrar ↑↓ para el volumen · clic para previsualizar · ✕ para quitar"
+        title={$t('strip.chordTitle')}
         role="button"
         tabindex="0"
         on:pointerdown={(e) => handlePointerDown(e, i)}

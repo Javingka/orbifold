@@ -14,6 +14,7 @@
     deleteSession,
     encodeSession,
   } from '../lib/persistence.js';
+  import { t } from '../i18n/index.js';
 
   let open = false;
   let sessions: string[] = [];
@@ -59,7 +60,8 @@
     const encoded = encodeSession(get(sessionStore));
     const url = `${window.location.origin}${window.location.pathname}#session=${encoded}`;
     void navigator.clipboard.writeText(url).then(() => {
-      shareFeedback = '✓ Copiado';
+      // Use $t to resolve the translated feedback text at call time.
+      shareFeedback = $t('persistence.shareFeedback');
       if (shareTimer !== null) clearTimeout(shareTimer);
       shareTimer = setTimeout(() => {
         shareFeedback = '';
@@ -72,7 +74,7 @@
 <!--
   Floating trigger button — position:fixed bottom-right of viewport.
 -->
-<button id="sessionsBtn" title="Sesiones guardadas" on:click={openPanel}>💾</button>
+<button id="sessionsBtn" title={$t('persistence.btnTitle')} on:click={openPanel}>💾</button>
 
 <!--
   Slide-in sessions panel.
@@ -81,31 +83,34 @@
 <div id="sessionsPanel" class:open>
   <div class="sess-head">
     <span>💾</span>
-    <b>Sesiones</b>
-    <button class="sess-close" title="Cerrar panel" on:click={closePanel}>✕</button>
+    <b>{$t('persistence.panelTitle')}</b>
+    <button class="sess-close" title={$t('persistence.closeTitle')} on:click={closePanel}>✕</button>
   </div>
 
   <div class="sess-input-row">
     <input
       type="text"
       bind:value={saveName}
-      placeholder="nombre de sesión…"
+      placeholder={$t('persistence.saveNamePlaceholder')}
       on:keydown={(e) => e.key === 'Enter' && handleSave()}
     />
-    <button on:click={handleSave}>💾 Guardar</button>
+    <button on:click={handleSave}>{$t('persistence.saveBtn')}</button>
   </div>
 
   <div class="sess-list">
     {#if sessions.length === 0}
-      <div class="sess-list-empty">Sin sesiones guardadas.</div>
+      <div class="sess-list-empty">{$t('persistence.emptyState')}</div>
     {:else}
       {#each sessions as name (name)}
         <div class="sess-item">
           <span class="sess-name" title={name}>{name}</span>
           <div class="sess-actions">
-            <button title="Cargar sesión" on:click={() => handleLoad(name)}>▶</button>
-            <button class="del" title="Eliminar sesión" on:click={() => handleDelete(name)}
-              >🗑</button
+            <button title={$t('persistence.loadTitle')} on:click={() => handleLoad(name)}>▶</button
+            >
+            <button
+              class="del"
+              title={$t('persistence.deleteTitle')}
+              on:click={() => handleDelete(name)}>🗑</button
             >
           </div>
         </div>
@@ -114,7 +119,7 @@
   </div>
 
   <div class="share-url-row">
-    <button on:click={handleShare}>📤 Compartir URL</button>
+    <button on:click={handleShare}>{$t('persistence.shareBtn')}</button>
     <div class="share-feedback">{shareFeedback}</div>
   </div>
 </div>

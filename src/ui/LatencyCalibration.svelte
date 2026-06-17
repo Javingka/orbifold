@@ -14,6 +14,8 @@
 <script lang="ts">
   import { sessionStore } from '../state/session.js';
   import { getCalibrationOffsetMs, setCalibrationOffsetMs } from '../state/phase-anchor.js';
+  // Phase 11 step 11.4: i18n store for Wave A string extraction.
+  import { t } from '../i18n/index.js';
 
   // ── Visibility flag ───────────────────────────────────────────────────────
   // Becomes true on first play; stays true for the session so the control
@@ -60,17 +62,19 @@
     Compact nudge widget. Positioned as a flex item inside the Transport footer.
     Label "sync" + tooltip explaining purpose.
   -->
-  <div class="latency-calib" title="Ajusta si los círculos se adelantan o retrasan al sonido">
-    <span class="lc-label">sync</span>
+  <div class="latency-calib" title={$t('latency.widgetTitle')}>
+    <span class="lc-label">{$t('latency.label')}</span>
     <div class="lc-controls">
-      <button class="lc-btn" on:click={decrement} aria-label="Reducir calibración 10 ms">−</button>
+      <button class="lc-btn" on:click={decrement} aria-label={$t('latency.decrementAria')}>−</button
+      >
       <span class="lc-readout">{fmtMs(calibMs)}</span>
-      <button class="lc-btn" on:click={increment} aria-label="Aumentar calibración 10 ms">+</button>
+      <button class="lc-btn" on:click={increment} aria-label={$t('latency.incrementAria')}>+</button
+      >
       <button
         class="lc-btn lc-reset"
         on:click={reset}
-        aria-label="Restablecer calibración a 0"
-        title="Restablecer a 0 ms">↺</button
+        aria-label={$t('latency.resetAria')}
+        title={$t('latency.resetTitle')}>↺</button
       >
     </div>
   </div>

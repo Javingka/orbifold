@@ -10,6 +10,8 @@
 -->
 <script lang="ts">
   import { sessionStore } from '../state/session.js';
+  // Phase 11 step 11.4: i18n store for Wave A string extraction.
+  import { t } from '../i18n/index.js';
 
   /** Derived from store: only show in harmony view. */
   $: visible = $sessionStore.view === 'harmony';
@@ -21,12 +23,12 @@
     Prototype HTML lines 414–421, CSS lines 122–127.
   -->
   <div class="legend glass" id="legend">
-    <span><i style="background:var(--tonic)"></i>tónica</span>
-    <span><i style="background:var(--subdom)"></i>subdom.</span>
-    <span><i style="background:var(--dom)"></i>dominante</span>
+    <span><i style="background:var(--tonic)"></i>{$t('legend.tonic')}</span>
+    <span><i style="background:var(--subdom)"></i>{$t('legend.subdom')}</span>
+    <span><i style="background:var(--dom)"></i>{$t('legend.dominant')}</span>
     <span style="opacity:.4">│</span>
-    <span style="color:var(--faint)">▲ mayor · ▼ menor</span>
-    <span style="color:#b9c6ff">P·L·R vecinos</span>
+    <span style="color:var(--faint)">{$t('legend.triangles')}</span>
+    <span style="color:#b9c6ff">{$t('legend.plr')}</span>
   </div>
 {/if}
 

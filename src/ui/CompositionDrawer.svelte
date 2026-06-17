@@ -62,7 +62,9 @@
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { sessionStore } from '../state/session.js';
+  import { t } from '../i18n/index.js';
   import {
     addBlock,
     deleteBlock,
@@ -152,11 +154,17 @@
   }
 
   /**
-   * Human-readable type label for a block.
+   * Human-readable type label for a block (via i18n).
    * Prototype: `tagOf(b)` (line 1948).
+   * Step 11.5: uses get(t) to resolve the active language's label.
    */
   function tagOf(b: Block): string {
-    return b.type === 'groove' ? 'ritmo' : b.type === 'armonia' ? 'armonía' : 'sesión';
+    const tFn = get(t);
+    return b.type === 'groove'
+      ? tFn('composition.blockTypeRhythm')
+      : b.type === 'armonia'
+        ? tFn('composition.blockTypeHarmony')
+        : tFn('composition.blockTypeSession');
   }
 
   /**
@@ -254,18 +262,27 @@
       activeBlocks = newActive;
 
       // compInfo: "▶ compás N / tb" or "⏸ compás N / tb".
-      // Prototype line 2085.
-      const icon = compState === 'playing' ? '▶' : '⏸';
-      compInfo = `${icon} compás ${Math.floor(pos) + 1} / ${tb}`;
+      // Prototype line 2085. Step 11.5: use i18n keys via get(t).
+      const tFn = get(t);
+      const bar = Math.floor(pos) + 1;
+      const key = compState === 'playing' ? 'composition.playing' : 'composition.paused';
+      compInfo = tFn(key, { bar: String(bar), total: String(tb) });
     } else {
       // stopped
       playheadOn = false;
       activeBlocks = new Map();
-      // compInfo: static track/bar count.
+      // compInfo: static track/bar count. Step 11.5: use i18n keys via get(t).
       // Prototype line 2051.
+      const tFn2 = get(t);
       const tl = tracks.length;
       const tb2 = totalBarsValue();
-      compInfo = `${tl} pista${tl === 1 ? '' : 's'} · ${tb2} compás${tb2 === 1 ? '' : 'es'}`;
+      const tlStr = tFn2(tl === 1 ? 'composition.trackSingular' : 'composition.trackPlural', {
+        count: String(tl),
+      });
+      const tbStr = tFn2(tb2 === 1 ? 'composition.barSingular' : 'composition.barPlural', {
+        count: String(tb2),
+      });
+      compInfo = `${tlStr} · ${tbStr}`;
     }
 
     rafId = requestAnimationFrame(compTickLoop);
@@ -579,8 +596,16 @@
   $: {
     const tl = $sessionStore.composition.tracks.length;
     const tb = totalBarsValue();
+    // Re-run whenever $t changes (language switch) or store changes.
+    const _tFn = $t;
     if (getCompState() === 'stopped') {
-      compInfo = `${tl} pista${tl === 1 ? '' : 's'} · ${tb} compás${tb === 1 ? '' : 'es'}`;
+      const tlStr = _tFn(tl === 1 ? 'composition.trackSingular' : 'composition.trackPlural', {
+        count: String(tl),
+      });
+      const tbStr = _tFn(tb === 1 ? 'composition.barSingular' : 'composition.barPlural', {
+        count: String(tb),
+      });
+      compInfo = `${tlStr} · ${tbStr}`;
     }
   }
 </script>
@@ -595,10 +620,8 @@
   <!-- Header row: title + hint. Close button removed (navigate via Header.svelte). -->
   <!-- Prototype lines 533–537. -->
   <div class="code-head">
-    <b>composición — arregla ritmos y armonías ya montados</b>
-    <span style="font-size:10.5px;color:var(--faint)"
-      >guarda bloques y ordénalos en el tiempo (cada uno dura N compases)</span
-    >
+    <b>{$t('composition.heading')}</b>
+    <span style="font-size:10.5px;color:var(--faint)">{$t('composition.headingHint')}</span>
   </div>
 
   <!-- Two-column grid: block library + timeline. Prototype line 538. -->
@@ -606,17 +629,23 @@
     <!-- ── Column 1: block library ─────────────────────────────────────── -->
     <!-- Prototype lines 539–548. -->
     <div class="comp-col">
-      <h4>1 · guardar bloques</h4>
-      <div class="sub">captura lo que tienes montado ahora mismo como un bloque reutilizable.</div>
+      <h4>{$t('composition.col1Title')}</h4>
+      <div class="sub">{$t('composition.col1Hint')}</div>
 
       <!--
         Save row: three buttons to capture current state as a named block.
         Prototype lines 542–545, JS lines 1939–1946.
       -->
       <div class="save-row">
-        <button class="tbtn" on:click={() => addBlock('groove')}>💾 groove actual</button>
-        <button class="tbtn" on:click={() => addBlock('armonia')}>💾 armonía actual</button>
-        <button class="tbtn" on:click={() => addBlock('sesion')}>💾 sesión actual</button>
+        <button class="tbtn" on:click={() => addBlock('groove')}
+          >{$t('composition.saveGroove')}</button
+        >
+        <button class="tbtn" on:click={() => addBlock('armonia')}
+          >{$t('composition.saveHarmony')}</button
+        >
+        <button class="tbtn" on:click={() => addBlock('sesion')}
+          >{$t('composition.saveSession')}</button
+        >
       </div>
 
       <!--
@@ -627,7 +656,7 @@
       -->
       {#if $sessionStore.composition.blocks.length === 0}
         <!-- Empty state. Prototype line 1953. -->
-        <div class="arr-empty">aún no hay bloques — guarda uno arriba.</div>
+        <div class="arr-empty">{$t('composition.emptyBlocks')}</div>
       {:else}
         {#each $sessionStore.composition.blocks as b (b.id)}
           <div class="blk">
@@ -678,16 +707,15 @@
     <div class="comp-col">
       <!-- Timeline header: title, hint, + pista button. Prototype lines 550–553. -->
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-        <h4 style="margin:0">2 · línea de tiempo</h4>
-        <span style="font-size:10.5px;color:var(--faint)"
-          >pistas apiladas = suenan a la vez · bloques en fila = en secuencia · arrastra el borde
-          derecho para los compases</span
-        >
+        <h4 style="margin:0">{$t('composition.col2Title')}</h4>
+        <span style="font-size:10.5px;color:var(--faint)">{$t('composition.timelineHint')}</span>
         <!--
           + pista button. Prototype line 2120: pushes empty track.
           Function: addTrack().
         -->
-        <button class="tbtn" style="margin-left:auto" on:click={addTrack}>+ pista</button>
+        <button class="tbtn" style="margin-left:auto" on:click={addTrack}
+          >{$t('composition.addTrack')}</button
+        >
       </div>
 
       <!--
@@ -706,13 +734,15 @@
           -->
           {#each trackIndices as ti (ti)}
             <div class="tl-head">
-              <span class="tname">pista {ti + 1}</span>
+              <span class="tname">{$t('composition.trackLabel', { N: String(ti + 1) })}</span>
               <!--
                 Delete track button. Prototype line 2000:
                 `tracks.splice(ti,1); if(!tracks.length) tracks.push(...);`
                 Function: removeTrack(ti) — auto-re-adds empty if last.
               -->
-              <button title="eliminar pista" on:click={() => removeTrack(ti)}>🗑</button>
+              <button title={$t('composition.deleteTrackTitle')} on:click={() => removeTrack(ti)}
+                >🗑</button
+              >
             </div>
           {/each}
         </div>
@@ -806,7 +836,7 @@
                           on:change={(e) => handleBarsChange(e, ti, ri)}
                           on:pointerdown|stopPropagation={() => {}}
                         />
-                        comp.
+                        {$t('composition.barsUnit')}
                       </div>
 
                       <!--
@@ -837,14 +867,21 @@
                       Prototype line 2047.
                     -->
                     <select on:change={(e) => handleAddFromSelect(e, ti)}>
-                      <option value="">＋ bloque…</option>
+                      <option value="">{$t('composition.addBlockOption')}</option>
                       {#each $sessionStore.composition.blocks as bl}
-                        <option value={bl.id}>+ {tagOf(bl)}: {bl.name}</option>
+                        <option value={bl.id}
+                          >{$t('composition.addBlockEntry', {
+                            type: tagOf(bl),
+                            name: bl.name,
+                          })}</option
+                        >
                       {/each}
                     </select>
                   {:else}
                     <!-- No blocks saved yet. Prototype line 2045. -->
-                    <span style="font-size:10px;color:var(--faint)">guarda bloques arriba</span>
+                    <span style="font-size:10px;color:var(--faint)"
+                      >{$t('composition.noBlocksHint')}</span
+                    >
                   {/if}
                 </div>
               </div>
@@ -872,24 +909,28 @@
         <button
           class="play-session"
           style="padding:9px 16px"
-          on:click={() => void playComposition()}>▶ tocar</button
+          on:click={() => void playComposition()}>{$t('composition.play')}</button
         >
 
         <!--
           ⏸ pausa: calls pauseComposition(). Prototype line 2123.
         -->
-        <button class="tbtn" on:click={() => void pauseComposition()}>⏸ pausa</button>
+        <button class="tbtn" on:click={() => void pauseComposition()}
+          >{$t('composition.pause')}</button
+        >
 
         <!--
           ■ stop: calls stopComposition(). Prototype line 2124.
         -->
-        <button class="tbtn warm" on:click={() => void stopComposition()}>■ stop</button>
+        <button class="tbtn warm" on:click={() => void stopComposition()}
+          >{$t('composition.stop')}</button
+        >
 
         <!--
           limpiar todo: clears all tracks (one empty track remains).
           Prototype line 2121: `tracks=[{id:'t'+(trkSeq++),blocks:[]}];`
         -->
-        <button class="tbtn" on:click={clearAllTracks}>limpiar todo</button>
+        <button class="tbtn" on:click={clearAllTracks}>{$t('composition.clearAll')}</button>
 
         <!--
           compInfo span: shows track/bar count or playback position.
@@ -906,7 +947,11 @@
         {#if $sessionStore.nowPlaying.source === 'block' || $sessionStore.nowPlaying.source === 'composition'}
           <div class="comp-now-pill" class:live={true}>
             <span class="comp-now-dot"></span>
-            <span class="comp-now-label">{$sessionStore.nowPlaying.label ?? ''}</span>
+            <span class="comp-now-label"
+              >{$sessionStore.nowPlaying.label
+                ? $t($sessionStore.nowPlaying.label, $sessionStore.nowPlaying.vars)
+                : ''}</span
+            >
           </div>
         {/if}
       </div>

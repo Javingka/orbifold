@@ -26,6 +26,18 @@ import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { PROVIDERS, loadApiKey, type ProviderKey, type ChatMessage } from './providers.js';
 import { AgentOutputSchema, type AgentOutput } from './schema.js';
 import { applyRhythmSpec, applyHarmonySpec } from './apply.js';
+import { lang, t_raw } from '../i18n/index.js';
+import type { LangCode } from '../i18n/index.js';
+
+// ── ADR 0017 D7: language directive ──────────────────────────────────────────
+// Maps LangCode → user-facing language name used in the directive injected into
+// each API request. SYSTEM_PROMPT stays Spanish; the directive targets the reply.
+const LANGUAGE_NAMES: Record<LangCode, string> = {
+  es: 'español',
+  en: 'inglés',
+  pt: 'português',
+  zh: 'chino',
+};
 
 // ── Module-level mutable state (ephemeral — not persisted, ADR 0009 pattern) ─
 
@@ -257,6 +269,12 @@ function buildContextAddendum(ctx: AgentSendContext): string {
     addendum += `\n\n[IMPORTANTE: combina AMBOS marcos en UN SOLO stack() para que ritmo y armonía suenen juntos.]`;
   }
 
+  // ADR 0017 D7: append language directive so the agent replies in the user's language.
+  // SYSTEM_PROMPT stays Spanish; this directive overrides the reply language per request.
+  const currentLang = get(lang);
+  const languageName = LANGUAGE_NAMES[currentLang] ?? 'español';
+  addendum += '\n\n' + t_raw('agent.languageDirective', { languageName });
+
   return addendum;
 }
 
@@ -402,10 +420,15 @@ export async function requestAutofix(badCode: string, errorMsg: string): Promise
   const model = agentModel || provider.defaultModel;
 
   // Fix prompt (prototype line 1652)
+  // ADR 0017 D7: append language directive so the autofix reply is in the user's language.
+  const currentLang = get(lang);
+  const languageName = LANGUAGE_NAMES[currentLang] ?? 'español';
+  const langDirective = t_raw('agent.languageDirective', { languageName });
   const fixPrompt =
     `El código Strudel que generaste dio este error al ejecutarse:\n\n"${errorMsg}"\n\n` +
     `Código:\n\`\`\`\n${badCode}\n\`\`\`\n\n` +
-    `Corrígelo (comillas, paréntesis/corchetes, comas). Devuelve SOLO el bloque de código Strudel corregido, completo y ejecutable.`;
+    `Corrígelo (comillas, paréntesis/corchetes, comas). Devuelve SOLO el bloque de código Strudel corregido, completo y ejecutable.\n\n` +
+    langDirective;
 
   chatHistory.push({ role: 'user', content: fixPrompt });
 

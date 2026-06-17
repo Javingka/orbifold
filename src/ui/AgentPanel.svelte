@@ -36,6 +36,7 @@
   import { loadApiKey, saveApiKey, PROVIDERS } from '../agent/providers.js';
   import { runNow, queueForNextCycle } from '../audio/strudel.js';
   import type { ProviderKey } from '../agent/providers.js';
+  import { t } from '../i18n/index.js';
 
   // ── Panel open/close state ────────────────────────────────────────────────
   let open = false;
@@ -78,20 +79,15 @@
 
   // ── Quick prompts ──────────────────────────────────────────────────────────
   // Prototype: QUICK array lines 1789–1795 + render loop lines 1796–1797.
+  // Step 11.5: made reactive so labels/prompts switch with the active language.
 
-  const QUICK: [string, string][] = [
-    [
-      '🥁 Groove',
-      'Crea un groove de batería con bombo, caja y hi-hats que pegue con el tempo actual.',
-    ],
-    [
-      '🎹 Progresión',
-      'Crea una progresión de 4 acordes con voice-leadings suaves en una clave que propongas.',
-    ],
-    ['🎶 Ritmo + armonía', 'Crea un groove y una progresión que combinen bien como base.'],
-    ['🌀 Euclidiano', 'Crea un ritmo con capas euclidianas (bombo y hats) con sabor afro.'],
-    ['🔁 Variación', 'Modifica el ritmo actual para hacerlo más interesante sin perder el pulso.'],
-  ];
+  $: QUICK = [
+    [$t('agent.quick.grooveLabel'), $t('agent.quick.groovePrompt')],
+    [$t('agent.quick.progressionLabel'), $t('agent.quick.progressionPrompt')],
+    [$t('agent.quick.bothLabel'), $t('agent.quick.bothPrompt')],
+    [$t('agent.quick.euclidLabel'), $t('agent.quick.euclidPrompt')],
+    [$t('agent.quick.variationLabel'), $t('agent.quick.variationPrompt')],
+  ] as [string, string][];
 
   // ── Toggles ───────────────────────────────────────────────────────────────
   let autoplay = true;
@@ -191,7 +187,7 @@
         // Show "🔧 corrigiendo…" loading indicator (prototype line 1656).
         const loadMsg: ChatMsg = {
           role: 'assistant',
-          content: '🔧 corrigiendo…',
+          content: $t('agent.autofixLoading'),
           codeBlocks: [],
           isLoading: true,
           avatar: '🔧',
@@ -223,7 +219,7 @@
             ...chatMessages,
             {
               role: 'assistant',
-              content: '⚠️ No pude obtener corrección del agente.',
+              content: $t('agent.autofixFailed'),
               codeBlocks: [],
               avatar: '꩜',
             },
@@ -234,13 +230,12 @@
         // Give up (prototype lines 1644–1645).
         const giveUp = autofixAttempts >= AUTOFIX_MAX;
         const errMsg =
-          '⚠️ Error al ejecutar: ' +
-          result.error +
+          $t('agent.execError', { error: result.error }) +
           (giveUp
-            ? '\n(no pude corregirlo tras varios intentos; revísalo en el editor)'
+            ? $t('agent.execErrorGiveUp')
             : autofixEnabled
               ? ''
-              : '\n(activa 🔧 auto-corregir)');
+              : $t('agent.execErrorEnableAutofix'));
         chatMessages = [
           ...chatMessages,
           {
@@ -253,9 +248,9 @@
         scrollChat();
       }
     } else if (result && result.ok) {
-      // Prototype line 1646: success.
+      // Prototype line 1646: success. D8: store key, Transport resolves via $t.
       autofixAttempts = 0;
-      setNowPlaying('Código del agente', 'agent');
+      setNowPlaying('session.playing.agent', 'agent');
     }
   }
 
@@ -407,7 +402,7 @@
   on:click={() => (open = true)}
   on:keydown={(e) => e.key === 'Enter' && (open = true)}
 >
-  ꩜ AGENTE IA
+  {$t('agent.tabLabel')}
 </div>
 
 <!--
@@ -421,8 +416,9 @@
   -->
   <div class="agent-head">
     <span class="a-glyph">꩜</span>
-    <b>Agente</b>
-    <button class="a-close" title="Cerrar panel" on:click={() => (open = false)}>✕</button>
+    <b>{$t('agent.panelTitle')}</b>
+    <button class="a-close" title={$t('agent.closeTitle')} on:click={() => (open = false)}>✕</button
+    >
   </div>
 
   <!--
@@ -433,7 +429,7 @@
   <div class="prov-row">
     <select
       value={providerValue}
-      title="Proveedor de IA"
+      title={$t('agent.providerTitle')}
       on:change={(e) => handleProviderChange(/** @type {HTMLSelectElement} */ (e.target).value)}
     >
       <option value="anthropic">Anthropic</option>
@@ -442,8 +438,8 @@
     <input
       id="agentModel"
       bind:value={modelValue}
-      placeholder="modelo"
-      title="Modelo de IA"
+      placeholder={$t('agent.modelPlaceholder')}
+      title={$t('agent.modelTitle')}
       on:blur={handleModelBlur}
     />
     <input
@@ -451,7 +447,7 @@
       type="password"
       bind:value={keyValue}
       placeholder={keyPlaceholder}
-      title="API key"
+      title={$t('agent.keyTitle')}
       on:blur={handleKeyBlur}
     />
   </div>
@@ -487,7 +483,7 @@
                   class="runbtn"
                   on:click={() => {
                     void playWithAutofix(part.code);
-                  }}>▶ tocar esto</button
+                  }}>{$t('agent.runCodeLabel')}</button
                 >
               {/if}
             {/each}
@@ -514,11 +510,11 @@
   <div class="toggles">
     <label class:on={autoplay}>
       <input type="checkbox" bind:checked={autoplay} />
-      auto-tocar
+      {$t('agent.autoplay')}
     </label>
     <label class:on={autofixEnabled}>
       <input type="checkbox" bind:checked={autofixEnabled} />
-      🔧 auto-corregir
+      {$t('agent.autofix')}
     </label>
   </div>
 
@@ -529,12 +525,12 @@
   <div class="agent-input">
     <textarea
       bind:value={inputText}
-      placeholder="pídele un acompañamiento, una variación, una progresión…"
+      placeholder={$t('agent.inputPlaceholder')}
       on:keydown={handleKeyDown}
     ></textarea>
     <button
       class="sendbtn"
-      title="Enviar"
+      title={$t('agent.sendTitle')}
       disabled={sending}
       on:click={() => void handleSend(inputText)}
     >

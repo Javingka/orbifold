@@ -46,6 +46,7 @@
     harmonyCode,
     sessionCode,
   } from '../state/session.js';
+  import { t } from '../i18n/index.js';
 
   // open: vestigial (Phase 09 step 09.4). The {#if} gate in App.svelte controls
   // mounting/unmounting. Removed to avoid lint no-unused-vars error.
@@ -145,14 +146,14 @@
 -->
 <div id="codeDrawer" class="glass">
   <div class="code-head">
-    <b>código Strudel</b>
-    <span style="font-size:10.5px;color:var(--faint)">lo que suena ahora — edítalo y ejecútalo</span
-    >
+    <b>{$t('code.heading')}</b>
+    <span style="font-size:10.5px;color:var(--faint)">{$t('code.headingHint')}</span>
   </div>
 
   <!--
     Textarea. Prototype lines 246–248.
     IBM Plex Mono, 120px height, placeholder for hint.
+    The placeholder s("bd hh sd hh") is [VERBATIM] Strudel code — not translated.
     on:input sets userEdited=true so auto-population is suppressed while editing.
   -->
   <textarea
@@ -167,8 +168,8 @@
     Action buttons. Prototype lines 524–527.
   -->
   <div class="code-actions">
-    <button class="tbtn" id="runEditor" on:click={handleRun}>▶ ejecutar (ahora)</button>
-    <button class="tbtn" id="updateEditor" on:click={handleQueue}>↻ encolar (próximo ciclo)</button>
+    <button class="tbtn" id="runEditor" on:click={handleRun}>{$t('code.runNow')}</button>
+    <button class="tbtn" id="updateEditor" on:click={handleQueue}>{$t('code.queue')}</button>
   </div>
 </div>
 

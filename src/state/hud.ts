@@ -35,9 +35,16 @@ export interface HudState {
 
 // ── Default state ──────────────────────────────────────────────────────────────
 
-/** Prototype: `#stageHint` initial text content (line 423). */
-const DEFAULT_HINT =
-  'Toca un triángulo para elegir un acorde (▲ mayor ▼ menor). Verás sus vecinos P·L·R y el voice-leading mínimo. Abajo eliges qué suena.';
+/**
+ * Prototype: `#stageHint` initial text content (line 423).
+ *
+ * Checkpoint #5 bug-fix (ADR 0017 D8 pattern): `hint` now stores a dictionary
+ * translation key (e.g. 'app.hint.tonnetz') rather than a pre-translated Spanish
+ * string. App.svelte renders it via `$t($hudStore.hint)` so the hint updates
+ * live on language switch. This is the same key-storage convention as
+ * `setNowPlaying()` (ADR 0017 D8).
+ */
+const DEFAULT_HINT = 'app.hint.tonnetz';
 
 export const DEFAULT_HUD_STATE: HudState = {
   title: '—',
