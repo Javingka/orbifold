@@ -104,11 +104,21 @@ export function melodyLine(
 
   // ADR 0010 dual-mode + ADR 0012 rest extension:
   // use arrange() when any slot is a rest, OR when any chord has bars !== 1.
+  // ADR 0018 D2 amendment: also use arrange() when any chord has non-default
+  // sound attributes (instrument/room/decay) — the slowcat form emits a single
+  // .s(…)/room(…) for the whole pattern and cannot express per-chord timbre.
+  // The arrange() path reads per-slot attributes directly, so falling through to
+  // it whenever attributes are present ensures instrument/room/decay take effect.
   const uniformDuration = progression.every(
     (slot) => !('isRest' in slot) && ((slot as { bars?: number }).bars ?? 1) === 1
   );
+  const uniformAttrs = progression.every((slot) => {
+    if ('isRest' in slot) return true;
+    const s = slot as { instrument?: string; room?: number; decay?: number };
+    return s.instrument === undefined && s.room === undefined && s.decay === undefined;
+  });
 
-  if (uniformDuration) {
+  if (uniformDuration && uniformAttrs) {
     // Slowcat form — byte-identical to pre-phase main (A-02-02).
     // Safe to cast: uniformDuration guarantees no rest slots remain.
     const chordSlots = progression as ReadonlyArray<{

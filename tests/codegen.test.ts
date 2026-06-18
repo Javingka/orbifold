@@ -243,6 +243,42 @@ describe('melodyLine — ADR 0018 sound attributes (arrange case)', () => {
     expect(result).not.toContain('.decay');
   });
 
+  // Per-slot attrs on bars=1 chords — this would silently be ignored before the
+  // uniformAttrs fix (the slowcat path only reads function-level params). After the
+  // fix, any chord with a non-default attr forces the arrange() path where per-slot
+  // attrs are read correctly.
+  it('per-slot instrument on bars=1 chord → arrange() path, attr applied (ADR 0018 D2 fix)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', instrument: 'sine' }],
+      'chord',
+      3
+    );
+    // Must use arrange() (not slowcat) so the slot's instrument is respected
+    expect(result).toContain('arrange(');
+    expect(result).toContain('s("sine")');
+    expect(result).not.toContain('s("sawtooth")');
+  });
+
+  it('per-slot room on bars=1 chord → arrange() path, room applied', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', room: 0.7 }],
+      'chord',
+      3
+    );
+    expect(result).toContain('arrange(');
+    expect(result).toContain('room(0.7)');
+  });
+
+  it('per-slot decay on bars=1 chord → arrange() path, decay applied', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', decay: 0.4 }],
+      'chord',
+      3
+    );
+    expect(result).toContain('arrange(');
+    expect(result).toContain('.decay(0.4)');
+  });
+
   // All three set together — arrange path
   it('all three attrs set → well-formed string in arrange path', () => {
     const result = melodyLine(
