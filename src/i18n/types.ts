@@ -99,20 +99,36 @@ export interface Dictionary {
       modeLocrian: string;
       modeHarmonicMinor: string;
       /**
-       * Sound attributes section (ADR 0018, Phase 02 step 02.5).
-       * Waveform technical tokens (sawtooth/sine/square/triangle) are [VERBATIM]
+       * Sound attributes section (ADR 0019, Phase 03 step 03.5 redesign).
+       * Waveform technical tokens (sawtooth/sine/square/triangle/pink) are [VERBATIM]
        * in the Strudel value attribute — only the display labels are translated.
+       * Preset name tokens (piano/guitar/synth-bass) are [VERBATIM] — only labels translate.
+       * roomLabel/roomTip/decayLabel/decayTip removed (phase 03 step 03.5 — absorbed into presets).
        */
       soundLabel: string;
+      /** Oscillator selector label */
+      oscillatorLabel: string;
       instrLabel: string;
       instrSawtooth: string;
       instrSine: string;
       instrSquare: string;
       instrTriangle: string;
-      roomLabel: string;
-      roomTip: string;
-      decayLabel: string;
-      decayTip: string;
+      /** Noise oscillator option label — token 'pink' is [VERBATIM] */
+      instrNoise: string;
+      /** Presets selector label */
+      presetLabel: string;
+      /** "No preset" option label */
+      presetNone: string;
+      /** Piano preset display name — 'piano' token is [VERBATIM] */
+      presetPiano: string;
+      /** Guitar preset display name — 'guitar' token is [VERBATIM] */
+      presetGuitar: string;
+      /** Synth Bass preset display name — 'synth-bass' token is [VERBATIM] */
+      presetSynthBass: string;
+      /** Tooltip when the sound block is in edit mode (a slot is selected) */
+      soundEditTip: string;
+      /** Tooltip when the sound block is in intent mode (no slot selected) */
+      soundIntentTip: string;
     };
     /** Tutorial link */
     tutorialTitle: string;

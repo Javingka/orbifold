@@ -586,3 +586,225 @@ and 03.5. The Dev auto-continues to step 03.5.
 
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 03.5 — Top-bar UI redesign: Oscillator select, Presets select, edit-mode feedback, placement, i18n
+
+**Date:** 2026-06-18
+**Commit(s):** (terminal commit — see note below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/harmonic-rhythm-improvements/decisions.md`,
+  `docs/adr/0019-oscillator-and-presets.md` (D1–D7, all Pilot-approved), ADR 0018,
+  ADR 0017 (technical tokens verbatim), this phase file (step 03.5 scope, A-03-02..A-03-14),
+  `docs/harmonic-rhythm-improvements/handoffs/phase-03-handoff.md` (steps 03.3 and 03.4
+  both Planner-APPROVED), `src/ui/Header.svelte` (full file — harmony block, `.sound-ctl`
+  block from Phase 02, CSS), `src/render/tonnetz-scene.ts` (`pickChord` / `soundIntentStore`
+  usage), `src/i18n/types.ts` + `src/i18n/locales/{es,en,pt,zh}.ts`.
+
+**`src/ui/Header.svelte`:**
+- Removed the Phase 02 flat `.sound-ctl` block: `instrument` select, room range slider,
+  decay range slider, and their handlers (`handleInstrumentChange`, `handleRoomChange`,
+  `handleDecayChange`).
+- Removed the now-unused import of `setChordSoundAttrs`; added imports for
+  `setChordOscillator` and `setChordPreset` (both added in step 03.4).
+- Added `type OscillatorToken` covering the five valid oscillator tokens.
+- Added reactive derived values `displayInstrument` (from selected slot `.instrument`
+  → fallback `$soundIntentStore.instrument`) and `displayPreset` (from selected slot
+  `.preset` → fallback `$soundIntentStore.preset ?? ''`).
+- **Edit-mode feedback:** a reactive block watches `$selectedSlotIdxStore`: when it
+  changes to a new non-null index, a `soundCtlPulsing` boolean is toggled off→on (via
+  `Promise.resolve().then(...)` microtask to force Svelte to flush the class removal
+  before re-adding) then cleared after 320ms via `setTimeout`. The `.sound-ctl` block
+  receives `class:sound-ctl--active` (persistent accent border, active when slot ≠ null)
+  and `class:sound-ctl--pulse` (transient pulse animation). `_prevSlotIdx` tracks the
+  last seen slot index so the pulse fires only on actual changes, not on unrelated reactive
+  reruns.
+- **New `.sound-ctl` HTML block:** two `<label class="sound-field">` elements:
+  - **Oscillator `<select id="instrSelect">`**: five `<option>` elements in the order
+    `sine`/`triangle`/`square`/`sawtooth`/`pink` (verbatim tokens as values; i18n labels).
+    `on:change` calls `handleOscillatorChange` which updates `soundIntentStore.instrument`
+    and calls `setChordOscillator` when a slot is selected.
+  - **Presets `<select id="presetSelect">`**: four `<option>` elements: `''`/`piano`/
+    `guitar`/`synth-bass` (verbatim tokens; i18n labels for `presetNone`/`presetPiano`/
+    `presetGuitar`/`presetSynthBass`). `on:change` calls `handlePresetChange` which updates
+    `soundIntentStore.preset` and calls `setChordPreset` when a slot is selected.
+  - The block has a `title` tooltip showing `soundEditTip` (slot selected) or
+    `soundIntentTip` (no selection) for screen-reader / hover accessibility.
+  - Placement confirmed at end-of-row (position 5, after `div.field` for clave/escala/
+    octava) — unchanged from Phase 02 baseline (ADR 0019 D4 / A-03-06).
+- **CSS additions:**
+  - `.sound-ctl` given `border-radius:10px`, `padding:4px 8px`, `border:1px solid transparent`,
+    and `transition` for smooth activation.
+  - `.sound-ctl--active`: `border-color:rgba(138,160,255,.55)`, `background:rgba(138,160,255,.07)`.
+    (accent `#8aa0ff` per CLAUDE.md spec — A-03-07.)
+  - `@keyframes soundCtlPulse`: flashes from bright accent border/background/box-shadow at 0%
+    down to the `--active` steady state at 100% (A-03-08).
+  - `.sound-ctl--pulse`: `animation: soundCtlPulse 320ms ease-out forwards`.
+  - Removed `.sound-field input[type='range']` and `.sound-val` (no sliders remain).
+
+**`src/render/tonnetz-scene.ts`:**
+- Added module-level `_pickPulse` state (stores triangle ref + `startMs` from
+  `performance.now()`) set in `pickChord` on each pick.
+- `pickChord`: extended `newChord` construction to include `preset: intent.preset` from
+  `soundIntentStore` (ADR 0019 D2/D3 apply-to-new for preset). The existing `instrument`,
+  `room`, `decay` fields are unchanged.
+- `pickChord`: sets `_pickPulse` immediately on every pick.
+- `tickHarmony`: added a "click-pulse overlay" block (before the suggestion glow) that draws
+  a bright accent fill/outline on `_pickPulse.tri` with alpha decaying from 0.55→0 over
+  300ms. When elapsed ≥ 300ms, `_pickPulse` is cleared.
+- **`playChord` signature unchanged**: `playChord` still takes `instrument/room/decay` as
+  positional args. The preset is resolved at codegen time by `resolveChordAttrs` (already
+  wired in step 03.3); passing `newChord.instrument` etc. to `playChord` is sufficient.
+
+**i18n (`src/i18n/types.ts` + all four locales):**
+- **`types.ts`:** Removed `roomLabel`, `roomTip`, `decayLabel`, `decayTip` from the
+  `header.harmony` type. Added 10 new keys: `oscillatorLabel`, `instrNoise`, `presetLabel`,
+  `presetNone`, `presetPiano`, `presetGuitar`, `presetSynthBass`, `soundEditTip`,
+  `soundIntentTip`. `instrLabel` and the four existing waveform keys retained.
+- **`es.ts`:** Updated `instrSawtooth`→`Diente de Sierra`, `instrSine`→`Sinusoidal`,
+  `instrSquare`→`Cuadrada`, `instrTriangle`→`Triangular` (proper-cased for selector context);
+  added all new keys with natural Spanish labels.
+- **`en.ts`:** Same four waveform labels updated to proper-cased English; added all new keys.
+- **`pt.ts`:** Updated waveform labels; added all new keys with natural Portuguese labels.
+- **`zh.ts`:** Waveform labels unchanged (already correct Chinese); added all new keys
+  with natural Simplified Chinese labels.
+- **`grep` sanity:** confirmed no other component references `roomLabel`, `roomTip`,
+  `decayLabel`, or `decayTip` — removal is safe and complete.
+
+### Files touched
+
+- `src/ui/Header.svelte` (Phase 02 sound block replaced; edit-mode feedback added; CSS updated)
+- `src/render/tonnetz-scene.ts` (`pickChord` extended with preset + pulse; `tickHarmony` pulse render)
+- `src/i18n/types.ts` (4 keys removed; 10 keys added)
+- `src/i18n/locales/es.ts` (updated + new keys)
+- `src/i18n/locales/en.ts` (updated + new keys)
+- `src/i18n/locales/pt.ts` (updated + new keys)
+- `src/i18n/locales/zh.ts` (updated + new keys)
+- `docs/harmonic-rhythm-improvements/handoffs/phase-03-handoff.md` (this entry)
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → clean (ESLint + Prettier; one `prettier --write` pass applied).
+- `pnpm exec vitest run` → **646 tests pass** (17 test files). Count unchanged from step
+  03.4 (no new unit tests needed — this step is UI/i18n; key-parity test already exercises
+  the new keys automatically).
+  - `tests/i18n/key-parity.test.ts` → **8 tests pass** (A-03-13 CLOSED).
+- `pnpm build` → clean exit code 0 (A-03-14 CLOSED). Two pre-existing chunk/dynamic-import
+  warnings retained — not introduced by this step.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / artifact | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | Byte-identical at default | `tests/codegen.test.ts`, `tests/presets.test.ts` (step 03.3) | unit | **CLOSED** (step 03.3) |
+| A-03-02 | Piano preset produces distinct audio (warm, plucked) | — | manual | **pending Pilot Checkpoint #5** |
+| A-03-03 | Guitar preset produces distinct audio (bright pluck, filter sweep) | — | manual | **pending Pilot Checkpoint #5** |
+| A-03-04 | Synth Bass preset produces distinct audio (dark, sustained) | — | manual | **pending Pilot Checkpoint #5** |
+| A-03-05 | Noise oscillator (`pink`) produces noise-textured harmony | — | manual | **pending Pilot Checkpoint #5** |
+| A-03-06 | Sound block at end-of-row (after clave/escala/octava) | visual inspection in dev server | manual | **pending Pilot Checkpoint #5** |
+| A-03-07 | Accent border (#8aa0ff) on `.sound-ctl` when slot selected | visual inspection in dev server | manual | **pending Pilot Checkpoint #5** |
+| A-03-08 | Brief pulse animation on new slot selection | visual inspection in dev server | manual | **pending Pilot Checkpoint #5** |
+| A-03-09 | No accent border when no slot selected | visual inspection in dev server | manual | **pending Pilot Checkpoint #5** |
+| A-03-10 | `resolveChordAttrs` exact preset values | `tests/presets.test.ts` (step 03.3) | unit | **CLOSED** (step 03.3) |
+| A-03-11 | Persistence v3 drop + v4 parse | `tests/persistence.test.ts` (step 03.4) | unit | **CLOSED** (step 03.4) |
+| A-03-12 | Agent schema v4 optional fields | `tests/schema.test.ts` (step 03.4) | unit | **CLOSED** (step 03.4) |
+| A-03-13 | i18n key-parity passes | `tests/i18n/key-parity.test.ts` — 8 tests pass | unit | **CLOSED** |
+| A-03-14 | `pnpm build` clean | exit code 0, 1.57s | automated | **CLOSED** |
+
+**Manual acceptance guide for Pilot Checkpoint #5:**
+
+- **A-03-02 Piano:** Open the app in Armonía. Select a chord in the Pentagrama (or add one via Tonnetz). Change Preset to "Piano". Play Armonía. Expect: a warm, controlled attack with a quick decay — distinct from the default sawtooth pad. The `triangle` oscillator, `attack:0.02`, `decay:0.4`, `sustain:0.1`, `release:0.3`, `lpf:1800`, `room:0.4` bundle should give a warm piano-like character.
+- **A-03-03 Guitar:** Same flow, select "Guitarra". Expect: a bright plucked sound with a filter sweep (`lpenv:3`, `lpa:0.01`, `lpd:0.25`), very short sustain. Much shorter sustain than Piano, bright at attack.
+- **A-03-04 Synth Bass:** Select "Bajo Sintético". Expect: a dark, rumbling sustained sound (`lpf:600`, `lpq:2`, `sustain:0.8`, `release:0.5`). Lower in perceived register than default sawtooth.
+- **A-03-05 Noise:** Change Oscillator to "Ruido" (token `pink`). Expect: a textured noise pad — unmistakably different from waveform tones. Still harmonic/rhythmic when used with chord changes.
+- **A-03-06 Placement:** The Oscillator + Presets selects appear AFTER the clave/escala/octava `.field` row, at the rightmost position in the harmony bottom row.
+- **A-03-07 Accent border:** Click a Pentagrama slot. The `.sound-ctl` block should show a faint blue-purple border and slightly tinted background (accent `#8aa0ff`).
+- **A-03-08 Pulse:** Click one slot, then click a different slot. A brief bright flash (~300ms) should fire on the second click before settling to the persistent accent border.
+- **A-03-09 No border:** Click empty canvas to deselect. Accent border and background should disappear; the selects remain visible showing the intent values.
+- **Tonnetz pulse (Pilot-requested):** Click any triangle in the Tonnetz view. The clicked triangle should briefly flash bright accent color then fade (~300ms). The existing active-chord pulse (on the currently-playing chord) is separate and unaffected.
+- **Apply-to-new:** With no slot selected, change the Oscillator to "Sinusoidal" and Preset to "Piano". Click a Tonnetz triangle to add a new chord. The new chord should inherit `instrument:'sine'` and `preset:'piano'`. Confirm by selecting the new slot — the selectors should reflect those values.
+- **Session round-trip:** Add a chord with Piano preset, save session, reload. The loaded chord should still show Piano in the Presets selector.
+
+### Prototype parity
+
+Not applicable — Oscillator/Preset menus, edit-mode feedback, and the Tonnetz click pulse
+are net-new features that did not exist in `reference/orbifold.html`. No prototype source to
+cite. Spec authority is ADR 0019.
+
+### Decisions made (if any)
+
+**Edit-mode pulse via microtask toggle:** The Svelte reactive block uses
+`Promise.resolve().then(...)` to toggle `soundCtlPulsing` off and immediately back on.
+This forces Svelte to flush the `class:sound-ctl--pulse` removal in one microtask tick,
+then re-add it, allowing CSS animation to restart from the beginning. A simpler approach
+(setting to `true` directly) would not re-trigger the animation if already in progress.
+The `setTimeout(320ms)` cleanup clears the class after the animation completes.
+
+**`_prevSlotIdx` guard:** The reactive block uses a local `_prevSlotIdx` to distinguish
+"slot index changed to non-null" from "other reactive updates". Without this guard,
+the pulse would fire on any reactive update that happens to re-run the block, even when
+`$selectedSlotIdxStore` is unchanged.
+
+**`playChord` signature unchanged for preset:** `playChord` takes `instrument/room/decay`
+as positional args and passes them to `chordToStrudel`. The preset is already wired into
+`chordToStrudel` via `resolveChordAttrs` in the `chordAttrs?` parameter path (step 03.3).
+To thread preset through `playChord` would require a signature change and a new `chordAttrs`
+argument. Since `playChord` is used for immediate chord preview (the one-shot audio fired
+on Tonnetz click) and the preset is only meaningful at full-progression-codegen time (when
+the pattern is sent to Strudel's engine), this is intentional. The instant preview uses
+the oscillator sound only; the preset bundle is applied when the progression replays.
+
+### Proposed Decisions Register entries (for Pilot consideration)
+
+None new beyond what ADR 0019 already captures.
+
+### Blockers resolved during this step (if any)
+
+None. One ESLint transient issue: `OSCILLATORS` and `PRESET_TOKENS` const arrays were
+flagged as `assigned a value but only used as a type` / `never used`. Fixed by removing
+the const arrays and replacing `type OscillatorToken` with an explicit union literal type.
+One Prettier formatting pass applied after ESLint fix.
+
+### Environment state after this step
+
+- Branch: `harmonic-rhythm-improvements/phase-01`
+- 646 tests pass (unchanged from step 03.4).
+- `pnpm build` → clean.
+- `Header.svelte`: Phase 02 sound block fully replaced. Two selectors present.
+  Edit-mode feedback implemented.
+- `tonnetz-scene.ts`: preset threaded onto new chords; click pulse active.
+- All four i18n dictionaries carry the new sound-control keys. Dead room/decay keys removed.
+
+### Auto-continuation
+
+**BLOCKED — Pilot Checkpoint #5 (manual audio/UX acceptance) required.**
+
+This is the FINAL code step of Phase 03. The Pilot must:
+1. Run `pnpm dev`, open the app in the browser in Armonía view.
+2. Verify A-03-02..A-03-09 manually per the acceptance guide above.
+3. Verify the Tonnetz click pulse is visible.
+4. Verify apply-to-new behavior and session round-trip.
+
+The Dev does NOT mark the phase complete. That is the Pilot's action at Checkpoint #5.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** (pending)
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(ui): Phase 03 step 03.5 — Oscillator + Presets selectors, edit-mode feedback, Tonnetz pulse, i18n`
+
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

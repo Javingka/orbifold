@@ -84,6 +84,14 @@ export let _lastVL: VoiceLeadingResult | null = null;
 /** Last-picked chord reference (rootPc + qual + centroid). Prototype: `lastPick`. */
 let _lastPick: { rootPc: number; qual: string; cx: number; cy: number } | null = null;
 
+/**
+ * Click-pulse state for the Tonnetz triangle flash (A-03-07/step 03.5).
+ * When the user picks a triangle, we store the pick time and the triangle's
+ * centroid. The tick loop draws a brief (~300ms) bright highlight overlay on
+ * that triangle via `hDyn`, decaying to transparent.
+ */
+let _pickPulse: { cx: number; cy: number; tri: RenderTri; startMs: number } | null = null;
+
 /** Traveling particle position along voice-leading path [0..1). Prototype: `particle`. */
 let _particle = 0;
 
@@ -470,7 +478,7 @@ export function onStagePointerDown(e: PointerEvent): void {
  * @param state - Current SessionState (passed to avoid redundant get() calls).
  */
 function pickChord(tri: RenderTri, state: SessionState): void {
-  // Apply-to-new: inherit sound intent from the top-bar controls (ADR 0018 D5, step 02.5).
+  // Apply-to-new: inherit sound intent from the top-bar controls (ADR 0018 D5 / ADR 0019 D3).
   const intent = get(soundIntentStore);
   const newChord: Chord = {
     rootPc: tri.rootPc,
@@ -481,7 +489,14 @@ function pickChord(tri: RenderTri, state: SessionState): void {
     instrument: intent.instrument !== 'sawtooth' ? intent.instrument : undefined,
     room: intent.room !== 0.25 ? intent.room : undefined,
     decay: intent.decay > 0 ? intent.decay : undefined,
+    // ADR 0019 D2/D3: carry preset from intent store onto new chord (apply-to-new).
+    preset: intent.preset,
   };
+
+  // ── Tonnetz click pulse (step 03.5, A-03-07 partial): store pick time ─────
+  // The tickHarmony loop reads _pickPulse and draws a brief bright overlay on
+  // the clicked triangle for ~300ms, giving click feedback.
+  _pickPulse = { cx: tri.cx, cy: tri.cy, tri, startMs: performance.now() };
 
   // ── Compute voice-leading before appending — prototype lines 1363–1370 ────
   // `Chord` stores {rootPc, qual, gain} only; pcs are derived via chordPcs().
@@ -652,6 +667,23 @@ export function tickHarmony(delta: number): void {
     hDyn.drawCircle(tri.cx, tri.cy, isActive ? 8 : 5);
     hDyn.endFill();
   });
+
+  // ── Click-pulse overlay (step 03.5): brief bright flash on picked triangle ──
+  // Decays over 300ms from fully visible to transparent, giving tactile feedback.
+  if (_pickPulse !== null) {
+    const elapsed = performance.now() - _pickPulse.startMs;
+    const PULSE_MS = 300;
+    if (elapsed < PULSE_MS) {
+      const alpha = (1 - elapsed / PULSE_MS) * 0.55; // fade from 0.55 → 0
+      const pt = _pickPulse.tri;
+      hDyn.beginFill(0x8aa0ff, alpha); // accent #8aa0ff
+      hDyn.lineStyle(2, 0x8aa0ff, alpha * 1.4);
+      hDyn.drawPolygon([pt.vx[0], pt.vy[0], pt.vx[1], pt.vy[1], pt.vx[2], pt.vy[2]]);
+      hDyn.endFill();
+    } else {
+      _pickPulse = null;
+    }
+  }
 
   // ── Suggestion glow — prototype lines 1122–1130 ───────────────────────────
   for (const t of _suggestionTris) {
