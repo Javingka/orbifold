@@ -308,13 +308,30 @@ textarea {
 /* Block library items */
 .blk {
   display: flex;
-  align-items: center;
-  gap: 9px;
+  flex-direction: column;
+  gap: 6px;
   padding: 9px 11px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--stroke);
   margin-bottom: 7px;
+}
+
+/* Top row: type tag + editable name */
+.blk-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Bottom row: mini code preview + all action buttons */
+.blk-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .blk .tag {
@@ -346,13 +363,17 @@ textarea {
   font-weight: 600;
   flex: 1;
   min-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .blk .mini {
   font-size: 10px;
   color: var(--faint);
   font-family: 'IBM Plex Mono', monospace;
-  max-width: 230px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

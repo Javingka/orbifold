@@ -661,66 +661,77 @@
       {:else}
         {#each $sessionStore.composition.blocks as b (b.id)}
           <div class="blk">
-            <!-- Type tag. Prototype line 1956: `<span class="tag ${tagClsOf(b)}">${tagOf(b)}</span>` -->
-            <span class="tag {tagClsOf(b)}">{tagOf(b)}</span>
-
             <!--
-              Contenteditable name span.
-              Prototype line 1957–1960: `.nm contenteditable` + input handler.
-              handleBlockRename reads e.target.textContent, calls renameBlock.
+              Top row: type tag + editable name.
             -->
-            <span
-              class="nm"
-              contenteditable="true"
-              role="textbox"
-              tabindex="0"
-              on:input={(e) => handleBlockRename(e, b.id, b.name)}>{b.name}</span
-            >
+            <div class="blk-meta">
+              <!-- Type tag. Prototype line 1956: `<span class="tag ${tagClsOf(b)}">${tagOf(b)}</span>` -->
+              <span class="tag {tagClsOf(b)}">{tagOf(b)}</span>
 
-            <!-- Mini code preview. Prototype line 1958: `.mini` showing first 60 chars. -->
-            <span class="mini">{b.code.replace(/\n/g, ' ').slice(0, 60)}</span>
-
-            <!--
-              Legacy indicator: shown on blocks without a snapshot (ADR 0020 D4).
-              Styled as a muted badge — does NOT indicate a playback problem.
-              Uses i18n key `composition.legacyBlockTip` for the tooltip text.
-            -->
-            {#if b.snapshot === undefined}
-              <span class="blk-legacy" title={$t('composition.legacyBlockTip')}>legacy</span>
-            {/if}
-
-            <!--
-              ✎ open in editor button (ADR 0020 D6).
-              Visible only when block.snapshot is present — hidden for legacy blocks (D4).
-              Calls openBlock(b.id): restores snapshot into live session stores,
-              switches to the matching editor view (rhythm or harmony).
-            -->
-            {#if b.snapshot !== undefined}
-              <button
-                class="blk-open"
-                title={$t('composition.openBlockTip')}
-                on:click={() => openBlock(b.id)}>{$t('composition.openBlock')}</button
+              <!--
+                Contenteditable name span.
+                Prototype line 1957–1960: `.nm contenteditable` + input handler.
+                handleBlockRename reads e.target.textContent, calls renameBlock.
+              -->
+              <span
+                class="nm"
+                contenteditable="true"
+                role="textbox"
+                tabindex="0"
+                on:input={(e) => handleBlockRename(e, b.id, b.name)}>{b.name}</span
               >
-            {/if}
+            </div>
 
             <!--
-              ▶ preview button. Prototype line 1961.
-              Calls playBlockById(b.id) → runs block code, sets nowPlaying 'block'.
+              Bottom row: mini code preview + legacy badge/open button + action buttons.
+              flex-wrap: wrap (in CSS) ensures all buttons remain visible even on narrow cards.
             -->
-            <button on:click={() => void playBlockById(b.id)}>▶</button>
+            <div class="blk-actions">
+              <!-- Mini code preview. Prototype line 1958: `.mini` showing first 60 chars. -->
+              <span class="mini">{b.code.replace(/\n/g, ' ').slice(0, 60)}</span>
 
-            <!--
-              ↳ pista button. Prototype line 1962.
-              Creates NEW track pre-populated with this block (Pilot-confirmed OD-1).
-              Function: addBlockAsNewTrack (session.ts).
-            -->
-            <button on:click={() => addBlockAsNewTrack(b.id)}>↳ pista</button>
+              <!--
+                Legacy indicator: shown on blocks without a snapshot (ADR 0020 D4).
+                Styled as a muted badge — does NOT indicate a playback problem.
+                Uses i18n key `composition.legacyBlockTip` for the tooltip text.
+              -->
+              {#if b.snapshot === undefined}
+                <span class="blk-legacy" title={$t('composition.legacyBlockTip')}>legacy</span>
+              {/if}
 
-            <!--
-              🗑 delete button. Prototype lines 1963–1966.
-              Removes block from library AND all track references.
-            -->
-            <button on:click={() => deleteBlock(b.id)}>🗑</button>
+              <!--
+                ✎ open in editor button (ADR 0020 D6).
+                Visible only when block.snapshot is present — hidden for legacy blocks (D4).
+                Calls openBlock(b.id): restores snapshot into live session stores,
+                switches to the matching editor view (rhythm or harmony).
+              -->
+              {#if b.snapshot !== undefined}
+                <button
+                  class="blk-open"
+                  title={$t('composition.openBlockTip')}
+                  on:click={() => openBlock(b.id)}>{$t('composition.openBlock')}</button
+                >
+              {/if}
+
+              <!--
+                ▶ preview button. Prototype line 1961.
+                Calls playBlockById(b.id) → runs block code, sets nowPlaying 'block'.
+              -->
+              <button on:click={() => void playBlockById(b.id)}>▶</button>
+
+              <!--
+                ↳ pista button. Prototype line 1962.
+                Creates NEW track pre-populated with this block (Pilot-confirmed OD-1).
+                Function: addBlockAsNewTrack (session.ts).
+              -->
+              <button on:click={() => addBlockAsNewTrack(b.id)}>↳ pista</button>
+
+              <!--
+                🗑 delete button. Prototype lines 1963–1966.
+                Removes block from library AND all track references.
+              -->
+              <button on:click={() => deleteBlock(b.id)}>🗑</button>
+            </div>
           </div>
         {/each}
       {/if}

@@ -544,10 +544,71 @@ None. The lazy stage-import pattern for `setView` was already established in ste
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** <ISO date>
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-18
 **Iteration:** 1 of 5
-**Reason:**
-**Next action:**
+**Reason:** All 8 checklist items pass and both project-specific items (AGPL-3.0 present in both modified files, prototype parity N/A). openBlock contract verified line-by-line against ADR 0020 D6: block-not-found no-op, snapshot-absent no-op (no error, no view switch), correct restore* dispatch per discriminant, bpm untouched, no runNow/stopAll, ephemeral harmony fields preserved via explicit subview/registerMode spread. UI guard conditions verified: legacy badge rendered only on snapshot===undefined, open button rendered only on snapshot!==undefined (mutually exclusive). All three i18n keys confirmed in types.ts and all four locales. A-01-08..A-01-11 provide concrete Pilot-executable manual verification paths. A-01-12 quality gate (tsc + lint + vitest 682 + build) closed. No ID unmapped across the full phase.
+**Next action:** Pilot approval required before phase completion, reason: Phase 01 is complete — A-01-08..A-01-11 require Pilot manual acceptance at Checkpoint #5 before the phase can be marked done.
+
+**Pending Register proposals (Pilot decides at phase approval):**
+None — all required decisions are in ADR 0020; no new Register entries were proposed across steps 01.3–01.5.
+
+---
+
+## Checkpoint #5 Bug-fix — block-card action buttons occluded by the tracks section
+
+**Date:** 2026-06-18
+
+**Commit:** `fix(composition): Phase 01 Checkpoint #5 — block-card action buttons occluded by tracks section`
+
+**Iteration:** 2 of 5 (bug-fix — no new Planner review required; Pilot-directed fix)
+
+### Root cause
+
+The `.blk` block card in `src/app/app.css` was a single-row `display: flex; align-items: center` container. Before step 01.5 the row held: type tag, editable name (`flex: 1`), mini code preview (`max-width: 230px`), and three action buttons (▶, ↳ pista, 🗑). Step 01.5 added a fourth action element (`.blk-legacy` badge or `.blk-open` button), making the total content wider than the 300 px column available in the two-column layout. Because the row had no `flex-wrap` and the column had no `overflow: visible` guard, the overflowing elements slid behind the second column (the timeline panel), rendering the 🗑 button fully inaccessible and ↳ pista partially inaccessible.
+
+### Fix
+
+Restructured the `.blk` card from a single flat flex row to a two-row column layout:
+
+- **`src/app/app.css`:** Changed `.blk` to `display: flex; flex-direction: column; gap: 6px`. Added two new utility classes:
+  - `.blk-meta` — first row: type tag + editable name, `align-items: center; gap: 8px; min-width: 0`.
+  - `.blk-actions` — second row: mini code preview + badge/open button + all action buttons, `align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0`. The `flex-wrap: wrap` ensures all buttons stay visible even on narrow viewports. The `.blk .mini` no longer uses `max-width: 230px`; instead it uses `flex: 1; min-width: 0` to fill available space before the fixed-width buttons.
+
+- **`src/ui/CompositionDrawer.svelte`:** Wrapped the type tag and name span in a `<div class="blk-meta">`, and wrapped the mini preview, legacy badge, open button, and three action buttons in a `<div class="blk-actions">`.
+
+No i18n changes. No new keys. No logic changes. The `.blk-legacy` and `.blk-open` conditional visibility guards (`b.snapshot === undefined` / `b.snapshot !== undefined`) are unchanged.
+
+### Manual re-verification path (for Pilot)
+
+Load the Composition view with one or more saved blocks. Confirm:
+
+1. The 🗑 (delete) button is fully visible and clickable on every block card.
+2. The ↳ pista (add-track) button is fully visible and clickable.
+3. On blocks with a snapshot, the ✎ abrir button appears on the second row alongside ▶ and the other buttons.
+4. On blocks without a snapshot, the "legacy" badge appears on the second row.
+5. None of the buttons are occluded by the timeline section.
+6. The card layout looks clean — type tag + name on the first row; code preview + action buttons on the second row.
+
+### Bug-fix files touched
+
+- `src/app/app.css` (`.blk` restructured; `.blk-meta` and `.blk-actions` added; `.blk .mini` width constraint changed)
+- `src/ui/CompositionDrawer.svelte` (block card markup wrapped in `.blk-meta` / `.blk-actions` sub-divs)
+- `docs/editable-composition/handoffs/phase-01-handoff.md` (this entry)
+
+### Bug-fix validations
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → ESLint + Prettier clean.
+- `pnpm exec vitest run` → 682 tests pass (18 test files), 0 failures. Test count unchanged (CSS/markup-only fix).
+- `pnpm build` → exit code 0 (pre-existing chunk-size warnings only; no new warnings).
+
+### Bug-fix Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+| --- | --- | --- | --- | --- |
+| A-01-08 | manual: groove re-open | see step 01.5 verification path | manual | READY FOR PILOT — layout regression fixed |
+| A-01-09 | manual: armonia re-open | see step 01.5 verification path | manual | READY FOR PILOT — layout regression fixed |
+| A-01-10 | manual: sesion re-open | see step 01.5 verification path | manual | READY FOR PILOT — layout regression fixed |
+| A-01-11 | manual: legacy block no edit button | see step 01.5 verification path | manual | READY FOR PILOT — layout regression fixed |
+| A-01-12 | quality gate | automated | automated | CLOSED |
