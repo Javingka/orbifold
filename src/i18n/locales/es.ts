@@ -259,6 +259,11 @@ const es: Dictionary = {
     addBlockOption: '＋ bloque…',
     // {type} and {name} interpolated
     addBlockEntry: '+ {type}: {name}',
+    // "abrir en editor" button on block cards with snapshots
+    openBlock: '✎ abrir',
+    openBlockTip: 'Restaurar este bloque en el editor para editarlo',
+    legacyBlockTip:
+      'Creado antes de que existieran los snapshots editables. Se puede reproducir, pero no se puede reabrir en el editor.',
   },
 
   code: {

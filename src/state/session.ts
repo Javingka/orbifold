@@ -49,6 +49,9 @@ import {
   captureGrooveSnapshot,
   captureArmoniaSnapshot,
   captureSesionSnapshot,
+  restoreGrooveSnapshot,
+  restoreArmoniaSnapshot,
+  restoreSesionSnapshot,
 } from '../core/composition/snapshot.js';
 import {
   chordToStrudel,
@@ -1709,4 +1712,67 @@ export async function stopComposition(): Promise<void> {
   a.hush();
   setCompStopped();
   setNowPlaying(null, null);
+}
+
+/**
+ * Open a saved block in its corresponding editor view by restoring its snapshot.
+ *
+ * Per ADR 0020 D6:
+ * 1. Finds the block by id in `composition.blocks`.
+ * 2. If the block is not found, returns (no-op, no error).
+ * 3. If `block.snapshot === undefined`, returns (no-op, no error, no view switch).
+ * 4. Calls the appropriate restore function from `src/core/composition/snapshot.ts`.
+ * 5. Writes the resulting `Partial<SessionState>` delta into `sessionStore`, preserving
+ *    ephemeral harmony fields (subview, registerMode) from the current state.
+ * 6. Switches the active view to 'rhythm' (groove) or 'harmony' (armonia/sesion).
+ *
+ * Does NOT auto-play, does NOT touch `state.bpm`, does NOT clear the composition
+ * track list. The user resumes playback manually.
+ *
+ * New in Phase 01 step 01.5 (editable-composition initiative) — ADR 0020 D6.
+ *
+ * @param blockId - The `id` of the block to open (e.g. 'b1').
+ */
+export function openBlock(blockId: string): void {
+  const state = get(sessionStore);
+  const block = state.composition.blocks.find((b) => b.id === blockId);
+  // Guard: block not found (D6 §2).
+  if (!block) return;
+  // Guard: snapshot absent — legacy block, no edit action (D6 §3 / D4).
+  if (block.snapshot === undefined) return;
+
+  const snapshot = block.snapshot;
+  let delta: Partial<SessionState>;
+  let targetView: SessionState['view'];
+
+  if (snapshot.type === 'groove') {
+    delta = restoreGrooveSnapshot(snapshot);
+    targetView = 'rhythm';
+  } else if (snapshot.type === 'armonia') {
+    delta = restoreArmoniaSnapshot(snapshot);
+    targetView = 'harmony';
+  } else {
+    // 'sesion' — composite; harmony is the lead view (D6 §6)
+    delta = restoreSesionSnapshot(snapshot);
+    targetView = 'harmony';
+  }
+
+  // Preserve the current ephemeral harmony fields (subview, registerMode) so
+  // openBlock does not inadvertently reset the user's Tonnetz/staff preference.
+  // The restoreArmoniaSnapshot returns default ephemeral values; we override
+  // them here with the live store values before writing the delta.
+  sessionStore.update((s) => {
+    const mergedDelta = { ...delta };
+    if (mergedDelta.harmony !== undefined) {
+      mergedDelta.harmony = {
+        ...mergedDelta.harmony,
+        subview: s.harmony.subview,
+        registerMode: s.harmony.registerMode,
+      };
+    }
+    return { ...s, ...mergedDelta, view: targetView };
+  });
+
+  // Call stage.setView via lazy import (mirrors setView pattern in step 09.3).
+  void getStage().then((m) => m.setView(targetView));
 }

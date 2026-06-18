@@ -295,6 +295,12 @@ export interface Dictionary {
     addBlockOption: string;
     /** Drop selector per-block option — {type} and {name} interpolated */
     addBlockEntry: string;
+    /** "Open in editor" button label on a block card (snapshot present) */
+    openBlock: string;
+    /** Tooltip on the "open in editor" button */
+    openBlockTip: string;
+    /** Tooltip on the legacy badge shown for blocks without a snapshot */
+    legacyBlockTip: string;
   };
 
   /** CodeDrawer.svelte strings */

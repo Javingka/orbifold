@@ -407,13 +407,11 @@ Step 01.4 is a checkpoint step. Step 01.5 (openBlock action + UI round-trip butt
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** <ISO date>
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-18
 **Iteration:** 1 of 5
-**Reason:**
-**Next action:**
+**Reason:** All 8 checklist items pass and both project-specific items (AGPL-3.0 header confirmed, prototype parity N/A). SESSION_SCHEMA_VERSION=5 and z.literal(5) confirmed at source. SavedBlockSnapshotSchema discriminated union verified field-by-field against BlockSnapshot TS types — all 12 per-chord sound attributes present in SavedChordSnapshotEntrySchema, rest-first ordering correct per ADR 0012 D4, SesionSnapshot composite shape congruent. Agent SCHEMA_VERSION stays 4; D7 JSDoc guard on HarmonyChordCoreSchema confirmed. A-01-07 Coverage Table maps all six sub-criteria to real (de)serialization tests (no mocked bypass). 682 tests pass (675 + 7 net new). Quality gates clean.
+**Next action:** Dev proceeds to step 01.5
 
 ---
 
@@ -421,3 +419,135 @@ Step 01.4 is a checkpoint step. Step 01.5 (openBlock action + UI round-trip butt
 
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 01.5 — `openBlock` action + round-trip UI button + i18n + quality gate (Checkpoint #5)
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(composition): Phase 01 step 01.5 — openBlock action + round-trip UI button + i18n + quality gate`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/editable-composition/decisions.md`, `docs/adr/0020-block-as-state.md` (D4, D6 binding), `docs/editable-composition/phases/phase-01.md` (step 01.5 scope and all Acceptance IDs A-01-08..A-01-12), all prior step handoff entries in this file, `src/state/session.ts` (full), `src/ui/CompositionDrawer.svelte` (full — block-card `{#each}` ~lines 661–703), `src/i18n/types.ts` (full), and all four locale files (es/en/pt/zh) for the current key inventory.
+- Read `src/core/composition/snapshot.ts` (restore function signatures and return types) to confirm the delta shapes used by `openBlock`.
+- **`src/state/session.ts`:**
+  - Added imports for `restoreGrooveSnapshot`, `restoreArmoniaSnapshot`, `restoreSesionSnapshot` alongside the existing capture imports.
+  - Exported `openBlock(blockId: string): void` per ADR 0020 D6:
+    - Reads `get(sessionStore)`, finds block by id; if not found → no-op.
+    - If `block.snapshot === undefined` → no-op (D4 / D6 §3).
+    - Calls appropriate `restore*Snapshot` function based on `snapshot.type`.
+    - Writes the `Partial<SessionState>` delta via `sessionStore.update`, spreading existing ephemeral harmony fields (`subview`, `registerMode`) so openBlock does not reset the user's Tonnetz/staff preference (noted as a step 01.5 concern in the step 01.3 handoff).
+    - Also writes `view: targetView` (`'rhythm'` for groove, `'harmony'` for armonia/sesion) inside the same update.
+    - Calls `getStage().then((m) => m.setView(targetView))` via the existing lazy stage-module pattern (mirrors `setView` in step 09.3) to synchronize the PIXI layer visibility.
+    - Does NOT call `runNow`, `stopAll`, or any audio transport operation (D6 §7).
+    - Does NOT touch `state.bpm` (D3 / D6 §7).
+- **`src/ui/CompositionDrawer.svelte`:**
+  - Added `openBlock` to the import list from `'../state/session.js'`.
+  - Inside the `{#each $sessionStore.composition.blocks as b (b.id)}` block:
+    - Added a `{#if b.snapshot === undefined}` conditional rendering a `<span class="blk-legacy">` badge with `title={$t('composition.legacyBlockTip')}` (ADR 0020 D4 / D6 §3).
+    - Added a `{#if b.snapshot !== undefined}` conditional rendering a `<button class="blk-open">` with `title={$t('composition.openBlockTip')}` and `on:click={() => openBlock(b.id)}` (ADR 0020 D6).
+  - Added CSS rules in `<style>`:
+    - `.blk-legacy` — 9px muted uppercase badge, `color: var(--faint)`, `border: 1px solid var(--stroke)`, `cursor: help`. Consistent with sober Apple-like aesthetic (ADR 0011); does not suggest a playback error.
+    - `.blk-open` — 11px accent-colored button (`#8aa0ff` — ADR 0011 edit-mode accent), transparent background with a 35% opacity accent border; hover state adds a 10% opacity accent background fill. Matches the aesthetic of existing block action buttons.
+- **`src/i18n/types.ts`:** Added three new keys to the `composition` interface:
+  - `openBlock: string` — "open in editor" button label.
+  - `openBlockTip: string` — tooltip on the open button.
+  - `legacyBlockTip: string` — tooltip on the legacy badge.
+- **Locale files — all four updated:**
+  - `es.ts`: `openBlock: '✎ abrir'`, explanatory tooltip strings in Spanish.
+  - `en.ts`: `openBlock: '✎ open'`, explanatory tooltip strings in English.
+  - `pt.ts`: `openBlock: '✎ abrir'`, explanatory tooltip strings in Portuguese.
+  - `zh.ts`: `openBlock: '✎ 打开'`, explanatory tooltip strings in Chinese.
+- **i18n key parity:** `tests/i18n/key-parity.test.ts` (8 tests) passes — all four locale files carry the new keys.
+
+### Files touched
+
+- `src/state/session.ts` (`restoreGrooveSnapshot`/`restoreArmoniaSnapshot`/`restoreSesionSnapshot` imports added; `openBlock` exported)
+- `src/ui/CompositionDrawer.svelte` (`openBlock` imported; legacy badge + open button added to block card loop; `.blk-legacy` + `.blk-open` CSS added)
+- `src/i18n/types.ts` (three new `composition.*` keys added)
+- `src/i18n/locales/es.ts` (three new keys added — Spanish)
+- `src/i18n/locales/en.ts` (three new keys added — English)
+- `src/i18n/locales/pt.ts` (three new keys added — Portuguese)
+- `src/i18n/locales/zh.ts` (three new keys added — Chinese)
+- `docs/editable-composition/handoffs/phase-01-handoff.md` (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-08** — Manual. Verification path: (1) In Ritmo view, add at least two layers and toggle some steps; (2) Switch to Composition view, click "💾 groove actual"; (3) The new block card shows "✎ abrir" button; (4) Click "✎ abrir"; (5) The view switches to Ritmo and the layers/steps match what was saved.
+- **A-01-09** — Manual. Verification path: (1) In Armonía view, add 2–3 chords with different root/qual/sound attributes; (2) Switch to Composition, click "💾 armonía actual"; (3) Block card shows "✎ abrir"; (4) Click it; (5) View switches to Armonía; Pentagrama + chord slots show the same progression, root, mode, octave, and sound attributes as at save time.
+- **A-01-10** — Manual. Verification path: (1) Set up both rhythm and harmony, then click "💾 sesión actual"; (2) Block card shows "✎ abrir"; (3) Click it; (4) View switches to Armonía (harmony is the lead view per ADR 0020 D6 §6); (5) Both Ritmo state and Armonía state are restored (navigate to Ritmo to confirm layers).
+- **A-01-11** — Manual. Verification path: (1) Load a session saved before this phase (or manually downgrade `SESSION_SCHEMA_VERSION` to force the drop, confirming no old block survives); in normal use, legacy blocks arise only from deliberate `Block` construction without a snapshot; the badge "legacy" appears and no "✎ abrir" button is rendered. Alternatively, write a test block directly: see automated path below where `snapshot === undefined` is the guard.
+- **A-01-12** — Automated (all quality gates clean):
+  - `pnpm exec tsc --noEmit` → 0 errors.
+  - `pnpm lint` → ESLint + Prettier clean.
+  - `pnpm exec vitest run` → 682 tests pass (18 test files); `tests/i18n/key-parity.test.ts` (8 tests) includes new key assertions.
+  - `pnpm build` → exit code 0 (Vite informational warnings about chunk size and dynamic-import chunking are pre-existing and not new).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → ESLint + Prettier clean.
+- `pnpm exec vitest run` → 682 tests pass (18 test files), 0 failures. No new test files in this step (the implementation targets manual acceptance items A-01-08..A-01-11).
+- `pnpm build` → exit code 0.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | groove round-trip fidelity | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-02 | armonia round-trip fidelity | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-03 | sesion round-trip fidelity | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-04 | per-chord sound attrs captured | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-05 | per-chord sound attrs restored | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-06 | byte-identical-at-default | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-07 | persistence round-trip | `tests/persistence.test.ts` (step 01.4) | unit | CLOSED (step 01.4) |
+| A-01-08 | manual: groove re-open | see "Validation evidence" above | manual | READY FOR PILOT (Checkpoint #5) |
+| A-01-09 | manual: armonia re-open | see "Validation evidence" above | manual | READY FOR PILOT (Checkpoint #5) |
+| A-01-10 | manual: sesion re-open | see "Validation evidence" above | manual | READY FOR PILOT (Checkpoint #5) |
+| A-01-11 | manual: legacy block no edit button | see "Validation evidence" above | manual | READY FOR PILOT (Checkpoint #5) |
+| A-01-12 | quality gate (all tools clean) | automated — `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm exec vitest run`, `pnpm build` | automated | **CLOSED** |
+
+### Decisions made (if any)
+
+**Ephemeral harmony field merging in `openBlock`:** The `openBlock` implementation spreads the current store's `harmony.subview` and `harmony.registerMode` values over the `restoreArmoniaSnapshot` result (which returns default ephemeral values) before writing to the store. This preserves the user's Tonnetz/staff preference across openBlock calls, as noted as a step 01.5 concern in the step 01.3 handoff. This is a pure implementation detail within the D6 contract — no new ADR needed.
+
+**View switch uses both store update and lazy `getStage().setView` call:** To match the established `setView` pattern in `session.ts` (step 09.3), `openBlock` writes `view: targetView` inline inside `sessionStore.update` (so the store is consistent) and then calls `getStage().then((m) => m.setView(targetView))` for the PIXI layer. This is the only correct pattern given the lazy-import constraint (PIXI must not be imported at module-eval time in Node/Vitest).
+
+### Proposed Decisions Register entries (if any)
+
+None — all required decisions are already in ADR 0020.
+
+### Prototype parity
+
+N/A — `openBlock` is new infrastructure (no prototype equivalent for re-opening a saved block in the editor). The byte-identical-at-default guarantee (A-01-06, closed in step 01.3) confirms the parity invariant from the reversibility checklist.
+
+### Blockers resolved during this step (if any)
+
+None. The lazy stage-import pattern for `setView` was already established in step 09.3; `openBlock` reuses it without modification.
+
+### Environment state after this step
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → clean (ESLint + Prettier).
+- `pnpm exec vitest run` → 682 tests pass (18 test files), 0 failures.
+- `pnpm build` → exit code 0.
+- `openBlock` is exported from `src/state/session.ts`.
+- All four locale files carry the three new `composition.*` keys; `key-parity.test.ts` passes.
+- Manual acceptance items A-01-08..A-01-11 are ready for Pilot review at Checkpoint #5.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 5
+**Reason:**
+**Next action:**

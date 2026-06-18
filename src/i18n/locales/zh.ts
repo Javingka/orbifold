@@ -252,6 +252,10 @@ const zh: Dictionary = {
     addBlockOption: '＋ 片段…',
     // {type} and {name} interpolated
     addBlockEntry: '+ {type}：{name}',
+    // "在编辑器中打开" button on block cards with snapshots
+    openBlock: '✎ 打开',
+    openBlockTip: '将此片段恢复到编辑器中进行编辑',
+    legacyBlockTip: '该片段在可编辑快照功能出现之前创建，可以播放，但无法在编辑器中重新打开。',
   },
 
   code: {

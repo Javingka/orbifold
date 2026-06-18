@@ -70,6 +70,7 @@
     deleteBlock,
     renameBlock,
     playBlockById,
+    openBlock,
     addTrack,
     removeTrack,
     addBlockToTrack,
@@ -680,6 +681,29 @@
             <span class="mini">{b.code.replace(/\n/g, ' ').slice(0, 60)}</span>
 
             <!--
+              Legacy indicator: shown on blocks without a snapshot (ADR 0020 D4).
+              Styled as a muted badge — does NOT indicate a playback problem.
+              Uses i18n key `composition.legacyBlockTip` for the tooltip text.
+            -->
+            {#if b.snapshot === undefined}
+              <span class="blk-legacy" title={$t('composition.legacyBlockTip')}>legacy</span>
+            {/if}
+
+            <!--
+              ✎ open in editor button (ADR 0020 D6).
+              Visible only when block.snapshot is present — hidden for legacy blocks (D4).
+              Calls openBlock(b.id): restores snapshot into live session stores,
+              switches to the matching editor view (rhythm or harmony).
+            -->
+            {#if b.snapshot !== undefined}
+              <button
+                class="blk-open"
+                title={$t('composition.openBlockTip')}
+                on:click={() => openBlock(b.id)}>{$t('composition.openBlock')}</button
+              >
+            {/if}
+
+            <!--
               ▶ preview button. Prototype line 1961.
               Calls playBlockById(b.id) → runs block code, sets nowPlaying 'block'.
             -->
@@ -1105,5 +1129,51 @@
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
+  }
+
+  /*
+   * .blk-legacy — discreet muted badge shown on blocks without a snapshot.
+   * Per ADR 0020 D4: playback is unaffected; badge uses a subdued tone (not a
+   * warning) and carries a tooltip with an i18n explanation.
+   * New in Phase 01 step 01.5 (editable-composition initiative).
+   */
+  .blk-legacy {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--faint);
+    border: 1px solid var(--stroke);
+    border-radius: 4px;
+    padding: 1px 4px;
+    cursor: help;
+    user-select: none;
+  }
+
+  /*
+   * .blk-open — "open in editor" icon-button on blocks with a snapshot.
+   * Styled to match the surrounding inline block action buttons but distinguished
+   * by the accent color (#8aa0ff — ADR 0011: accent for edit-mode actions) and
+   * an edit glyph (✎) to signal "editable".
+   * New in Phase 01 step 01.5 (editable-composition initiative).
+   */
+  .blk-open {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8aa0ff;
+    background: transparent;
+    border: 1px solid rgba(138, 160, 255, 0.35);
+    border-radius: 6px;
+    padding: 2px 7px;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
+  }
+
+  .blk-open:hover {
+    background: rgba(138, 160, 255, 0.1);
+    border-color: rgba(138, 160, 255, 0.65);
   }
 </style>
