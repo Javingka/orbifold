@@ -8,12 +8,14 @@ import type { SessionState } from '../state/session.js';
 // ── Schema version ─────────────────────────────────────────────────────────
 
 /**
- * Schema version 2 — Phase 09 (step 09.3), ADR 0013 D1.
- * Change from v1: `view` enum extended with `'code'` (Código Strudel primary view).
- * Version 1 blobs fail the `z.literal(2)` check and are dropped by the existing
- * safeParse graceful-degradation path — no migration function. Pilot-confirmed tradeoff.
+ * Schema version 4 — Phase 03 (harmonic-rhythm-improvements), ADR 0019 D5.
+ * Change from v3: `SavedChordSchema` gains `preset?`, `lpf?`, `attack?`, `sustain?`,
+ * `release?`, `lpenv?`, `lpa?`, `lpd?`, `lpq?` optional fields.
+ * Version 3 blobs fail the `z.literal(4)` check and are dropped by the existing
+ * safeParse graceful-degradation path — no migration function. Pilot-confirmed tradeoff
+ * (same precedent as ADR 0013 D1, ADR 0018 D3).
  */
-export const SESSION_SCHEMA_VERSION = 2;
+export const SESSION_SCHEMA_VERSION = 4;
 
 // ── Shared enum constants (mirror agent/schema.ts SK_ arrays) ─────────────
 
@@ -37,6 +39,30 @@ const SavedChordSchema = z.object({
   qual: z.enum(SK_QUAL),
   gain: z.number().min(0).max(1.2),
   bars: z.number().min(0.25).max(8).optional(),
+  /** Oscillator waveform — ADR 0018 D1/D3. Default: 'sawtooth' when absent. */
+  instrument: z.string().optional(),
+  /** Reverb level 0–1 — ADR 0018 D1/D3. Default: 0.25 (chord) / 0.3 (melody) when absent. */
+  room: z.number().min(0).max(1).optional(),
+  /** Amplitude decay in seconds (> 0) — ADR 0018 D1/D3. Absent = no .decay() emitted. */
+  decay: z.number().min(0).optional(),
+  /** Named preset bundle — ADR 0019 D5. Technical token; not translated. */
+  preset: z.enum(['piano', 'guitar', 'synth-bass']).optional(),
+  /** Low-pass filter cutoff frequency in Hz — ADR 0019 D5. */
+  lpf: z.number().optional(),
+  /** Amplitude attack time in seconds — ADR 0019 D5. */
+  attack: z.number().min(0).optional(),
+  /** Amplitude sustain level 0–1 — ADR 0019 D5. */
+  sustain: z.number().min(0).max(1).optional(),
+  /** Amplitude release time in seconds — ADR 0019 D5. */
+  release: z.number().min(0).optional(),
+  /** Filter envelope modulation depth — ADR 0019 D5. */
+  lpenv: z.number().optional(),
+  /** Filter envelope attack time in seconds — ADR 0019 D5. */
+  lpa: z.number().min(0).optional(),
+  /** Filter envelope decay time in seconds — ADR 0019 D5. */
+  lpd: z.number().min(0).optional(),
+  /** Filter resonance (Q factor) — ADR 0019 D5. */
+  lpq: z.number().min(0).optional(),
 });
 
 /**
@@ -93,20 +119,19 @@ const SavedCompositionSchema = z.object({
 });
 
 /**
- * SavedSessionSchema v2 — Phase 09 (step 09.3), ADR 0013 D1.
+ * SavedSessionSchema v4 — Phase 03 (harmonic-rhythm-improvements), ADR 0019 D5.
  *
- * Changes from v1:
- *   - `version` literal bumped from 1 to 2.
- *   - `view` enum extended with `'code'` (five valid strings).
- *   - Safe fallback: `.catch('harmony' as const)` after the enum so any
- *     unrecognized `view` string (forward-compat or corrupt) silently defaults
- *     to `'harmony'` rather than causing safeParse to return `null`.
+ * Changes from v3:
+ *   - `version` literal bumped from 3 to 4.
+ *   - `SavedChordSchema` gains `preset?`, `lpf?`, `attack?`, `sustain?`, `release?`,
+ *     `lpenv?`, `lpa?`, `lpd?`, `lpq?` optional fields (ADR 0019 D4a).
  *
- * Version 1 blobs fail the `z.literal(2)` check → dropped by safeParse (existing
- * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0013 D1).
+ * Version 3 blobs fail the `z.literal(4)` check → dropped by safeParse (existing
+ * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0019 D5 /
+ * ADR 0018 D3 / ADR 0013 D1 precedent).
  */
 export const SavedSessionSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(4),
   bpm: z.number().int().min(40).max(280),
   view: z
     .enum(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)
@@ -152,6 +177,20 @@ export function serializeSession(state: SessionState): SavedSession {
           qual: slot.qual,
           gain: slot.gain,
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          // ADR 0018 D3: persist sound attributes when present.
+          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+          ...(slot.room !== undefined ? { room: slot.room } : {}),
+          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
+          // ADR 0019 D5: persist preset and filter/envelope attributes when present.
+          ...(slot.preset !== undefined ? { preset: slot.preset } : {}),
+          ...(slot.lpf !== undefined ? { lpf: slot.lpf } : {}),
+          ...(slot.attack !== undefined ? { attack: slot.attack } : {}),
+          ...(slot.sustain !== undefined ? { sustain: slot.sustain } : {}),
+          ...(slot.release !== undefined ? { release: slot.release } : {}),
+          ...(slot.lpenv !== undefined ? { lpenv: slot.lpenv } : {}),
+          ...(slot.lpa !== undefined ? { lpa: slot.lpa } : {}),
+          ...(slot.lpd !== undefined ? { lpd: slot.lpd } : {}),
+          ...(slot.lpq !== undefined ? { lpq: slot.lpq } : {}),
         };
       }),
     },
@@ -220,6 +259,20 @@ export function deserializeSession(saved: SavedSession): Omit<SessionState, 'now
           qual: slot.qual,
           gain: slot.gain,
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          // ADR 0018 D3: carry through sound attributes.
+          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+          ...(slot.room !== undefined ? { room: slot.room } : {}),
+          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
+          // ADR 0019 D5: carry through preset and filter/envelope attributes.
+          ...(slot.preset !== undefined ? { preset: slot.preset } : {}),
+          ...(slot.lpf !== undefined ? { lpf: slot.lpf } : {}),
+          ...(slot.attack !== undefined ? { attack: slot.attack } : {}),
+          ...(slot.sustain !== undefined ? { sustain: slot.sustain } : {}),
+          ...(slot.release !== undefined ? { release: slot.release } : {}),
+          ...(slot.lpenv !== undefined ? { lpenv: slot.lpenv } : {}),
+          ...(slot.lpa !== undefined ? { lpa: slot.lpa } : {}),
+          ...(slot.lpd !== undefined ? { lpd: slot.lpd } : {}),
+          ...(slot.lpq !== undefined ? { lpq: slot.lpq } : {}),
         };
       }),
       // Phase 08 (step 08.5): ephemeral UI fields — NOT from SavedHarmonySchema.

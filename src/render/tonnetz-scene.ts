@@ -28,6 +28,7 @@ import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
 import { sessionStore, playChord, requeueLive } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
+import { soundIntentStore } from '../state/selectedSlot.js';
 import { getStageRefs } from './stage.js';
 import { COL, FUNC_COL, FONT_SERIF, FONT_SANS } from './theme.js';
 import { tickRhythm as _tickRhythmImpl } from './rhythm-scene.js';
@@ -82,6 +83,14 @@ export let _lastVL: VoiceLeadingResult | null = null;
 
 /** Last-picked chord reference (rootPc + qual + centroid). Prototype: `lastPick`. */
 let _lastPick: { rootPc: number; qual: string; cx: number; cy: number } | null = null;
+
+/**
+ * Click-pulse state for the Tonnetz triangle flash (A-03-07/step 03.5).
+ * When the user picks a triangle, we store the pick time and the triangle's
+ * centroid. The tick loop draws a brief (~300ms) bright highlight overlay on
+ * that triangle via `hDyn`, decaying to transparent.
+ */
+let _pickPulse: { cx: number; cy: number; tri: RenderTri; startMs: number } | null = null;
 
 /** Traveling particle position along voice-leading path [0..1). Prototype: `particle`. */
 let _particle = 0;
@@ -469,7 +478,25 @@ export function onStagePointerDown(e: PointerEvent): void {
  * @param state - Current SessionState (passed to avoid redundant get() calls).
  */
 function pickChord(tri: RenderTri, state: SessionState): void {
-  const newChord: Chord = { rootPc: tri.rootPc, qual: tri.qual, gain: 0.6, cx: tri.cx, cy: tri.cy };
+  // Apply-to-new: inherit sound intent from the top-bar controls (ADR 0018 D5 / ADR 0019 D3).
+  const intent = get(soundIntentStore);
+  const newChord: Chord = {
+    rootPc: tri.rootPc,
+    qual: tri.qual,
+    gain: 0.6,
+    cx: tri.cx,
+    cy: tri.cy,
+    instrument: intent.instrument !== 'sawtooth' ? intent.instrument : undefined,
+    room: intent.room !== 0.25 ? intent.room : undefined,
+    decay: intent.decay > 0 ? intent.decay : undefined,
+    // ADR 0019 D2/D3: carry preset from intent store onto new chord (apply-to-new).
+    preset: intent.preset,
+  };
+
+  // ── Tonnetz click pulse (step 03.5, A-03-07 partial): store pick time ─────
+  // The tickHarmony loop reads _pickPulse and draws a brief bright overlay on
+  // the clicked triangle for ~300ms, giving click feedback.
+  _pickPulse = { cx: tri.cx, cy: tri.cy, tri, startMs: performance.now() };
 
   // ── Compute voice-leading before appending — prototype lines 1363–1370 ────
   // `Chord` stores {rootPc, qual, gain} only; pcs are derived via chordPcs().
@@ -532,7 +559,17 @@ function pickChord(tri: RenderTri, state: SessionState): void {
   }));
 
   // ── Play the chord immediately — prototype lines 1357–1360 ────────────────
-  playChord(tri.rootPc, tri.qual, 0.6);
+  // Only play the single-chord preview when harmony is NOT already the active
+  // source. When source === 'harmony' (or 'session'), playChord would switch
+  // nowPlaying.source to 'chord', causing requeueLive() below to re-queue
+  // only the last chord instead of the full progression — the bug where the
+  // visual cycles through all chords but audio stays on the last one pressed.
+  // The Tonnetz click-pulse (above) gives visual feedback; requeueLive picks
+  // up the new chord at the next cycle boundary.
+  const priorSource = state.nowPlaying.source;
+  if (priorSource !== 'harmony' && priorSource !== 'session') {
+    playChord(tri.rootPc, tri.qual, 0.6, newChord.instrument, newChord.room, newChord.decay);
+  }
 
   // ── Requeue if something is already playing — prototype line 1374 ─────────
   // requeueLive checks nowPlaying.source from the store.
@@ -639,6 +676,23 @@ export function tickHarmony(delta: number): void {
     hDyn.drawCircle(tri.cx, tri.cy, isActive ? 8 : 5);
     hDyn.endFill();
   });
+
+  // ── Click-pulse overlay (step 03.5): brief bright flash on picked triangle ──
+  // Decays over 300ms from fully visible to transparent, giving tactile feedback.
+  if (_pickPulse !== null) {
+    const elapsed = performance.now() - _pickPulse.startMs;
+    const PULSE_MS = 300;
+    if (elapsed < PULSE_MS) {
+      const alpha = (1 - elapsed / PULSE_MS) * 0.55; // fade from 0.55 → 0
+      const pt = _pickPulse.tri;
+      hDyn.beginFill(0x8aa0ff, alpha); // accent #8aa0ff
+      hDyn.lineStyle(2, 0x8aa0ff, alpha * 1.4);
+      hDyn.drawPolygon([pt.vx[0], pt.vy[0], pt.vx[1], pt.vy[1], pt.vx[2], pt.vy[2]]);
+      hDyn.endFill();
+    } else {
+      _pickPulse = null;
+    }
+  }
 
   // ── Suggestion glow — prototype lines 1122–1130 ───────────────────────────
   for (const t of _suggestionTris) {

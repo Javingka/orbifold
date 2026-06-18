@@ -151,6 +151,72 @@ export interface Chord {
    * Introduced in Phase 02 — ADR 0010. Phase 03: granularity 0.5 → 0.25.
    */
   bars?: number;
+  /**
+   * Oscillator waveform for the chord sound.
+   * Valid values: 'sawtooth' | 'sine' | 'square' | 'triangle'.
+   * Default (undefined): 'sawtooth' — byte-identical to pre-phase output.
+   * Introduced in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D1.
+   */
+  instrument?: string;
+  /**
+   * Reverb level 0–1.
+   * Default (undefined): 0.25 (chordToStrudel) or 0.3 (melodyLine paths).
+   * Introduced in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D1.
+   */
+  room?: number;
+  /**
+   * Amplitude decay time in seconds (> 0).
+   * Default (undefined): no .decay() emitted — byte-identical to pre-phase output.
+   * Introduced in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D1.
+   */
+  decay?: number;
+  /**
+   * Named preset bundle. Technical token — not translated (ADR 0017 §D3).
+   * Valid values: 'piano' | 'guitar' | 'synth-bass'.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D2.
+   */
+  preset?: 'piano' | 'guitar' | 'synth-bass';
+  /**
+   * Low-pass filter cutoff frequency in Hz.
+   * Default (undefined): resolves to 1200 via resolveChordAttrs.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpf?: number;
+  /**
+   * Amplitude attack time in seconds (>= 0).
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  attack?: number;
+  /**
+   * Amplitude sustain level 0–1.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  sustain?: number;
+  /**
+   * Amplitude release time in seconds (>= 0).
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  release?: number;
+  /**
+   * Filter envelope modulation depth.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpenv?: number;
+  /**
+   * Filter envelope attack time in seconds.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpa?: number;
+  /**
+   * Filter envelope decay time in seconds.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpd?: number;
+  /**
+   * Filter resonance (Q factor).
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpq?: number;
 }
 
 /**
@@ -598,14 +664,53 @@ export function requeueLive(): string | null {
  * @param qual   - Chord quality.
  * @param gain   - Per-chord gain (0–1.2; prototype default 0.6).
  */
-export function playChord(rootPc: number, qual: Quality, gain: number): void {
+/**
+ * Play a chord immediately using `runNow` (one-shot preview, not queued).
+ *
+ * Accepts optional sound attribute overrides (`instrument`, `room`, `decay`)
+ * so callers that know the chord's stored attributes (e.g. a Pentagrama slot
+ * edit) can forward them. When omitted the codegen defaults apply
+ * (instrument='sawtooth', room=0.25, no decay).
+ *
+ * Prototype: `pickChord()` lines 1357–1360 (runNow call + setNowPlaying).
+ * Phase 02 step 02.4: threaded instrument/room/decay — ADR 0018 D5.
+ */
+export function playChord(
+  rootPc: number,
+  qual: Quality,
+  gain: number,
+  instrument?: string,
+  room?: number,
+  decay?: number
+): void {
   const state = get(sessionStore);
-  const code = chordToStrudel(rootPc, qual, gain, state.chordMode, state.harmony.octave);
+  const code = chordToStrudel(
+    rootPc,
+    qual,
+    gain,
+    state.chordMode,
+    state.harmony.octave,
+    instrument,
+    room,
+    decay
+  );
   const label = 'Acorde · ' + chordLabel(rootPc, qual);
-  // Fire and forget — audio is lazy-loaded; initAudio() is idempotent.
-  // initAudio() called here ensures the audio context is ready on the first chord pick
-  // (a user gesture), without requiring a separate "Init audio" button.
-  void getAudio().then((a) => a.initAudio().then(() => a.runNow(code)));
+  // One cycle = 240000/bpm ms (ADR 0005: cps = bpm/240; one cycle = 1 bar of 4/4).
+  // After one cycle, auto-stop if no other source has taken over — single-chord
+  // preview should sound once, not loop. The guard on source === 'chord' ensures
+  // we don't silence a subsequent harmony or rhythm playback that started
+  // during that window.
+  const cycleDurationMs = Math.round(240000 / state.bpm);
+  void getAudio().then((a) =>
+    a.initAudio().then(() => {
+      void a.runNow(code);
+      setTimeout(() => {
+        if (get(sessionStore).nowPlaying.source === 'chord') {
+          void hushAll();
+        }
+      }, cycleDurationMs);
+    })
+  );
   setNowPlaying(label, 'chord');
 }
 
@@ -917,6 +1022,114 @@ export function setChordBars(index: number, bars: number): void {
     return { ...s, harmony: { ...s.harmony, progression } };
   });
   requeueLive();
+}
+
+/**
+ * Set the instrument waveform for the chord slot at `index`.
+ *
+ * Updates `progression[index].instrument` and calls `requeueLive()` so
+ * a running harmony engine picks up the change at the next cycle boundary.
+ * Has no effect if `index` is out of range or points to a rest slot.
+ *
+ * Modeled on `setChordBars`. Introduced in Phase 02 (harmonic-rhythm-improvements)
+ * step 02.4 — ADR 0018 D5.
+ *
+ * @param index      - Zero-based progression slot index.
+ * @param instrument - Oscillator waveform name (e.g. 'sawtooth', 'sine', 'square', 'triangle').
+ */
+export function setChordInstrument(index: number, instrument: string): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    if (slot === undefined || 'isRest' in slot) return s;
+    const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+      i === index ? { ...ch, instrument } : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Batch-update instrument, room, and/or decay on the chord slot at `index`.
+ *
+ * Only fields present (not `undefined`) in `attrs` are written. Calls
+ * `requeueLive()` so a running harmony engine picks up the change at the
+ * next cycle boundary. Has no effect if `index` is out of range or points
+ * to a rest slot.
+ *
+ * Introduced in Phase 02 (harmonic-rhythm-improvements) step 02.4 — ADR 0018 D5.
+ *
+ * @param index - Zero-based progression slot index.
+ * @param attrs - Object with optional `instrument`, `room`, and/or `decay` overrides.
+ */
+export function setChordSoundAttrs(
+  index: number,
+  attrs: { instrument?: string; room?: number; decay?: number }
+): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    if (slot === undefined || 'isRest' in slot) return s;
+    const updated = { ...slot };
+    if (attrs.instrument !== undefined) updated.instrument = attrs.instrument;
+    if (attrs.room !== undefined) updated.room = attrs.room;
+    if (attrs.decay !== undefined) updated.decay = attrs.decay;
+    const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+      i === index ? updated : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Set the preset bundle name for the chord slot at `index`.
+ *
+ * Updates `progression[index].preset` and calls `requeueLive()` so a running
+ * harmony engine picks up the change at the next cycle boundary.
+ * Has no effect if `index` is out of range or points to a rest slot.
+ * Pass `undefined` to clear the preset (no preset selected).
+ *
+ * Introduced in Phase 03 (harmonic-rhythm-improvements) step 03.4 — ADR 0019 D2/D4a.
+ *
+ * @param index  - Zero-based progression slot index.
+ * @param preset - Preset name ('piano' | 'guitar' | 'synth-bass') or undefined to clear.
+ */
+export function setChordPreset(
+  index: number,
+  preset: 'piano' | 'guitar' | 'synth-bass' | undefined
+): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    if (slot === undefined || 'isRest' in slot) return s;
+    const updated: Chord = { ...slot };
+    updated.preset = preset;
+    const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+      i === index ? updated : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Set the oscillator waveform for the chord slot at `index`.
+ *
+ * Alias for `setChordInstrument` with ADR 0019 D1 semantics: the oscillator field
+ * is `instrument` (extended to include 'pink' in Phase 03). The UI exposes this as
+ * the "Oscillator" selector; data field stays `instrument`.
+ * Has no effect if `index` is out of range or points to a rest slot.
+ *
+ * Introduced in Phase 03 (harmonic-rhythm-improvements) step 03.4 — ADR 0019 D1.
+ *
+ * @param index      - Zero-based progression slot index.
+ * @param instrument - Oscillator waveform name ('sawtooth' | 'sine' | 'square' | 'triangle' | 'pink').
+ */
+export function setChordOscillator(index: number, instrument: string): void {
+  // Delegates to the existing setChordInstrument (same field, same requeueLive behavior).
+  setChordInstrument(index, instrument);
 }
 
 /**
@@ -1369,6 +1582,10 @@ export function applyLoadedSession(saved: SavedSession): void {
           qual: slot.qual,
           gain: slot.gain,
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          // ADR 0018 D3: restore sound attributes when present in the saved session.
+          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+          ...(slot.room !== undefined ? { room: slot.room } : {}),
+          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
         };
       }),
       // Phase 08 (step 08.5): ephemeral fields NOT persisted — always reset to defaults.

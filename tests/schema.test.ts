@@ -27,9 +27,9 @@ beforeEach(() => {
 // ── SCHEMA_VERSION ─────────────────────────────────────────────────────────
 
 describe('SCHEMA_VERSION', () => {
-  // A-06-08: SCHEMA_VERSION must equal 2 after Phase 06 rest-union change (ADR 0012 D4).
-  it('is numeric 2 (bumped in Phase 06 — ADR 0012 D4)', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+  // Bumped to 4 in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D6.
+  it('is numeric 4 (bumped in Phase 03 harmonic-rhythm-improvements — ADR 0019 D6)', () => {
+    expect(SCHEMA_VERSION).toBe(4);
   });
 });
 
@@ -470,5 +470,204 @@ describe('applyHarmonySpec — rest slot (Phase 06, ADR 0012)', () => {
     expect('isRest' in slot && slot.isRest).toBe(true);
     // clampBars(1.1) = Math.round(1.1 * 4) / 4 = Math.round(4.4) / 4 = 4/4 = 1
     expect(slot.bars).toBe(1);
+  });
+});
+
+// ── HarmonyChordCoreSchema — ADR 0018 D4 sound attributes (A-02-07) ──────────
+
+describe('HarmonyChordCoreSchema — ADR 0018 D4 sound attributes (A-02-07)', () => {
+  // A-02-07: agent schema accepts instrument, room, decay as optional fields
+  it('chord with instrument: sine parses successfully (A-02-07)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', instrument: 'sine' });
+    expect(result.success).toBe(true);
+  });
+
+  it('chord with all three new attrs parses successfully (A-02-07)', () => {
+    const result = HarmonyChordSchema.safeParse({
+      root: 'G',
+      quality: 'maj',
+      instrument: 'sawtooth',
+      room: 0.5,
+      decay: 0.2,
+    });
+    expect(result.success).toBe(true);
+    if (result.success && 'root' in result.data) {
+      expect(result.data.instrument).toBe('sawtooth');
+      expect(result.data.room).toBe(0.5);
+      expect(result.data.decay).toBe(0.2);
+    }
+  });
+
+  it('chord with no new attrs still parses (attrs are optional) (A-02-07)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'min' });
+    expect(result.success).toBe(true);
+  });
+
+  it('room above 1 fails (max is 1)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', room: 1.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('room below 0 fails (min is 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', room: -0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('decay below 0 fails (min is 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', decay: -0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('HarmonyRestSchema is unchanged — no instrument/room/decay on rest', () => {
+    // Rests must not gain sound attributes (ADR 0018 D4: HarmonyRestSchema unchanged)
+    const result = HarmonyChordSchema.safeParse({ isRest: true, instrument: 'sine' });
+    // isRest:true parses as rest; 'instrument' is stripped (Zod strips unknown keys)
+    expect(result.success).toBe(true);
+    if (result.success && 'isRest' in result.data) {
+      expect(result.data).not.toHaveProperty('instrument');
+    }
+  });
+});
+
+// ── HarmonyChordCoreSchema — ADR 0019 D6 preset + filter/envelope (A-03-12) ─────────────
+
+describe('HarmonyChordCoreSchema — ADR 0019 D6 preset + filter/envelope fields (A-03-12)', () => {
+  // A-03-12: schema accepts preset as an optional field (verbatim technical token).
+  it('A-03-12: chord with preset: "piano" parses successfully', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', preset: 'piano' });
+    expect(result.success).toBe(true);
+    if (result.success && 'root' in result.data) {
+      expect(result.data.preset).toBe('piano');
+    }
+  });
+
+  it('A-03-12: chord with preset: "guitar" parses successfully', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'G', quality: 'min', preset: 'guitar' });
+    expect(result.success).toBe(true);
+  });
+
+  it('A-03-12: chord with preset: "synth-bass" parses successfully', () => {
+    const result = HarmonyChordSchema.safeParse({
+      root: 'F',
+      quality: 'maj',
+      preset: 'synth-bass',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // A-03-12: invalid preset name is rejected by z.enum.
+  it('A-03-12: invalid preset name "violin" is rejected by z.enum', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', preset: 'violin' });
+    expect(result.success).toBe(false);
+  });
+
+  it('A-03-12: invalid preset name "bass" is rejected by z.enum', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', preset: 'bass' });
+    expect(result.success).toBe(false);
+  });
+
+  // A-03-12: noise token 'pink' accepted by instrument (z.string() — ADR 0019 D1).
+  it('A-03-12: instrument: "pink" accepted (z.string() accepts noise token per ADR 0019 D1)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', instrument: 'pink' });
+    expect(result.success).toBe(true);
+    if (result.success && 'root' in result.data) {
+      expect(result.data.instrument).toBe('pink');
+    }
+  });
+
+  // A-03-12: all new filter/envelope fields are accepted as optional.
+  it('A-03-12: chord with all filter/envelope fields parses successfully', () => {
+    const result = HarmonyChordSchema.safeParse({
+      root: 'C',
+      quality: 'maj',
+      instrument: 'sawtooth',
+      preset: 'guitar',
+      lpf: 2500,
+      attack: 0.01,
+      sustain: 0.0,
+      release: 0.3,
+      lpenv: 3,
+      lpa: 0.01,
+      lpd: 0.25,
+      lpq: 1,
+    });
+    expect(result.success).toBe(true);
+    if (result.success && 'root' in result.data) {
+      expect(result.data.lpf).toBe(2500);
+      expect(result.data.attack).toBe(0.01);
+      expect(result.data.sustain).toBe(0.0);
+      expect(result.data.release).toBe(0.3);
+      expect(result.data.lpenv).toBe(3);
+      expect(result.data.lpa).toBe(0.01);
+      expect(result.data.lpd).toBe(0.25);
+      expect(result.data.lpq).toBe(1);
+    }
+  });
+
+  // A-03-12: chord with no new fields still parses (all optional).
+  it('A-03-12: chord with no new ADR 0019 fields parses; all are undefined', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'min' });
+    expect(result.success).toBe(true);
+    if (result.success && 'root' in result.data) {
+      expect(result.data.preset).toBeUndefined();
+      expect(result.data.lpf).toBeUndefined();
+      expect(result.data.attack).toBeUndefined();
+      expect(result.data.sustain).toBeUndefined();
+      expect(result.data.release).toBeUndefined();
+      expect(result.data.lpenv).toBeUndefined();
+      expect(result.data.lpa).toBeUndefined();
+      expect(result.data.lpd).toBeUndefined();
+      expect(result.data.lpq).toBeUndefined();
+    }
+  });
+
+  // A-03-12: attack below 0 is rejected.
+  it('A-03-12: attack below 0 is rejected (min: 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', attack: -0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  // A-03-12: sustain above 1 is rejected.
+  it('A-03-12: sustain above 1 is rejected (max: 1)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', sustain: 1.1 });
+    expect(result.success).toBe(false);
+  });
+
+  // A-03-12: release below 0 is rejected.
+  it('A-03-12: release below 0 is rejected (min: 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', release: -0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  // A-03-12: lpa below 0 is rejected.
+  it('A-03-12: lpa below 0 is rejected (min: 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', lpa: -0.01 });
+    expect(result.success).toBe(false);
+  });
+
+  // A-03-12: lpd below 0 is rejected.
+  it('A-03-12: lpd below 0 is rejected (min: 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', lpd: -0.01 });
+    expect(result.success).toBe(false);
+  });
+
+  // A-03-12: lpq below 0 is rejected.
+  it('A-03-12: lpq below 0 is rejected (min: 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', lpq: -1 });
+    expect(result.success).toBe(false);
+  });
+
+  // A-03-12: HarmonyRestSchema unchanged — preset and filter/envelope fields are stripped from rests.
+  it('A-03-12: HarmonyRestSchema unchanged — preset field stripped from rest slot', () => {
+    const result = HarmonyChordSchema.safeParse({ isRest: true, preset: 'piano' });
+    expect(result.success).toBe(true);
+    if (result.success && 'isRest' in result.data) {
+      expect(result.data).not.toHaveProperty('preset');
+    }
+  });
+
+  // A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6).
+  it('A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6)', () => {
+    expect(SCHEMA_VERSION).toBe(4);
   });
 });

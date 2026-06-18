@@ -20,27 +20,21 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 ## Current initiative
 
-**Name:** `orbifold-v2` — **COMPLETE** (all phases 01–11 shipped to `main`, 2026-06-17). Ready to archive `docs/orbifold-v2/` and open the next initiative. One item carried forward for a future initiative to schedule: note-level free placement on the Pentagrama (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note), deferred at Phase 10.
-**Goal:** Post-migration product/UX refinements on the live app.
+**Name:** `harmonic-rhythm-improvements` — **IN PROGRESS**
+**Goal:** Progressive enrichment of the live sound layer and AI-assisted improvisation: timbre/preset control per chord, oscillator/noise options, and (next) an AI improvisation mode where the agent evolves rhythm and/or harmony autonomously in real time while the user plays along.
+**Started:** 2026-06-18
+**Docs:** `docs/harmonic-rhythm-improvements/` · Decisions Register: `docs/harmonic-rhythm-improvements/decisions.md` · ADRs: 0018, 0019.
 
-- **Phase 01 (complete)** — UX quick-wins (hide harmony-only top-bar selectors in Rhythm mode; reposition the Composición / Código Strudel drawer tabs so they don't overlap the Transport).
-- **Phase 02 (complete)** — variable chord duration: each chord occupies a variable cycle span via `arrange()` (ADR 0010), with agent control.
-- **Phase 03 (complete)** — ProgressionStrip overhaul: own full-width row above the Transport (fixes the save-button occlusion of the last resize handle), absolute 48px/cycle grid with a numbered bar ruler and hierarchical gridlines, and 0.25-cycle (one-beat) granularity (ADR 0010 amendment).
-- **Phase 04 (complete)** — audio↔visual sync: compensate AudioContext output latency in the shared phase anchor so the rhythm (and harmony/composition) playhead lights up when the sound is heard, not before; plus a user calibration nudge widget.
-- **Phase 05 (complete)** — ADR 0011 (harmony-view design) + pure engines in `core/**` with tests: voice-assignment (progression → continuous voice tracks via the minimal-voice-leading permutations), staff mapping (note → treble-clef vertical position + accidental + ledger lines), and time mapping (bars → linear x / orbital angle, aligned to the 48px/cycle grid). Chord-only; rest support deferred to Phase 06.
-- **Phase 06 (complete)** — silences (rests) in the harmony progression: a progression slot may be silent (no chord) for a variable cycle span, like a chord. ADR 0012 (rest data model + Strudel `silence`/`~` codegen, respecting the no-`.fast`/`.slow` invariant), the progression data model, codegen, persistence + agent schemas (versioned), ProgressionStrip rendering/editing of rests, and a minimal `voice-tracks.ts` revision (a rest slot = a gap/rest event across the three voices).
-- **Phase 07 (complete)** — linear harmony view (core + renderer): pure `staff-layout.ts` engine (`computeStaffLayout`) and a PIXI treble-clef staff scene rendering the progression's voices color-coded per voice, with rest glyphs, accidentals, and ledger lines. Engine/renderer delivered and unit-tested; live verification carried four integration/UX items (placement, voice register, cyclic playhead, widget overlap) forward to Phase 08.
-- **Phase 08 (complete)** — harmony-view UX: central full-canvas Pentagrama with Tonnetz ⇄ Pentagrama sub-toggle; user-selectable register mode (estricto/suavizado); cyclic playhead on staff + ProgressionStrip cursor; acorde/arpegio/marco relocated to top bar. ADR 0011 amended; 3 new Register entries (staff geometry constants, registerMode visual-only, ephemeral state not persisted).
-- **Phase 09 (complete)** — 4-view primary navigation: Composición and Código Strudel elevated from drawer tabs to first-class primary views alongside Armonía and Ritmo (drawer tab/close buttons removed); rhythm Euclidean controls moved from canvas overlay to top bar; bottom Transport row transversal-only. ADR 0013 (5-string view union, session schema v2 lossy bump). Checkpoint #5 manual acceptance passed by Pilot 2026-06-12. Orbital harmony view **deprioritized** by Pilot (2026-06-12) — linear staff must be solid first; orbital view deferred to a later phase.
-- **Phase 10 (complete)** — Pentagrama as an editor ("el pentagrama no es solo visualización, es también construcción"): delivered the slot-editor cut — duration-extent rendering (each voice spans its sounding time as a bar), slot select/resize/delete (✕)/time-move on the staff (parity with ProgressionStrip badge editing), arpeggio-mode stagger visual, rest extents, and a bar grid relating staff time to the rhythm's cycle. ADR 0014 (staff becomes a co-equal duration editor; pure `staff-hit.ts` engine; `reorderSlot` action). Note-level free placement (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note) **deferred to a later phase** by the Pilot (2026-06-16) so i18n could go next.
-- **Phase 11 (complete)** — App internationalization (ES / EN / PT / ZH): every user-facing string served from per-language TS dictionaries via a reactive `lang` store honoring the marketing `orbifold.lang` localStorage contract, a `文A` language-globe selector in the header, fallback to the Spanish base, and a key-parity test so a new language is one dictionary, not component edits. ADR 0017 (i18n architecture). Language is UI-only ephemeral state (absent from persistence/agent schemas). Agent chat follows the UI language (OQ-1 → A); technical tokens (Strudel code, sample codes, `E(k,n)`, note literals, `P·L·R`) stay verbatim (OQ-6). Checkpoint #5 manual acceptance passed by Pilot 2026-06-17 (two rounds of bug-fixes: dropdown layering, two-row header, translated stage hints, clickable Orbifold brand → landing). Merged to `main` (production). New Register entry: `orbifold.lang` cross-surface language contract.
+- **Phase 01 (complete)** — Discovery/triage: sound surface mapping, Strudel attribute survey, feature candidate set (F1 chord sound · F2 oscillator/preset · F3 AI improvisation mode). Docs-only; no source changes. Carried forward: D-3 (per-chord filter slider) and D-4 (envelope fine-tuning) deferred.
+- **Phase 02 (complete)** — F1 — Chord sound attributes: per-slot `instrument`/`room`/`decay` on `Chord`; codegen injection via `chordToStrudel`/`melodyLine`; `uniformAttrs` gate forcing `arrange()` for attribute variation; persistence + agent schema v3 (lossy bump); `selectedSlotIdxStore` + `soundIntentStore`; top-bar selector (ADR 0018). Merged to `main` together with Phase 03.
+- **Phase 03 (complete, merged to `main` 2026-06-18)** — F2 — Oscillator + Presets: two separate top-bar selectors (Oscillator: 5 waveforms incl. pink noise; Presets: Piano/Guitarra/Bajo Sintético); pure `resolveChordAttrs` preset engine with per-attribute explicit-wins rule; `lpf(1200)` variabilized; edit-mode highlight (#8aa0ff) + 300ms pulse on slot selection; one-shot chord preview (auto-stop after one cycle); harmony-source guard in `pickChord` (prevents source switching breaking the progression loop); schema v4 lossy; i18n in ES/EN/PT/ZH (ADR 0019). 646 tests.
 
-**Confirmed harmony-view design decisions (in ADR 0011, Phase 05; amended Phase 08):** (1) harmony orbit period = full progression loop with bar marks; (2) keep ProgressionStrip as duration/gain editor; (3) treble clef + ledger lines for register; (4) **[Phase 08]** staff is a central full-canvas view toggled against the Tonnetz (Tonnetz ⇄ Pentagrama), not a coexisting strip; (5) **[Phase 08]** voice register is user-selectable: estricto (absolute pitch) vs suavizado (octave-nearest continuity).
-**Started:** 2026-06-10
+**Deferred items carried forward:**
+- Note-level free placement on the Pentagrama (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note) — deferred from orbifold-v2 Phase 10.
+- Per-chord `lpf`/`lpq` direct user slider (D-3) — deferred from Phase 01 triage.
+- F3 — AI improvisation mode: agent evolves rhythm and/or harmony autonomously over time (e.g. X cycles per chord change), user plays along (e.g. bass); **next to scope**.
 
-**Previous initiative:** `orbifold-v1` (Phases 0–8, complete) — migrated the single-file prototype into the statically-deployable Svelte + PIXI + Strudel app now in production. Its folder `docs/orbifold-v1/` is retained as the migration record.
-
-When this initiative is complete, archive its folder and start a new one.
+**Previous initiative:** `orbifold-v2` (Phases 01–11, complete, merged to `main` 2026-06-17) — post-migration UX refinements. Archived in `docs/orbifold-v2/`. Prior: `orbifold-v1` (Phases 0–8, complete) in `docs/orbifold-v1/`.
 
 ## Project-specific conventions
 
@@ -60,13 +54,13 @@ When this initiative is complete, archive its folder and start a new one.
 ### Branch and commit
 
 - Main branch: `main`
-- Initiative branch pattern: `orbifold-v2/phase-NN` (current initiative; prior was `orbifold-v1/phase-NN`)
+- Initiative branch pattern: `harmonic-rhythm-improvements/phase-NN` (current initiative; prior: `orbifold-v2/phase-NN`, `orbifold-v1/phase-NN`)
 - Commit format: `<type>(<scope>): Phase NN step NN.N — <description>` (types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`)
 - PR convention: one PR (or one merge commit) per phase, with its acceptance criteria verified, without breaking prior phases.
 
 ### Spec location
 
-Specs are the phase files in `docs/orbifold-v1/phases/phase-NN.md`. The master brief that all phases derive from is `ORBIFOLD_KICKOFF.md` (the architecture, domain model, invariants, and phase plan §8).
+Specs are the phase files in `docs/harmonic-rhythm-improvements/phases/phase-NN.md`. The master brief is `ORBIFOLD_KICKOFF.md` (architecture, domain model, invariants). Prior initiative specs: `docs/orbifold-v2/phases/` and `docs/orbifold-v1/phases/`.
 
 ### Test commands
 

@@ -38,11 +38,14 @@
     setHarmonyKey,
     setHarmonySubview,
     setChordMode,
+    setChordOscillator,
+    setChordPreset,
     addEuclidLayer,
     addEmptyLayer,
     previewEuclid,
     hushAll,
   } from '../state/session.js';
+  import { selectedSlotIdxStore, soundIntentStore } from '../state/selectedSlot.js';
 
   // Phase 11 step 11.3: i18n store + language selector (ADR 0017 D1, D3, OQ-5).
   // Phase 11 step 11.4: `t` store imported for Wave A string extraction.
@@ -191,6 +194,86 @@
   function handleOctaveChange(e: Event): void {
     const octave = Number((e.currentTarget as HTMLSelectElement).value);
     setHarmonyKey($sessionStore.harmony.root, $sessionStore.harmony.mode, octave);
+  }
+
+  // ── Sound attribute controls (Phase 03 step 03.5 — ADR 0019) ─────────────
+  // Two selectors: Oscillator (waveform + noise) and Presets (named bundles).
+  // Replace the Phase 02 flat block (instrument select + room/decay sliders).
+  //
+  // Design (Pilot-decided):
+  // - Always visible (do NOT hide when no slot is selected).
+  // - When a slot IS selected: controls show and write that slot's attrs.
+  //   The block gains a persistent accent border (.sound-ctl--active) and
+  //   a brief CSS pulse on the first frame of selection change.
+  // - When no slot is selected: controls show the "intent" defaults that
+  //   new chords inherit (apply-to-new behavior).
+  // Technical tokens (sine/triangle/square/sawtooth/pink; piano/guitar/synth-bass)
+  // are [VERBATIM] in value attributes (OQ-6/ADR 0017); labels come from i18n.
+
+  // Valid oscillator token type (ADR 0019 D1: 'pink' added to instrument field).
+  type OscillatorToken = 'sine' | 'triangle' | 'square' | 'sawtooth' | 'pink';
+
+  // Derive selected slot (reactive). Rest slots have no sound attrs.
+  $: selSlot =
+    $selectedSlotIdxStore !== null
+      ? $sessionStore.harmony.progression[$selectedSlotIdxStore]
+      : undefined;
+  $: selIsChord = selSlot !== undefined && !('isRest' in selSlot);
+
+  // Display values: prefer selected slot's attrs, then intent store.
+  $: displayInstrument = (
+    selIsChord &&
+    selSlot !== undefined &&
+    !('isRest' in selSlot) &&
+    selSlot.instrument !== undefined
+      ? selSlot.instrument
+      : $soundIntentStore.instrument
+  ) as OscillatorToken;
+
+  $: displayPreset = (
+    selIsChord && selSlot !== undefined && !('isRest' in selSlot) && selSlot.preset !== undefined
+      ? selSlot.preset
+      : ($soundIntentStore.preset ?? '')
+  ) as string;
+
+  // ── Edit-mode highlight + pulse ───────────────────────────────────────────
+  // When $selectedSlotIdxStore changes to a non-null index, add a transient
+  // pulse class for ~300ms then drop it (keeps the persistent --active class).
+  let _prevSlotIdx: number | null = null;
+  let soundCtlPulsing = false;
+
+  $: {
+    const idx = $selectedSlotIdxStore;
+    if (idx !== null && idx !== _prevSlotIdx) {
+      // Selection changed to a new non-null slot → trigger pulse
+      soundCtlPulsing = false;
+      // Use a microtask tick to allow Svelte to flush the class removal first,
+      // then re-add it so the animation restarts.
+      void Promise.resolve().then(() => {
+        soundCtlPulsing = true;
+        setTimeout(() => {
+          soundCtlPulsing = false;
+        }, 320);
+      });
+    }
+    _prevSlotIdx = idx;
+  }
+
+  function handleOscillatorChange(e: Event): void {
+    const val = (e.currentTarget as HTMLSelectElement).value as OscillatorToken;
+    soundIntentStore.update((s) => ({ ...s, instrument: val }));
+    if ($selectedSlotIdxStore !== null && selIsChord) {
+      setChordOscillator($selectedSlotIdxStore, val);
+    }
+  }
+
+  function handlePresetChange(e: Event): void {
+    const raw = (e.currentTarget as HTMLSelectElement).value;
+    const val = raw === '' ? undefined : (raw as 'piano' | 'guitar' | 'synth-bass');
+    soundIntentStore.update((s) => ({ ...s, preset: val }));
+    if ($selectedSlotIdxStore !== null && selIsChord) {
+      setChordPreset($selectedSlotIdxStore, val);
+    }
   }
 </script>
 
@@ -586,6 +669,55 @@
           <option value="4">4</option>
         </select>
       </div>
+
+      <!--
+        Sound attribute controls (Phase 03 step 03.5 — ADR 0019).
+        Redesigned: two <select> menus (Oscillator + Presets) replace the Phase 02
+        instrument select + room/decay sliders. Room/decay are now preset-internal.
+        Placement: AFTER clave/escala/octava (position 5, end of row). ADR 0019 D1–D3.
+
+        Edit-mode feedback (A-02-08 resolution → A-03-07/A-03-08):
+        - .sound-ctl--active: persistent accent border when a slot is selected.
+        - .sound-ctl--pulse: transient 300ms flash when the selection CHANGES to
+          a new non-null index (class is toggled by the reactive block above).
+        - Tooltip describes edit vs. intent mode.
+
+        Waveform/noise option values and preset option values are [VERBATIM] technical
+        tokens (OQ-6/ADR 0017); display labels come from the i18n dictionary.
+      -->
+      <div
+        class="sound-ctl"
+        class:sound-ctl--active={$selectedSlotIdxStore !== null}
+        class:sound-ctl--pulse={soundCtlPulsing}
+        title={$selectedSlotIdxStore !== null
+          ? $t('header.harmony.soundEditTip')
+          : $t('header.harmony.soundIntentTip')}
+      >
+        <span class="sound-lbl">{$t('header.harmony.soundLabel')}</span>
+
+        <!-- Oscillator select (ADR 0019 D1: instrument field, UI label "Oscillator") -->
+        <label class="sound-field" title={$t('header.harmony.oscillatorLabel')}>
+          <span>{$t('header.harmony.oscillatorLabel')}</span>
+          <select id="instrSelect" value={displayInstrument} on:change={handleOscillatorChange}>
+            <option value="sine">{$t('header.harmony.instrSine')}</option>
+            <option value="triangle">{$t('header.harmony.instrTriangle')}</option>
+            <option value="square">{$t('header.harmony.instrSquare')}</option>
+            <option value="sawtooth">{$t('header.harmony.instrSawtooth')}</option>
+            <option value="pink">{$t('header.harmony.instrNoise')}</option>
+          </select>
+        </label>
+
+        <!-- Presets select (ADR 0019 D2: name-only; '' = no preset) -->
+        <label class="sound-field" title={$t('header.harmony.presetLabel')}>
+          <span>{$t('header.harmony.presetLabel')}</span>
+          <select id="presetSelect" value={displayPreset} on:change={handlePresetChange}>
+            <option value="">{$t('header.harmony.presetNone')}</option>
+            <option value="piano">{$t('header.harmony.presetPiano')}</option>
+            <option value="guitar">{$t('header.harmony.presetGuitar')}</option>
+            <option value="synth-bass">{$t('header.harmony.presetSynthBass')}</option>
+          </select>
+        </label>
+      </div>
     {/if}
   </div>
 
@@ -895,5 +1027,87 @@
   /* Active (currently selected) language */
   .lang-option.active {
     color: var(--accent);
+  }
+
+  /*
+   * Sound attribute controls (Phase 03 step 03.5 — ADR 0019 redesign).
+   * Inline-flex row matching header bottom-row aesthetic; font + spacing
+   * mirrors the existing .field and .rhythm-ctl patterns.
+   * Replaces the Phase 02 flat block (instrument select + room/decay sliders).
+   */
+  .sound-ctl {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    flex-wrap: wrap;
+    border-radius: 10px;
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    transition:
+      border-color 0.2s,
+      background 0.2s;
+  }
+
+  /*
+   * Edit-mode persistent accent border (A-03-07).
+   * Shown when $selectedSlotIdxStore !== null (a Pentagrama slot is selected).
+   * --accent (#8aa0ff) per CLAUDE.md tonal-function color spec.
+   */
+  .sound-ctl--active {
+    border-color: rgba(138, 160, 255, 0.55);
+    background: rgba(138, 160, 255, 0.07);
+  }
+
+  /*
+   * Transient color pulse (A-03-08).
+   * Plays a brief ~300ms flash on accent color when the selection changes to
+   * a new non-null slot index. Added and removed by the Svelte reactive block.
+   */
+  @keyframes soundCtlPulse {
+    0% {
+      border-color: rgba(138, 160, 255, 0.9);
+      background: rgba(138, 160, 255, 0.22);
+      box-shadow: 0 0 8px rgba(138, 160, 255, 0.4);
+    }
+    100% {
+      border-color: rgba(138, 160, 255, 0.55);
+      background: rgba(138, 160, 255, 0.07);
+      box-shadow: none;
+    }
+  }
+
+  .sound-ctl--pulse {
+    animation: soundCtlPulse 320ms ease-out forwards;
+  }
+
+  .sound-lbl {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+    white-space: nowrap;
+  }
+
+  .sound-field {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .sound-field span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .sound-field select {
+    background: rgba(0, 0, 0, 0.34);
+    border: 1px solid var(--stroke);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 4px 6px;
+    font-size: 11px;
   }
 </style>

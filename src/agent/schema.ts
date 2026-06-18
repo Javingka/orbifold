@@ -13,8 +13,13 @@ import { z } from 'zod';
  * Schema version constant; bump if the shape changes in a future phase.
  * Phase 06: bumped from 1 to 2 — `HarmonyChordSchema` now accepts a discriminated
  * rest union `{ isRest: true; bars? }` in addition to the chord object (ADR 0012 D4).
+ * Phase 02 (harmonic-rhythm-improvements): bumped from 2 to 3 — `HarmonyChordCoreSchema`
+ * gains `instrument?`, `room?`, `decay?` optional fields (ADR 0018 D4).
+ * Phase 03 (harmonic-rhythm-improvements): bumped from 3 to 4 — `HarmonyChordCoreSchema`
+ * gains `preset?`, `lpf?`, `attack?`, `sustain?`, `release?`, `lpenv?`, `lpa?`, `lpd?`,
+ * `lpq?` optional fields (ADR 0019 D6).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 // ── Constants (prototype lines 1670–1673) ─────────────────────────────────
 
@@ -120,6 +125,37 @@ const HarmonyChordCoreSchema = z.object({
   gain: z.number().min(0).max(1.2).optional(),
   /** Duration in Strudel cycles (0.25 = one beat, 0.5 = half bar, 1 = one bar, 2 = two bars; multiples of 0.25; default 1). */
   bars: z.number().min(0.25).max(8).optional(),
+  /**
+   * Oscillator waveform — ADR 0018 D4.
+   * Valid technical tokens (verbatim per OQ-7/ADR 0017): 'sawtooth' | 'sine' | 'square' | 'triangle' | 'pink'.
+   * Default when absent: 'sawtooth'.
+   */
+  instrument: z.string().optional(),
+  /** Reverb level 0–1 — ADR 0018 D4. Default when absent: 0.25 (chord) / 0.3 (melody). */
+  room: z.number().min(0).max(1).optional(),
+  /** Amplitude decay in seconds (> 0) — ADR 0018 D4. Absent = no .decay() emitted. */
+  decay: z.number().min(0).optional(),
+  /**
+   * Named preset bundle — ADR 0019 D6. Technical token; not translated (ADR 0017 D3).
+   * Valid values: 'piano' | 'guitar' | 'synth-bass'.
+   */
+  preset: z.enum(['piano', 'guitar', 'synth-bass']).optional(),
+  /** Low-pass filter cutoff frequency in Hz — ADR 0019 D6. */
+  lpf: z.number().optional(),
+  /** Amplitude attack time in seconds (>= 0) — ADR 0019 D6. */
+  attack: z.number().min(0).optional(),
+  /** Amplitude sustain level 0–1 — ADR 0019 D6. */
+  sustain: z.number().min(0).max(1).optional(),
+  /** Amplitude release time in seconds (>= 0) — ADR 0019 D6. */
+  release: z.number().min(0).optional(),
+  /** Filter envelope modulation depth — ADR 0019 D6. */
+  lpenv: z.number().optional(),
+  /** Filter envelope attack time in seconds — ADR 0019 D6. */
+  lpa: z.number().min(0).optional(),
+  /** Filter envelope decay time in seconds — ADR 0019 D6. */
+  lpd: z.number().min(0).optional(),
+  /** Filter resonance (Q factor) — ADR 0019 D6. */
+  lpq: z.number().min(0).optional(),
 });
 
 /**

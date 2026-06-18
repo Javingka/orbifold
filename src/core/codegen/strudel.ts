@@ -7,6 +7,7 @@
 
 import { type Quality, chordVoicing } from '../theory/chords.js';
 import { type RhythmLayer, layerAudible, rhythmLayerToStrudelLine } from '../rhythm/layers.js';
+import { resolveChordAttrs, type ChordAttrs } from './presets.js';
 
 // ── Local union for harmony slot input ────────────────────────────────────────
 // NOT exported — avoids pulling session.ts (with Svelte-transitive dependencies)
@@ -14,8 +15,10 @@ import { type RhythmLayer, layerAudible, rhythmLayerToStrudelLine } from '../rhy
 // DOM/PIXI/Svelte imports. Existing callers pass chord-only arrays; the chord
 // structural type is a subtype of HarmonySlotInput, so no callers need updating.
 // Introduced in Phase 06 — ADR 0012 D2.
+// Phase 03 amendment: chord branch extended with ChordAttrs fields for preset/
+// filter/envelope support — ADR 0019 D4.
 type HarmonySlotInput =
-  | { rootPc: number; qual: Quality; gain?: number | null; bars?: number }
+  | ({ rootPc: number; qual: Quality; gain?: number | null; bars?: number } & ChordAttrs)
   | { isRest: true; bars?: number };
 
 /**
@@ -56,12 +59,35 @@ export function chordToStrudel(
   qual: Quality,
   gain: number | null,
   chordMode: 'chord' | 'arp',
-  octave: number
+  octave: number,
+  instrument?: string,
+  room?: number,
+  decay?: number,
+  chordAttrs?: ChordAttrs
 ): string {
   const notes = chordVoicing(rootPc, qual, octave);
   const g = gain == null ? 0.6 : gain;
   const inner = chordMode === 'chord' ? notes.join(',') : notes.join(' ');
-  return `note("${inner}").s("sawtooth").lpf(1200).gain(${g.toFixed(2)}).room(0.25)`;
+  // ADR 0019 D4b: resolve sound attributes via resolveChordAttrs.
+  // Positional params (instrument, room, decay) take priority as explicit overrides.
+  // chordAttrs carries preset + filter/envelope fields from a Chord slot.
+  // roomDefault=0.25 preserves the chordToStrudel byte-identical baseline.
+  const baseAttrs: ChordAttrs = {
+    ...chordAttrs,
+    ...(instrument !== undefined ? { instrument } : {}),
+    ...(room !== undefined ? { room } : {}),
+    ...(decay !== undefined ? { decay } : {}),
+  };
+  const resolved = resolveChordAttrs(baseAttrs, 0.25);
+  const attackStr = resolved.attack !== undefined ? `.attack(${resolved.attack})` : '';
+  const decayStr = resolved.decay !== undefined ? `.decay(${resolved.decay})` : '';
+  const sustainStr = resolved.sustain !== undefined ? `.sustain(${resolved.sustain})` : '';
+  const releaseStr = resolved.release !== undefined ? `.release(${resolved.release})` : '';
+  const lpenvStr = resolved.lpenv !== undefined ? `.lpenv(${resolved.lpenv})` : '';
+  const lpaStr = resolved.lpa !== undefined ? `.lpa(${resolved.lpa})` : '';
+  const lpdStr = resolved.lpd !== undefined ? `.lpd(${resolved.lpd})` : '';
+  const lpqStr = resolved.lpq !== undefined ? `.lpq(${resolved.lpq})` : '';
+  return `note("${inner}").s("${resolved.instrument}").lpf(${resolved.lpf}).gain(${g.toFixed(2)}).room(${resolved.room})${attackStr}${decayStr}${sustainStr}${releaseStr}${lpenvStr}${lpaStr}${lpdStr}${lpqStr}`;
 }
 
 /**
@@ -88,31 +114,78 @@ export function chordToStrudel(
 export function melodyLine(
   progression: ReadonlyArray<HarmonySlotInput>,
   chordMode: 'chord' | 'arp',
-  octave: number
+  octave: number,
+  instrument?: string,
+  room?: number,
+  decay?: number
 ): string {
   if (progression.length === 0) return '';
   const sep = chordMode === 'chord' ? ',' : ' ';
 
   // ADR 0010 dual-mode + ADR 0012 rest extension:
   // use arrange() when any slot is a rest, OR when any chord has bars !== 1.
+  // ADR 0018 D2 amendment: also use arrange() when any chord has non-default
+  // sound attributes (instrument/room/decay) — the slowcat form emits a single
+  // .s(…)/room(…) for the whole pattern and cannot express per-chord timbre.
+  // ADR 0019 D7 amendment: extend the uniformAttrs check to include all new
+  // Phase 03 sound-attribute fields (preset, lpf, attack, sustain, release,
+  // lpenv, lpa, lpd, lpq). When all new fields are absent (undefined), the
+  // comparison undefined===undefined evaluates to true — gate outcome unchanged.
   const uniformDuration = progression.every(
     (slot) => !('isRest' in slot) && ((slot as { bars?: number }).bars ?? 1) === 1
   );
+  const uniformAttrs = (() => {
+    const chordSlots = progression.filter((slot) => !('isRest' in slot)) as Array<ChordAttrs>;
+    if (chordSlots.length === 0) return true;
+    const ref = chordSlots[0];
+    if (ref === undefined) return true;
+    return chordSlots.every(
+      (c) =>
+        c.instrument === ref.instrument &&
+        c.room === ref.room &&
+        c.decay === ref.decay &&
+        c.preset === ref.preset &&
+        c.lpf === ref.lpf &&
+        c.attack === ref.attack &&
+        c.sustain === ref.sustain &&
+        c.release === ref.release &&
+        c.lpenv === ref.lpenv &&
+        c.lpa === ref.lpa &&
+        c.lpd === ref.lpd &&
+        c.lpq === ref.lpq
+    );
+  })();
 
-  if (uniformDuration) {
-    // Slowcat form — byte-identical to pre-phase main (A-02-02).
+  if (uniformDuration && uniformAttrs) {
+    // Slowcat form — byte-identical to pre-phase main (A-02-02, A-03-01).
     // Safe to cast: uniformDuration guarantees no rest slots remain.
-    const chordSlots = progression as ReadonlyArray<{
-      rootPc: number;
-      qual: Quality;
-      gain?: number | null;
-      bars?: number;
-    }>;
+    const chordSlots = progression as ReadonlyArray<
+      { rootPc: number; qual: Quality; gain?: number | null; bars?: number } & ChordAttrs
+    >;
     const seq = chordSlots
       .map((ch) => '[' + chordVoicing(ch.rootPc, ch.qual, octave).join(sep) + ']')
       .join(' ');
     const gains = chordSlots.map((ch) => (ch.gain == null ? 0.6 : ch.gain).toFixed(2)).join(' ');
-    return `  note("<${seq}>").s("sawtooth").lpf(1200).gain("<${gains}>").room(0.3)`;
+    // Per ADR 0018 D2: top-level instrument/room/decay params override per-slot values.
+    // Per ADR 0019 D4b: resolveChordAttrs with first-chord's attrs (all chords are uniform
+    // so any chord is representative). roomDefault=0.3 preserves the melodyLine baseline.
+    const firstChord = chordSlots[0] ?? {};
+    const baseAttrs: ChordAttrs = {
+      ...firstChord,
+      ...(instrument !== undefined ? { instrument } : {}),
+      ...(room !== undefined ? { room } : {}),
+      ...(decay !== undefined ? { decay } : {}),
+    };
+    const resolved = resolveChordAttrs(baseAttrs, 0.3);
+    const attackStr = resolved.attack !== undefined ? `.attack(${resolved.attack})` : '';
+    const decayStr = resolved.decay !== undefined ? `.decay(${resolved.decay})` : '';
+    const sustainStr = resolved.sustain !== undefined ? `.sustain(${resolved.sustain})` : '';
+    const releaseStr = resolved.release !== undefined ? `.release(${resolved.release})` : '';
+    const lpenvStr = resolved.lpenv !== undefined ? `.lpenv(${resolved.lpenv})` : '';
+    const lpaStr = resolved.lpa !== undefined ? `.lpa(${resolved.lpa})` : '';
+    const lpdStr = resolved.lpd !== undefined ? `.lpd(${resolved.lpd})` : '';
+    const lpqStr = resolved.lpq !== undefined ? `.lpq(${resolved.lpq})` : '';
+    return `  note("<${seq}>").s("${resolved.instrument}").lpf(${resolved.lpf}).gain("<${gains}>").room(${resolved.room})${attackStr}${decayStr}${sustainStr}${releaseStr}${lpenvStr}${lpaStr}${lpdStr}${lpqStr}`;
   }
 
   // arrange() form — per-slot inline segment (A-02-03, ADR 0012 D3).
@@ -137,8 +210,27 @@ export function melodyLine(
     // 0005 ban targets.
     const voicing = chordVoicing(slot.rootPc, slot.qual, octave).join(sep);
     const g = (slot.gain == null ? 0.6 : slot.gain).toFixed(2);
-    const sustain = numCycles !== 1 ? `.slow(${numCycles})` : '';
-    return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)${sustain}]`;
+    const slowStr = numCycles !== 1 ? `.slow(${numCycles})` : '';
+    // Per ADR 0018 D2: top-level instrument/room/decay params take priority.
+    // Per ADR 0019 D4b: resolveChordAttrs merges slot attrs + top-level overrides.
+    // roomDefault=0.3 preserves the melodyLine arrange-path byte-identical baseline.
+    const slotBase = slot as ChordAttrs;
+    const baseAttrs: ChordAttrs = {
+      ...slotBase,
+      ...(instrument !== undefined ? { instrument } : {}),
+      ...(room !== undefined ? { room } : {}),
+      ...(decay !== undefined ? { decay } : {}),
+    };
+    const resolved = resolveChordAttrs(baseAttrs, 0.3);
+    const attackStr = resolved.attack !== undefined ? `.attack(${resolved.attack})` : '';
+    const decayStr = resolved.decay !== undefined ? `.decay(${resolved.decay})` : '';
+    const sustainStr = resolved.sustain !== undefined ? `.sustain(${resolved.sustain})` : '';
+    const releaseStr = resolved.release !== undefined ? `.release(${resolved.release})` : '';
+    const lpenvStr = resolved.lpenv !== undefined ? `.lpenv(${resolved.lpenv})` : '';
+    const lpaStr = resolved.lpa !== undefined ? `.lpa(${resolved.lpa})` : '';
+    const lpdStr = resolved.lpd !== undefined ? `.lpd(${resolved.lpd})` : '';
+    const lpqStr = resolved.lpq !== undefined ? `.lpq(${resolved.lpq})` : '';
+    return `  [${numCycles}, note("[${voicing}]").s("${resolved.instrument}").lpf(${resolved.lpf}).gain(${g}).room(${resolved.room})${attackStr}${decayStr}${sustainStr}${releaseStr}${lpenvStr}${lpaStr}${lpdStr}${lpqStr}${slowStr}]`;
   });
   return `arrange(\n${segments.join(',\n')}\n)`;
 }
