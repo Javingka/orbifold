@@ -356,3 +356,92 @@ Not applicable — net-new feature.
 Phase 02 is complete. All steps committed. Automated validations all pass. Manual acceptance (A-02-08, A-02-09, A-02-10) requires Pilot checkpoint #5.
 
 ---
+
+## Planner fix — `uniformAttrs` correctness (post-step-02.5)
+
+**Date:** 2026-06-18
+**Commit:** `fix(codegen): Phase 02 — per-slot sound attrs on bars=1 chords now reach arrange() path`
+**Iteration:** Planner-identified fix before Checkpoint #5
+
+### Issue found
+
+`melodyLine`'s slowcat (uniform) path emitted `.s("sawtooth")` regardless of per-chord
+`instrument/room/decay` fields, because `harmonyCode` passes no sound params to
+`melodyLine` and the uniform path only reads function-level params. Any chord with
+`bars === 1` and a non-default instrument would have its attribute silently ignored.
+
+### Fix
+
+Added `uniformAttrs` check (alongside `uniformDuration`) in `src/core/codegen/strudel.ts`:
+the slowcat path is taken only when ALL chords have absent sound attributes.
+Any non-default attribute forces the `arrange()` path, which reads per-slot fields.
+Byte-identical guarantee (A-02-01) is preserved: all attrs absent → slowcat → unchanged output.
+
+### Tests added
+
+Three new regression tests in `tests/codegen.test.ts`:
+- `per-slot instrument on bars=1 chord → arrange() path, attr applied`
+- `per-slot room on bars=1 chord → arrange() path, room applied`
+- `per-slot decay on bars=1 chord → arrange() path, decay applied`
+
+Total: 539 tests pass (was 536).
+
+### Updated Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / artifact | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Byte-identical at default | `tests/codegen.test.ts` "byte-identical at default" | unit | COVERED |
+| A-02-02 | instrument variants | `tests/codegen.test.ts` + per-slot fix tests | unit | COVERED |
+| A-02-03 | room override | `tests/codegen.test.ts` + per-slot fix tests | unit | COVERED |
+| A-02-04 | decay present/absent | `tests/codegen.test.ts` + per-slot fix tests | unit | COVERED |
+| A-02-05 | v2 blob dropped | `tests/persistence.test.ts` | unit | COVERED |
+| A-02-06 | v3 blob parses | `tests/persistence.test.ts` | unit | COVERED |
+| A-02-07 | Agent schema optional attrs | `tests/schema.test.ts` | unit | COVERED |
+| A-02-08 | Slot click → store → controls | — | manual | OPEN |
+| A-02-09 | Instrument change → audio next cycle | — | manual | OPEN |
+| A-02-10 | Controls placement | — | manual | OPEN |
+| A-02-11 | i18n key-parity | `tests/i18n/key-parity.test.ts` | unit | COVERED |
+| A-02-12 | `pnpm build` clean | build output | automated | COVERED |
+
+---
+
+## Pilot Checkpoint #5 resolution (2026-06-18)
+
+Pilot ran the manual acceptance on the live dev server. Results:
+
+- **A-02-09 — PASS.** Changing the instrument on a selected slot changes the harmony
+  audio on the next cycle; reverting restores the original sound. The core F1 behavior
+  (per-chord sound attributes through the full data → codegen → audio path) is validated.
+- **A-02-08 — PARTIAL → deferred to Phase 03.** The controls do reflect and write the
+  selected slot's attributes, but there is no visual signal that the controls are in
+  "edit mode" for the highlighted note (vs. setting intent for new notes). Pilot
+  requested: when a note is selected (Pentagrama slot or Tonnetz triangle), highlight the
+  control group with a persistent accent border + a transient color pulse confirming
+  "these parameters are recorded on this note." (Decision: **visible + highlight + pulse**,
+  not hide-when-unselected.)
+- **A-02-10 — PARTIAL → deferred to Phase 03.** The acceptance criterion was
+  self-contradictory against the real top-bar order. Actual order:
+  `Tonnetz/Pentagrama → acorde/arpegio → marco → clave/escala/octava → [sound]`.
+  "After tonalidad/escala/octava AND before acorde/arpegio/marco" is unsatisfiable because
+  acorde/arpegio/marco precede clave/escala/octava. The Dev placed the controls after
+  octava → they landed at the end. Correct placement is resolved in the Phase 03 redesign.
+
+**Pilot decision (Checkpoint #5):** A-02-08 and A-02-10 are **partials carried forward to
+Phase 03**, NOT patched in isolation, because Phase 03 redesigns the entire sound-control
+block (two menus: Oscillator + Presets) and the placement + edit-mode feedback are resolved
+once within that redesign. Patching them now would be discarded work. Phase 02's core
+deliverable (the F1 data model, codegen, persistence v3, agent schema v3, reactive
+selected-slot store, functional sound change — A-02-09 ✓) is **accepted as complete**.
+
+**Register proposals:** none. ADR 0018 captures all five Phase 02 decisions; no new vigent
+rule emerged that is not already in the ADR. The schema-v3 lossy-drop contract lives in
+ADR 0018 D3 and does not need duplication in the Register.
+
+**New scope opened by the Pilot (→ Phase 03):** two separate selectors — an **Oscillator**
+menu (sine/triangle/square/sawtooth + **noise**) and a **Presets** menu (Piano / Guitar /
+Synth Bass) that load pre-built filter + envelope configurations. Presets touch the deferred
+candidates D-3 (filter) and D-4 (filter envelope) from the Phase 01 inventory, so Phase 03
+requires a new ADR (preset data model + which params + persistence) and a discovery of which
+envelope/filter parameters exist in `@strudel/web@1.0.3`.
+
+**Phase 02 status: COMPLETE** (A-02-08, A-02-10 deferred to Phase 03 by Pilot).
