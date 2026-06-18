@@ -8,14 +8,15 @@ import type { SessionState } from '../state/session.js';
 // ── Schema version ─────────────────────────────────────────────────────────
 
 /**
- * Schema version 4 — Phase 03 (harmonic-rhythm-improvements), ADR 0019 D5.
- * Change from v3: `SavedChordSchema` gains `preset?`, `lpf?`, `attack?`, `sustain?`,
- * `release?`, `lpenv?`, `lpa?`, `lpd?`, `lpq?` optional fields.
- * Version 3 blobs fail the `z.literal(4)` check and are dropped by the existing
- * safeParse graceful-degradation path — no migration function. Pilot-confirmed tradeoff
- * (same precedent as ADR 0013 D1, ADR 0018 D3).
+ * Schema version 5 — editable-composition Phase 01 step 01.4, ADR 0020 D5.
+ * Change from v4: `SavedBlockSchema` gains an optional `snapshot?` field — a
+ * `z.discriminatedUnion` mirroring the `BlockSnapshot` discriminated union
+ * (GrooveSnapshot | ArmoniaSnapshot | SesionSnapshot). Version 4 blobs fail
+ * the `z.literal(5)` check and are dropped by the existing safeParse
+ * graceful-degradation path — no migration function. Pilot-confirmed tradeoff
+ * (same precedent as ADR 0020 D5 / ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1).
  */
-export const SESSION_SCHEMA_VERSION = 4;
+export const SESSION_SCHEMA_VERSION = 5;
 
 // ── Shared enum constants (mirror agent/schema.ts SK_ arrays) ─────────────
 
@@ -97,11 +98,106 @@ const SavedRhythmSchema = z.object({
   layers: z.array(SavedRhythmLayerSchema).max(8),
 });
 
+// ── Block snapshot sub-schemas (ADR 0020 D1 / D5) ─────────────────────────
+// Mirror the BlockSnapshot discriminated union from
+// src/core/composition/snapshot.ts — kept in sync manually.
+// These are persistence-layer schemas only; runtime types live in snapshot.ts.
+
+/**
+ * Zod schema for a single rhythm layer inside a GrooveSnapshot.
+ * Mirrors GrooveSnapshot.layers[number] from snapshot.ts.
+ */
+const SavedGrooveLayerSchema = z.object({
+  sound: z.enum(SK_SOUNDS),
+  steps: z.array(z.number().int().min(0).max(1)).length(16),
+  euclid: z.string().optional(),
+  muted: z.boolean().optional(),
+  solo: z.boolean().optional(),
+});
+
+/**
+ * Zod schema for GrooveSnapshot — type:'groove' + layers array.
+ * Mirrors GrooveSnapshot from snapshot.ts (ADR 0020 D1).
+ */
+const SavedGrooveSnapshotSchema = z.object({
+  type: z.literal('groove'),
+  layers: z.array(SavedGrooveLayerSchema),
+});
+
+/**
+ * Zod schema for a single chord entry inside an ArmoniaSnapshot.
+ * Mirrors ChordSnapshotEntry from snapshot.ts (all per-chord sound attributes
+ * from ADR 0018 D1 and ADR 0019 D4a are preserved — A-01-04).
+ */
+const SavedChordSnapshotEntrySchema = z.object({
+  rootPc: z.number().int().min(0).max(11),
+  qual: z.enum(SK_QUAL),
+  gain: z.number().min(0).max(1.2),
+  bars: z.number().min(0.25).max(8).optional(),
+  instrument: z.string().optional(),
+  room: z.number().min(0).max(1).optional(),
+  decay: z.number().min(0).optional(),
+  preset: z.enum(['piano', 'guitar', 'synth-bass']).optional(),
+  lpf: z.number().optional(),
+  attack: z.number().min(0).optional(),
+  sustain: z.number().min(0).max(1).optional(),
+  release: z.number().min(0).optional(),
+  lpenv: z.number().optional(),
+  lpa: z.number().min(0).optional(),
+  lpd: z.number().min(0).optional(),
+  lpq: z.number().min(0).optional(),
+});
+
+/**
+ * Zod schema for a rest entry inside an ArmoniaSnapshot.
+ * Mirrors RestSnapshotEntry from snapshot.ts.
+ */
+const SavedRestSnapshotEntrySchema = z.object({
+  isRest: z.literal(true),
+  bars: z.number().min(0.25).max(8).optional(),
+});
+
+/**
+ * Zod schema for ArmoniaSnapshot — type:'armonia' + harmonic context + progression.
+ * Mirrors ArmoniaSnapshot from snapshot.ts (ADR 0020 D1 / D3).
+ * Progression uses a union: rest schema listed first (ADR 0012 D4 precedent).
+ */
+const SavedArmoniaSnapshotSchema = z.object({
+  type: z.literal('armonia'),
+  root: z.number().int().min(0).max(11),
+  mode: z.string(),
+  octave: z.number().int().min(2).max(5),
+  chordMode: z.enum(['chord', 'arp']),
+  progression: z.array(z.union([SavedRestSnapshotEntrySchema, SavedChordSnapshotEntrySchema])),
+});
+
+/**
+ * Zod schema for SesionSnapshot — type:'sesion' + groove sub-snapshot + armonia sub-snapshot.
+ * Mirrors SesionSnapshot from snapshot.ts (ADR 0020 D1 — composite per OQ-4 Option B).
+ */
+const SavedSesionSnapshotSchema = z.object({
+  type: z.literal('sesion'),
+  groove: SavedGrooveSnapshotSchema,
+  armonia: SavedArmoniaSnapshotSchema,
+});
+
+/**
+ * Zod discriminated union over all three snapshot variants (type tag: 'groove' | 'armonia' | 'sesion').
+ * Used as the optional `snapshot?` field on SavedBlockSchema (ADR 0020 D5).
+ */
+const SavedBlockSnapshotSchema = z.discriminatedUnion('type', [
+  SavedGrooveSnapshotSchema,
+  SavedArmoniaSnapshotSchema,
+  SavedSesionSnapshotSchema,
+]);
+
 const SavedBlockSchema = z.object({
   name: z.string().max(100),
   type: z.enum(['groove', 'armonia', 'sesion'] as const),
   code: z.string(),
   bars: z.number().int().min(1).max(64),
+  /** Block snapshot captured at save time (editable-composition Phase 01, ADR 0020 D5). */
+  snapshot: SavedBlockSnapshotSchema.optional(),
 });
 
 const SavedBlockRefSchema = z.object({
@@ -119,19 +215,19 @@ const SavedCompositionSchema = z.object({
 });
 
 /**
- * SavedSessionSchema v4 — Phase 03 (harmonic-rhythm-improvements), ADR 0019 D5.
+ * SavedSessionSchema v5 — editable-composition Phase 01 step 01.4, ADR 0020 D5.
  *
- * Changes from v3:
- *   - `version` literal bumped from 3 to 4.
- *   - `SavedChordSchema` gains `preset?`, `lpf?`, `attack?`, `sustain?`, `release?`,
- *     `lpenv?`, `lpa?`, `lpd?`, `lpq?` optional fields (ADR 0019 D4a).
+ * Changes from v4:
+ *   - `version` literal bumped from 4 to 5.
+ *   - `SavedBlockSchema` gains an optional `snapshot?` field — a Zod discriminated
+ *     union for GrooveSnapshot | ArmoniaSnapshot | SesionSnapshot (ADR 0020 D1/D5).
  *
- * Version 3 blobs fail the `z.literal(4)` check → dropped by safeParse (existing
- * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0019 D5 /
- * ADR 0018 D3 / ADR 0013 D1 precedent).
+ * Version 4 blobs fail the `z.literal(5)` check → dropped by safeParse (existing
+ * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0020 D5 /
+ * ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1 precedent).
  */
 export const SavedSessionSchema = z.object({
-  version: z.literal(4),
+  version: z.literal(5),
   bpm: z.number().int().min(40).max(280),
   view: z
     .enum(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)
@@ -213,6 +309,8 @@ export function serializeSession(state: SessionState): SavedSession {
         code: b.code,
         bars: b.bars,
         // id excluded — ADR 0009
+        // snapshot included when present (ADR 0020 D5); omitted when undefined per Zod defaults
+        ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
       })),
       tracks: state.composition.tracks.map((t) => ({
         // id excluded — ADR 0009
@@ -307,6 +405,8 @@ export function deserializeSession(saved: SavedSession): Omit<SessionState, 'now
         type: b.type,
         code: b.code,
         bars: b.bars,
+        // snapshot carried through when present (ADR 0020 D5); absent → undefined (legacy block)
+        ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
       })),
       tracks: saved.composition.tracks.map((t) => ({
         id: '',

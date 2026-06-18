@@ -284,6 +284,129 @@ The `openBlock` ephemeral field merging note above is a step 01.5 concern — no
 
 ### Planner Review
 
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-18
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass and both project-specific items (core purity, AGPL-3.0 header) pass; snapshot.ts implements ADR 0020 D1–D3 types exactly, capture/restore functions are confirmed pure, A-01-04/A-01-05 explicitly test all 12 per-chord sound attributes, A-01-06 directly verifies byte-identical buildComposition output, addBlock discriminant tests confirm all three block types, 29 new tests bring the suite to 675, and quality gates are clean.
+**Next action:** Dev proceeds to step 01.4
+
+---
+
+## Step 01.4 — Persistence schema v5 and agent schema guard
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(schema): Phase 01 step 01.4 — persistence schema v5 + Block snapshot serialization`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/editable-composition/decisions.md`, `docs/adr/0020-block-as-state.md` (D5, D7 binding), `docs/editable-composition/phases/phase-01.md` (step 01.4 scope), `src/lib/persistence.ts` (full), `src/agent/schema.ts` (full), and `docs/harmonic-rhythm-improvements/handoffs/phase-03-handoff.md` step 03.4 (schema-bump style reference).
+- **`src/lib/persistence.ts`:**
+  - Bumped `SESSION_SCHEMA_VERSION` from `4` to `5`.
+  - Changed `SavedSessionSchema` `version` literal from `z.literal(4)` to `z.literal(5)`.
+  - Added eight extracted named Zod sub-schemas immediately before `SavedBlockSchema`:
+    - `SavedGrooveLayerSchema` — mirrors `GrooveSnapshot.layers[number]`.
+    - `SavedGrooveSnapshotSchema` — `type: z.literal('groove')` + layers.
+    - `SavedChordSnapshotEntrySchema` — all 15 chord fields from ADR 0020 D1 + ADR 0018 D1 + ADR 0019 D4a (A-01-04 coverage).
+    - `SavedRestSnapshotEntrySchema` — `isRest: z.literal(true)` + optional bars.
+    - `SavedArmoniaSnapshotSchema` — `type: z.literal('armonia')` + root/mode/octave/chordMode + progression union (rest first per ADR 0012 D4 precedent).
+    - `SavedSesionSnapshotSchema` — `type: z.literal('sesion')` + `groove: SavedGrooveSnapshotSchema` + `armonia: SavedArmoniaSnapshotSchema`.
+    - `SavedBlockSnapshotSchema` — `z.discriminatedUnion('type', [...])` over the three snapshot schemas.
+  - Added `snapshot: SavedBlockSnapshotSchema.optional()` to `SavedBlockSchema`.
+  - Updated `serializeSession`: spreads `snapshot` onto each block when present (omitted via `...({})` when undefined, per Zod's JSON serialization defaults).
+  - Updated `deserializeSession`: spreads `snapshot` onto each block when present; absent → `undefined` (legacy block, ADR 0020 D4).
+- **`src/agent/schema.ts`:** Added the ADR 0020 D7 JSDoc guard to `HarmonyChordCoreSchema` noting that block snapshot fields are a composition-layer concern defined in `snapshot.ts` and must not be added here. `SCHEMA_VERSION` unchanged at `4`.
+- **`tests/persistence.test.ts`:**
+  - Updated `MINIMAL_SAVED` and `FULL_SAVED` fixtures from `version: 4` to `version: 5`.
+  - Updated all inline `version: 4` literals in test bodies to `version: 5` (or to `version: 4` where the test now asserts the v4 blob is rejected).
+  - Updated the `SESSION_SCHEMA_VERSION is 4` test to assert `5`; updated the "accepts version 4" test to "rejects version 4"; added new "accepts version 5" test; updated "rejects version 5" to "rejects version 6".
+  - Added the `ADR 0020 D5: schema v5 — Block snapshot persistence (A-01-07)` describe block with 6 tests: v4 drop, groove round-trip, armonia round-trip (with rest + sound attrs), sesion round-trip, snapshot-absent block loads as snapshot-less, invalid snapshot discriminant rejected.
+- **`tests/schema.test.ts`:** Updated `SCHEMA_VERSION` describe block comment and test name to explicitly document that the agent schema version remains `4` per ADR 0020 D7. Assertion value unchanged.
+- **`tests/session.test.ts`:** Updated 3 version-literal fixtures in the `SavedChordSchema backward-compat` describe block from `version: 4` to `version: 5` (behavior unchanged; version-literal updates only per the step scope).
+
+### Files touched
+
+- `src/lib/persistence.ts` (`SESSION_SCHEMA_VERSION` 4→5; `SavedBlockSnapshotSchema` sub-schemas added; `SavedBlockSchema` + `serialize`/`deserialize` updated)
+- `src/agent/schema.ts` (JSDoc guard on `HarmonyChordCoreSchema`; no structural change)
+- `tests/persistence.test.ts` (version literals 4→5; A-01-07 describe block added)
+- `tests/schema.test.ts` (SCHEMA_VERSION describe comment/name updated; assertion value unchanged at 4)
+- `tests/session.test.ts` (3 version-literal fixture updates)
+- `docs/editable-composition/handoffs/phase-01-handoff.md` (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-07** — `tests/persistence.test.ts` — "ADR 0020 D5: schema v5 — Block snapshot persistence (A-01-07)" describe block (6 tests):
+  - v4 drop: `version: 4` blob fails `z.literal(5)`, `safeParse` returns false.
+  - Groove round-trip: serialized → JSON → parse → deserialize; layers/steps/euclid/muted preserved.
+  - Armonia round-trip: progression (chord + rest + chord with sound attrs) + root/mode/octave/chordMode preserved.
+  - Sesion round-trip: both groove and armonia sub-snapshots preserved.
+  - Snapshot-absent block: v5 session without `snapshot` on a block loads with `block.snapshot === undefined`; block still usable via `code`.
+  - Invalid discriminant: `{ type: 'unknown-type' }` snapshot rejected by `z.discriminatedUnion`.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → clean (ESLint + Prettier).
+- `pnpm exec vitest run` → **682 tests pass** (18 test files). Prior count: 675. New tests: 1 (new "accepts version 5") + 6 (A-01-07 block) = 7 net new.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | groove round-trip fidelity | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-02 | armonia round-trip fidelity | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-03 | sesion round-trip fidelity | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-04 | per-chord sound attrs captured | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-05 | per-chord sound attrs restored | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-06 | byte-identical-at-default | `tests/snapshot.test.ts` (step 01.3) | unit | CLOSED (step 01.3) |
+| A-01-07 | persistence round-trip (v5 session; v4 drop; snapshot-absent loads OK; invalid discriminant rejected) | `tests/persistence.test.ts` — "ADR 0020 D5" describe (6 tests) | unit | **CLOSED** |
+| A-01-08 | manual: groove re-open | — | manual | open — step 01.5 |
+| A-01-09 | manual: armonia re-open | — | manual | open — step 01.5 |
+| A-01-10 | manual: sesion re-open | — | manual | open — step 01.5 |
+| A-01-11 | manual: legacy block no edit button | — | manual | open — step 01.5 |
+| A-01-12 | quality gate (all tools clean) | automated | automated | CLOSED for this step |
+
+### Decisions made (if any)
+
+**Zod sub-schema factoring strategy:** The `SesionSnapshot` variant's `groove` and `armonia` sub-objects are extracted as named `SavedGrooveSnapshotSchema` and `SavedArmoniaSnapshotSchema` variables. This allows `SavedSesionSnapshotSchema` to compose them without inlining, avoids the verbosity of a deeply nested literal, and keeps the session snapshot Zod schema readable and maintainable. The extracted schemas are module-private (not exported from `persistence.ts`).
+
+**Rest-first ordering in armonia progression:** `SavedArmoniaSnapshotSchema`'s progression uses `z.union([SavedRestSnapshotEntrySchema, SavedChordSnapshotEntrySchema])` with rest listed first, following ADR 0012 D4 precedent (same as `SavedHarmonySchema`). This ensures `{ isRest: true }` always parses as a rest regardless of other fields.
+
+### Proposed Decisions Register entries (if any)
+
+None new — all required decisions are already in ADR 0020.
+
+### Prototype parity
+
+N/A — persistence schema changes are infrastructure, not a port of prototype logic.
+
+### Blockers resolved during this step (if any)
+
+None. TypeScript structural compatibility between `Block.snapshot` (`BlockSnapshot | undefined`) and the Zod-inferred `SavedBlockSnapshotSchema` type was confirmed by clean `tsc --noEmit` — both are structurally equivalent discriminated unions.
+
+### Environment state after this step
+
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm lint` → clean.
+- `pnpm exec vitest run` → 682 tests pass (18 test files), 0 failures.
+- `SESSION_SCHEMA_VERSION = 5`. `SCHEMA_VERSION = 4` (unchanged).
+- `SavedBlockSchema` carries optional `snapshot?` with `z.discriminatedUnion`.
+- v4 sessions are gracefully dropped (lossy per ADR 0020 D5). v5 sessions with or without block snapshots parse correctly.
+- `src/agent/schema.ts` carries the D7 JSDoc guard on `HarmonyChordCoreSchema`; no structural change.
+
+### Auto-continuation
+
+**BLOCKED — Pilot/Planner Checkpoint review required before step 01.5.**
+
+Step 01.4 is a checkpoint step. Step 01.5 (openBlock action + UI round-trip button + i18n) begins only after the Planner reviews and approves this entry.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:** APPROVED / REVISE / ESCALATED
@@ -291,3 +414,10 @@ The `openBlock` ephemeral field merging note above is a step 01.5 concern — no
 **Iteration:** 1 of 5
 **Reason:**
 **Next action:**
+
+---
+
+**Terminal commit:** `feat(schema): Phase 01 step 01.4 — persistence schema v5 + Block snapshot serialization`
+
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
