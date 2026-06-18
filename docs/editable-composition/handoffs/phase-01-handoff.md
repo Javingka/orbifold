@@ -177,3 +177,117 @@ After Pilot approves the ADR at Checkpoint #2, step 01.3 implements:
 **Iteration:** 1 of 5
 **Reason:**
 **Next action:**
+
+---
+
+## Step 01.3 — BlockSnapshot types + capture/restore engine + unit tests (Checkpoint #3)
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(composition): Phase 01 step 01.3 — BlockSnapshot types + capture/restore engine + unit tests`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read `CLAUDE.md`, `docs/editable-composition/decisions.md`, `docs/adr/0020-block-as-state.md` (full, all D1–D7 binding), `docs/editable-composition/phases/phase-01.md` (step 01.3 scope and A-01-01..A-01-06 acceptance criteria), `src/core/composition/model.ts` (full), `src/state/session.ts` (Chord, RhythmLayer, ProgressionSlot type declarations, `addBlock` function lines 1233–1263), and `src/core/rhythm/layers.ts` (Sound, RhythmLayer).
+- Created `src/core/composition/snapshot.ts` — AGPL-3.0 header; pure engine (no DOM/PIXI/Svelte imports); exports:
+  - Types: `GrooveSnapshot`, `ChordSnapshotEntry`, `RestSnapshotEntry`, `ProgressionSnapshotEntry`, `ArmoniaSnapshot`, `SesionSnapshot`, `BlockSnapshot` per ADR 0020 D1.
+  - `captureGrooveSnapshot(state)` → `GrooveSnapshot` — shallow-copies layer arrays; copies optional euclid/muted/solo fields.
+  - `captureArmoniaSnapshot(state)` → `ArmoniaSnapshot` — captures root/mode/octave/chordMode and full progression with all per-chord sound attributes (instrument, room, decay, preset, lpf, attack, sustain, release, lpenv, lpa, lpd, lpq); excludes cx/cy ephemeral render hints per D1.
+  - `captureSesionSnapshot(state)` → `SesionSnapshot` — delegates to the two sub-capture functions.
+  - `restoreGrooveSnapshot(snap)` → `Partial<SessionState>` — pure, no store write.
+  - `restoreArmoniaSnapshot(snap)` → `Partial<SessionState>` — restores harmony + chordMode; uses default ephemeral values for `subview`/`registerMode` (openBlock caller merges existing state, so these are preserved).
+  - `restoreSesionSnapshot(snap)` → `Partial<SessionState>` — merges groove delta and armonia delta.
+- Extended `Block` in `src/core/composition/model.ts` with `snapshot?: BlockSnapshot` (optional per D2); added import for `BlockSnapshot` from snapshot.ts.
+- Updated `addBlock` in `src/state/session.ts`: added import of `captureGrooveSnapshot`, `captureArmoniaSnapshot`, `captureSesionSnapshot`; after the existing code generation path, captures the appropriate snapshot and attaches it to the new block. `buildComposition` is unchanged (reads `block.code` only — A-01-06 guarantee intact).
+- Created `tests/snapshot.test.ts` covering all acceptance items A-01-01 through A-01-06 plus `addBlock` discriminant tests. 29 new tests; total suite 675 (was 646).
+
+### Files touched
+
+- `src/core/composition/snapshot.ts` (created)
+- `src/core/composition/model.ts` (extended: import + `snapshot?` field)
+- `src/state/session.ts` (updated: snapshot imports + `addBlock` snapshot capture)
+- `tests/snapshot.test.ts` (created)
+- `docs/editable-composition/handoffs/phase-01-handoff.md` (updated, this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-01** — `tests/snapshot.test.ts` describe block "A-01-01: captureGrooveSnapshot → restoreGrooveSnapshot round-trip" (6 tests): layers, steps, euclid, muted/solo, discriminant, deep-copy isolation, empty array.
+- **A-01-02** — `tests/snapshot.test.ts` describe block "A-01-02: captureArmoniaSnapshot → restoreArmoniaSnapshot round-trip" (6 tests): root/mode/octave/chordMode, chord slots, rest slots, discriminant, bpm exclusion, empty progression.
+- **A-01-03** — `tests/snapshot.test.ts` describe block "A-01-03: captureSesionSnapshot → restoreSesionSnapshot round-trip" (3 tests): both sub-states, discriminants, delegation equivalence.
+- **A-01-04** — `tests/snapshot.test.ts` describe block "A-01-04: captureArmoniaSnapshot preserves all per-chord sound attributes" (2 tests): all 12 ADR 0018/0019 attributes captured; no spurious undefined keys on minimal chord.
+- **A-01-05** — `tests/snapshot.test.ts` describe block "A-01-05: restoreArmoniaSnapshot restores per-chord sound attributes faithfully" (2 tests): all 12 attributes survive restore; no spurious extra fields for minimal chord.
+- **A-01-06** — `tests/snapshot.test.ts` describe block "A-01-06: buildComposition is byte-identical when snapshot is absent" (3 tests): snapshot-absent block, snapshot-present vs absent (same code → same output), two blocks with different snapshots but same code → same output.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → clean (ESLint + Prettier).
+- `pnpm exec vitest run` → 675 tests passed (18 test files), 0 failures. Prior suite was 646 tests; 29 new snapshot tests added.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | groove round-trip fidelity | `tests/snapshot.test.ts` — "A-01-01" describe (6 tests) | unit | CLOSED |
+| A-01-02 | armonia round-trip fidelity | `tests/snapshot.test.ts` — "A-01-02" describe (6 tests) | unit | CLOSED |
+| A-01-03 | sesion round-trip fidelity | `tests/snapshot.test.ts` — "A-01-03" describe (3 tests) | unit | CLOSED |
+| A-01-04 | per-chord sound attrs captured | `tests/snapshot.test.ts` — "A-01-04" describe (2 tests) | unit | CLOSED |
+| A-01-05 | per-chord sound attrs restored | `tests/snapshot.test.ts` — "A-01-05" describe (2 tests) | unit | CLOSED |
+| A-01-06 | byte-identical-at-default (flag-off equivalent) | `tests/snapshot.test.ts` — "A-01-06" describe (3 tests) | unit | CLOSED |
+| A-01-07 | persistence round-trip | `tests/persistence.test.ts` (future — step 01.4) | unit | open — step 01.4 |
+| A-01-08 | manual: groove re-open | — | manual | open — step 01.5 |
+| A-01-09 | manual: armonia re-open | — | manual | open — step 01.5 |
+| A-01-10 | manual: sesion re-open | — | manual | open — step 01.5 |
+| A-01-11 | manual: legacy block no edit button | — | manual | open — step 01.5 |
+| A-01-12 | quality gate (all tools clean) | automated (all CI commands pass) | automated | CLOSED for this step |
+
+### Decisions made (if any)
+
+No new decisions. All implementation follows ADR 0020 D1–D7 exactly as approved at Checkpoint #2.
+
+One implementation note on `restoreArmoniaSnapshot`: the `HarmonyState` return includes `subview: 'tonnetz'` and `registerMode: 'suavizado'` defaults. The `openBlock` action in step 01.5 should use `sessionStore.update((s) => ({ ...s, ...delta, harmony: { ...s.harmony, ...delta.harmony } }))` to preserve existing ephemeral fields. This is a step 01.5 concern, noted here for continuity.
+
+### Proposed Decisions Register entries (if any)
+
+None — all required decisions are already in ADR 0020.
+
+### Prototype parity
+
+N/A — `src/core/composition/snapshot.ts` is new infrastructure, not a port of prototype logic. The byte-identical-at-default guarantee (A-01-06) serves the same role as the flag-off invariant required by the reversibility checklist item.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm lint` → clean.
+- `pnpm exec vitest run` → 675 tests pass, 0 failures.
+- Working tree: 4 source files modified/created + this handoff.
+
+### Next-step context (only if non-obvious)
+
+Step 01.4 must:
+1. Bump `SESSION_SCHEMA_VERSION` to 5 in `src/lib/persistence.ts`.
+2. Add the `snapshot?` field to `SavedBlockSchema` as a Zod discriminated union mirroring the TypeScript types added in this step.
+3. Update `serializeSession`/`deserializeSession` to carry snapshots through.
+4. Add JSDoc guard to `HarmonyChordCoreSchema` in `src/agent/schema.ts` (D7).
+5. Add persistence tests for A-01-07.
+
+The `openBlock` ephemeral field merging note above is a step 01.5 concern — no action needed in step 01.4.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 5
+**Reason:**
+**Next action:**

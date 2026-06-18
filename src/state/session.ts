@@ -46,6 +46,11 @@ import { bjorklund, rotate, RSTEPS } from '../core/rhythm/euclid.js';
 import type { Composition } from '../core/composition/model.js';
 import { stripComments, buildComposition } from '../core/composition/model.js';
 import {
+  captureGrooveSnapshot,
+  captureArmoniaSnapshot,
+  captureSesionSnapshot,
+} from '../core/composition/snapshot.js';
+import {
   chordToStrudel,
   melodyLine,
   rhythmToStrudel,
@@ -1246,12 +1251,24 @@ export function addBlock(type: 'groove' | 'armonia' | 'sesion'): void {
     defName = 'Sesión ' + _blkSeq;
   }
   if (!code) return;
+  // Capture the editable snapshot at save time (ADR 0020 D2):
+  // 1. Generate code via existing codegen path (unchanged — see below).
+  // 2. Capture the appropriate snapshot.
+  // 3. Attach both to the new Block.
+  // buildComposition is NOT touched — it reads block.code only (A-01-06).
+  const snapshot =
+    type === 'groove'
+      ? captureGrooveSnapshot(state)
+      : type === 'armonia'
+        ? captureArmoniaSnapshot(state)
+        : captureSesionSnapshot(state);
   const block = {
     id: 'b' + _blkSeq++,
     name: defName,
     type,
     code: stripComments(code),
     bars: 4,
+    snapshot,
   };
   sessionStore.update((s) => ({
     ...s,
