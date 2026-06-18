@@ -370,3 +370,16 @@ Given the v4 drop behavior, the indicator is mostly cosmetic for the launch wind
 **Recommendation:** Option B — composite `{ type: 'sesion'; groove: GrooveSnapshot; armonia: ArmoniaSnapshot }`. This is the shape already reflected in §(f) above.
 
 **Pilot resolution needed:** Confirm Option B or choose Option A. This decision directly affects the `BlockSnapshot` type shape, Zod schema, persistence, and restore functions.
+
+---
+
+## Pilot resolution — Checkpoint #1 (2026-06-18)
+
+Pilot (Javier) resolved all four open questions, accepting the Dev's recommendations verbatim:
+
+- **OQ-1 → A.** Include `root`, `mode`, `octave` in `ArmoniaSnapshot` (harmonic content). **Exclude `bpm`** from all snapshots; `openBlock` does not touch `state.bpm`.
+- **OQ-2 → A/B.** **Keep `Block.code`** alongside the optional `snapshot`. `addBlock` keeps generating `code` via the existing codegen path and additionally captures a snapshot. `buildComposition` is unchanged (preserves byte-identical-at-default, A-01-06).
+- **OQ-3 → indicator.** Snapshot-less ("legacy") blocks show a discreet visual indicator (badge/tooltip, muted) and **no** "open in editor" button.
+- **OQ-4 → Option B.** `SesionSnapshot = { type: 'sesion'; groove: GrooveSnapshot; armonia: ArmoniaSnapshot }` (composite).
+
+These resolutions are the inputs for ADR 0020 (step 01.2). Approved to proceed to step 01.2; ADR review is Checkpoint #2 before any source code (step 01.3).
