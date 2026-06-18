@@ -250,4 +250,172 @@ Dirt-samples (`github:tidalcycles/dirt-samples`) **are** loaded at init (`src/au
 
 ---
 
-*(Sections (c) and (d) follow in step 01.3.)*
+*(Section (b) complete. Sections (c) and (d) follow in step 01.3.)*
+
+---
+
+## (c) Candidate set vs. deferred register
+
+The following two lists are **proposed**, not decided. All decisions rest with the Pilot at Checkpoint #1.
+
+Selection criterion: **Candidates** are low-risk, high-impact, directly serve F1/F2/F3, and do not increase use complexity (the Pilot's design principle). **Deferred** items are high-risk, paradigm-shifting, complexity-adding, or unavailable in `@strudel/web@1.0.3`.
+
+---
+
+### Candidates for this initiative
+
+These attributes are low-risk, serve F1/F2/F3 directly, integrate cleanly into the existing codegen/data model, and keep sessions reproducible.
+
+| # | Attribute / Feature | Target feature | Implementation surface | ADR needed? | Schema bump needed? | Notes |
+|---|---|---|---|---|---|---|
+| C-1 | **`s()` waveform selector for harmony chords** (`sine`, `square`, `triangle`, `sawtooth` — the four confirmed in 1.0.3) | F1 | `chordToStrudel` + `melodyLine` in `codegen/strudel.ts`; `Chord.instrument?: string`; `agent/schema.ts` (`HarmonyChordCoreSchema`); `lib/persistence.ts` (`SavedChordSchema`) | Yes — sound-attribute data model (parallels ADR 0010/0012; defines the typed model and codegen form) | Yes — both agent (`SCHEMA_VERSION`) and persistence (`SESSION_SCHEMA_VERSION`); backward-compatible (optional field, old sessions parse with `undefined` → `'sawtooth'`) | Default `'sawtooth'` preserves byte-identical output. UI: a `<select>` in Header.svelte `{#if view === 'harmony'}` block for the selected progression slot. |
+| C-2 | **`.room(value)` exposed (currently hardcoded)** | F1 | `chordToStrudel` + `melodyLine`; `Chord.room?: number` | Subsumed under C-1's ADR (same sound-attribute model) | Yes (same bump as C-1) | Replace hardcoded `room(0.25/0.3)` with variable; default `0.25/0.3` preserves byte-identity. Low lift once C-1 schema exists. |
+| C-3 | **`.decay()` (note length / pluck feel) for chords** | F1 | Same codegen path; `Chord.decay?: number` | Subsumed under C-1's ADR | Yes (same bump) | Gives chords a plucked feel (`decay(0.1).sustain(0)`) vs. sustained. Default absent → byte-identical current output. |
+| C-4 | **Dirt-sample bank selector for rhythm layers (`s("bd").bank("RolandTR909")`)** | F2 | `rhythmLayerToStrudelLine` in `layers.ts`; `RhythmLayer.bank?: string`; `agent/schema.ts` (`RhythmLayerSchema`); `lib/persistence.ts` (`SavedRhythmLayerSchema`) | Subsumed under C-1's ADR | Yes (same bump, adding `bank?: z.string().optional()`) | TR808/TR909/etc. already in dirt-samples. Default absent → `s("bd")` byte-identical. |
+| C-5 | **Sample index selector for rhythm layers (`bd:n`)** | F2 | `rhythmLayerToStrudelLine`; `RhythmLayer.sampleIndex?: number` | Subsumed | Yes (same bump) | Exposes the dirt-samples multiple variants (`RolandTR909_hh` has 4). Default absent → byte-identical. |
+| C-6 | **Expanded built-in rhythm sound set** (add `cr` crash, `rd` ride, `sh` shakers, `cb` cowbell, `tb` tambourine, `perc`, `misc` from dirt-samples to the `Sound` union and `SK_SOUNDS`) | F2 | `Sound` union in `layers.ts`; `SK_SOUNDS` in `schema.ts` and `persistence.ts` | No separate ADR — covered by sound-attribute ADR | Yes (widening `SK_SOUNDS` enum) | Dirt-samples already loaded at init. Old sessions with the 9 existing sounds parse fine; new sounds only appear in new layers. |
+| C-7 | **Short non-looping Tonnetz chord preview (F3)** | F3 | New `previewChord(notes, durationSec)` function in `src/audio/strudel.ts` using direct Web Audio API (not the Strudel cyclic scheduler); does NOT touch `nowPlaying` transport state when a session is playing | Yes — Non-looping preview audio path ADR (one-shot fire decoupled from the cyclic scheduler/`nowPlaying`; see ADR Triggers in phase file) | No (no persistence; preview is always ephemeral) | Must not interrupt a running session's `nowPlaying` state. Duration controlled by `AudioContext` scheduling, not Strudel BPM. |
+| C-8 | **Sound-change for an already-selected chord on the Pentagrama** | F1 (already-selected chord) | Requires surfacing `_selectedSlotIdx` from `pentagrama-scene.ts` as a reactive store (new `selectedSlotStore`); a `setChordInstrument(index, instrument)` action in `session.ts`; Header.svelte instrument `<select>` responds to the reactive slot index | Subsumed under C-1's ADR (data model handles it; selection mechanism is UI) | No additional bump beyond C-1 | Design question: writable store vs. callback. Resolve via OQ-3. |
+| C-9 | **Sound-change for an already-defined rhythm layer** | F2 (already-defined layer) | New `setLayerSound(index, sound)` store action in `session.ts`; a sound selector per layer row in Header.svelte rhythm block (already renders layer list) | None | No additional bump beyond C-6 | Simpler than C-8 — no PIXI reactive store needed; layer index comes from `$sessionStore.rhythm.layers` enumerate. |
+
+---
+
+### Deferred register
+
+These are recorded as future options with reasons. They are NOT proposed for this initiative.
+
+| # | Attribute / Feature | Reason for deferral |
+|---|---|---|
+| D-1 | `supersaw`, `pulse` waveforms | **Not available in @strudel/web@1.0.3**. Require either a version upgrade (not in scope) or custom `registerSynthSounds` extension. Record for a future version-upgrade phase. |
+| D-2 | GM soundfonts (`gm_piano`, `gm_strings`, etc.) | `registerSoundfonts()` commented-out in `@strudel/web/web.mjs`. Enabling adds a ~1-2 MB network fetch at init, changes the init path, requires testing the soundfont atlas load. High operational risk for this initiative. Record for a future audio-enhancement phase. |
+| D-3 | `.lpf()` / `.hpf()` as user-controllable per-chord parameters | The existing hardcoded `lpf(1200)` already shapes the sawtooth to be listenable. Exposing both `lpf` and `hpf` as per-chord attributes alongside `instrument`, `room`, `decay` increases the control surface significantly. The "no added complexity" principle argues for deferring until the simpler C-1/C-2/C-3 set is validated. |
+| D-4 | Filter envelope (`lpa`, `lpd`, `lps`, `lpq`, `lpenv`) | 4-5 correlated parameters; high interaction complexity. Useful for expressive pads but requires a dedicated envelope UI. Defer to a "sound design" phase. |
+| D-5 | FM synthesis (`.fm()` / `.fmh()`) | Medium complexity; good for metallic/bell timbres but not obviously needed for the initial chord-sound selector. Defer to an "extended timbre" phase after C-1 is validated. |
+| D-6 | `.pan()` per chord/layer | Stereo placement is an advanced mix parameter. Low impact for initial sound selection; adds a per-element attribute. Defer. |
+| D-7 | `.delay()` per chord/layer | Useful but an advanced effect; adds a per-element attribute. Defer with D-6. |
+| D-8 | User-supplied samples (load from disk / URL) | Requires a new loading path (`samples({...}, baseURL)`), persistence model for user sample maps, and browser security considerations (CORS, file access). No-assets-in-repo rule means samples never live in the repo. Potential ADR for a future phase if the Pilot wants this capability. |
+| D-9 | `.n()` + `.scale()` for pitch selection | Bypasses Orbifold's geometric Tonnetz/voice-leading model — the app's core value. Reject for harmony voice output. Could appear in user's free-code drawer but must not be generated by the harmony engine. |
+| D-10 | `.add()` for transposition | Same reason as D-9 — contradicts deterministic voice-leading. |
+| D-11 | `rand`, `perlin`, `sine`/`tri` signals as parameter drivers | Non-deterministic: breaks reproducible sessions. Not compatible with the "saved-session bytes unchanged" invariant for existing sessions. Could be a future "live modulation" feature with explicit UI affordance, but not this initiative. |
+| D-12 | `.struct()`, `.ribbon()`, `.seg()` as structural tools | Paradigm-shifting: require users to think in event structures or ribbon-of-time units. Increase complexity without direct F1/F2/F3 benefit. |
+| D-13 | `.orbit()` assignment | Advanced multi-bus mixing; one reverb/delay per orbit with interaction hazards when patterns share an orbit. Not a sound selector; defer to a "mixing" phase. |
+| D-14 | `slider()`, `._pianoroll()`, `._scope()` | REPL-only tools, not applicable to Orbifold's architecture. Permanently out of scope. |
+| D-15 | Note-level free placement (`NoteSlot`, pitch-drag) | Already explicitly deferred by Pilot at Phase 10 (CLAUDE.md §Phase 10). Not in this initiative. |
+
+---
+
+### ADR triggers confirmed for Phase 02 scoping
+
+1. **Sound-attribute data model ADR** — Trigger on Phase 02 step 01 (covers C-1 through C-6, C-8, C-9). Defines: typed `instrument?`, `room?`, `decay?`, `bank?`, `sampleIndex?` on `Chord` and `RhythmLayer`; codegen default-preserving pattern; schema bump strategy.
+2. **Non-looping preview audio path ADR** — Trigger on Phase 02 step covering F3 (C-7). Defines: `previewChord` function contract, Web Audio API approach, decoupling from `nowPlaying` transport state.
+3. **User-sample loading ADR** — Trigger if the Pilot includes user-supplied samples in scope (D-8). **Not proposed for this initiative.**
+
+---
+
+## (d) Open questions for the Pilot
+
+The following OQ-N items must be resolved before Phase 02 scoping. Each item includes options and a one-line Planner recommendation (marked **Rec:**).
+
+---
+
+**OQ-1 — Chord instrument set (F1): which waveforms to expose?**
+
+The confirmed-available waveforms in `@strudel/web@1.0.3` are: `sawtooth` (current default), `sine`, `square`, `triangle`, plus noise types (`white`, `pink`, `brown`).
+
+Options:
+- A) Expose the 4 oscillator waveforms only: `sawtooth / sine / square / triangle`.
+- B) Expose oscillators + noise types (6 sounds; noise types used as harmonic textures are unusual but valid).
+- C) Defer to a later phase and enable `supersaw`/`pulse` after a version bump (out of scope for this initiative).
+
+**Rec:** Option A. The 4 waveforms cover the meaningful timbral range (bright → warm). Noise types (`white`/`pink`) as chord instruments would be confusing to most users and contradicts "no added complexity."
+
+---
+
+**OQ-2 — Rhythm sounds and samples (F2): scope of expansion?**
+
+Options:
+- A) Expand `Sound` union with additional dirt-sample names (`cr`, `rd`, `sh`, `cb`, `tb`, `perc`, `misc`) + expose sample-index variant (`bd:n`) + bank selector (TR808/TR909). No user-supplied samples.
+- B) Same as A plus user-supplied samples (load from URL or browser file picker; requires ADR + persistence model — deferred D-8).
+- C) Sample-index only (minimal change — just expose `bd:n`).
+
+**Rec:** Option A. Adds useful sonic variety (crash, ride, cowbell are standard drum palette) without user-sample complexity. All dirt-samples already loaded at init.
+
+---
+
+**OQ-3 — Changing an already-defined chord's sound (F1): selection surface?**
+
+The phase spec says the control lives "after tonalidad / escala / octava" in the top bar. `_selectedSlotIdx` in `pentagrama-scene.ts` is currently module-level, not a reactive Svelte store.
+
+Options:
+- A) Promote `_selectedSlotIdx` to a Svelte writable store (e.g., `selectedSlotIdxStore`); Header.svelte reacts to it and shows the instrument selector when a slot is selected.
+- B) The instrument selector in the top bar operates globally (applies to all new chords going forward) — no per-slot retroactive change except via ProgressionStrip tap-to-select + re-apply.
+- C) Instrument selector applies to the most-recently-tapped chord (implicit selection via `nowPlaying.source === 'chord'` with the chord index tracked separately).
+
+**Rec:** Option A. Clean reactive architecture; consistent with the Phase 10 slot-editor pattern. Resolves to a single source of truth for "selected slot."
+
+---
+
+**OQ-4 — Tonnetz preview behavior (F3): one-shot mechanism and transport interaction?**
+
+The key constraint: a preview that does not overwrite a running session's `nowPlaying` state.
+
+Options:
+- A) Direct Web Audio API: synthesize a short chord burst using `AudioContext.createOscillator()` with scheduled `stop()` after ~0.5 s. Completely decoupled from the Strudel scheduler and `nowPlaying`. Does not require a new Strudel pattern evaluation.
+- B) Short Strudel pattern + timed `hush()`: run `evaluate(code.clip(1))` and schedule `hush()` after one bar. Interrupts the running session; clobbers `nowPlaying`.
+- C) A secondary Strudel scheduler instance (high complexity; not feasible with `@strudel/web@1.0.3`'s private-scheduler architecture).
+
+**Rec:** Option A. Cleanest decoupling; Web Audio API is already imported via `getAudioContext()` in `src/audio/strudel.ts`. Duration is BPM-independent.
+
+---
+
+**OQ-5 — Secondary timbre/space attributes (F1): which join this initiative?**
+
+From the candidate list, C-2 (`.room()`), C-3 (`.decay()`) are low-lift additions once C-1's schema exists.
+
+Options:
+- A) Include C-1 (instrument), C-2 (room), C-3 (decay) in Phase 02. One schema bump covers all three.
+- B) C-1 only (instrument). Add C-2/C-3 in Phase 03 if the Pilot approves.
+- C) C-1 + C-2 only (instrument + room). Decay is more complex to surface in UI without an envelope panel.
+
+**Rec:** Option A. All three share the same schema bump; implementing all three in one phase avoids a second bump later. C-3 `.decay()` with a simple range slider (e.g., 0.05–1.0 s) is straightforward.
+
+---
+
+**OQ-6 — Data model & schema bump strategy: version bump and backward-read behavior?**
+
+Adding optional attributes (`instrument?`, `room?`, `decay?`, `bank?`, `sampleIndex?`) is additive. Two choices:
+
+Options:
+- A) **Bump both `SCHEMA_VERSION` (agent) and `SESSION_SCHEMA_VERSION` (persistence) from 2→3.** Old sessions (v2) fail the `z.literal(3)` check and are **dropped** (existing graceful-degradation behavior — Pilot-confirmed precedent at Phase 09 ADR 0013 D1). No migration function needed. Clean but lossy.
+- B) **Add optional fields without a version bump.** Zod `optional()` fields parse successfully from old v2 blobs (they just parse as `undefined`). The version number stays at 2. Risky: if a future breaking change also bumps 2→3, there is no way to distinguish pre-new-fields sessions from post-new-fields ones.
+- C) **Bump 2→3 with a migration function** that reads v2 blobs and sets new fields to defaults. Backward-compatible reads. Higher implementation cost.
+
+**Rec:** Option A (precedent from Phase 09) unless the Pilot wants backward-compatible migration (Option C). The drop-on-parse graceful degradation is already the established contract; users will simply start a new session. Document clearly.
+
+---
+
+**OQ-7 — Agent exposure: which new attributes may the agent set?**
+
+Options:
+- A) Agent may set `instrument` (on each chord in `progression`), `bank` / `sampleIndex` (on each layer). The agent schema (`HarmonyChordCoreSchema`, `RhythmLayerSchema`) gains the new optional fields. Technical tokens (`sawtooth`, `RolandTR909`, sample names) stay verbatim (OQ-6 precedent from ADR 0017 i18n).
+- B) Agent may NOT set new sound attributes — they are UI-only selections (no agent schema change).
+- C) Agent may set instrument for harmony only (not rhythm banks/sample indices), to keep the rhythm agent schema minimal.
+
+**Rec:** Option A. The agent already sets `sound` for rhythm layers; extending that to `bank`/`sampleIndex` is natural. Instrument names are technical tokens (verbatim, like `P·L·R` and Euclidean parameters).
+
+---
+
+**OQ-8 — ADR triggers: confirm which ADRs to open at Phase 02?**
+
+The phase file identifies 3 potential ADR triggers. Proposed confirmation:
+
+Options:
+- A) Open **two ADRs**: (i) Sound-attribute data model (mandatory for C-1 through C-9), (ii) Non-looping preview audio path (mandatory for C-7/F3). Hold the user-sample ADR for a later phase (D-8 deferred).
+- B) Open all three ADRs upfront (including user-sample loading), even if user samples are deferred.
+- C) Fold both into a single "sound surface expansion" ADR.
+
+**Rec:** Option A. Two focused ADRs are easier to review. Opening the user-sample ADR preemptively creates scope-creep risk for this initiative.
+
+---
+
+*(Discovery document complete — sections (a) through (d). Ready for Pilot Checkpoint #1.)*
