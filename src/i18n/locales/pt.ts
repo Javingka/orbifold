@@ -258,6 +258,11 @@ const pt: Dictionary = {
     addBlockOption: '＋ bloco…',
     // {type} and {name} interpolated
     addBlockEntry: '+ {type}: {name}',
+    // "abrir no editor" button on block cards with snapshots
+    openBlock: '✎ abrir',
+    openBlockTip: 'Restaurar este bloco no editor para editá-lo',
+    legacyBlockTip:
+      'Criado antes de os snapshots editáveis estarem disponíveis. Pode ser reproduzido, mas não pode ser reaberto no editor.',
   },
 
   code: {

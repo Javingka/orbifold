@@ -118,6 +118,13 @@ const HarmonyRestSchema = z.object({
  * Root note name and quality are required; gain and bars are optional.
  *
  * Prototype §7: `quality ∈ {maj,min,dim,aug}`.
+ *
+ * NOTE: Block snapshot fields (GrooveSnapshot, ArmoniaSnapshot, SesionSnapshot)
+ * are a composition-layer concern defined in src/core/composition/snapshot.ts.
+ * They are NOT part of agent output and must NOT be added here. Agent output
+ * describes live session mutations; block persistence is a separate concern.
+ * See ADR 0020 D7. Any future F3 (AI improvisation) requirement for agent-to-block
+ * interaction must be governed by a new ADR before any schema change is made.
  */
 const HarmonyChordCoreSchema = z.object({
   root: z.string(),

@@ -4,19 +4,34 @@
 // Types from ORBIFOLD_KICKOFF.md §5; logic ported from
 // reference/orbifold.html lines 1931–1938, 2054–2065.
 // No DOM / PIXI / Svelte imports — pure engine, unit-testable.
+//
+// Phase 01 step 01.3 (editable-composition): Block extended with optional
+// `snapshot?` field per ADR 0020 D2.
+
+import type { BlockSnapshot } from './snapshot.js';
 
 /**
  * A saved pattern block (groove, harmony, or full session).
  * Matches ORBIFOLD_KICKOFF.md §5 `Block` interface exactly.
+ *
+ * Phase 01 step 01.3 (editable-composition): `snapshot` field added per ADR 0020 D2.
+ * `code` is kept as the canonical Strudel playback field (byte-identical-at-default
+ * guarantee — `buildComposition` reads only `code`).
  */
 export interface Block {
   id: string;
   name: string;
   type: 'groove' | 'armonia' | 'sesion';
-  /** Strudel code string for this block. */
+  /** Strudel code string for this block. Canonical playback field. */
   code: string;
   /** Duration in bars (1 Strudel cycle = 1 bar of 4/4). */
   bars: number;
+  /**
+   * Editable-state snapshot captured at save time. Present on blocks created
+   * after Phase 01 step 01.3. Absent on legacy blocks (snapshot-less).
+   * ADR 0020 D2.
+   */
+  snapshot?: BlockSnapshot;
 }
 
 /**

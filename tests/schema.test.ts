@@ -27,8 +27,11 @@ beforeEach(() => {
 // ── SCHEMA_VERSION ─────────────────────────────────────────────────────────
 
 describe('SCHEMA_VERSION', () => {
-  // Bumped to 4 in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D6.
-  it('is numeric 4 (bumped in Phase 03 harmonic-rhythm-improvements — ADR 0019 D6)', () => {
+  // Remains 4 after editable-composition Phase 01 step 01.4 — ADR 0020 D7.
+  // The agent schema is NOT bumped in this phase (block snapshots are a
+  // composition-layer concern, not agent output — see ADR 0020 D7 and the
+  // JSDoc guard added to HarmonyChordCoreSchema in src/agent/schema.ts).
+  it('is numeric 4 — unchanged in editable-composition Phase 01 (ADR 0020 D7)', () => {
     expect(SCHEMA_VERSION).toBe(4);
   });
 });
@@ -666,8 +669,8 @@ describe('HarmonyChordCoreSchema — ADR 0019 D6 preset + filter/envelope fields
     }
   });
 
-  // A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6).
-  it('A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6)', () => {
+  // A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6 — unchanged per ADR 0020 D7).
+  it('A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6 — unchanged by editable-composition Phase 01 per ADR 0020 D7)', () => {
     expect(SCHEMA_VERSION).toBe(4);
   });
 });

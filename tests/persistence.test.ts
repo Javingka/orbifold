@@ -58,7 +58,7 @@ beforeEach(() => {
 // ── Test fixtures ──────────────────────────────────────────────────────────
 
 const MINIMAL_SAVED: SavedSession = {
-  version: 4,
+  version: 5,
   bpm: 120,
   view: 'harmony',
   chordMode: 'chord',
@@ -68,7 +68,7 @@ const MINIMAL_SAVED: SavedSession = {
 };
 
 const FULL_SAVED: SavedSession = {
-  version: 4,
+  version: 5,
   bpm: 140,
   view: 'rhythm',
   chordMode: 'arp',
@@ -179,12 +179,16 @@ describe('SavedSessionSchema', () => {
     expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 3 }).success).toBe(false);
   });
 
-  it('accepts version 4 (current schema version — ADR 0019 D5)', () => {
-    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 4 }).success).toBe(true);
+  it('rejects version 4 (old schema — lossy drop per ADR 0020 D5)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 4 }).success).toBe(false);
   });
 
-  it('rejects version 5 (unknown future version)', () => {
-    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 5 }).success).toBe(false);
+  it('accepts version 5 (current schema version — ADR 0020 D5)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 5 }).success).toBe(true);
+  });
+
+  it('rejects version 6 (unknown future version)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 6 }).success).toBe(false);
   });
 
   it('rejects bpm below 40', () => {
@@ -374,7 +378,7 @@ describe('saveSession / listSavedSessions / loadSavedSession / deleteSession', (
     expect(loaded).not.toBeNull();
     expect(loaded?.bpm).toBe(140);
     expect(loaded?.harmony.root).toBe(5);
-    expect(loaded?.version).toBe(4);
+    expect(loaded?.version).toBe(5);
   });
 
   it('loadSavedSession returns null for an unknown session name', () => {
@@ -446,10 +450,10 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
   });
 
   // A-06-06: chord-only session with current schema version still parses.
-  it('version-4 session with chord-only progression parses against SavedSessionSchema', () => {
-    // A chord-only session (no isRest fields) at schema v4 must parse correctly.
-    const v4Payload = {
-      version: 4,
+  it('version-5 session with chord-only progression parses against SavedSessionSchema', () => {
+    // A chord-only session (no isRest fields) at schema v5 must parse correctly.
+    const v5Payload = {
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -462,7 +466,7 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    const result = SavedSessionSchema.safeParse(v4Payload);
+    const result = SavedSessionSchema.safeParse(v5Payload);
     expect(result.success).toBe(true);
     if (result.success) {
       // Chord slot must parse correctly as a chord (not a rest).
@@ -475,8 +479,8 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
     }
   });
 
-  // version-1, version-2, version-3 blobs are dropped (lossy drop per ADR 0013 D1 / ADR 0018 D3 / ADR 0019 D5).
-  it('version-1 blob fails schema v4 validation and is dropped (ADR 0013 D1)', () => {
+  // version-1, version-2, version-3, version-4 blobs are dropped (lossy drop).
+  it('version-1 blob fails schema v5 validation and is dropped (ADR 0013 D1)', () => {
     const v1Payload = {
       version: 1,
       bpm: 120,
@@ -489,7 +493,7 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
     expect(SavedSessionSchema.safeParse(v1Payload).success).toBe(false);
   });
 
-  it('version-2 blob fails schema v4 validation and is dropped (ADR 0018 D3)', () => {
+  it('version-2 blob fails schema v5 validation and is dropped (ADR 0018 D3)', () => {
     const v2Payload = {
       version: 2,
       bpm: 120,
@@ -527,9 +531,9 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
 
 // ── Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D3 schema v3 (now dropped) ─────────
 
-describe('ADR 0018 D3: schema v3 → now dropped by v4 bump (A-02-05, A-02-06)', () => {
-  // A-02-05: v2 persistence blob is gracefully dropped (v3 → v4 bump means v3 also dropped now)
-  it('A-02-05: v2 blob fails z.literal(4) check and is dropped (ADR 0013 D1)', () => {
+describe('ADR 0018 D3: schema v3 → now dropped by v5 bump (A-02-05, A-02-06)', () => {
+  // A-02-05: v2 persistence blob is gracefully dropped (v3 → v4 → v5 bump means v2 also dropped)
+  it('A-02-05: v2 blob fails z.literal(5) check and is dropped (ADR 0013 D1)', () => {
     const v2Payload = {
       version: 2,
       bpm: 120,
@@ -543,8 +547,8 @@ describe('ADR 0018 D3: schema v3 → now dropped by v4 bump (A-02-05, A-02-06)',
     expect(result.success).toBe(false);
   });
 
-  // v3 blobs are now also dropped (ADR 0019 D5 — version literal bumped to 4).
-  it('v3 blob fails z.literal(4) check and is dropped (ADR 0019 D5)', () => {
+  // v3 blobs are dropped (ADR 0019 D5 — version literal bumped to 4, now 5).
+  it('v3 blob fails z.literal(5) check and is dropped (ADR 0019 D5)', () => {
     const v3Payload = {
       version: 3,
       bpm: 120,
@@ -558,10 +562,10 @@ describe('ADR 0018 D3: schema v3 → now dropped by v4 bump (A-02-05, A-02-06)',
     expect(result.success).toBe(false);
   });
 
-  // A-02-06: v4 blob with instrument/room/decay on a chord parses successfully
-  it('A-02-06: v4 blob with instrument/room/decay on a chord parses successfully', () => {
+  // A-02-06: v5 blob with instrument/room/decay on a chord parses successfully
+  it('A-02-06: v5 blob with instrument/room/decay on a chord parses successfully', () => {
     const v4WithAttrs = {
-      version: 4,
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -589,10 +593,10 @@ describe('ADR 0018 D3: schema v3 → now dropped by v4 bump (A-02-05, A-02-06)',
     }
   });
 
-  // A-02-06 variant: v4 blob with no new fields still parses; fields are undefined
-  it('A-02-06 variant: v4 blob without new sound fields parses; fields are undefined', () => {
+  // A-02-06 variant: v5 blob with no new fields still parses; fields are undefined
+  it('A-02-06 variant: v5 blob without new sound fields parses; fields are undefined', () => {
     const v4NoAttrs = {
-      version: 4,
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -652,11 +656,11 @@ describe('ADR 0018 D3: schema v3 → now dropped by v4 bump (A-02-05, A-02-06)',
 });
 
 // ── Phase 09 (step 09.3) — view-type schema (A-09-01, A-09-03) ─────────────
-// Schema is now v4 (ADR 0019 D5) but view-type behavior is preserved.
+// Schema is now v5 (ADR 0020 D5) but view-type behavior is preserved.
 
 describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03)", () => {
-  // A-09-01 + A-09-03: session saved with view:'code' round-trips under schema v4.
-  it("round-trips a session with view:'code' under schema v4 (A-09-01)", () => {
+  // A-09-01 + A-09-03: session saved with view:'code' round-trips under schema v5.
+  it("round-trips a session with view:'code' under schema v5 (A-09-01)", () => {
     const stateWithCode: SessionState = {
       ...FULL_STATE,
       view: 'code',
@@ -664,8 +668,8 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
     const serialized = serializeSession(stateWithCode);
     // Serialized view must be 'code'.
     expect(serialized.view).toBe('code');
-    expect(serialized.version).toBe(4);
-    // Schema v4 accepts 'code'.
+    expect(serialized.version).toBe(5);
+    // Schema v5 accepts 'code'.
     const parseResult = SavedSessionSchema.safeParse(
       JSON.parse(JSON.stringify(serialized)) as unknown
     );
@@ -680,7 +684,7 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
   // A-09-03: an unrecognized view string falls back to 'harmony' (safe fallback).
   it("unrecognized view string defaults to 'harmony' via .catch fallback (A-09-03)", () => {
     const unknownViewPayload = {
-      version: 4,
+      version: 5,
       bpm: 120,
       view: 'unknown-future-view',
       chordMode: 'chord',
@@ -696,17 +700,17 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
     expect(result.data.view).toBe('harmony');
   });
 
-  // A-09-03: SESSION_SCHEMA_VERSION is now 4 (ADR 0019 D5).
-  it('SESSION_SCHEMA_VERSION is 4 (A-09-03 — bumped in ADR 0019 D5)', () => {
-    expect(SESSION_SCHEMA_VERSION).toBe(4);
+  // A-09-03: SESSION_SCHEMA_VERSION is now 5 (ADR 0020 D5).
+  it('SESSION_SCHEMA_VERSION is 5 (A-09-03 — bumped in ADR 0020 D5)', () => {
+    expect(SESSION_SCHEMA_VERSION).toBe(5);
   });
 
   // A-09-01: all five view-type strings are accepted by the schema.
   it.each(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)(
-    "schema v4 accepts view:'%s' (A-09-01)",
+    "schema v5 accepts view:'%s' (A-09-01)",
     (viewValue) => {
       const payload = {
-        version: 4,
+        version: 5,
         bpm: 120,
         view: viewValue,
         chordMode: 'chord',
@@ -723,11 +727,11 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
   );
 });
 
-// ── Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D5 schema v4 (A-03-11) ──────────
+// ── Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D5 schema (now at v5) (A-03-11) ────
 
-describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A-03-11)', () => {
-  // A-03-11: v3 blob is rejected by z.literal(4) and loadSavedSession returns null (no crash).
-  it('A-03-11: v3 blob fails z.literal(4) check — safeParse returns false (ADR 0019 D5)', () => {
+describe('ADR 0019 D5: schema (now v5) — preset + filter/envelope + lossy v3 drop (A-03-11)', () => {
+  // A-03-11: v3 blob is rejected by z.literal(5) and loadSavedSession returns null (no crash).
+  it('A-03-11: v3 blob fails z.literal(5) check — safeParse returns false (ADR 0019 D5)', () => {
     const v3Payload = {
       version: 3,
       bpm: 120,
@@ -740,10 +744,10 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
     expect(SavedSessionSchema.safeParse(v3Payload).success).toBe(false);
   });
 
-  // A-03-11: v4 blob with preset field parses successfully.
-  it('A-03-11: v4 blob with preset: "piano" on a chord parses successfully', () => {
-    const v4WithPreset = {
-      version: 4,
+  // A-03-11: v5 blob with preset field parses successfully.
+  it('A-03-11: v5 blob with preset: "piano" on a chord parses successfully', () => {
+    const v5WithPreset = {
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -756,7 +760,7 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    const result = SavedSessionSchema.safeParse(v4WithPreset);
+    const result = SavedSessionSchema.safeParse(v5WithPreset);
     expect(result.success).toBe(true);
     if (result.success) {
       const chord = result.data.harmony.progression[0];
@@ -766,10 +770,10 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
     }
   });
 
-  // A-03-11: v4 blob with all new filter/envelope fields parses successfully.
-  it('A-03-11: v4 blob with full filter/envelope fields parses successfully', () => {
-    const v4WithAll = {
-      version: 4,
+  // A-03-11: v5 blob with all new filter/envelope fields parses successfully.
+  it('A-03-11: v5 blob with full filter/envelope fields parses successfully', () => {
+    const v5WithAll = {
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -797,7 +801,7 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    const result = SavedSessionSchema.safeParse(v4WithAll);
+    const result = SavedSessionSchema.safeParse(v5WithAll);
     expect(result.success).toBe(true);
     if (result.success) {
       const chord = result.data.harmony.progression[0];
@@ -815,10 +819,10 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
     }
   });
 
-  // A-03-11: v4 blob with no new fields still parses (backward-compatible optional fields).
-  it('A-03-11: v4 blob with none of the new fields parses; new fields are undefined', () => {
-    const v4NoNewFields = {
-      version: 4,
+  // A-03-11: v5 blob with no new fields still parses (backward-compatible optional fields).
+  it('A-03-11: v5 blob with none of the new fields parses; new fields are undefined', () => {
+    const v5NoNewFields = {
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -831,7 +835,7 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    const result = SavedSessionSchema.safeParse(v4NoNewFields);
+    const result = SavedSessionSchema.safeParse(v5NoNewFields);
     expect(result.success).toBe(true);
     if (result.success) {
       const chord = result.data.harmony.progression[0];
@@ -902,8 +906,8 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
 
   // A-03-11: invalid preset name is rejected by z.enum.
   it('A-03-11: invalid preset name rejected by z.enum', () => {
-    const v4BadPreset = {
-      version: 4,
+    const v5BadPreset = {
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -916,13 +920,13 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    expect(SavedSessionSchema.safeParse(v4BadPreset).success).toBe(false);
+    expect(SavedSessionSchema.safeParse(v5BadPreset).success).toBe(false);
   });
 
   // A-03-11: attack below 0 is rejected.
   it('A-03-11: attack below 0 is rejected (min: 0)', () => {
-    const v4BadAttack = {
-      version: 4,
+    const v5BadAttack = {
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -935,13 +939,13 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    expect(SavedSessionSchema.safeParse(v4BadAttack).success).toBe(false);
+    expect(SavedSessionSchema.safeParse(v5BadAttack).success).toBe(false);
   });
 
   // A-03-11: sustain above 1 is rejected.
   it('A-03-11: sustain above 1 is rejected (max: 1)', () => {
-    const v4BadSustain = {
-      version: 4,
+    const v5BadSustain = {
+      version: 5,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -954,6 +958,249 @@ describe('ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A
       rhythm: { layers: [] },
       composition: { blocks: [], tracks: [] },
     };
-    expect(SavedSessionSchema.safeParse(v4BadSustain).success).toBe(false);
+    expect(SavedSessionSchema.safeParse(v5BadSustain).success).toBe(false);
+  });
+});
+
+// ── ADR 0020 D5: schema v5 — Block snapshot persistence (A-01-07) ────────────
+
+describe('ADR 0020 D5: schema v5 — Block snapshot persistence (A-01-07)', () => {
+  // A-01-07: v4 blob is rejected by z.literal(5) → safeParse returns false → session reset.
+  it('A-01-07: v4 blob fails z.literal(5) check — safeParse returns false (ADR 0020 D5)', () => {
+    const v4Payload = {
+      version: 4,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: { root: 0, mode: 'major', octave: 3, progression: [] },
+      rhythm: { layers: [] },
+      composition: { blocks: [], tracks: [] },
+    };
+    expect(SavedSessionSchema.safeParse(v4Payload).success).toBe(false);
+  });
+
+  // A-01-07: v5 session with a groove block snapshot round-trips correctly.
+  it('A-01-07: v5 groove block snapshot round-trips serialize → parse → deserialize', () => {
+    const stateWithGrooveSnapshot: SessionState = {
+      ...FULL_STATE,
+      composition: {
+        blocks: [
+          {
+            id: 'b1',
+            name: 'My Groove',
+            type: 'groove',
+            code: 's("bd")',
+            bars: 4,
+            snapshot: {
+              type: 'groove',
+              layers: [
+                {
+                  sound: 'bd',
+                  steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+                  muted: false,
+                },
+                {
+                  sound: 'hh',
+                  steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                  euclid: '8,16',
+                },
+              ],
+            },
+          },
+        ],
+        tracks: [],
+      },
+    };
+    const serialized = serializeSession(stateWithGrooveSnapshot);
+    const rawBlock = serialized.composition.blocks[0];
+    // Snapshot must be in the serialized form.
+    expect(rawBlock.snapshot).toBeDefined();
+    expect(rawBlock.snapshot?.type).toBe('groove');
+
+    const raw = JSON.parse(JSON.stringify(serialized)) as unknown;
+    const parseResult = SavedSessionSchema.safeParse(raw);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+    const back = deserializeSession(parseResult.data);
+    const backBlock = back.composition.blocks[0];
+    expect(backBlock.snapshot).toBeDefined();
+    expect(backBlock.snapshot?.type).toBe('groove');
+    if (backBlock.snapshot?.type === 'groove') {
+      expect(backBlock.snapshot.layers).toHaveLength(2);
+      expect(backBlock.snapshot.layers[0].sound).toBe('bd');
+      expect(backBlock.snapshot.layers[0].steps).toHaveLength(16);
+      expect(backBlock.snapshot.layers[0].muted).toBe(false);
+      expect(backBlock.snapshot.layers[1].euclid).toBe('8,16');
+    }
+  });
+
+  // A-01-07: v5 session with an armonia block snapshot round-trips correctly.
+  it('A-01-07: v5 armonia block snapshot round-trips serialize → parse → deserialize', () => {
+    const stateWithArmoniaSnapshot: SessionState = {
+      ...FULL_STATE,
+      composition: {
+        blocks: [
+          {
+            id: 'b2',
+            name: 'My Harmony',
+            type: 'armonia',
+            code: 'note("C3 E3 G3")',
+            bars: 2,
+            snapshot: {
+              type: 'armonia',
+              root: 0,
+              mode: 'major',
+              octave: 3,
+              chordMode: 'chord',
+              progression: [
+                { rootPc: 0, qual: 'maj', gain: 0.6, preset: 'piano' },
+                { isRest: true, bars: 1 },
+                { rootPc: 7, qual: 'maj', gain: 0.7, instrument: 'sine', lpf: 1800 },
+              ],
+            },
+          },
+        ],
+        tracks: [],
+      },
+    };
+    const serialized = serializeSession(stateWithArmoniaSnapshot);
+    const rawBlock = serialized.composition.blocks[0];
+    expect(rawBlock.snapshot?.type).toBe('armonia');
+
+    const raw = JSON.parse(JSON.stringify(serialized)) as unknown;
+    const parseResult = SavedSessionSchema.safeParse(raw);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+    const back = deserializeSession(parseResult.data);
+    const backBlock = back.composition.blocks[0];
+    expect(backBlock.snapshot?.type).toBe('armonia');
+    if (backBlock.snapshot?.type === 'armonia') {
+      expect(backBlock.snapshot.root).toBe(0);
+      expect(backBlock.snapshot.mode).toBe('major');
+      expect(backBlock.snapshot.octave).toBe(3);
+      expect(backBlock.snapshot.chordMode).toBe('chord');
+      expect(backBlock.snapshot.progression).toHaveLength(3);
+      // chord entry with preset
+      const slot0 = backBlock.snapshot.progression[0];
+      expect('isRest' in slot0).toBe(false);
+      if (!('isRest' in slot0)) {
+        expect(slot0.rootPc).toBe(0);
+        expect(slot0.preset).toBe('piano');
+      }
+      // rest entry
+      const slot1 = backBlock.snapshot.progression[1];
+      expect('isRest' in slot1 && slot1.isRest).toBe(true);
+      expect(slot1.bars).toBe(1);
+      // chord with instrument + lpf
+      const slot2 = backBlock.snapshot.progression[2];
+      if (!('isRest' in slot2)) {
+        expect(slot2.instrument).toBe('sine');
+        expect(slot2.lpf).toBe(1800);
+      }
+    }
+  });
+
+  // A-01-07: v5 session with a sesion block snapshot round-trips correctly.
+  it('A-01-07: v5 sesion block snapshot round-trips serialize → parse → deserialize', () => {
+    const stateWithSesionSnapshot: SessionState = {
+      ...FULL_STATE,
+      composition: {
+        blocks: [
+          {
+            id: 'b3',
+            name: 'Full Session',
+            type: 'sesion',
+            code: 'stack(s("bd"), note("C3"))',
+            bars: 4,
+            snapshot: {
+              type: 'sesion',
+              groove: {
+                type: 'groove',
+                layers: [{ sound: 'sd', steps: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0] }],
+              },
+              armonia: {
+                type: 'armonia',
+                root: 5,
+                mode: 'minor',
+                octave: 4,
+                chordMode: 'arp',
+                progression: [{ rootPc: 5, qual: 'min', gain: 0.6 }],
+              },
+            },
+          },
+        ],
+        tracks: [],
+      },
+    };
+    const serialized = serializeSession(stateWithSesionSnapshot);
+    const rawBlock = serialized.composition.blocks[0];
+    expect(rawBlock.snapshot?.type).toBe('sesion');
+
+    const raw = JSON.parse(JSON.stringify(serialized)) as unknown;
+    const parseResult = SavedSessionSchema.safeParse(raw);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+    const back = deserializeSession(parseResult.data);
+    const backBlock = back.composition.blocks[0];
+    expect(backBlock.snapshot?.type).toBe('sesion');
+    if (backBlock.snapshot?.type === 'sesion') {
+      expect(backBlock.snapshot.groove.type).toBe('groove');
+      expect(backBlock.snapshot.groove.layers).toHaveLength(1);
+      expect(backBlock.snapshot.armonia.type).toBe('armonia');
+      expect(backBlock.snapshot.armonia.root).toBe(5);
+      expect(backBlock.snapshot.armonia.mode).toBe('minor');
+      expect(backBlock.snapshot.armonia.chordMode).toBe('arp');
+    }
+  });
+
+  // A-01-07: v5 session with a block that has NO snapshot loads as snapshot-less (undefined).
+  it('A-01-07: block without snapshot in v5 session loads as snapshot-less (undefined)', () => {
+    const v5WithoutSnapshot = {
+      version: 5,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: { root: 0, mode: 'major', octave: 3, progression: [] },
+      rhythm: { layers: [] },
+      composition: {
+        blocks: [{ name: 'Old Block', type: 'groove', code: 's("bd")', bars: 2 }],
+        tracks: [],
+      },
+    };
+    const result = SavedSessionSchema.safeParse(v5WithoutSnapshot);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const back = deserializeSession(result.data);
+    expect(back.composition.blocks).toHaveLength(1);
+    // snapshot field must be absent (undefined) — not an error, just legacy block
+    expect(back.composition.blocks[0].snapshot).toBeUndefined();
+    // block is still fully usable (has code, type, bars, name)
+    expect(back.composition.blocks[0].code).toBe('s("bd")');
+    expect(back.composition.blocks[0].type).toBe('groove');
+  });
+
+  // A-01-07: snapshot with an invalid discriminant value is rejected.
+  it('A-01-07: block with invalid snapshot discriminant type is rejected', () => {
+    const v5BadSnapshot = {
+      version: 5,
+      bpm: 120,
+      view: 'harmony',
+      chordMode: 'chord',
+      harmony: { root: 0, mode: 'major', octave: 3, progression: [] },
+      rhythm: { layers: [] },
+      composition: {
+        blocks: [
+          {
+            name: 'Bad Block',
+            type: 'groove',
+            code: 's("bd")',
+            bars: 2,
+            snapshot: { type: 'unknown-type', layers: [] },
+          },
+        ],
+        tracks: [],
+      },
+    };
+    expect(SavedSessionSchema.safeParse(v5BadSnapshot).success).toBe(false);
   });
 });

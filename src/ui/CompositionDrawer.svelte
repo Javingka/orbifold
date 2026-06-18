@@ -70,6 +70,7 @@
     deleteBlock,
     renameBlock,
     playBlockById,
+    openBlock,
     addTrack,
     removeTrack,
     addBlockToTrack,
@@ -660,43 +661,77 @@
       {:else}
         {#each $sessionStore.composition.blocks as b (b.id)}
           <div class="blk">
-            <!-- Type tag. Prototype line 1956: `<span class="tag ${tagClsOf(b)}">${tagOf(b)}</span>` -->
-            <span class="tag {tagClsOf(b)}">{tagOf(b)}</span>
+            <!--
+              Top row: type tag + editable name.
+            -->
+            <div class="blk-meta">
+              <!-- Type tag. Prototype line 1956: `<span class="tag ${tagClsOf(b)}">${tagOf(b)}</span>` -->
+              <span class="tag {tagClsOf(b)}">{tagOf(b)}</span>
+
+              <!--
+                Contenteditable name span.
+                Prototype line 1957–1960: `.nm contenteditable` + input handler.
+                handleBlockRename reads e.target.textContent, calls renameBlock.
+              -->
+              <span
+                class="nm"
+                contenteditable="true"
+                role="textbox"
+                tabindex="0"
+                on:input={(e) => handleBlockRename(e, b.id, b.name)}>{b.name}</span
+              >
+            </div>
 
             <!--
-              Contenteditable name span.
-              Prototype line 1957–1960: `.nm contenteditable` + input handler.
-              handleBlockRename reads e.target.textContent, calls renameBlock.
+              Bottom row: mini code preview + legacy badge/open button + action buttons.
+              flex-wrap: wrap (in CSS) ensures all buttons remain visible even on narrow cards.
             -->
-            <span
-              class="nm"
-              contenteditable="true"
-              role="textbox"
-              tabindex="0"
-              on:input={(e) => handleBlockRename(e, b.id, b.name)}>{b.name}</span
-            >
+            <div class="blk-actions">
+              <!-- Mini code preview. Prototype line 1958: `.mini` showing first 60 chars. -->
+              <span class="mini">{b.code.replace(/\n/g, ' ').slice(0, 60)}</span>
 
-            <!-- Mini code preview. Prototype line 1958: `.mini` showing first 60 chars. -->
-            <span class="mini">{b.code.replace(/\n/g, ' ').slice(0, 60)}</span>
+              <!--
+                Legacy indicator: shown on blocks without a snapshot (ADR 0020 D4).
+                Styled as a muted badge — does NOT indicate a playback problem.
+                Uses i18n key `composition.legacyBlockTip` for the tooltip text.
+              -->
+              {#if b.snapshot === undefined}
+                <span class="blk-legacy" title={$t('composition.legacyBlockTip')}>legacy</span>
+              {/if}
 
-            <!--
-              ▶ preview button. Prototype line 1961.
-              Calls playBlockById(b.id) → runs block code, sets nowPlaying 'block'.
-            -->
-            <button on:click={() => void playBlockById(b.id)}>▶</button>
+              <!--
+                ✎ open in editor button (ADR 0020 D6).
+                Visible only when block.snapshot is present — hidden for legacy blocks (D4).
+                Calls openBlock(b.id): restores snapshot into live session stores,
+                switches to the matching editor view (rhythm or harmony).
+              -->
+              {#if b.snapshot !== undefined}
+                <button
+                  class="blk-open"
+                  title={$t('composition.openBlockTip')}
+                  on:click={() => openBlock(b.id)}>{$t('composition.openBlock')}</button
+                >
+              {/if}
 
-            <!--
-              ↳ pista button. Prototype line 1962.
-              Creates NEW track pre-populated with this block (Pilot-confirmed OD-1).
-              Function: addBlockAsNewTrack (session.ts).
-            -->
-            <button on:click={() => addBlockAsNewTrack(b.id)}>↳ pista</button>
+              <!--
+                ▶ preview button. Prototype line 1961.
+                Calls playBlockById(b.id) → runs block code, sets nowPlaying 'block'.
+              -->
+              <button on:click={() => void playBlockById(b.id)}>▶</button>
 
-            <!--
-              🗑 delete button. Prototype lines 1963–1966.
-              Removes block from library AND all track references.
-            -->
-            <button on:click={() => deleteBlock(b.id)}>🗑</button>
+              <!--
+                ↳ pista button. Prototype line 1962.
+                Creates NEW track pre-populated with this block (Pilot-confirmed OD-1).
+                Function: addBlockAsNewTrack (session.ts).
+              -->
+              <button on:click={() => addBlockAsNewTrack(b.id)}>↳ pista</button>
+
+              <!--
+                🗑 delete button. Prototype lines 1963–1966.
+                Removes block from library AND all track references.
+              -->
+              <button on:click={() => deleteBlock(b.id)}>🗑</button>
+            </div>
           </div>
         {/each}
       {/if}
@@ -1105,5 +1140,51 @@
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
+  }
+
+  /*
+   * .blk-legacy — discreet muted badge shown on blocks without a snapshot.
+   * Per ADR 0020 D4: playback is unaffected; badge uses a subdued tone (not a
+   * warning) and carries a tooltip with an i18n explanation.
+   * New in Phase 01 step 01.5 (editable-composition initiative).
+   */
+  .blk-legacy {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--faint);
+    border: 1px solid var(--stroke);
+    border-radius: 4px;
+    padding: 1px 4px;
+    cursor: help;
+    user-select: none;
+  }
+
+  /*
+   * .blk-open — "open in editor" icon-button on blocks with a snapshot.
+   * Styled to match the surrounding inline block action buttons but distinguished
+   * by the accent color (#8aa0ff — ADR 0011: accent for edit-mode actions) and
+   * an edit glyph (✎) to signal "editable".
+   * New in Phase 01 step 01.5 (editable-composition initiative).
+   */
+  .blk-open {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8aa0ff;
+    background: transparent;
+    border: 1px solid rgba(138, 160, 255, 0.35);
+    border-radius: 6px;
+    padding: 2px 7px;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
+  }
+
+  .blk-open:hover {
+    background: rgba(138, 160, 255, 0.1);
+    border-color: rgba(138, 160, 255, 0.65);
   }
 </style>
