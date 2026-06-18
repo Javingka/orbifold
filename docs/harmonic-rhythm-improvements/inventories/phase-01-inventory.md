@@ -173,4 +173,81 @@ Per the phase invariants: "New attributes that persist or that the agent may set
 
 ---
 
-*(Sections (b), (c), (d) follow in steps 01.2 and 01.3.)*
+*(Section (a) complete. Sections (b)–(d) follow in steps 01.2 and 01.3.)*
+
+---
+
+## (b) Attribute survey + triage
+
+**Sources consulted (live, 2026-06-17):**
+- Synths: `https://strudel.cc/learn/synths/`
+- Audio Effects: `https://strudel.cc/learn/effects/`
+- Samples: `https://strudel.cc/learn/samples/`
+- Signals: `https://strudel.cc/learn/signals/`
+- Mini-notation: `https://strudel.cc/learn/mini-notation/`
+- Tonal Functions: `https://strudel.cc/learn/tonal/`
+- Time Modifiers: `https://strudel.cc/learn/time-modifiers/`
+- Conditional Modifiers: `https://strudel.cc/learn/conditional-modifiers/`
+- Accumulation Modifiers: `https://strudel.cc/learn/accumulation/`
+- Visual Feedback: `https://strudel.cc/learn/visual-feedback/`
+
+**@strudel/web@1.0.3 discrepancy note (verified from bundled `dist/index.mjs`):**
+`registerSynthSounds()` in @strudel/web@1.0.3 registers exactly:
+- Oscillators: `sine`, `square`, `triangle`, `sawtooth`
+- Noise: `pink`, `white`, `brown`, `crackle`
+
+`supersaw` and `pulse` appear in current docs but are **NOT** registered in `@strudel/web@1.0.3`. ZZFX sounds (`z_sawtooth`, `z_sine`, `z_triangle`, `z_square`, `z_tan`, `z_noise`) are present in 1.0.3. Soundfonts (`gm_*`) depend on `@strudel/soundfonts`, which is explicitly commented-out in `@strudel/web/web.mjs` line 3 and line 25 (the call `registerSoundfonts()` is commented). Soundfonts are **not available** in the app's `@strudel/web@1.0.3` initialization path (`src/audio/strudel.ts` line 166 calls `registerSynthSounds()` but not `registerSoundfonts()`).
+
+Dirt-samples (`github:tidalcycles/dirt-samples`) **are** loaded at init (`src/audio/strudel.ts` line 165: `samples('github:tidalcycles/dirt-samples')`). The full dirt-samples set includes `bd`, `sd`, `hh`, `oh`, `cp`, `rim`, `lt`, `mt`, `ht`, `cr` (crash), `rd` (ride), `sh` (shakers), `cb` (cowbell), `tb` (tambourine), `perc`, `misc`, `fx` plus VCSL instrument samples (see samples page at `https://strudel.cc/learn/samples/`).
+
+**The full triage table follows.** For each function, the triage columns are:
+
+| Function | What it does | Target feature | Implementation surface | Risk | Impact | Live-doc URL | 1.0.3 note |
+|---|---|---|---|---|---|---|---|
+| **`s()` / `.sound()`** | Sets the sound source (waveform name or sample name) | F1 (chord sound), F2 (rhythm sound) | codegen (`chordToStrudel`, `rhythmLayerToStrudelLine`), data model (`Chord.instrument?`, `RhythmLayer.sound`), agent schema (`SK_SOUNDS`), persistence (`SavedChordSchema`, `SavedRhythmLayerSchema`) | Low | High | `https://strudel.cc/learn/synths/` (Basic Waveforms) | In 1.0.3: `sine/square/triangle/sawtooth` + noise types only; `supersaw`/`pulse` absent |
+| **`bd:n` (sample index in mini-notation)** | Selects the nth sample within a named dirt-sample group | F2 | `rhythmLayerToStrudelLine` (emit `s("${sound}:${n}")`), `RhythmLayer.sampleIndex?`, persistence | Low | Med | `https://strudel.cc/learn/samples/` (Selecting Sounds) | Fully supported in 1.0.3 via dirt-samples |
+| **`.bank()`** | Prepends a drum-machine prefix to sound names, e.g. `s("bd").bank("RolandTR909")` selects `RolandTR909_bd` | F2 (alternate drum machine timbre) | codegen (per-layer emit), data model (new `bank?: string` on `RhythmLayer`) | Low | Med | `https://strudel.cc/learn/samples/` (Sound Banks) | Supported — dirt-samples includes TR808, TR909, etc. |
+| **`n()` + `.scale()`** | Picks pitch from a named scale by index; quantizes note events to the scale. `n()` alone is an integer pattern | F1 (alternate pitch selection approach) | N/A — Orbifold uses `note()` with explicit voice pitches from `chordVoicing()`; `.scale()` provides a different paradigm | High | Low | `https://strudel.cc/learn/tonal/` | Supported in 1.0.3. **Orbifold already solves this** via Tonnetz geometry + `chordVoicing()` — explicit voice-leading is the app's core value; `.scale()` would bypass it |
+| **`.add()`** | Transposes a note pattern by a number of semitones (or another pattern) | F1 (potential octave/transpose) | Would add random pitch variation — not a timbre selector | High | Low | `https://strudel.cc/learn/accumulation/` | Supported in 1.0.3. **Conflicts with Orbifold's geometric voice-leading** — voice pitches must be exactly those from `chordVoicing()`; adding random semitone offsets destroys the Tonnetz/voice-leading intent |
+| **Mini-notation operators (`*`, `/`, `<>`, `[,]`)** | Sequence, repetition, alternation, polyphony operators in the pattern DSL | None directly; already used by Orbifold | codegen (already used in note strings) | Low | N/A | `https://strudel.cc/learn/mini-notation/` | Supported. Orbifold uses `<…>` (slowcat) and `[a,b,c]` (polyphony) already |
+| **`.seg()` (segment)** | Samples a continuous signal at N events per cycle; turns continuous into discrete. Also used to densify patterns for continuous filter LFO effect | N/A for F1/F2/F3 | Would require injecting into codegen — no UI model maps to it | High | Low | `https://strudel.cc/learn/time-modifiers/` | Supported. **Adds complexity** — no direct user mental model in Orbifold's geometric approach |
+| **`.struct()`** | Imposes a rhythmic structure on a value pattern: `note("c,eb,g").struct("x ~ x ~")` | N/A | No natural UI mapping in Orbifold | High | Low | `https://strudel.cc/learn/conditional-modifiers/` | Supported. Primarily a compositional tool; bypasses Orbifold's step-grid model |
+| **`.ribbon()` / `rib()`** | Loops a slice of the total time axis by offset + cycles | N/A | Not a sound attribute; a time-topology tool with no UI analog in Orbifold | High | Low | `https://strudel.cc/learn/time-modifiers/` | Supported. Paradigm-shifting: requires thinking in ribbon-of-time units, not bars/cycles |
+| **`.round()`** | (not directly in docs as a standalone function — `round` appears in context of swing/swingBy as "rounding", not a generic `.round()` method) | N/A | — | N/A | N/A | `https://strudel.cc/learn/time-modifiers/` | Not a standard sound attribute |
+| **`.mul()`** | (not found in live docs as a standard Pattern method; may refer to signal arithmetic `.mul` inside signal patterns such as `rand.mul(0.5)`) | N/A | — | N/A | N/A | Not documented as a standalone user-facing method | Not confirmed in 1.0.3 API surface |
+| **`rand`** | Continuous 0–1 random signal, used to drive parameters: `rand.range(500,8000)` | Could be used to randomize `lpf`/`room` — not a discrete attribute | N/A for fixed per-chord attributes | High | Low | `https://strudel.cc/learn/signals/` | Supported in 1.0.3. **Adds non-determinism** — contradicts Orbifold's reproducible-session model |
+| **`time`** | (The `time` signal in some Strudel setups is a per-cycle phase `[0,1]`; not in the standard API surface for effects) | N/A | Not applicable | High | N/A | Not clearly documented as a standalone signal in 1.0.3 API surface | Not confirmed |
+| **`.clip()` / legato** | Multiplies event duration by a factor; truncates samples. Also controls legato feel for sustained chords | F1 (chord sustain control) | codegen (append `.clip(factor)` after `.s(…)`), data model (`Chord.clip?`), persistence | Low | Med | `https://strudel.cc/learn/samples/` (Sampler Effects, clip) | Supported in 1.0.3 (line 3296 in dist/index.mjs: `["clip"]`) |
+| **`.lpf()` / `.hpf()` (filters)** | Low-pass / high-pass filter with cutoff frequency. `lpf(1200)` is already hardcoded for harmony | F1 (chord timbre shaping — expose `lpf` as user-controllable) | codegen (replace hardcoded `lpf(1200)` with `lpf(${value})`), data model, persistence | Low | Med | `https://strudel.cc/learn/effects/` (Filters) | Supported in 1.0.3 |
+| **`.lpa()/.lpd()/.lps()/.lpq()` (filter envelope)** | Attack/decay/sustain/resonance parameters for the LP filter envelope. `.lpenv(depth)` sets modulation depth | F1 (chord attack shaping — e.g. `.lpa(0.1).lpenv(4)` for a filter sweep) | codegen, data model | Med | Med | `https://strudel.cc/learn/effects/` (Filter Envelope) | Supported in 1.0.3. Adds significant interaction complexity — requires 4+ parameters |
+| **`.gain()`** | Sets output volume (0–1.2). Already used per-chord in Orbifold | F1/F2 (already implemented) | Already in codegen and data model | None | N/A | `https://strudel.cc/learn/effects/` (Signal chain — gain) | Supported. Already implemented |
+| **`.dec()` / `decay`** | ADSR decay time: how fast the sound dies after attack | F1 (chord note length / pluck feel) | codegen (append `.decay(${val})`), data model (`Chord.decay?`) | Low | Med | `https://strudel.cc/learn/effects/` (Amplitude Envelope) | Supported in 1.0.3. Gives chords a plucked/sustained character |
+| **`.fm()` / `.fmh()`** | FM synthesis: modulates oscillator frequency for metallic/bell timbres | F1 (extended chord timbre palette) | codegen, data model | Med | Med | `https://strudel.cc/learn/synths/` (FM Synthesis) | Supported in 1.0.3 (dist/index.mjs lines 2031, 2046) |
+| **`.orbit()`** | Routes pattern to a named reverb+delay bus. `orbit(2)` = separate reverb from default | Advanced mixing — separating harmony/rhythm reverb chains | codegen | Med | Low | `https://strudel.cc/learn/effects/` (Orbits) | Supported. **Use with caution**: one reverb/delay per orbit; parameterizing orbit for a single pattern type while sharing it with another causes unpredictable reverb overrides |
+| **`.pan()`** | Stereo position (0=left, 0.5=center, 1=right) | F1 / F2 (panning) | codegen, data model | Low | Low | `https://strudel.cc/learn/effects/` | Supported in 1.0.3 |
+| **`.delay()`** | Echo/delay level (0–1) | F1 / F2 (spatial effect) | codegen, data model | Low | Low | `https://strudel.cc/learn/effects/` (Delay) | Supported in 1.0.3 |
+| **`.room()`** | Reverb level (0–1). Already used (`room(0.25/0.3)`) | F1 — expose as user-settable | codegen (replace hardcoded `room(0.25)` with `room(${val})`), data model | Low | Med | `https://strudel.cc/learn/effects/` (Reverb) | Supported. Already in use; changing default from 0.25 to variable is low-risk |
+| **`slider()`** | REPL-specific widget that renders an interactive slider in the code editor UI | None — REPL-only UI tool | N/A | High | N/A | Not in static docs — REPL-specific feature | **Not applicable** to Orbifold: the app has its own Svelte UI, does not render inside the Strudel REPL |
+| **`._pianoroll()` / `._scope()`** | Visualize a pattern as a scrolling piano roll / oscilloscope in the REPL | None — REPL-only visualization | N/A | High | N/A | `https://strudel.cc/learn/visual-feedback/` | **Not applicable**: Orbifold has PIXI/Pentagrama for visualization; injecting these into patterns would crash or no-op in the app's `evaluate()` context. The `_` prefix signals developer tooling |
+| **`supersaw`** | Multi-oscillator saw (rich detuned stack) | F1 candidate if available | codegen | N/A | High if available | `https://strudel.cc/learn/synths/` | **Not available in @strudel/web@1.0.3** — not registered by `registerSynthSounds()`. Present in current docs but absent from 1.0.3 `dist/index.mjs` |
+| **`pulse`** | PWM oscillator | F1 candidate if available | codegen | N/A | Med | `https://strudel.cc/learn/synths/` | **Not available in @strudel/web@1.0.3** — not registered. Present in current docs, absent from 1.0.3 |
+| **`gm_*` soundfonts** | GM soundfont instrument patches (piano, strings, etc.) | F1 candidate (piano-like chord) | codegen, init (`registerSoundfonts`) | High | Med | `https://strudel.cc/learn/samples/` | **Not available in @strudel/web@1.0.3 app init**: `registerSoundfonts()` is commented-out in `web.mjs` (lines 3, 25). Adding it would require an `initAudio` change and a load-time cost for the soundfont atlas |
+| **`samples('github:…')`** | Load a sample map from a GitHub-hosted `strudel.json` | F2 (user custom samples or additional drum banks) | `initAudio` (one-time call), possible lazy-load per session | High | Med | `https://strudel.cc/learn/samples/` (Github Shortcut) | Supported; `github:tidalcycles/dirt-samples` already loaded. Additional `samples()` calls at runtime are possible but must complete before the pattern plays |
+
+### Summary of key 1.0.3 discrepancies
+
+1. **`supersaw`/`pulse` absent**: The current Strudel docs show these as available waveforms, but `registerSynthSounds()` in `@strudel/web@1.0.3` only registers `['sine','square','triangle','sawtooth','pink','white','brown','crackle']`. Using `s("supersaw")` in the app would fall through to the sample-player path and likely produce silence or an error (no sample named `supersaw` in the dirt-samples map).
+
+2. **Soundfonts (`gm_*`) not initialized**: `@strudel/web/web.mjs` explicitly comments out `import { registerSoundfonts } from '@strudel/soundfonts'` and the corresponding `registerSoundfonts()` call. The app follows the same pattern — `src/audio/strudel.ts` calls `registerSynthSounds()` but not `registerSoundfonts()`. Enabling soundfonts requires a new init call and network fetch of the soundfont atlas (load cost ~1-2 MB).
+
+3. **`slider()` is REPL-only**: No match in Orbifold's architecture.
+
+4. **`._pianoroll()` / `._scope()`**: REPL-only developer tooling. Evaluating code containing these in Orbifold's `evaluate()` call would either no-op or reference undefined REPL globals.
+
+5. **`.round()`**: Not a standard sound attribute — the docs use `round` in swingBy context; there is no `.round()` as a Pattern method in the sound-effects sense.
+
+6. **`time` signal**: Not confirmed as a standard user-facing continuous signal in 1.0.3 (the Signals page lists `saw`, `sine`, `cosine`, `tri`, `square`, `rand`, `perlin`, `irand`, `brand`). `time` is not in that list.
+
+---
+
+*(Sections (c) and (d) follow in step 01.3.)*
