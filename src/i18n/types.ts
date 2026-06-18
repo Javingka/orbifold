@@ -98,6 +98,21 @@ export interface Dictionary {
       modeMixolydian: string;
       modeLocrian: string;
       modeHarmonicMinor: string;
+      /**
+       * Sound attributes section (ADR 0018, Phase 02 step 02.5).
+       * Waveform technical tokens (sawtooth/sine/square/triangle) are [VERBATIM]
+       * in the Strudel value attribute — only the display labels are translated.
+       */
+      soundLabel: string;
+      instrLabel: string;
+      instrSawtooth: string;
+      instrSine: string;
+      instrSquare: string;
+      instrTriangle: string;
+      roomLabel: string;
+      roomTip: string;
+      decayLabel: string;
+      decayTip: string;
     };
     /** Tutorial link */
     tutorialTitle: string;

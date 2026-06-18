@@ -84,6 +84,18 @@ const es: Dictionary = {
       modeMixolydian: 'mixolidio',
       modeLocrian: 'locrio',
       modeHarmonicMinor: 'menor armónica',
+      // Sound attributes (ADR 0018, Phase 02 step 02.5)
+      // Waveform technical tokens (sawtooth/sine/square/triangle) are [VERBATIM] values
+      soundLabel: 'timbre',
+      instrLabel: 'onda',
+      instrSawtooth: 'sierra',
+      instrSine: 'seno',
+      instrSquare: 'cuadrada',
+      instrTriangle: 'triángulo',
+      roomLabel: 'reverb',
+      roomTip: 'Nivel de reverberación (0 = seco, 1 = máximo).',
+      decayLabel: 'decay',
+      decayTip: 'Tiempo de caída de la amplitud en segundos (0 = sin decay).',
     },
     tutorialTitle: 'Guía de uso',
     tutorialLabel: 'Tutorial',

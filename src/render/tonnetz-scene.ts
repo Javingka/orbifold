@@ -28,6 +28,7 @@ import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
 import { sessionStore, playChord, requeueLive } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
+import { soundIntentStore } from '../state/selectedSlot.js';
 import { getStageRefs } from './stage.js';
 import { COL, FUNC_COL, FONT_SERIF, FONT_SANS } from './theme.js';
 import { tickRhythm as _tickRhythmImpl } from './rhythm-scene.js';
@@ -469,7 +470,18 @@ export function onStagePointerDown(e: PointerEvent): void {
  * @param state - Current SessionState (passed to avoid redundant get() calls).
  */
 function pickChord(tri: RenderTri, state: SessionState): void {
-  const newChord: Chord = { rootPc: tri.rootPc, qual: tri.qual, gain: 0.6, cx: tri.cx, cy: tri.cy };
+  // Apply-to-new: inherit sound intent from the top-bar controls (ADR 0018 D5, step 02.5).
+  const intent = get(soundIntentStore);
+  const newChord: Chord = {
+    rootPc: tri.rootPc,
+    qual: tri.qual,
+    gain: 0.6,
+    cx: tri.cx,
+    cy: tri.cy,
+    instrument: intent.instrument !== 'sawtooth' ? intent.instrument : undefined,
+    room: intent.room !== 0.25 ? intent.room : undefined,
+    decay: intent.decay > 0 ? intent.decay : undefined,
+  };
 
   // ── Compute voice-leading before appending — prototype lines 1363–1370 ────
   // `Chord` stores {rootPc, qual, gain} only; pcs are derived via chordPcs().
@@ -532,7 +544,8 @@ function pickChord(tri: RenderTri, state: SessionState): void {
   }));
 
   // ── Play the chord immediately — prototype lines 1357–1360 ────────────────
-  playChord(tri.rootPc, tri.qual, 0.6);
+  // Forward sound intent so the preview uses the same attributes as the new chord (ADR 0018 D5).
+  playChord(tri.rootPc, tri.qual, 0.6, newChord.instrument, newChord.room, newChord.decay);
 
   // ── Requeue if something is already playing — prototype line 1374 ─────────
   // requeueLive checks nowPlaying.source from the store.

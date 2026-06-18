@@ -82,6 +82,18 @@ const zh: Dictionary = {
       modeMixolydian: '混合利底亚调式',
       modeLocrian: '洛克利亚调式',
       modeHarmonicMinor: '和声小调',
+      // Sound attributes (ADR 0018, Phase 02 step 02.5)
+      // Waveform technical tokens (sawtooth/sine/square/triangle) are [VERBATIM] values
+      soundLabel: '音色',
+      instrLabel: '波形',
+      instrSawtooth: '锯齿波',
+      instrSine: '正弦波',
+      instrSquare: '方波',
+      instrTriangle: '三角波',
+      roomLabel: '混响',
+      roomTip: '混响级别（0 = 干音，1 = 最大）。',
+      decayLabel: '衰减',
+      decayTip: '振幅衰减时间（秒），0 = 无衰减。',
     },
     tutorialTitle: '使用指南',
     tutorialLabel: '教程',

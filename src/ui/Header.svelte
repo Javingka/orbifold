@@ -38,11 +38,13 @@
     setHarmonyKey,
     setHarmonySubview,
     setChordMode,
+    setChordSoundAttrs,
     addEuclidLayer,
     addEmptyLayer,
     previewEuclid,
     hushAll,
   } from '../state/session.js';
+  import { selectedSlotIdxStore, soundIntentStore } from '../state/selectedSlot.js';
 
   // Phase 11 step 11.3: i18n store + language selector (ADR 0017 D1, D3, OQ-5).
   // Phase 11 step 11.4: `t` store imported for Wave A string extraction.
@@ -191,6 +193,72 @@
   function handleOctaveChange(e: Event): void {
     const octave = Number((e.currentTarget as HTMLSelectElement).value);
     setHarmonyKey($sessionStore.harmony.root, $sessionStore.harmony.mode, octave);
+  }
+
+  // ── Sound attribute controls (Phase 02 step 02.5 — ADR 0018 D5) ──────────
+  // Read the selected slot's sound attrs reactively; fall back to defaults when
+  // no slot is selected. On change: write only to the selected slot via
+  // setChordSoundAttrs if a slot is selected; otherwise the change is ephemeral
+  // "intent" (used when a Tonnetz click adds a new chord — step 02.5 apply-to-new).
+  // Technical waveform tokens (sawtooth/sine/square/triangle) are [VERBATIM] in the
+  // value attribute (OQ-6/ADR 0017); display labels come from the i18n dictionary.
+
+  const WAVEFORMS = ['sawtooth', 'sine', 'square', 'triangle'] as const;
+  type Waveform = (typeof WAVEFORMS)[number];
+
+  // "Intent" variables — top-bar values that serve as defaults for new chords.
+  let intentInstrument: Waveform = 'sawtooth';
+  let intentRoom: number = 0.25;
+  let intentDecay: number = 0;
+
+  // Derive displayed values: prefer selected slot's attrs, then intent.
+  $: selSlot =
+    $selectedSlotIdxStore !== null
+      ? $sessionStore.harmony.progression[$selectedSlotIdxStore]
+      : undefined;
+  $: selIsChord = selSlot !== undefined && !('isRest' in selSlot);
+  $: displayInstrument =
+    selIsChord &&
+    selSlot !== undefined &&
+    !('isRest' in selSlot) &&
+    selSlot.instrument !== undefined
+      ? (selSlot.instrument as Waveform)
+      : intentInstrument;
+  $: displayRoom =
+    selIsChord && selSlot !== undefined && !('isRest' in selSlot) && selSlot.room !== undefined
+      ? selSlot.room
+      : intentRoom;
+  $: displayDecay =
+    selIsChord && selSlot !== undefined && !('isRest' in selSlot) && selSlot.decay !== undefined
+      ? selSlot.decay
+      : intentDecay;
+
+  function handleInstrumentChange(e: Event): void {
+    const val = (e.currentTarget as HTMLSelectElement).value as Waveform;
+    intentInstrument = val;
+    soundIntentStore.update((s) => ({ ...s, instrument: val }));
+    if ($selectedSlotIdxStore !== null && selIsChord) {
+      setChordSoundAttrs($selectedSlotIdxStore, { instrument: val });
+    }
+  }
+
+  function handleRoomChange(e: Event): void {
+    const val = Number((e.currentTarget as HTMLInputElement).value);
+    intentRoom = val;
+    soundIntentStore.update((s) => ({ ...s, room: val }));
+    if ($selectedSlotIdxStore !== null && selIsChord) {
+      setChordSoundAttrs($selectedSlotIdxStore, { room: val });
+    }
+  }
+
+  function handleDecayChange(e: Event): void {
+    const val = Number((e.currentTarget as HTMLInputElement).value);
+    intentDecay = val;
+    soundIntentStore.update((s) => ({ ...s, decay: val }));
+    if ($selectedSlotIdxStore !== null && selIsChord) {
+      // decay = 0 means "no decay applied"; store undefined-equivalent by sending 0
+      setChordSoundAttrs($selectedSlotIdxStore, { decay: val > 0 ? val : undefined });
+    }
   }
 </script>
 
@@ -586,6 +654,68 @@
           <option value="4">4</option>
         </select>
       </div>
+
+      <!--
+        Sound attribute controls (Phase 02 step 02.5 — ADR 0018 D5).
+        Instrument waveform selector, reverb level slider, decay slider.
+        Placement: AFTER tonalidad/escala/octava, BEFORE acorde/arpegio/marco.
+        When a Pentagrama slot is selected, the controls show and write that slot's
+        attrs. When no slot is selected, the controls show "intent" defaults that
+        new chords will inherit (apply-to-new behavior).
+        Waveform option values are [VERBATIM] technical tokens (OQ-6/ADR 0017);
+        display labels come from the i18n dictionary.
+      -->
+      <div class="sound-ctl">
+        <span class="sound-lbl">{$t('header.harmony.soundLabel')}</span>
+
+        <!-- Instrument waveform select -->
+        <label class="sound-field" title={$t('header.harmony.instrLabel')}>
+          <span>{$t('header.harmony.instrLabel')}</span>
+          <select id="instrSelect" value={displayInstrument} on:change={handleInstrumentChange}>
+            {#each WAVEFORMS as wf}
+              <option value={wf}
+                >{wf === 'sawtooth'
+                  ? $t('header.harmony.instrSawtooth')
+                  : wf === 'sine'
+                    ? $t('header.harmony.instrSine')
+                    : wf === 'square'
+                      ? $t('header.harmony.instrSquare')
+                      : $t('header.harmony.instrTriangle')}</option
+              >
+            {/each}
+          </select>
+        </label>
+
+        <!-- Room / reverb slider -->
+        <label class="sound-field" title={$t('header.harmony.roomTip')}>
+          <span>{$t('header.harmony.roomLabel')}</span>
+          <input
+            type="range"
+            id="roomSlider"
+            min="0"
+            max="1"
+            step="0.01"
+            value={displayRoom}
+            on:change={handleRoomChange}
+          />
+          <span class="sound-val">{displayRoom.toFixed(2)}</span>
+        </label>
+
+        <!-- Decay slider -->
+        <label class="sound-field" title={$t('header.harmony.decayTip')}>
+          <span>{$t('header.harmony.decayLabel')}</span>
+          <input
+            type="range"
+            id="decaySlider"
+            min="0"
+            max="2"
+            step="0.05"
+            value={displayDecay}
+            on:change={handleDecayChange}
+          />
+          <span class="sound-val">{displayDecay > 0 ? displayDecay.toFixed(2) + 's' : '—'}</span>
+        </label>
+      </div>
     {/if}
   </div>
 
@@ -895,5 +1025,60 @@
   /* Active (currently selected) language */
   .lang-option.active {
     color: var(--accent);
+  }
+
+  /*
+   * Sound attribute controls (Phase 02 step 02.5 — ADR 0018 D5).
+   * Inline-flex row matching header bottom-row aesthetic; font + spacing
+   * mirrors the existing .field and .rhythm-ctl patterns.
+   */
+  .sound-ctl {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+
+  .sound-lbl {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+    white-space: nowrap;
+  }
+
+  .sound-field {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .sound-field span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .sound-field select {
+    background: rgba(0, 0, 0, 0.34);
+    border: 1px solid var(--stroke);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .sound-field input[type='range'] {
+    width: 64px;
+    accent-color: var(--accent);
+  }
+
+  .sound-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--faint);
+    min-width: 3ch;
   }
 </style>

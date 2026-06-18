@@ -116,3 +116,243 @@ only after the Pilot reviews and approves `docs/adr/0018-chord-sound-attributes.
 
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 02.2 — Core data model, codegen extension, unit tests
+
+**Date:** 2026-06-17
+**Commit(s):** (in step 02.2 commit — `feat(core): Phase 02 step 02.2 — Chord type + codegen extension (ADR 0018 D1/D2)`)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Extended `Chord` interface in `src/state/session.ts` with three optional fields: `instrument?: string`, `room?: number`, `decay?: number` (ADR 0018 D1). Added TSDoc with verbatim defaults and ranges.
+- Extended `chordToStrudel` signature in `src/core/codegen/strudel.ts` to accept `instrument?`, `room?`, `decay?` params. Injected conditionally: `instrument !== undefined ? instrument : 'sawtooth'`, `room !== undefined ? room : 0.25`, and `.decay(N)` only when `decay !== undefined`. Byte-identical guarantee enforced by the conditional path.
+- Extended `melodyLine` (uniform case and arrange case) similarly: uniform path passes top-level attrs; arrange path reads per-slot attrs via TS casts (slot type doesn't yet carry the fields) with top-level fallback. Decay placed before `.slow()` per ADR 0018 D2.
+- Added 20 new unit tests in `tests/codegen.test.ts` across three describe blocks:
+  - `chordToStrudel — ADR 0018 sound attributes` (10 tests, A-02-01 through A-02-04)
+  - `melodyLine — ADR 0018 sound attributes (uniform case)` (5 tests)
+  - `melodyLine — ADR 0018 sound attributes (arrange case)` (6 tests)
+- All 62 codegen tests pass; 516 total tests pass. Fixed Prettier formatting.
+
+### Files touched
+
+- `src/state/session.ts` (Chord type extended)
+- `src/core/codegen/strudel.ts` (chordToStrudel + melodyLine extended)
+- `tests/codegen.test.ts` (20 new tests added)
+
+### Validation evidence
+
+- `pnpm exec vitest run` → 62 codegen tests pass (36 pre-existing + 20 new + 6 re-run). All 516 tests pass.
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm lint` → clean (Prettier formatting fixed).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / artifact | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Byte-identical at default (codegen) | `tests/codegen.test.ts` "byte-identical when no attrs" | unit | COVERED |
+| A-02-02 | `instrument: 'sine'` etc. produces correct `s(…)` | `tests/codegen.test.ts` "instrument='sine'" | unit | COVERED |
+| A-02-03 | `room: N` produces `room(N)` override | `tests/codegen.test.ts` "room override" | unit | COVERED |
+| A-02-04 | `decay: N` appends `.decay(N)`; absent = nothing | `tests/codegen.test.ts` "decay present/absent" | unit | COVERED |
+| A-02-05 | v2 blob dropped gracefully | — | unit | not yet (step 02.3) |
+| A-02-06 | v3 blob with new fields parses correctly | — | unit | not yet (step 02.3) |
+| A-02-07 | Agent schema accepts optional attrs | — | unit | not yet (step 02.3) |
+| A-02-08 | Slot click updates store; controls reflect values | — | manual | not yet (step 02.4/02.5) |
+| A-02-09 | Changing instrument calls setChordSoundAttrs | — | manual | not yet (step 02.5) |
+| A-02-10 | Controls appear after key selector, before chord mode | — | manual | not yet (step 02.5) |
+| A-02-11 | key-parity test passes with new keys | — | unit | not yet (step 02.5) |
+| A-02-12 | `pnpm build` clean | — | automated | not yet (step 02.5) |
+
+### Prototype parity
+
+Not applicable — net-new feature. No prototype citation possible.
+
+### Environment state after this step
+
+- Branch: `harmonic-rhythm-improvements/phase-01`
+- All core tests pass. Source files are clean. No behavior change with defaults.
+
+---
+
+## Step 02.3 — Persistence schema v3, agent schema v3, tests
+
+**Date:** 2026-06-17
+**Commit(s):** `feat(harmony): Phase 02 step 02.3 — persistence v3 + agent schema v3 (ADR 0018 D3/D4)`
+**Iteration:** 1 of 5
+
+### Completed
+
+- Bumped `SESSION_SCHEMA_VERSION` from 2 to 3 in `src/lib/persistence.ts` (ADR 0018 D3).
+- Added `instrument: z.string().optional()`, `room: z.number().min(0).max(1).optional()`, `decay: z.number().min(0).optional()` to `SavedChordSchema`. Updated `SavedSessionSchema.version` to `z.literal(3)`.
+- Updated `serializeSession` to include new fields when present; updated `deserializeSession` to carry through new fields.
+- Updated `applyLoadedSession` in `src/state/session.ts` to restore `instrument`, `room`, `decay` from loaded chords.
+- Bumped `SCHEMA_VERSION` from 2 to 3 in `src/agent/schema.ts` (ADR 0018 D4). Added same 3 optional Zod fields to `HarmonyChordCoreSchema`.
+- Updated `tests/persistence.test.ts`: all `version: 2` fixtures → `version: 3`; updated version-check test labels; added new `ADR 0018 D3` describe block with 4 tests (v2 drop, v3 accepts, round-trip, agent round-trip).
+- Updated `tests/schema.test.ts`: `SCHEMA_VERSION` assertion → 3; added `ADR 0018 D4` describe block with 7 tests.
+- Updated `tests/session.test.ts`: 3 backward-compat tests in `SavedChordSchema backward-compat — bars: 0.5 (A-03-08)` updated `version: 2` → `version: 3`.
+- Fixed Prettier formatting in `tests/persistence.test.ts`.
+
+### Files touched
+
+- `src/lib/persistence.ts`
+- `src/agent/schema.ts`
+- `src/state/session.ts`
+- `tests/persistence.test.ts`
+- `tests/schema.test.ts`
+- `tests/session.test.ts`
+
+### Validation evidence
+
+- `pnpm exec vitest run` → 536 tests pass (0 failures). All new ADR 0018 tests pass.
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm lint` → clean.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / artifact | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Byte-identical codegen | `tests/codegen.test.ts` | unit | COVERED (step 02.2) |
+| A-02-02 | instrument variants in codegen | `tests/codegen.test.ts` | unit | COVERED (step 02.2) |
+| A-02-03 | room override in codegen | `tests/codegen.test.ts` | unit | COVERED (step 02.2) |
+| A-02-04 | decay present/absent in codegen | `tests/codegen.test.ts` | unit | COVERED (step 02.2) |
+| A-02-05 | v2 blob dropped gracefully | `tests/persistence.test.ts` "v2 rejected / dropped" | unit | COVERED |
+| A-02-06 | v3 blob with new fields parses | `tests/persistence.test.ts` "v3 accepted + round-trip" | unit | COVERED |
+| A-02-07 | Agent schema optional attrs | `tests/schema.test.ts` "ADR 0018 D4 sound attributes" | unit | COVERED |
+| A-02-08 | Slot click updates store | — | manual | not yet (step 02.4/02.5) |
+| A-02-09 | Changing instrument applies next cycle | — | manual | not yet (step 02.5) |
+| A-02-10 | Controls placement in top bar | — | manual | not yet (step 02.5) |
+| A-02-11 | key-parity test passes | — | unit | not yet (step 02.5) |
+| A-02-12 | `pnpm build` clean | — | automated | not yet (step 02.5) |
+
+### Prototype parity
+
+Not applicable — net-new feature.
+
+### Environment state after this step
+
+- Branch: `harmonic-rhythm-improvements/phase-01`
+- All 536 tests pass. Schema version is 3. Old v2 sessions are dropped on load.
+
+---
+
+## Step 02.4 — Reactive `selectedSlotIdxStore`, store actions, `playChord` threading
+
+**Date:** 2026-06-17
+**Commit(s):** `feat(state): Phase 02 step 02.4 — selectedSlotIdxStore, setChordSoundAttrs action, playChord threading`
+**Iteration:** 1 of 5
+
+### Completed
+
+- Created `src/state/selectedSlot.ts` (new file, AGPL-3.0 header): exports `selectedSlotIdxStore: Writable<number | null>` and `soundIntentStore: Writable<{ instrument, room, decay }>`. Pure state file — no DOM/PIXI/Svelte component imports.
+- Migrated `_selectedSlotIdx` in `src/render/pentagrama-scene.ts`: removed module-level variable; imported `selectedSlotIdxStore`; in `paint()` added `const _selectedSlotIdx = get(selectedSlotIdxStore)` (read-only local for the frame); in `onDn` replaced all 4 write-sites with `selectedSlotIdxStore.set(...)` and reads with `get(selectedSlotIdxStore)`; in `onUp` replaced 1 read; in `destroyPentagrama` replaced 1 write (`set(null)`). Zero behavior change.
+- Added `setChordInstrument(index, instrument)` and `setChordSoundAttrs(index, attrs)` to `src/state/session.ts`, modeled on `setChordBars`. Both guard out-of-range and rest-slot cases; both call `requeueLive()`.
+- Updated `playChord` signature in `src/state/session.ts` to accept optional `instrument?`, `room?`, `decay?` and forward them to `chordToStrudel`.
+- `soundIntentStore` added to `selectedSlot.ts` for apply-to-new behavior (step 02.5 reads it in the Tonnetz click path).
+
+### Files touched
+
+- `src/state/selectedSlot.ts` (created)
+- `src/render/pentagrama-scene.ts` (migrated _selectedSlotIdx)
+- `src/state/session.ts` (new actions + playChord signature)
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm lint` → clean.
+- `pnpm build` → clean (pre-existing chunking warnings only).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / artifact | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 through A-02-07 | Codegen + schema | already covered | unit | COVERED |
+| A-02-08 | Slot click updates store | `selectedSlotIdxStore` wired; no auto-test | manual | PARTIAL (store exists; UI in 02.5) |
+| A-02-09 | `setChordSoundAttrs` + `requeueLive` | `src/state/session.ts` action | code-review | PARTIAL (action ready; UI in 02.5) |
+| A-02-10 | Controls placement | — | manual | not yet (step 02.5) |
+| A-02-11 | key-parity | — | unit | not yet (step 02.5) |
+| A-02-12 | `pnpm build` clean | build verified | automated | COVERED |
+
+### Prototype parity
+
+Not applicable — net-new feature. The migration of `_selectedSlotIdx` to a store is a refactor with zero behavioral change; all existing Pentagrama interaction semantics are preserved.
+
+### Environment state after this step
+
+- Branch: `harmonic-rhythm-improvements/phase-01`
+- All 536 tests pass. Build clean. State layer is ready for UI wiring.
+
+---
+
+## Step 02.5 — Top-bar sound selector UI, i18n keys, key-parity
+
+**Date:** 2026-06-17
+**Commit(s):** (committed as part of phase completion — see below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `soundLabel`, `instrLabel`, `instrSawtooth`, `instrSine`, `instrSquare`, `instrTriangle`, `roomLabel`, `roomTip`, `decayLabel`, `decayTip` keys to `header.harmony` section of `Dictionary` type in `src/i18n/types.ts`.
+- Added identical key sets to all four locale dictionaries: `es.ts` (Spanish), `en.ts` (English), `pt.ts` (Portuguese), `zh.ts` (Chinese). Waveform technical tokens (sawtooth/sine/square/triangle) remain [VERBATIM] in the `value` attribute; display labels are translated.
+- Added instrument/room/decay controls to `Header.svelte` inside `{#if $sessionStore.view === 'harmony'}`: instrument `<select>` (4 options, waveform values verbatim, labels from `$t`), room `<input type="range" min=0 max=1 step=0.01>`, decay `<input type="range" min=0 max=2 step=0.05>`. Placement: after `.field` (tonalidad/escala/octava) and before the chord mode controls.
+- Added `selectedSlotIdxStore` and `soundIntentStore` imports; added `setChordSoundAttrs` import. Local `intentInstrument`, `intentRoom`, `intentDecay` vars serve as the "intent" state when no slot is selected. Handlers write both the intent local, the `soundIntentStore` (for Tonnetz apply-to-new), and call `setChordSoundAttrs` when a slot is selected.
+- Reactive derivations: `selSlot`, `selIsChord`, `displayInstrument`, `displayRoom`, `displayDecay` derived from `$selectedSlotIdxStore` and `$sessionStore.harmony.progression` — controls reflect the selected slot's values or the intent defaults.
+- Updated `tonnetz-scene.ts` `pickChord` to import `soundIntentStore`, read intent values via `get(soundIntentStore)`, and pass non-default values as `instrument`/`room`/`decay` on the new `Chord` object and in the `playChord` call (apply-to-new behavior).
+- CSS for `.sound-ctl`, `.sound-lbl`, `.sound-field`, `.sound-val` added to match header aesthetic.
+- `pnpm exec vitest run` → all 536 tests pass including i18n key-parity.
+
+### Files touched
+
+- `src/i18n/types.ts` (10 new keys in `header.harmony`)
+- `src/i18n/locales/es.ts` (10 new keys)
+- `src/i18n/locales/en.ts` (10 new keys)
+- `src/i18n/locales/pt.ts` (10 new keys)
+- `src/i18n/locales/zh.ts` (10 new keys)
+- `src/ui/Header.svelte` (sound controls UI + handlers + CSS)
+- `src/render/tonnetz-scene.ts` (apply-to-new intent threading)
+- `src/state/selectedSlot.ts` (soundIntentStore added — already committed in 02.4 placeholder; finalized here)
+
+### Validation evidence
+
+- `pnpm exec vitest run` → 536 tests pass. `tests/i18n/key-parity.test.ts` passes (8 tests, all 4 locales).
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm lint` → clean (Prettier auto-fixed Header.svelte).
+- `pnpm build` → clean (exit 0, pre-existing chunking warnings only).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / artifact | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Byte-identical codegen | `tests/codegen.test.ts` | unit | COVERED |
+| A-02-02 | instrument variants in codegen | `tests/codegen.test.ts` | unit | COVERED |
+| A-02-03 | room override in codegen | `tests/codegen.test.ts` | unit | COVERED |
+| A-02-04 | decay present/absent in codegen | `tests/codegen.test.ts` | unit | COVERED |
+| A-02-05 | v2 blob dropped gracefully | `tests/persistence.test.ts` | unit | COVERED |
+| A-02-06 | v3 blob with new fields parses | `tests/persistence.test.ts` | unit | COVERED |
+| A-02-07 | Agent schema optional attrs | `tests/schema.test.ts` | unit | COVERED |
+| A-02-08 | Slot click → store → controls | `Header.svelte` reactive; `selectedSlotIdxStore` wired | manual | OPEN (manual acceptance pending) |
+| A-02-09 | Instrument change → `setChordSoundAttrs` → next cycle | `Header.svelte` + `session.ts` | manual | OPEN (manual acceptance pending) |
+| A-02-10 | Controls after key selector, before chord mode | `Header.svelte` placement | manual | OPEN (manual acceptance pending) |
+| A-02-11 | key-parity test passes | `tests/i18n/key-parity.test.ts` | unit | COVERED |
+| A-02-12 | `pnpm build` clean | build output | automated | COVERED |
+
+### Prototype parity
+
+Not applicable — net-new feature.
+
+### Decisions made (if any)
+
+- `soundIntentStore` added to `selectedSlot.ts` (not a new ADR decision; a natural extension of D5 for the apply-to-new behavior specified in 02.5).
+- Non-default intent: instrument defaults (`'sawtooth'`) and room defaults (`0.25`) are stored as `undefined` on the new Chord (not as explicit values) to preserve byte-identical guarantee for the default case.
+
+### Environment state after this step
+
+- Branch: `harmonic-rhythm-improvements/phase-01`
+- All 536 tests pass. All automated acceptance criteria covered. Manual acceptance (A-02-08/09/10) requires the Pilot to run the dev server.
+
+### Auto-continuation
+
+Phase 02 is complete. All steps committed. Automated validations all pass. Manual acceptance (A-02-08, A-02-09, A-02-10) requires Pilot checkpoint #5.
+
+---
