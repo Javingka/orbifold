@@ -439,11 +439,14 @@ This is a UX detail the Pilot should confirm before step 01.3 implements the `se
 
 ---
 
-## Pilot resolution — Checkpoint #1
+## Pilot resolution — Checkpoint #1 (2026-06-18)
 
-_(To be filled by the Pilot before step 01.2 proceeds)_
+Pilot (Javier) resolved all four open questions, accepting the Dev's recommendations verbatim:
 
-- **OQ-1 →** …
-- **OQ-2 →** …
-- **OQ-3 →** …
+- **OQ-1 → A (trust as declared).** `saveAsBlock.type` is accepted as the agent's declaration. `addBlock`'s existing early-return on empty code is the sufficient guard. No live-state validation added in `applyBlockSave`.
+- **OQ-2 → B (truncate).** Zod schema has **no** `.max(100)` on `name`; `applyBlockSave` silently truncates via `.trim().slice(0, 100)`. A long name does not reject rhythm/harmony specs in the same response.
+- **OQ-3 → relax guard.** `superRefine` updated to require at least one of `rhythm`, `harmony`, or `saveAsBlock`. The agent may send a save-only response (no musical changes).
+- **OQ-4 → sessionCode + named summary.** When `did` is empty (only `saveAsBlock` fired): `code = sessionCode(updatedState)`; `summary` = "✓ Guardé el [type] actual como bloque «name»" (or equivalent per locale). Returns `{ type: 'skill', code, summary }` — not `type: 'text'`.
+
+Approved to proceed to step 01.2 (ADR 0021). Checkpoint #2 (ADR review) is required before step 01.3 (source code).
 - **OQ-4 →** …
