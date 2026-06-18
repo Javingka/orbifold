@@ -56,12 +56,18 @@ export function chordToStrudel(
   qual: Quality,
   gain: number | null,
   chordMode: 'chord' | 'arp',
-  octave: number
+  octave: number,
+  instrument?: string,
+  room?: number,
+  decay?: number
 ): string {
   const notes = chordVoicing(rootPc, qual, octave);
   const g = gain == null ? 0.6 : gain;
   const inner = chordMode === 'chord' ? notes.join(',') : notes.join(' ');
-  return `note("${inner}").s("sawtooth").lpf(1200).gain(${g.toFixed(2)}).room(0.25)`;
+  const instr = instrument !== undefined ? instrument : 'sawtooth';
+  const roomVal = room !== undefined ? room : 0.25;
+  const decayStr = decay !== undefined ? `.decay(${decay})` : '';
+  return `note("${inner}").s("${instr}").lpf(1200).gain(${g.toFixed(2)}).room(${roomVal})${decayStr}`;
 }
 
 /**
@@ -88,7 +94,10 @@ export function chordToStrudel(
 export function melodyLine(
   progression: ReadonlyArray<HarmonySlotInput>,
   chordMode: 'chord' | 'arp',
-  octave: number
+  octave: number,
+  instrument?: string,
+  room?: number,
+  decay?: number
 ): string {
   if (progression.length === 0) return '';
   const sep = chordMode === 'chord' ? ',' : ' ';
@@ -107,12 +116,24 @@ export function melodyLine(
       qual: Quality;
       gain?: number | null;
       bars?: number;
+      instrument?: string;
+      room?: number;
+      decay?: number;
     }>;
     const seq = chordSlots
       .map((ch) => '[' + chordVoicing(ch.rootPc, ch.qual, octave).join(sep) + ']')
       .join(' ');
     const gains = chordSlots.map((ch) => (ch.gain == null ? 0.6 : ch.gain).toFixed(2)).join(' ');
-    return `  note("<${seq}>").s("sawtooth").lpf(1200).gain("<${gains}>").room(0.3)`;
+    // Per-slot instrument/room/decay: use the first chord's attrs as representative
+    // (uniform-case: all chords share the same sound params for simplicity; the full
+    // per-chord attribute model applies in the arrange() path below).
+    // However, per ADR 0018 D2, when callers pass top-level instrument/room/decay
+    // params those override per-slot values. In the uniform path, all chords share
+    // one pattern line, so we use the provided params (or defaults).
+    const instr = instrument !== undefined ? instrument : 'sawtooth';
+    const roomVal = room !== undefined ? room : 0.3;
+    const decayStr = decay !== undefined ? `.decay(${decay})` : '';
+    return `  note("<${seq}>").s("${instr}").lpf(1200).gain("<${gains}>").room(${roomVal})${decayStr}`;
   }
 
   // arrange() form — per-slot inline segment (A-02-03, ADR 0012 D3).
@@ -138,7 +159,28 @@ export function melodyLine(
     const voicing = chordVoicing(slot.rootPc, slot.qual, octave).join(sep);
     const g = (slot.gain == null ? 0.6 : slot.gain).toFixed(2);
     const sustain = numCycles !== 1 ? `.slow(${numCycles})` : '';
-    return `  [${numCycles}, note("[${voicing}]").s("sawtooth").lpf(1200).gain(${g}).room(0.3)${sustain}]`;
+    // Per ADR 0018 D2: top-level instrument/room/decay params take priority;
+    // absent → use slot's own fields; absent slot fields → hardcoded defaults.
+    const slotInstr =
+      instrument !== undefined
+        ? instrument
+        : (slot as { instrument?: string }).instrument !== undefined
+          ? (slot as { instrument?: string }).instrument
+          : 'sawtooth';
+    const slotRoom =
+      room !== undefined
+        ? room
+        : (slot as { room?: number }).room !== undefined
+          ? (slot as { room?: number }).room
+          : 0.3;
+    const slotDecay =
+      decay !== undefined
+        ? decay
+        : (slot as { decay?: number }).decay !== undefined
+          ? (slot as { decay?: number }).decay
+          : undefined;
+    const decayStr = slotDecay !== undefined ? `.decay(${slotDecay})` : '';
+    return `  [${numCycles}, note("[${voicing}]").s("${slotInstr}").lpf(1200).gain(${g}).room(${slotRoom})${decayStr}${sustain}]`;
   });
   return `arrange(\n${segments.join(',\n')}\n)`;
 }

@@ -151,6 +151,25 @@ export interface Chord {
    * Introduced in Phase 02 — ADR 0010. Phase 03: granularity 0.5 → 0.25.
    */
   bars?: number;
+  /**
+   * Oscillator waveform for the chord sound.
+   * Valid values: 'sawtooth' | 'sine' | 'square' | 'triangle'.
+   * Default (undefined): 'sawtooth' — byte-identical to pre-phase output.
+   * Introduced in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D1.
+   */
+  instrument?: string;
+  /**
+   * Reverb level 0–1.
+   * Default (undefined): 0.25 (chordToStrudel) or 0.3 (melodyLine paths).
+   * Introduced in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D1.
+   */
+  room?: number;
+  /**
+   * Amplitude decay time in seconds (> 0).
+   * Default (undefined): no .decay() emitted — byte-identical to pre-phase output.
+   * Introduced in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D1.
+   */
+  decay?: number;
 }
 
 /**

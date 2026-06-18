@@ -82,6 +82,186 @@ describe('chordToStrudel', () => {
   });
 });
 
+// ── chordToStrudel — ADR 0018 sound attributes ───────────────────────────
+// A-02-01 (byte-identical at default), A-02-02 (instrument), A-02-03 (room), A-02-04 (decay).
+
+describe('chordToStrudel — ADR 0018 sound attributes', () => {
+  // A-02-01: byte-identical at default (all three attrs undefined)
+  it('byte-identical at default (instrument/room/decay all undefined)', () => {
+    expect(chordToStrudel(0, 'maj', null, 'chord', 3)).toBe(
+      'note("C3,E3,G3").s("sawtooth").lpf(1200).gain(0.60).room(0.25)'
+    );
+  });
+
+  // A-02-02: instrument variants
+  it('instrument: sine → s("sine")', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, 'sine');
+    expect(result).toContain('s("sine")');
+    expect(result).not.toContain('s("sawtooth")');
+  });
+
+  it('instrument: square → s("square")', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, 'square');
+    expect(result).toContain('s("square")');
+  });
+
+  it('instrument: triangle → s("triangle")', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, 'triangle');
+    expect(result).toContain('s("triangle")');
+  });
+
+  // A-02-03: room overrides the 0.25 default for chordToStrudel
+  it('room: 0.5 → room(0.5)', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, undefined, 0.5);
+    expect(result).toContain('room(0.5)');
+    expect(result).not.toContain('room(0.25)');
+  });
+
+  it('room: 0 → room(0)', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, undefined, 0);
+    expect(result).toContain('room(0)');
+  });
+
+  // A-02-04: decay present → .decay(N); absent → no .decay at all
+  it('decay: 0.2 → .decay(0.2)', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, undefined, undefined, 0.2);
+    expect(result).toContain('.decay(0.2)');
+  });
+
+  it('decay absent → no .decay in output', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3);
+    expect(result).not.toContain('.decay');
+  });
+
+  it('all three attrs set → well-formed string with all three in correct order', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, 'sine', 0.5, 0.2);
+    expect(result).toContain('s("sine")');
+    expect(result).toContain('room(0.5)');
+    expect(result).toContain('.decay(0.2)');
+    // Order: .s(...).lpf(...).gain(...).room(...).decay(...)
+    const roomIdx = result.indexOf('room(0.5)');
+    const decayIdx = result.indexOf('.decay(0.2)');
+    expect(roomIdx).toBeLessThan(decayIdx);
+  });
+});
+
+// ── melodyLine — ADR 0018 sound attributes (uniform case) ─────────────────
+// A-02-01 (byte-identical at default), A-02-02 (instrument), A-02-03 (room), A-02-04 (decay).
+
+describe('melodyLine — ADR 0018 sound attributes (uniform case)', () => {
+  // A-02-01: byte-identical at default
+  it('byte-identical at default — uniform path (C maj + A min, chord mode)', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj' },
+        { rootPc: 9, qual: 'min' },
+      ],
+      'chord',
+      3
+    );
+    expect(result).toBe(
+      '  note("<[C3,E3,G3] [A3,C4,E4]>").s("sawtooth").lpf(1200).gain("<0.60 0.60>").room(0.3)'
+    );
+  });
+
+  // A-02-02: instrument in uniform case
+  it('instrument: sine → s("sine") in uniform path', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj' }], 'chord', 3, 'sine');
+    expect(result).toContain('s("sine")');
+    expect(result).not.toContain('s("sawtooth")');
+  });
+
+  // A-02-03: room overrides the 0.3 default for melodyLine
+  it('room: 0.5 → room(0.5) in uniform path, overrides 0.3 default', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj' }], 'chord', 3, undefined, 0.5);
+    expect(result).toContain('room(0.5)');
+    expect(result).not.toContain('room(0.3)');
+  });
+
+  // A-02-04: decay in uniform case
+  it('decay: 0.3 → .decay(0.3) in uniform path', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj' }], 'chord', 3, undefined, undefined, 0.3);
+    expect(result).toContain('.decay(0.3)');
+  });
+
+  it('decay absent → no .decay in uniform path output', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj' }], 'chord', 3);
+    expect(result).not.toContain('.decay');
+  });
+});
+
+// ── melodyLine — ADR 0018 sound attributes (arrange case) ─────────────────
+
+describe('melodyLine — ADR 0018 sound attributes (arrange case)', () => {
+  // A-02-01: byte-identical at default — arrange path
+  it('byte-identical at default — arrange path (bars:2)', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 }], 'chord', 3);
+    expect(result).toBe(
+      'arrange(\n  [2, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3).slow(2)]\n)'
+    );
+  });
+
+  // A-02-02: instrument in arrange path
+  it('instrument: sine → s("sine") in arrange path', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 }], 'chord', 3, 'sine');
+    expect(result).toContain('s("sine")');
+    expect(result).not.toContain('s("sawtooth")');
+  });
+
+  // A-02-03: room overrides 0.3 default in arrange path
+  it('room: 0.7 → room(0.7) in arrange path', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 }],
+      'chord',
+      3,
+      undefined,
+      0.7
+    );
+    expect(result).toContain('room(0.7)');
+    expect(result).not.toContain('room(0.3)');
+  });
+
+  // A-02-04: decay in arrange path — appears before sustain
+  it('decay: 0.2 → .decay(0.2) before .slow in arrange path', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 }],
+      'chord',
+      3,
+      undefined,
+      undefined,
+      0.2
+    );
+    expect(result).toContain('.decay(0.2)');
+    // decay must appear before sustain (.slow)
+    const decayIdx = result.indexOf('.decay(0.2)');
+    const slowIdx = result.indexOf('.slow(');
+    expect(decayIdx).toBeLessThan(slowIdx);
+  });
+
+  it('decay absent → no .decay in arrange path output', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 }], 'chord', 3);
+    expect(result).not.toContain('.decay');
+  });
+
+  // All three set together — arrange path
+  it('all three attrs set → well-formed string in arrange path', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 1 },
+        { isRest: true, bars: 1 },
+      ],
+      'chord',
+      3,
+      'square',
+      0.6,
+      0.15
+    );
+    expect(result).toContain('s("square")');
+    expect(result).toContain('room(0.6)');
+    expect(result).toContain('.decay(0.15)');
+  });
+});
+
 // ── melodyLine ────────────────────────────────────────────────────────────
 // Prototype lines 765–773. Golden via Node execution.
 
