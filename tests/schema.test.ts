@@ -27,9 +27,9 @@ beforeEach(() => {
 // ── SCHEMA_VERSION ─────────────────────────────────────────────────────────
 
 describe('SCHEMA_VERSION', () => {
-  // A-06-08: SCHEMA_VERSION must equal 2 after Phase 06 rest-union change (ADR 0012 D4).
-  it('is numeric 2 (bumped in Phase 06 — ADR 0012 D4)', () => {
-    expect(SCHEMA_VERSION).toBe(2);
+  // Bumped to 3 in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D4.
+  it('is numeric 3 (bumped in Phase 02 harmonic-rhythm-improvements — ADR 0018 D4)', () => {
+    expect(SCHEMA_VERSION).toBe(3);
   });
 });
 
@@ -470,5 +470,61 @@ describe('applyHarmonySpec — rest slot (Phase 06, ADR 0012)', () => {
     expect('isRest' in slot && slot.isRest).toBe(true);
     // clampBars(1.1) = Math.round(1.1 * 4) / 4 = Math.round(4.4) / 4 = 4/4 = 1
     expect(slot.bars).toBe(1);
+  });
+});
+
+// ── HarmonyChordCoreSchema — ADR 0018 D4 sound attributes (A-02-07) ──────────
+
+describe('HarmonyChordCoreSchema — ADR 0018 D4 sound attributes (A-02-07)', () => {
+  // A-02-07: agent schema accepts instrument, room, decay as optional fields
+  it('chord with instrument: sine parses successfully (A-02-07)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', instrument: 'sine' });
+    expect(result.success).toBe(true);
+  });
+
+  it('chord with all three new attrs parses successfully (A-02-07)', () => {
+    const result = HarmonyChordSchema.safeParse({
+      root: 'G',
+      quality: 'maj',
+      instrument: 'sawtooth',
+      room: 0.5,
+      decay: 0.2,
+    });
+    expect(result.success).toBe(true);
+    if (result.success && 'root' in result.data) {
+      expect(result.data.instrument).toBe('sawtooth');
+      expect(result.data.room).toBe(0.5);
+      expect(result.data.decay).toBe(0.2);
+    }
+  });
+
+  it('chord with no new attrs still parses (attrs are optional) (A-02-07)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'min' });
+    expect(result.success).toBe(true);
+  });
+
+  it('room above 1 fails (max is 1)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', room: 1.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('room below 0 fails (min is 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', room: -0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('decay below 0 fails (min is 0)', () => {
+    const result = HarmonyChordSchema.safeParse({ root: 'C', quality: 'maj', decay: -0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('HarmonyRestSchema is unchanged — no instrument/room/decay on rest', () => {
+    // Rests must not gain sound attributes (ADR 0018 D4: HarmonyRestSchema unchanged)
+    const result = HarmonyChordSchema.safeParse({ isRest: true, instrument: 'sine' });
+    // isRest:true parses as rest; 'instrument' is stripped (Zod strips unknown keys)
+    expect(result.success).toBe(true);
+    if (result.success && 'isRest' in result.data) {
+      expect(result.data).not.toHaveProperty('instrument');
+    }
   });
 });

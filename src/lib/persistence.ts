@@ -8,12 +8,13 @@ import type { SessionState } from '../state/session.js';
 // ── Schema version ─────────────────────────────────────────────────────────
 
 /**
- * Schema version 2 — Phase 09 (step 09.3), ADR 0013 D1.
- * Change from v1: `view` enum extended with `'code'` (Código Strudel primary view).
- * Version 1 blobs fail the `z.literal(2)` check and are dropped by the existing
- * safeParse graceful-degradation path — no migration function. Pilot-confirmed tradeoff.
+ * Schema version 3 — Phase 02 (harmonic-rhythm-improvements), ADR 0018 D3.
+ * Change from v2: `SavedChordSchema` gains `instrument?`, `room?`, `decay?` optional fields.
+ * Version 2 blobs fail the `z.literal(3)` check and are dropped by the existing
+ * safeParse graceful-degradation path — no migration function. Pilot-confirmed tradeoff
+ * (same precedent as ADR 0013 D1).
  */
-export const SESSION_SCHEMA_VERSION = 2;
+export const SESSION_SCHEMA_VERSION = 3;
 
 // ── Shared enum constants (mirror agent/schema.ts SK_ arrays) ─────────────
 
@@ -37,6 +38,12 @@ const SavedChordSchema = z.object({
   qual: z.enum(SK_QUAL),
   gain: z.number().min(0).max(1.2),
   bars: z.number().min(0.25).max(8).optional(),
+  /** Oscillator waveform — ADR 0018 D1/D3. Default: 'sawtooth' when absent. */
+  instrument: z.string().optional(),
+  /** Reverb level 0–1 — ADR 0018 D1/D3. Default: 0.25 (chord) / 0.3 (melody) when absent. */
+  room: z.number().min(0).max(1).optional(),
+  /** Amplitude decay in seconds (> 0) — ADR 0018 D1/D3. Absent = no .decay() emitted. */
+  decay: z.number().min(0).optional(),
 });
 
 /**
@@ -93,20 +100,18 @@ const SavedCompositionSchema = z.object({
 });
 
 /**
- * SavedSessionSchema v2 — Phase 09 (step 09.3), ADR 0013 D1.
+ * SavedSessionSchema v3 — Phase 02 (harmonic-rhythm-improvements), ADR 0018 D3.
  *
- * Changes from v1:
- *   - `version` literal bumped from 1 to 2.
- *   - `view` enum extended with `'code'` (five valid strings).
- *   - Safe fallback: `.catch('harmony' as const)` after the enum so any
- *     unrecognized `view` string (forward-compat or corrupt) silently defaults
- *     to `'harmony'` rather than causing safeParse to return `null`.
+ * Changes from v2:
+ *   - `version` literal bumped from 2 to 3.
+ *   - `SavedChordSchema` gains `instrument?`, `room?`, `decay?` optional fields.
  *
- * Version 1 blobs fail the `z.literal(2)` check → dropped by safeParse (existing
- * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0013 D1).
+ * Version 2 blobs fail the `z.literal(3)` check → dropped by safeParse (existing
+ * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0018 D3 /
+ * ADR 0013 D1 precedent).
  */
 export const SavedSessionSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   bpm: z.number().int().min(40).max(280),
   view: z
     .enum(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)
@@ -152,6 +157,10 @@ export function serializeSession(state: SessionState): SavedSession {
           qual: slot.qual,
           gain: slot.gain,
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          // ADR 0018 D3: persist new sound attributes when present.
+          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+          ...(slot.room !== undefined ? { room: slot.room } : {}),
+          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
         };
       }),
     },
@@ -220,6 +229,10 @@ export function deserializeSession(saved: SavedSession): Omit<SessionState, 'now
           qual: slot.qual,
           gain: slot.gain,
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          // ADR 0018 D3: carry through new sound attributes.
+          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+          ...(slot.room !== undefined ? { room: slot.room } : {}),
+          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
         };
       }),
       // Phase 08 (step 08.5): ephemeral UI fields — NOT from SavedHarmonySchema.

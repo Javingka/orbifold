@@ -13,8 +13,10 @@ import { z } from 'zod';
  * Schema version constant; bump if the shape changes in a future phase.
  * Phase 06: bumped from 1 to 2 — `HarmonyChordSchema` now accepts a discriminated
  * rest union `{ isRest: true; bars? }` in addition to the chord object (ADR 0012 D4).
+ * Phase 02 (harmonic-rhythm-improvements): bumped from 2 to 3 — `HarmonyChordCoreSchema`
+ * gains `instrument?`, `room?`, `decay?` optional fields (ADR 0018 D4).
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 // ── Constants (prototype lines 1670–1673) ─────────────────────────────────
 
@@ -120,6 +122,16 @@ const HarmonyChordCoreSchema = z.object({
   gain: z.number().min(0).max(1.2).optional(),
   /** Duration in Strudel cycles (0.25 = one beat, 0.5 = half bar, 1 = one bar, 2 = two bars; multiples of 0.25; default 1). */
   bars: z.number().min(0.25).max(8).optional(),
+  /**
+   * Oscillator waveform — ADR 0018 D4.
+   * Valid technical tokens (verbatim per OQ-7/ADR 0017): 'sawtooth' | 'sine' | 'square' | 'triangle'.
+   * Default when absent: 'sawtooth'.
+   */
+  instrument: z.string().optional(),
+  /** Reverb level 0–1 — ADR 0018 D4. Default when absent: 0.25 (chord) / 0.3 (melody). */
+  room: z.number().min(0).max(1).optional(),
+  /** Amplitude decay in seconds (> 0) — ADR 0018 D4. Absent = no .decay() emitted. */
+  decay: z.number().min(0).optional(),
 });
 
 /**

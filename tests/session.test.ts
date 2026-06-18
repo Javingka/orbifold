@@ -492,12 +492,12 @@ describe('barsLabel — quarter fractions (A-03-07)', () => {
 // ── SavedChordSchema backward-compat — bars: 0.5 (A-03-08) ──────────────────
 // Acceptance criterion A-03-08: a session saved with bars: 0.5 (the old minimum)
 // must still parse successfully against the updated schema (min is now 0.25).
-// Note: schema is now v2 (Phase 09 step 09.3 bumped SESSION_SCHEMA_VERSION from 1 to 2).
+// Note: schema is now v3 (Phase 02 harmonic-rhythm-improvements bumped from 2 to 3 — ADR 0018 D3).
 
 describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
   it('safeParse succeeds for a chord with bars: 0.5 (old minimum)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 2,
+      version: 3,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -515,7 +515,7 @@ describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
 
   it('safeParse succeeds for a chord with bars: 0.25 (new minimum)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 2,
+      version: 3,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -533,7 +533,7 @@ describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
 
   it('safeParse succeeds for a chord without bars (backward-compat for old sessions)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 2,
+      version: 3,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',

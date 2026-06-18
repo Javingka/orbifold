@@ -1388,6 +1388,10 @@ export function applyLoadedSession(saved: SavedSession): void {
           qual: slot.qual,
           gain: slot.gain,
           ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          // ADR 0018 D3: restore sound attributes when present in the saved session.
+          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+          ...(slot.room !== undefined ? { room: slot.room } : {}),
+          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
         };
       }),
       // Phase 08 (step 08.5): ephemeral fields NOT persisted — always reset to defaults.
