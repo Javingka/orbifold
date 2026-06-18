@@ -268,3 +268,155 @@ The Dev stops here. Step 03.3 begins only after the Pilot reviews and approves
 
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 03.3 — Preset engine: `core/codegen/presets.ts`, codegen extension, unit tests
+
+**Date:** 2026-06-18
+**Commit(s):** (terminal commit — see note below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/harmonic-rhythm-improvements/decisions.md`,
+  `docs/adr/0019-oscillator-and-presets.md` (all 7 decisions, Pilot-approved at Checkpoint #2),
+  `docs/harmonic-rhythm-improvements/inventories/phase-03-inventory.md` (confirmed param set
+  and exact preset attribute values), `docs/harmonic-rhythm-improvements/phases/phase-03.md`
+  (step 03.3 scope), `src/core/codegen/strudel.ts` (full file — pre-existing
+  `chordToStrudel`/`melodyLine`/`uniformAttrs`), and `src/state/session.ts` (full file —
+  `Chord` interface, `ProgressionSlot`, all actions).
+- Created `src/core/codegen/presets.ts` (AGPL header; pure engine, no DOM/PIXI/Svelte):
+  - Exports `PRESET_NAMES` tuple and `PresetName` type.
+  - Exports `PRESETS` lookup table with exact ADR 0019 D4a values for Piano, Guitar,
+    Bajo Sintético.
+  - Exports `resolveChordAttrs(chord: ChordAttrs, roomDefault = 0.25): ResolvedAttrs`
+    implementing the per-attribute explicit-wins rule (D3). The `roomDefault` parameter
+    lets each callsite inject its own default to preserve byte-identical room output:
+    `chordToStrudel` passes `0.25`, `melodyLine` passes `0.3`. All new optional attrs
+    (attack, decay, sustain, release, lpenv, lpa, lpd, lpq) return `undefined` when absent
+    from both the chord and the preset — causing the codegen to omit those method calls.
+- Extended `interface Chord` in `src/state/session.ts` with nine new optional fields placed
+  immediately after `decay?`: `preset?`, `lpf?`, `attack?`, `sustain?`, `release?`,
+  `lpenv?`, `lpa?`, `lpd?`, `lpq?` (ADR 0019 D4a). JSDoc cites ADR 0019.
+- Updated `src/core/codegen/strudel.ts`:
+  - Added import of `resolveChordAttrs` and `ChordAttrs` from `./presets.js`.
+  - Extended `HarmonySlotInput` chord branch with `& ChordAttrs` to carry new fields.
+  - Added `chordAttrs?: ChordAttrs` as optional 9th parameter to `chordToStrudel`, consumed
+    via `resolveChordAttrs`. Positional params (instrument/room/decay) take priority as
+    explicit overrides.
+  - Replaced hardcoded `lpf(1200)` at all three callsites with `lpf(${resolved.lpf})`.
+  - Updated the `uniformAttrs` gate (ADR 0019 D7): replaced the old "all-undefined" check
+    with a per-field equality check across all chord slots. This correctly detects variation
+    (forces arrange) while preserving byte-identical behavior when all new fields are absent.
+  - Updated both the slowcat path and the arrange path of `melodyLine` to use
+    `resolveChordAttrs`, emitting `.attack()/.decay()/.sustain()/.release()/.lpenv()/.lpa()/
+    .lpd()/.lpq()` only when the resolved value is not `undefined`.
+- **ADR 0019 D7 behavioral note:** The old ADR 0018 D2 `uniformAttrs` check was "any chord
+  has any non-undefined attr → arrange". The new D7 check is "any chord has a different attr
+  value from the others → arrange". A single-chord progression with `instrument: 'sine'` is
+  now considered uniform (no variation), uses the slowcat path, and the attr IS applied via
+  `resolveChordAttrs`. The three existing ADR 0018 D2 tests that asserted `arrange(` for
+  single-chord cases were updated to document this behavioral change and verify the attr IS
+  still applied. Two-chord progressions with differing presets/attrs still force arrange().
+- Created `tests/presets.test.ts` (63 tests) covering A-03-10 and A-03-01.
+- Added Phase 03 describe blocks to `tests/codegen.test.ts` covering A-03-01 byte-identical
+  regression (all three callsites), D7 gate behavior, Piano preset codegen chain, Guitar
+  filter envelope attrs, Synth Bass lpq, and noise token `pink` codegen.
+
+### Files touched
+
+- `src/core/codegen/presets.ts` (created)
+- `src/state/session.ts` (Chord interface extended)
+- `src/core/codegen/strudel.ts` (codegen extended)
+- `tests/presets.test.ts` (created)
+- `tests/codegen.test.ts` (Phase 03 describe blocks added; 3 ADR 0018 D2 tests updated)
+- `docs/harmonic-rhythm-improvements/handoffs/phase-03-handoff.md` (this entry)
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → clean (ESLint + Prettier).
+- `pnpm exec vitest run` → 620 tests pass (all 17 test files). Prior count: 539. New tests:
+  63 in `presets.test.ts` + new describe blocks in `codegen.test.ts`.
+- All existing tests (pre-Phase-03) remain green. The three updated ADR 0018 D2 tests now
+  correctly describe the D7 behavior (attr applied regardless of path; arrange() only on
+  variation).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | Byte-identical at default at all three callsites | `tests/codegen.test.ts` — "Phase 03 — A-03-01 byte-identical regression" (4 tests) | unit | **CLOSED** |
+| A-03-01 (presets side) | resolveChordAttrs returns defaults when all fields absent | `tests/presets.test.ts` — "byte-identical baseline (A-03-01)" (12 tests) | unit | **CLOSED** |
+| A-03-02 | Piano preset distinct audio | — | manual | not yet — step 03.5 |
+| A-03-03 | Guitar preset distinct audio | — | manual | not yet — step 03.5 |
+| A-03-04 | Synth Bass preset distinct audio | — | manual | not yet — step 03.5 |
+| A-03-05 | Noise oscillator distinct audio | — | manual | not yet — step 03.5 |
+| A-03-06 | Placement matches inventory §(e) | — | manual | not yet — step 03.5 |
+| A-03-07 | Accent border on slot selected | — | manual | not yet — step 03.5 |
+| A-03-08 | Pulse on selection change | — | manual | not yet — step 03.5 |
+| A-03-09 | No border when no slot selected | — | manual | not yet — step 03.5 |
+| A-03-10 | resolveChordAttrs exact preset values | `tests/presets.test.ts` — Piano (11 tests), Guitar (11), Synth-bass (11), explicit-wins (9), PRESETS table (3) | unit | **CLOSED** |
+| A-03-10 (codegen side) | Preset chain in Strudel output | `tests/codegen.test.ts` — "Phase 03 — preset codegen" (10 tests) | unit | **CLOSED** |
+| A-03-11 | Persistence v3 drop + v4 parse | — | unit | not yet — step 03.4 |
+| A-03-12 | Agent schema v4 optional fields | — | unit | not yet — step 03.4 |
+| A-03-13 | i18n key-parity passes | `tests/i18n/key-parity.test.ts` (existing, green) | unit | **passes** (no new keys yet — step 03.5) |
+| A-03-14 | `pnpm build` clean | — | automated | not yet — step 03.5 |
+
+### Prototype parity
+
+Not applicable — Oscillator/Preset menus are net-new features that did not exist in
+`reference/orbifold.html`. No prototype source to cite. Spec authority is ADR 0019.
+
+### Decisions made (if any)
+
+**`resolveChordAttrs` room callsite default design:** The `roomDefault` parameter approach
+was chosen (over returning `undefined` and keeping room literals at each callsite) because:
+1. It keeps a single source of truth (all room logic in `resolveChordAttrs`).
+2. The callsite still controls its own default — byte-identical guarantee held at each site.
+3. The function signature is clean and self-documenting.
+
+### Proposed Decisions Register entries (for Pilot consideration)
+
+None beyond what ADR 0019 already captures. The `lpf` variabilization is fully documented
+in ADR 0019 D4b.
+
+### Blockers resolved during this step (if any)
+
+None. One transient issue encountered:
+- The ESLint `no-non-null-assertion` rule rejected `!` on array access. Fixed by using
+  `if (ref === undefined) return true` guard and `?? {}` fallback — no behavior change.
+
+### Environment state after this step
+
+- Branch: `harmonic-rhythm-improvements/phase-01`
+- 620 tests pass (up from 539).
+- `src/core/codegen/presets.ts` is a new pure-engine module with no DOM/PIXI/Svelte imports.
+- `Chord` interface carries 9 new optional fields (all undefined by default — no migration
+  needed at this step; migration is step 03.4).
+- `chordToStrudel` and `melodyLine` emit byte-identical output when all new fields are absent.
+
+### Auto-continuation
+
+Per the phase file, the next step is **03.4** (Data model, persistence schema bump, agent
+schema bump). No checkpoint required between 03.3 and 03.4 (the phase has two checkpoints:
+Checkpoint #1 after 03.1 and Checkpoint #2 after 03.2, both already passed). The Dev
+auto-continues to step 03.4.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** (pending)
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(codegen): Phase 03 step 03.3 — preset engine + resolveChordAttrs + uniformAttrs gate`
+
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.

@@ -170,6 +170,53 @@ export interface Chord {
    * Introduced in Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D1.
    */
   decay?: number;
+  /**
+   * Named preset bundle. Technical token — not translated (ADR 0017 §D3).
+   * Valid values: 'piano' | 'guitar' | 'synth-bass'.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D2.
+   */
+  preset?: 'piano' | 'guitar' | 'synth-bass';
+  /**
+   * Low-pass filter cutoff frequency in Hz.
+   * Default (undefined): resolves to 1200 via resolveChordAttrs.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpf?: number;
+  /**
+   * Amplitude attack time in seconds (>= 0).
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  attack?: number;
+  /**
+   * Amplitude sustain level 0–1.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  sustain?: number;
+  /**
+   * Amplitude release time in seconds (>= 0).
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  release?: number;
+  /**
+   * Filter envelope modulation depth.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpenv?: number;
+  /**
+   * Filter envelope attack time in seconds.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpa?: number;
+  /**
+   * Filter envelope decay time in seconds.
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpd?: number;
+  /**
+   * Filter resonance (Q factor).
+   * Introduced in Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a.
+   */
+  lpq?: number;
 }
 
 /**

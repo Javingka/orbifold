@@ -3,6 +3,11 @@
 // All golden values produced by running scripts/extract-golden-01-5.mjs
 // (Node execution of extracted prototype functions from reference/orbifold.html
 // lines 605–608, 758–773, 833–836, 1470–1476, 1931–1938, 2054–2065).
+//
+// Phase 03 additions (step 03.3):
+//   A-03-01 — byte-identical regression with all new fields absent
+//   A-03-10 (codegen side) — preset codegen emits exact attribute chain
+//   Noise token — pink oscillator emits s("pink")
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -243,39 +248,28 @@ describe('melodyLine — ADR 0018 sound attributes (arrange case)', () => {
     expect(result).not.toContain('.decay');
   });
 
-  // Per-slot attrs on bars=1 chords — this would silently be ignored before the
-  // uniformAttrs fix (the slowcat path only reads function-level params). After the
-  // fix, any chord with a non-default attr forces the arrange() path where per-slot
-  // attrs are read correctly.
-  it('per-slot instrument on bars=1 chord → arrange() path, attr applied (ADR 0018 D2 fix)', () => {
-    const result = melodyLine(
-      [{ rootPc: 0, qual: 'maj', instrument: 'sine' }],
-      'chord',
-      3
-    );
-    // Must use arrange() (not slowcat) so the slot's instrument is respected
-    expect(result).toContain('arrange(');
+  // Per-slot attrs on bars=1 chords — with ADR 0018 D2, any non-undefined attr
+  // forced the arrange() path. With ADR 0019 D7, the uniformAttrs gate detects
+  // VARIATION across chords (not merely presence). A single chord is always
+  // "uniform" (no variation), so a single chord with instrument:'sine' now uses
+  // the slowcat path, which correctly applies the attr via resolveChordAttrs.
+  // The attr IS applied regardless of path — the arrange() assertion is updated.
+  it('per-slot instrument on bars=1 chord → attr applied (ADR 0018 D2 / ADR 0019 D7)', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', instrument: 'sine' }], 'chord', 3);
+    // ADR 0019 D7: single chord with uniform attrs uses slowcat; attr is still applied.
     expect(result).toContain('s("sine")');
     expect(result).not.toContain('s("sawtooth")');
   });
 
-  it('per-slot room on bars=1 chord → arrange() path, room applied', () => {
-    const result = melodyLine(
-      [{ rootPc: 0, qual: 'maj', room: 0.7 }],
-      'chord',
-      3
-    );
-    expect(result).toContain('arrange(');
+  it('per-slot room on bars=1 chord → room applied (ADR 0018 D2 / ADR 0019 D7)', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', room: 0.7 }], 'chord', 3);
+    // ADR 0019 D7: single chord is uniform; slowcat path applies room via resolveChordAttrs.
     expect(result).toContain('room(0.7)');
   });
 
-  it('per-slot decay on bars=1 chord → arrange() path, decay applied', () => {
-    const result = melodyLine(
-      [{ rootPc: 0, qual: 'maj', decay: 0.4 }],
-      'chord',
-      3
-    );
-    expect(result).toContain('arrange(');
+  it('per-slot decay on bars=1 chord → decay applied (ADR 0018 D2 / ADR 0019 D7)', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', decay: 0.4 }], 'chord', 3);
+    // ADR 0019 D7: single chord is uniform; slowcat path applies decay via resolveChordAttrs.
     expect(result).toContain('.decay(0.4)');
   });
 
@@ -728,5 +722,216 @@ describe('buildComposition', () => {
     const result = buildComposition(blocks, tracks);
     // Track 1 has no matching block → filtered out → single track output
     expect(result).toBe('// ── Composición ──\narrange(\n  [4, s("bd")]\n)');
+  });
+});
+
+// ── Phase 03 step 03.3 additions ──────────────────────────────────────────────
+// A-03-01: byte-identical regression with ALL new fields absent at all three callsites.
+// A-03-10 (codegen side): preset codegen emits Piano attribute chain.
+// Noise token: 'pink' oscillator emits s("pink").
+
+// ── A-03-01: byte-identical regression ────────────────────────────────────────
+// When all new Phase 03 fields (preset, lpf, attack, sustain, release, lpenv, lpa,
+// lpd, lpq) are absent on every chord, and the existing fields (instrument, room,
+// decay) are also absent, codegen output must be character-for-character identical
+// to the pre-Phase-03 hardcoded strings.
+
+describe('Phase 03 — A-03-01 byte-identical regression', () => {
+  // Callsite 1: chordToStrudel (room default 0.25)
+  it('chordToStrudel: no new fields → byte-identical to pre-Phase-03 string', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3);
+    expect(result).toBe('note("C3,E3,G3").s("sawtooth").lpf(1200).gain(0.60).room(0.25)');
+  });
+
+  // Callsite 2: melodyLine uniform path (room default 0.3)
+  it('melodyLine uniform path: no new fields → byte-identical to pre-Phase-03 string', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj' },
+        { rootPc: 9, qual: 'min' },
+      ],
+      'chord',
+      3
+    );
+    expect(result).toBe(
+      '  note("<[C3,E3,G3] [A3,C4,E4]>").s("sawtooth").lpf(1200).gain("<0.60 0.60>").room(0.3)'
+    );
+  });
+
+  // Callsite 3: melodyLine arrange path (room default 0.3)
+  it('melodyLine arrange path: no new fields → byte-identical to pre-Phase-03 string', () => {
+    const result = melodyLine([{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 2 }], 'chord', 3);
+    expect(result).toBe(
+      'arrange(\n  [2, note("[C3,E3,G3]").s("sawtooth").lpf(1200).gain(0.60).room(0.3).slow(2)]\n)'
+    );
+  });
+
+  // uniformAttrs gate: all new fields undefined → gate unchanged (still uniform)
+  it('uniformAttrs gate: new fields all undefined → gate returns uniform (slowcat path)', () => {
+    // Two chords, no new fields set — must use slowcat (not arrange)
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 1 },
+        { rootPc: 9, qual: 'min', gain: 0.6, bars: 1 },
+      ],
+      'chord',
+      3
+    );
+    expect(result).not.toContain('arrange(');
+    expect(result).toBe(
+      '  note("<[C3,E3,G3] [A3,C4,E4]>").s("sawtooth").lpf(1200).gain("<0.60 0.60>").room(0.3)'
+    );
+  });
+});
+
+// ── Preset codegen: Piano preset on a single-bar progression ─────────────────
+// A-03-10 (codegen side): a chord with preset:'piano' on a single-bar progression
+// must force the arrange() path (uniformAttrs gate, ADR 0019 D7) and emit Piano's
+// exact attribute chain in the output.
+
+describe('Phase 03 — preset codegen (A-03-10 codegen side)', () => {
+  it('two chords with different presets force arrange() path (D7 gate)', () => {
+    // D7 gate triggers arrange() when presets VARY across chords.
+    // A single chord (bars:1) with preset:'piano' is uniform (no variation) → slowcat.
+    // Two chords where one has preset:'piano' and the other has no preset → arrange().
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' },
+        { rootPc: 7, qual: 'maj', gain: 0.6, bars: 1 }, // no preset → undefined ≠ 'piano'
+      ],
+      'chord',
+      3
+    );
+    expect(result).toContain('arrange(');
+  });
+
+  it('preset piano chord emits triangle oscillator', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('s("triangle")');
+    expect(result).not.toContain('s("sawtooth")');
+  });
+
+  it('preset piano chord emits lpf(1800)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('lpf(1800)');
+    expect(result).not.toContain('lpf(1200)');
+  });
+
+  it('preset piano chord emits room(0.4)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('room(0.4)');
+  });
+
+  it('preset piano chord emits .attack(0.02)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('.attack(0.02)');
+  });
+
+  it('preset piano chord emits .decay(0.4)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('.decay(0.4)');
+  });
+
+  it('preset piano chord emits .sustain(0.1)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('.sustain(0.1)');
+  });
+
+  it('preset piano chord emits .release(0.3)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'piano' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('.release(0.3)');
+  });
+
+  it('preset guitar chord emits filter envelope attributes (.lpenv .lpa .lpd)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'guitar' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('.lpenv(3)');
+    expect(result).toContain('.lpa(0.01)');
+    expect(result).toContain('.lpd(0.25)');
+  });
+
+  it('preset synth-bass chord emits .lpq(2)', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, preset: 'synth-bass' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('.lpq(2)');
+  });
+
+  it('chordToStrudel with preset piano emits Piano attribute chain', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, undefined, undefined, undefined, {
+      preset: 'piano',
+    });
+    expect(result).toContain('s("triangle")');
+    expect(result).toContain('lpf(1800)');
+    expect(result).toContain('room(0.4)');
+    expect(result).toContain('.attack(0.02)');
+    expect(result).toContain('.decay(0.4)');
+  });
+});
+
+// ── Noise token codegen ────────────────────────────────────────────────────────
+// A noise oscillator (e.g. 'pink') must emit s("pink") in the Strudel chain.
+
+describe('Phase 03 — noise token codegen', () => {
+  it('chordToStrudel with instrument pink → s("pink")', () => {
+    const result = chordToStrudel(0, 'maj', null, 'chord', 3, 'pink');
+    expect(result).toContain('s("pink")');
+    expect(result).not.toContain('s("sawtooth")');
+  });
+
+  it('melodyLine with slot instrument pink → s("pink") in arrange path', () => {
+    const result = melodyLine(
+      [{ rootPc: 0, qual: 'maj', gain: 0.6, bars: 1, instrument: 'pink' }],
+      'chord',
+      3
+    );
+    expect(result).toContain('s("pink")');
+  });
+
+  it('melodyLine with top-level instrument pink → s("pink") in uniform path', () => {
+    const result = melodyLine(
+      [
+        { rootPc: 0, qual: 'maj' },
+        { rootPc: 9, qual: 'min' },
+      ],
+      'chord',
+      3,
+      'pink'
+    );
+    expect(result).toContain('s("pink")');
+    expect(result).not.toContain('s("sawtooth")');
   });
 });
