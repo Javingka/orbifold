@@ -63,6 +63,7 @@ import { get } from 'svelte/store';
 import { sessionStore } from '../state/session.js';
 import type { ProgressionSlot, Chord, SessionState } from '../state/session.js';
 import { clearChordAt, setChordBars, reorderSlot, clampBars } from '../state/session.js';
+import { selectedSlotIdxStore } from '../state/selectedSlot.js';
 import type { Quality } from '../core/theory/chords.js';
 import { chordVoicing, chordLabel } from '../core/theory/chords.js';
 import { diatonicLookup } from '../core/theory/scales.js';
@@ -609,7 +610,8 @@ let _observer: ResizeObserver | null = null;
 // (Pentagrama.dc.html state at lines 528–558, 560–575, 578–590). Here these are
 // module-level variables — same semantics, different housing.
 
-let _selectedSlotIdx: number | null = null;
+// _selectedSlotIdx is now managed via selectedSlotIdxStore (ADR 0018 D5, step 02.4).
+// All reads use `get(selectedSlotIdxStore)`; all writes use `selectedSlotIdxStore.set(n)`.
 let _hoverSlotIdx: number | null = null;
 
 // Resize state
@@ -685,8 +687,9 @@ function paint(ts: DOMHighResTimeStamp): void {
 
   // ADR 0014 Consequence 3: if the selected slot index is now out of range
   // (e.g., the progression shrank due to clearChordAt), reset selection.
+  const _selectedSlotIdx = get(selectedSlotIdxStore);
   if (_selectedSlotIdx !== null && _selectedSlotIdx >= progression.length) {
-    _selectedSlotIdx = null;
+    selectedSlotIdxStore.set(null);
   }
 
   // Responsive geometry (ADR 0015 D3)
@@ -1085,19 +1088,20 @@ function onDn(e: PointerEvent): void {
   // (1) ✕ hit-test: if a slot is selected and pointer is within 13px of ✕ centre.
   // ✕ centre = (x+w-10, cy-ls*2-11) in canvas coords (matches selection chrome).
   // Prototype: `Math.hypot(px-(sx+sw-10), py-(cy-ls*2-11)) < 13` (lines 537–539).
-  if (_selectedSlotIdx !== null) {
-    const selSlot = progression[_selectedSlotIdx];
+  const selIdx = get(selectedSlotIdxStore);
+  if (selIdx !== null) {
+    const selSlot = progression[selIdx];
     if (selSlot !== undefined) {
       // Derive geometry matching paint() — use _H for ls/cy.
       const ls = Math.max(24, Math.min(88, _H / 6));
       const cy = _H / 2 - ls * 0.75;
-      const sx = slotX(_selectedSlotIdx, progression);
+      const sx = slotX(selIdx, progression);
       const sw = _resizeActive ? _resizePreviewBars * PX : slotW(selSlot);
       const bx = sx + sw - 10;
       const by = cy - ls * 2 - 11;
       if (Math.hypot(px - bx, py - by) < 13) {
-        clearChordAt(_selectedSlotIdx);
-        _selectedSlotIdx = null;
+        clearChordAt(selIdx);
+        selectedSlotIdxStore.set(null);
         _resizeActive = false;
         _moveActive = false;
         _pointerDownOnSelected = false;
@@ -1110,7 +1114,7 @@ function onDn(e: PointerEvent): void {
       // Prototype: `if (px > sx + sw - 14 && px < sx + sw + 5)` (lines 541–544).
       const adjPx = px - SL;
       const resizeHit = hitTestResizeHandle(adjPx, _slotBounds, 14);
-      if (resizeHit === _selectedSlotIdx) {
+      if (resizeHit === selIdx) {
         _resizeActive = true;
         _resizeStartPx = px;
         _resizeStartBars = selSlot.bars ?? 1;
@@ -1130,7 +1134,7 @@ function onDn(e: PointerEvent): void {
   const adjPx = px - SL;
   const hit = hitTestSlot(adjPx, _slotBounds);
   if (hit !== null) {
-    if (_selectedSlotIdx === hit) {
+    if (selIdx === hit) {
       // Already selected → arm for move (4px threshold in onMv).
       // Prototype: `if (selectedSlot === hit) { Object.assign(this.drag, {mode:'arm', ...})`
       _pointerDownPx = px;
@@ -1140,14 +1144,14 @@ function onDn(e: PointerEvent): void {
       _canvas.setPointerCapture(e.pointerId);
     } else {
       // New slot → select it.
-      _selectedSlotIdx = hit;
+      selectedSlotIdxStore.set(hit);
       _pointerDownOnSelected = false;
       _resizeActive = false;
       _moveActive = false;
     }
   } else {
     // (4) Outside all slots → deselect.
-    _selectedSlotIdx = null;
+    selectedSlotIdxStore.set(null);
     _resizeActive = false;
     _moveActive = false;
     _pointerDownOnSelected = false;
@@ -1206,10 +1210,11 @@ function onUp(e: PointerEvent): void {
     return;
   }
 
-  if (_resizeActive && _selectedSlotIdx !== null) {
+  const resizeSelIdx = get(selectedSlotIdxStore);
+  if (_resizeActive && resizeSelIdx !== null) {
     // Commit resize: write clamped bars to the store (setChordBars also clamps internally).
     // Prototype: modifies slot.duration directly; we use the store action.
-    setChordBars(_selectedSlotIdx, _resizePreviewBars);
+    setChordBars(resizeSelIdx, _resizePreviewBars);
   }
 
   if (_moveActive && _moveFromIdx >= 0 && _moveInsertIdx >= 0) {
@@ -1316,7 +1321,7 @@ export function destroyPentagrama(): void {
   _ctx = null;
 
   // Reset interaction state so a subsequent initPentagrama starts clean.
-  _selectedSlotIdx = null;
+  selectedSlotIdxStore.set(null);
   _hoverSlotIdx = null;
   _resizeActive = false;
   _resizeStartPx = 0;

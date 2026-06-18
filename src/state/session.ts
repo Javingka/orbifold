@@ -617,9 +617,36 @@ export function requeueLive(): string | null {
  * @param qual   - Chord quality.
  * @param gain   - Per-chord gain (0–1.2; prototype default 0.6).
  */
-export function playChord(rootPc: number, qual: Quality, gain: number): void {
+/**
+ * Play a chord immediately using `runNow` (one-shot preview, not queued).
+ *
+ * Accepts optional sound attribute overrides (`instrument`, `room`, `decay`)
+ * so callers that know the chord's stored attributes (e.g. a Pentagrama slot
+ * edit) can forward them. When omitted the codegen defaults apply
+ * (instrument='sawtooth', room=0.25, no decay).
+ *
+ * Prototype: `pickChord()` lines 1357–1360 (runNow call + setNowPlaying).
+ * Phase 02 step 02.4: threaded instrument/room/decay — ADR 0018 D5.
+ */
+export function playChord(
+  rootPc: number,
+  qual: Quality,
+  gain: number,
+  instrument?: string,
+  room?: number,
+  decay?: number
+): void {
   const state = get(sessionStore);
-  const code = chordToStrudel(rootPc, qual, gain, state.chordMode, state.harmony.octave);
+  const code = chordToStrudel(
+    rootPc,
+    qual,
+    gain,
+    state.chordMode,
+    state.harmony.octave,
+    instrument,
+    room,
+    decay
+  );
   const label = 'Acorde · ' + chordLabel(rootPc, qual);
   // Fire and forget — audio is lazy-loaded; initAudio() is idempotent.
   // initAudio() called here ensures the audio context is ready on the first chord pick
@@ -932,6 +959,65 @@ export function setChordBars(index: number, bars: number): void {
     const clamped = clampBars(bars);
     const progression = s.harmony.progression.map((ch, i) =>
       i === index ? { ...ch, bars: clamped } : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Set the instrument waveform for the chord slot at `index`.
+ *
+ * Updates `progression[index].instrument` and calls `requeueLive()` so
+ * a running harmony engine picks up the change at the next cycle boundary.
+ * Has no effect if `index` is out of range or points to a rest slot.
+ *
+ * Modeled on `setChordBars`. Introduced in Phase 02 (harmonic-rhythm-improvements)
+ * step 02.4 — ADR 0018 D5.
+ *
+ * @param index      - Zero-based progression slot index.
+ * @param instrument - Oscillator waveform name (e.g. 'sawtooth', 'sine', 'square', 'triangle').
+ */
+export function setChordInstrument(index: number, instrument: string): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    if (slot === undefined || 'isRest' in slot) return s;
+    const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+      i === index ? { ...ch, instrument } : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Batch-update instrument, room, and/or decay on the chord slot at `index`.
+ *
+ * Only fields present (not `undefined`) in `attrs` are written. Calls
+ * `requeueLive()` so a running harmony engine picks up the change at the
+ * next cycle boundary. Has no effect if `index` is out of range or points
+ * to a rest slot.
+ *
+ * Introduced in Phase 02 (harmonic-rhythm-improvements) step 02.4 — ADR 0018 D5.
+ *
+ * @param index - Zero-based progression slot index.
+ * @param attrs - Object with optional `instrument`, `room`, and/or `decay` overrides.
+ */
+export function setChordSoundAttrs(
+  index: number,
+  attrs: { instrument?: string; room?: number; decay?: number }
+): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    if (slot === undefined || 'isRest' in slot) return s;
+    const updated = { ...slot };
+    if (attrs.instrument !== undefined) updated.instrument = attrs.instrument;
+    if (attrs.room !== undefined) updated.room = attrs.room;
+    if (attrs.decay !== undefined) updated.decay = attrs.decay;
+    const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+      i === index ? updated : ch
     );
     return { ...s, harmony: { ...s.harmony, progression } };
   });
