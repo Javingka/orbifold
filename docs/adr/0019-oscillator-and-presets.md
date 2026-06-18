@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # ADR 0019 — Oscillator / Preset data model
 
-- **Status:** Proposed / pending Pilot approval at Checkpoint #2
+- **Status:** Accepted (Pilot approved at Checkpoint #2, 2026-06-18)
 - **Date:** 2026-06-18
 - **Initiative / Phase:** harmonic-rhythm-improvements / Phase 03 (step 03.2)
 - **Deciders:** Pilot (Javier)

@@ -1072,6 +1072,55 @@ export function setChordSoundAttrs(
 }
 
 /**
+ * Set the preset bundle name for the chord slot at `index`.
+ *
+ * Updates `progression[index].preset` and calls `requeueLive()` so a running
+ * harmony engine picks up the change at the next cycle boundary.
+ * Has no effect if `index` is out of range or points to a rest slot.
+ * Pass `undefined` to clear the preset (no preset selected).
+ *
+ * Introduced in Phase 03 (harmonic-rhythm-improvements) step 03.4 — ADR 0019 D2/D4a.
+ *
+ * @param index  - Zero-based progression slot index.
+ * @param preset - Preset name ('piano' | 'guitar' | 'synth-bass') or undefined to clear.
+ */
+export function setChordPreset(
+  index: number,
+  preset: 'piano' | 'guitar' | 'synth-bass' | undefined
+): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    if (slot === undefined || 'isRest' in slot) return s;
+    const updated: Chord = { ...slot };
+    updated.preset = preset;
+    const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+      i === index ? updated : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Set the oscillator waveform for the chord slot at `index`.
+ *
+ * Alias for `setChordInstrument` with ADR 0019 D1 semantics: the oscillator field
+ * is `instrument` (extended to include 'pink' in Phase 03). The UI exposes this as
+ * the "Oscillator" selector; data field stays `instrument`.
+ * Has no effect if `index` is out of range or points to a rest slot.
+ *
+ * Introduced in Phase 03 (harmonic-rhythm-improvements) step 03.4 — ADR 0019 D1.
+ *
+ * @param index      - Zero-based progression slot index.
+ * @param instrument - Oscillator waveform name ('sawtooth' | 'sine' | 'square' | 'triangle' | 'pink').
+ */
+export function setChordOscillator(index: number, instrument: string): void {
+  // Delegates to the existing setChordInstrument (same field, same requeueLive behavior).
+  setChordInstrument(index, instrument);
+}
+
+/**
  * Append a rest slot with `bars: 1` to the end of the progression.
  *
  * Delegates to `addRestAt(progression.length)`.

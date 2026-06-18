@@ -33,11 +33,23 @@ export const selectedSlotIdxStore: Writable<number | null> = writable(null);
  * When a Tonnetz triangle is clicked to add a new chord, the new chord
  * inherits these values (apply-to-new behavior, ADR 0018 D5).
  *
- * Written by `Header.svelte` whenever the user changes an instrument/room/decay
+ * Written by `Header.svelte` whenever the user changes an instrument/room/decay/preset
  * control. Read by `tonnetz-scene.ts` in `pickChord`.
+ *
+ * Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D4a/D2:
+ * Extended with `preset?` (the named preset bundle) alongside `instrument` (the oscillator).
+ * The preset name alone resolves the full filter/envelope bundle via `resolveChordAttrs`
+ * at codegen time (D2 name-only model), so the intent store carries only the two
+ * selector values — not the expanded filter/envelope fields. The `decay` sentinel
+ * (0 = "no decay applied") from Phase 02 is preserved: a zero `decay` value means
+ * no `.decay()` is emitted (the codegen checks for `undefined`, not zero; only
+ * explicitly set non-undefined values are written to new chords; decay:0 is a
+ * no-op sentinel in the intent but is passed through if set). Since `decay` is
+ * still used as an ADR 0018 D5 field, it remains in the intent shape.
  */
 export const soundIntentStore: Writable<{
   instrument: string;
   room: number;
   decay: number;
+  preset?: 'piano' | 'guitar' | 'synth-bass';
 }> = writable({ instrument: 'sawtooth', room: 0.25, decay: 0 });

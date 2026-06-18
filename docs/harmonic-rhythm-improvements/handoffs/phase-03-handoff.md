@@ -420,3 +420,169 @@ auto-continues to step 03.4.
 
 - Hash: self-referential — not recorded
 - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+---
+
+## Step 03.4 — Data model, persistence schema bump, and agent schema bump
+
+**Date:** 2026-06-18
+**Commit(s):** (terminal commit — see note below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/harmonic-rhythm-improvements/decisions.md`,
+  `docs/adr/0019-oscillator-and-presets.md` (D4a/D5/D6 governing this step),
+  `docs/harmonic-rhythm-improvements/phases/phase-03.md` (step 03.4 scope),
+  `docs/harmonic-rhythm-improvements/handoffs/phase-03-handoff.md` (step 03.3 APPROVED),
+  `src/lib/persistence.ts`, `src/agent/schema.ts`, `src/state/selectedSlot.ts`,
+  and `src/state/session.ts` (existing store actions for style reference).
+- **`src/lib/persistence.ts`:** bumped `SESSION_SCHEMA_VERSION` 3→4; changed
+  `SavedSessionSchema` version literal `z.literal(3)` → `z.literal(4)`; added all 9 new
+  optional fields to `SavedChordSchema` per ADR 0019 D5 (`preset`, `lpf`, `attack`,
+  `sustain`, `release`, `lpenv`, `lpa`, `lpd`, `lpq`); updated both `serializeSession`
+  and `deserializeSession` to carry the new fields through.
+- **`src/agent/schema.ts`:** bumped `SCHEMA_VERSION` 3→4; added the same 9 new optional
+  fields to `HarmonyChordCoreSchema` per ADR 0019 D6; `instrument` field comment updated
+  to document `'pink'` as a now-valid technical token; `HarmonyRestSchema` unchanged.
+- **`src/state/selectedSlot.ts`:** extended `soundIntentStore` shape with `preset?:
+  'piano' | 'guitar' | 'synth-bass'`. Decision rationale (documented in JSDoc):
+  per ADR 0019 D2 (name-only preset model), `resolveChordAttrs` expands the preset at
+  codegen time — so the intent store needs only `{ instrument, room, decay, preset? }`,
+  not the full filter/envelope set. The existing `decay: 0` sentinel is preserved
+  (intent carries it; codegen behavior unchanged since the field on `Chord` must be
+  explicitly set, not zero, to emit `.decay()`). Initial value unchanged
+  (`{ instrument: 'sawtooth', room: 0.25, decay: 0 }` — no preset intent initially).
+- **`src/state/session.ts`:** added two new exported action functions:
+  - `setChordPreset(index, preset)` — writes `progression[index].preset` and calls
+    `requeueLive()`. Accepts `'piano' | 'guitar' | 'synth-bass' | undefined`.
+  - `setChordOscillator(index, instrument)` — delegates to the existing
+    `setChordInstrument(index, instrument)` (ADR 0019 D1: `instrument` field unchanged;
+    UI label is "Oscillator" but data field stays `instrument`). Both actions follow the
+    Phase 02 style: guard on `isRest`, spread-update, `requeueLive()`.
+- **Tests:**
+  - `tests/persistence.test.ts`: updated `MINIMAL_SAVED`/`FULL_SAVED` fixtures from
+    `version: 3` to `version: 4`; updated all inline `version: 3` literals in test
+    bodies to `version: 4`; updated the `SESSION_SCHEMA_VERSION is 3` test to assert 4;
+    updated the Phase 06 "chord-only at schema v3" test to v4; updated the Phase 06 and
+    Phase 02 blob-drop tests to use v4 terminology; added new
+    `ADR 0019 D5: schema v4 — preset + filter/envelope + lossy v3 drop (A-03-11)` describe
+    block with 8 tests (v3 drop, preset parse, full-fields parse, backward-compatible
+    missing fields, round-trip, invalid preset rejected, attack<0 rejected,
+    sustain>1 rejected).
+  - `tests/schema.test.ts`: updated `SCHEMA_VERSION is 3` test to assert 4; added new
+    `ADR 0019 D6 preset + filter/envelope fields (A-03-12)` describe block with 15 tests
+    (all three preset names accepted, invalid preset rejected, pink noise token accepted,
+    full filter/envelope accepted, missing-fields undefined, attack<0 rejected, sustain>1
+    rejected, release<0 rejected, lpa<0 rejected, lpd<0 rejected, lpq<0 rejected,
+    rest unchanged — preset stripped, SCHEMA_VERSION is 4).
+  - `tests/session.test.ts`: updated 3 version-literal tests in the
+    `SavedChordSchema backward-compat` describe block from `version: 3` to `version: 4`
+    (behavior unchanged; these were version-literal updates only per the scope note).
+
+### Files touched
+
+- `src/lib/persistence.ts` (SESSION_SCHEMA_VERSION 3→4; SavedChordSchema + serialize/deserialize)
+- `src/agent/schema.ts` (SCHEMA_VERSION 3→4; HarmonyChordCoreSchema extended)
+- `src/state/selectedSlot.ts` (soundIntentStore extended with preset?)
+- `src/state/session.ts` (setChordPreset + setChordOscillator actions added)
+- `tests/persistence.test.ts` (version literals updated; A-03-11 describe block added)
+- `tests/schema.test.ts` (version literal updated; A-03-12 describe block added)
+- `tests/session.test.ts` (3 version-literal fixture updates)
+- `docs/adr/0019-oscillator-and-presets.md` (status updated to Accepted by Planner)
+- `docs/harmonic-rhythm-improvements/handoffs/phase-03-handoff.md` (this entry)
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` → clean (0 errors).
+- `pnpm lint` → clean (ESLint + Prettier; schema.test.ts reformatted by Prettier).
+- `pnpm exec vitest run` → **646 tests pass** (17 test files). Prior count: 620.
+  New tests: 8 in `persistence.test.ts` (A-03-11 block) + 15 in `schema.test.ts`
+  (A-03-12 block) + 3 updated version-literal tests in `session.test.ts` = 26 net new.
+- Confirmed all prior tests (pre-step-03.4) remain green. The 3 `session.test.ts`
+  version-literal updates were version-number changes only, not behavior changes.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | Byte-identical at default | `tests/codegen.test.ts`, `tests/presets.test.ts` (step 03.3) | unit | **CLOSED** (step 03.3) |
+| A-03-02 | Piano preset distinct audio | — | manual | not yet — step 03.5 |
+| A-03-03 | Guitar preset distinct audio | — | manual | not yet — step 03.5 |
+| A-03-04 | Synth Bass preset distinct audio | — | manual | not yet — step 03.5 |
+| A-03-05 | Noise oscillator distinct audio | — | manual | not yet — step 03.5 |
+| A-03-06 | Placement matches inventory §(e) | — | manual | not yet — step 03.5 |
+| A-03-07 | Accent border on slot selected | — | manual | not yet — step 03.5 |
+| A-03-08 | Pulse on selection change | — | manual | not yet — step 03.5 |
+| A-03-09 | No border when no slot selected | — | manual | not yet — step 03.5 |
+| A-03-10 | resolveChordAttrs exact preset values | `tests/presets.test.ts` (step 03.3) | unit | **CLOSED** (step 03.3) |
+| A-03-11 | Persistence v3 drop + v4 parse | `tests/persistence.test.ts` — "ADR 0019 D5: schema v4" (8 tests: v3 drop, preset parse, full-fields parse, missing-fields backward-compat, round-trip, invalid preset, attack<0, sustain>1) | unit | **CLOSED** |
+| A-03-12 | Agent schema v4 optional fields | `tests/schema.test.ts` — "ADR 0019 D6 preset + filter/envelope fields" (15 tests: 3 preset names, invalid preset rejected, pink token, full fields, missing-fields undefined, 5 constraint rejects, rest unchanged, SCHEMA_VERSION is 4) | unit | **CLOSED** |
+| A-03-13 | i18n key-parity passes | `tests/i18n/key-parity.test.ts` (existing, green) | unit | passes (no new keys yet — step 03.5) |
+| A-03-14 | `pnpm build` clean | — | automated | not yet — step 03.5 |
+
+### Prototype parity
+
+Not applicable — Oscillator/Preset menus and the schema changes backing them are net-new
+features that did not exist in `reference/orbifold.html`. No prototype source to cite.
+Spec authority is ADR 0019.
+
+### Decisions made (if any)
+
+**`soundIntentStore` carries `preset?` only (not the full filter/envelope set):**
+Per ADR 0019 D2 (name-only preset model), `resolveChordAttrs` expands the preset bundle
+at codegen time — the intent store needs only the two selector values (`instrument` and
+`preset?`) in addition to the existing Phase 02 fields (`room`, `decay`). The full
+filter/envelope expansion is not stored in the intent because it would duplicate the
+lookup table logic and create a two-source-of-truth risk. The step 03.5 UI will read
+`soundIntentStore.preset` and `soundIntentStore.instrument` when creating new chords.
+
+**`setChordOscillator` delegates to `setChordInstrument`:** ADR 0019 D1 decided that the
+data field is `instrument` (not a new `oscillator` field). `setChordOscillator` is a
+thin wrapper that makes the UI's call-site intent clear without duplicating logic. Both
+are exported and the UI (step 03.5) may call either.
+
+### Proposed Decisions Register entries (for Pilot consideration)
+
+None new beyond what ADR 0019 already captures.
+
+### Blockers resolved during this step (if any)
+
+None. One transient issue encountered:
+- `tests/session.test.ts` had 3 `version: 3` fixture literals in the
+  `SavedChordSchema backward-compat` describe block — updated to `version: 4` (these
+  were version-literal updates only, not behavior changes; noted in handoff per scope
+  instruction).
+
+### Environment state after this step
+
+- Branch: `harmonic-rhythm-improvements/phase-01`
+- 646 tests pass (up from 620).
+- `SESSION_SCHEMA_VERSION = 4`, `SCHEMA_VERSION = 4`.
+- `SavedChordSchema` and `HarmonyChordCoreSchema` carry the 9 new optional fields.
+- `soundIntentStore` carries `preset?` alongside the existing intent fields.
+- `setChordPreset` and `setChordOscillator` are exported from `session.ts`.
+- Old sessions at v3 are gracefully dropped; v4 sessions with/without new fields parse.
+
+### Auto-continuation
+
+Per the phase file, the next step is **03.5** (Top-bar UI redesign: Oscillator select,
+Presets select, edit-mode feedback, placement, i18n). No checkpoint required between 03.4
+and 03.5. The Dev auto-continues to step 03.5.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** (pending)
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**
+
+---
+
+**Terminal commit:** `feat(schema): Phase 03 step 03.4 — persistence + agent schema v4, preset/oscillator store actions`
+
+- Hash: self-referential — not recorded
+- Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
