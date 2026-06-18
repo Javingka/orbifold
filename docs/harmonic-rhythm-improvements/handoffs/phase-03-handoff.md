@@ -797,10 +797,55 @@ The Dev does NOT mark the phase complete. That is the Pilot's action at Checkpoi
 (Filled by the Planner in review mode)
 
 **Decision:** (pending)
-**Reviewed on:**
-**Iteration:**
-**Reason:**
-**Next action:**
+**Reviewed on:** 2026-06-18 (Pilot Checkpoint #5)
+**Iteration:** 1 of 5 (Planner review — code-verifiable items)
+**Reason:** All code-verifiable items passed. A-03-02..A-03-09 manual items sent to Pilot.
+**Next action:** Pilot Checkpoint #5 — manual audio/UX acceptance.
+
+---
+
+## Pilot Checkpoint #5 resolution (2026-06-18)
+
+**Pilot:** Javier
+
+### Acceptance results
+
+| ID | Result | Notes |
+|---|---|---|
+| A-03-02 Piano preset | PASS | Distinct warm/plucked character vs default sawtooth |
+| A-03-03 Guitar preset | PASS | Bright pluck with filter sweep, no sustain |
+| A-03-04 Synth Bass preset | PASS | Dark, sustained, resonant |
+| A-03-05 Noise oscillator | PASS | Pink noise texture on harmony |
+| A-03-06 Placement at row end | PASS | Sound block correctly positioned after clave/escala/octava |
+| A-03-07 Accent border on selection | PASS | #8aa0ff highlight when slot selected |
+| A-03-08 Pulse on selection change | PASS | ~300ms pulse fires on slot change |
+| A-03-09 No border when unselected | PASS | Controls visible but no highlight when no slot active |
+
+### Bug fixes applied at Checkpoint #5 (before close)
+
+**Bug 1 — Harmony progression audio stuck on last clicked chord**
+
+- **Symptom:** Visual highlighted each chord in the progression in sequence; audio played only the last-clicked chord.
+- **Root cause:** `pickChord` called `playChord()` unconditionally, which changed `nowPlaying.source` to `'chord'`. Subsequent `requeueLive()` then saw `source === 'chord'` and generated a pattern for only `progression[length-1]`, not the full progression. The visual (`tickHarmony`) reads the `progression` array directly and was unaffected.
+- **Fix:** In `pickChord`, read `state.nowPlaying.source` (captured at click time, before the store update) and skip `playChord` when source is already `'harmony'` or `'session'`. The Tonnetz click-pulse visual gives immediate click feedback; `requeueLive()` queues the updated full progression at the next cycle boundary. `src/render/tonnetz-scene.ts`.
+
+**Bug 2 — Single-chord preview loops indefinitely**
+
+- **Symptom:** When harmony is NOT playing, clicking a triangle plays the chord but it loops forever.
+- **Root cause:** `playChord` called `a.runNow(code)` which starts a looping Strudel pattern with no stop scheduled.
+- **Fix:** After `a.runNow(code)`, schedule `setTimeout(() => { if (source === 'chord') hushAll() }, cycleDurationMs)` where `cycleDurationMs = Math.round(240000 / state.bpm)` (one bar of 4/4 at the current BPM, per ADR 0005 `cps = bpm/240`). The guard on `source === 'chord'` prevents silencing a subsequent harmony or rhythm playback that started during that window. `src/state/session.ts`.
+
+Both fixes committed together in: `fix(audio): Phase 03 — one-shot chord preview + harmony-source guard in pickChord`.
+
+### Register proposals for Pilot consideration
+
+None new — ADR 0019 captures all architectural decisions for this phase. The two bug-fix behavioral rules (skip-playChord-when-harmony-playing; one-shot-preview-duration) are implementation details of the existing `pickChord` / `playChord` contract, not new cross-phase invariants.
+
+### PHASE 03 COMPLETE
+
+646 tests pass. `tsc --noEmit` clean. `pnpm lint` clean. `pnpm build` clean. All A-03-01..A-03-14 acceptance criteria either closed by automated tests or passed manually above. Phase 03 branch (`harmonic-rhythm-improvements/phase-01`, accumulating Phase 02+03) is ready to merge to `main` at Pilot discretion.
+
+**Pilot reminder:** Update the CLAUDE.md "Current initiative" block to reflect Phase 03 complete (CLAUDE.md is Pilot-only write).
 
 ---
 

@@ -695,10 +695,22 @@ export function playChord(
     decay
   );
   const label = 'Acorde · ' + chordLabel(rootPc, qual);
-  // Fire and forget — audio is lazy-loaded; initAudio() is idempotent.
-  // initAudio() called here ensures the audio context is ready on the first chord pick
-  // (a user gesture), without requiring a separate "Init audio" button.
-  void getAudio().then((a) => a.initAudio().then(() => a.runNow(code)));
+  // One cycle = 240000/bpm ms (ADR 0005: cps = bpm/240; one cycle = 1 bar of 4/4).
+  // After one cycle, auto-stop if no other source has taken over — single-chord
+  // preview should sound once, not loop. The guard on source === 'chord' ensures
+  // we don't silence a subsequent harmony or rhythm playback that started
+  // during that window.
+  const cycleDurationMs = Math.round(240000 / state.bpm);
+  void getAudio().then((a) =>
+    a.initAudio().then(() => {
+      void a.runNow(code);
+      setTimeout(() => {
+        if (get(sessionStore).nowPlaying.source === 'chord') {
+          void hushAll();
+        }
+      }, cycleDurationMs);
+    })
+  );
   setNowPlaying(label, 'chord');
 }
 

@@ -559,8 +559,17 @@ function pickChord(tri: RenderTri, state: SessionState): void {
   }));
 
   // ── Play the chord immediately — prototype lines 1357–1360 ────────────────
-  // Forward sound intent so the preview uses the same attributes as the new chord (ADR 0018 D5).
-  playChord(tri.rootPc, tri.qual, 0.6, newChord.instrument, newChord.room, newChord.decay);
+  // Only play the single-chord preview when harmony is NOT already the active
+  // source. When source === 'harmony' (or 'session'), playChord would switch
+  // nowPlaying.source to 'chord', causing requeueLive() below to re-queue
+  // only the last chord instead of the full progression — the bug where the
+  // visual cycles through all chords but audio stays on the last one pressed.
+  // The Tonnetz click-pulse (above) gives visual feedback; requeueLive picks
+  // up the new chord at the next cycle boundary.
+  const priorSource = state.nowPlaying.source;
+  if (priorSource !== 'harmony' && priorSource !== 'session') {
+    playChord(tri.rootPc, tri.qual, 0.6, newChord.instrument, newChord.room, newChord.decay);
+  }
 
   // ── Requeue if something is already playing — prototype line 1374 ─────────
   // requeueLive checks nowPlaying.source from the store.
