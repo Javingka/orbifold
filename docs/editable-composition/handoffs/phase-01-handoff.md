@@ -612,3 +612,19 @@ Load the Composition view with one or more saved blocks. Confirm:
 | A-01-10 | manual: sesion re-open | see step 01.5 verification path | manual | READY FOR PILOT — layout regression fixed |
 | A-01-11 | manual: legacy block no edit button | see step 01.5 verification path | manual | READY FOR PILOT — layout regression fixed |
 | A-01-12 | quality gate | automated | automated | CLOSED |
+
+---
+
+## Pilot Checkpoint #5 — Phase 01 COMPLETE (2026-06-18)
+
+Pilot (Javier) ran manual acceptance and resolved the checkpoint:
+
+- **A-01-08 (groove round-trip)** — PASS.
+- **A-01-09 (armonia round-trip, incl. per-chord sound attrs)** — PASS.
+- **A-01-10 (sesion round-trip, both ritmo+armonia)** — PASS.
+- **A-01-11 (legacy block: playable, no ✎ button)** — PASS (defensive; no in-the-wild legacy blocks after the v4→v5 lossy drop).
+- **A-01-12 (quality gate)** — CLOSED (`tsc` + `lint` + 682 tests + `build` exit 0).
+
+One Checkpoint #5 layout regression was reported (✎ button pushed the block-card action row behind the timeline column, occluding 🗑 and ↳ pista) and fixed (`.blk` restructured to a two-row layout with `flex-wrap`); Pilot re-verified the fix — all four action buttons visible, clickable, and clean.
+
+**All 12 acceptance IDs closed. PHASE 01 COMPLETE.** Block-as-State foundation shipped: blocks carry an editable `snapshot`, `code` stays canonical for playback (byte-identical-at-default preserved), persistence at schema v5, and `openBlock` restores a block into the Ritmo/Armonía editors without auto-play. This is the data-model dependency for the future AI-composition-authoring and AI-jam initiatives.
