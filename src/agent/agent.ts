@@ -125,6 +125,13 @@ responde EXCLUSIVAMENTE con UN bloque \`\`\`json siguiendo este esquema EXACTO (
 RESTRICCIONES (obligatorio, la interfaz solo admite esto):
 - sound ∈ {bd, sd, hh, oh, cp, rim, lt, mt, ht}
 - Cada capa usa "steps" (EXACTAMENTE 16 enteros 0/1) Ó "euclid" {k:1..16, n:2..16, rot:0..n-1}. No ambos.
+  RESTRICCIÓN DE FORMATO PARA RITMO:
+  - "steps" debe tener EXACTAMENTE 16 elementos (0 o 1). Nunca 8, 12 ni otro número.
+  - Para metros como 3/4, 6/8, 12/8: usa SIEMPRE "euclid" con n≤16, NO arrays "steps" de otro tamaño.
+    Ejemplo correcto para 3/4:  { "euclid": { "k": 3, "n": 4, "rot": 0 } }  (E(3,4) = negras en 3/4)
+    Ejemplo correcto para 6/8:  { "euclid": { "k": 4, "n": 12, "rot": 0 } } (E(4,12) = cueca)
+    Ejemplo correcto para 12/8: { "euclid": { "k": 7, "n": 12, "rot": 0 } } (campana africana)
+  - Si usas "steps", SIEMPRE son exactamente 16 números. Jamás menos.
 - mode ∈ {major, minor, dorian, phrygian, lydian, mixolydian, locrian, harmonic:minor}
 - quality ∈ {maj, min, dim, aug}
 - root: nota como "C", "C#", "Eb", "F#"… ; octave 2..5
@@ -174,7 +181,43 @@ Ejemplo completo (crea ritmo, lo guarda como sesión y lo añade al timeline):
 ══════════ MODO CÓDIGO (solo si NO aplica una skill) ══════════
 Si piden algo que no encaja en las skills (un efecto suelto, código Strudel libre), responde con UN bloque \`\`\`strudel ejecutable y comentado.
 CONOCIMIENTO STRUDEL: note("a3 c#4 e4"), s("bd hh sd hh"), stack(...), mini-notation (espacio=secuencia, ~=silencio, <a b>=alternar, [a b]=subdivisión, ,=paralelo, (3,8)=euclidiano), .s("sawtooth"), .lpf(n), .gain(n), .room(n), .euclidRot(k,n,r).
-NO uses setcps/setcpm/.fast/.slow para el tempo: la app fija el tempo vía setcps según el BPM. 1 ciclo = 1 compás 4/4.`;
+NO uses setcps/setcpm/.fast/.slow para el tempo: la app fija el tempo vía setcps según el BPM. 1 ciclo = 1 compás 4/4.
+
+══════════ IMPROVISACIÓN INFORMADA ══════════
+Cuando el usuario pida un estilo o tradición musical que no encaje directamente en
+ninguna receta del catálogo, puedes generar un patrón musical informado usando tu
+propio conocimiento. Sigue estas sub-instrucciones:
+
+A. RAZONA PRIMERO (internamente): antes de generar, considera las características
+   culturales y musicales del estilo solicitado: células rítmicas características,
+   compás típico, instrumentación, energía, tempo habitual.
+
+B. GENERA CON FORMATOS VÁLIDOS: usa siempre "steps" (exactamente 16 enteros 0/1)
+   o "euclid" {k:1..16, n:2..16, rot:0..n-1}. Nunca inventes nuevos campos.
+
+C. INCLUYE musicalIntent.explanation (máx. 300 caracteres) describiendo qué
+   características consultaste y por qué el patrón generado refleja ese estilo.
+
+D. PRECISIÓN CULTURAL: describe los patrones como "inspirado en [estilo]" o "con
+   características de [tradición]" — nunca afirmes que el patrón generado "es"
+   definitivamente el patrón auténtico de esa tradición.
+
+Ejemplo — usuario pide "algo que suene a kpanlogo ghanés":
+\`\`\`json
+{
+  "rhythm": {
+    "layers": [
+      { "sound": "bd", "euclid": { "k": 3, "n": 8, "rot": 0 } },
+      { "sound": "hh", "euclid": { "k": 7, "n": 12, "rot": 0 } }
+    ]
+  },
+  "musicalIntent": {
+    "style": "kpanlogo-inspired",
+    "explanation": "Inspirado en el kpanlogo ghanés: tresillo en bajo (E(3,8)), campana bell E(7,12) en 12/8."
+  }
+}
+\`\`\`
+══════════════════════════════════════════════`;
 
 // ── SYSTEM_PROMPT_EVOLUTION ───────────────────────────────────────────────
 
@@ -275,6 +318,13 @@ Ejemplo 2 — rhythm/harmony explícitos + musicalIntent como anotación:
 - sound ∈ {bd, sd, hh, oh, cp, rim, lt, mt, ht}
 - quality ∈ {maj, min, dim, aug}
 - Cada capa usa "steps" (EXACTAMENTE 16 enteros 0/1) Ó "euclid" {k:1..16, n:2..16, rot:0..n-1}. No ambos.
+  RESTRICCIÓN DE FORMATO PARA RITMO:
+  - "steps" debe tener EXACTAMENTE 16 elementos (0 o 1). Nunca 8, 12 ni otro número.
+  - Para metros como 3/4, 6/8, 12/8: usa SIEMPRE "euclid" con n≤16, NO arrays "steps" de otro tamaño.
+    Ejemplo correcto para 3/4:  { "euclid": { "k": 3, "n": 4, "rot": 0 } }  (E(3,4) = negras en 3/4)
+    Ejemplo correcto para 6/8:  { "euclid": { "k": 4, "n": 12, "rot": 0 } } (E(4,12) = cueca)
+    Ejemplo correcto para 12/8: { "euclid": { "k": 7, "n": 12, "rot": 0 } } (campana africana)
+  - Si usas "steps", SIEMPRE son exactamente 16 números. Jamás menos.
 - CRÍTICO: "euclid" DEBE ser SIEMPRE un objeto JSON {"k": número, "n": número, "rot": número}. NUNCA una cadena. INCORRECTO: "euclid": "3,8,2". CORRECTO: "euclid": {"k": 3, "n": 8, "rot": 2}.
 - NADA fuera del bloque json (sin texto antes ni después, sin "saveAsBlock").
 
@@ -323,7 +373,26 @@ Respuesta de evolución válida (cambio coherente pequeño — añade un hit de 
     ]
   }
 }
-\`\`\``;
+\`\`\`
+
+══════════ IMPROVISACIÓN INFORMADA ══════════
+Si el estado actual no encaja claramente con ninguna receta de "availableRecipes",
+puedes generar una evolución culturalmente informada:
+
+A. RAZONA PRIMERO (internamente): considera las características rítmicas/armónicas
+   del estado recibido (estilo implícito, metro, densidad, tensión armónica) para
+   decidir la dirección de la evolución.
+
+B. GENERA CON FORMATOS VÁLIDOS: usa siempre "steps" (exactamente 16 enteros 0/1)
+   o "euclid" {k:1..16, n:2..16, rot:0..n-1}. No crees patrones completamente
+   nuevos — evoluciónalo de forma coherente con el estado recibido.
+
+C. INCLUYE musicalIntent.explanation (máx. 300 caracteres) describiendo el
+   razonamiento de la evolución y qué característica musical guió el cambio.
+
+D. PRECISIÓN CULTURAL: usa "inspirado en [estilo]" — no afirmes autoría cultural
+   definitiva sobre el patrón generado.
+══════════════════════════════════════════════`;
 
 // ── sendEvolution ─────────────────────────────────────────────────────────
 

@@ -134,7 +134,7 @@ Added 15 new entries to `RHYTHM_CATALOG` (31 → 46 total), covering all Pilot-a
 
 None.
 
-### Acceptance Coverage Table
+### Acceptance Coverage Table (step 05.2)
 
 | Criterion | Status | Evidence |
 |-----------|--------|---------|
@@ -143,4 +143,82 @@ None.
 | A-05-03 (SYSTEM_PROMPT_EVOLUTION constraint + fallback) | PENDING | Step 05.3 |
 | A-05-04 (improvisation fallback 4 sub-instructions) | PENDING | Step 05.3 |
 | A-05-05 (RHYTHM_HARMONY_RECIPES ≥13 entries) | PENDING | Step 05.4 |
+| A-05-06 (full quality gate) | PENDING | Step 05.4 |
+
+---
+
+## Step 05.3 — Prompt update: 16-step constraint + improvisation fallback
+
+**Status:** COMPLETE
+**Date:** 2026-06-19
+**Branch:** `ai-jam/phase-05`
+**Commit:** `feat(agent): Phase 05 step 05.3 — 16-step constraint + improvisation fallback in prompts`
+
+### What was done
+
+Added two sections to both `SYSTEM_PROMPT` and `SYSTEM_PROMPT_EVOLUTION` in `src/agent/agent.ts`:
+
+**1. 16-step constraint block (RESTRICCION DE FORMATO PARA RITMO)**
+
+Inserted immediately after the existing `Cada capa usa "steps"...` bullet in both prompts. The block:
+- Explicitly states `steps` must have EXACTLY 16 elements — never 8, 12, or other counts.
+- States that for 3/4, 6/8, 12/8 meters, `euclid` with n<=16 must always be used instead of non-16 `steps` arrays.
+- Provides three concrete `euclid` examples: 3/4 with E(3,4), 6/8 with E(4,12), 12/8 with E(7,12).
+
+**2. IMPROVISACION INFORMADA section (OD-2 Option A)**
+
+Appended at the end of both prompts (after `MODO CODIGO` in `SYSTEM_PROMPT`; after `EJEMPLO CONCRETO` in `SYSTEM_PROMPT_EVOLUTION`). Purely additive — no existing text removed. No ADR required.
+
+Sub-instructions in both prompts:
+- **A**: Reason about cultural/musical characteristics before generating.
+- **B**: Generate using only valid schema formats (`steps[16]` or `euclid`).
+- **C**: Include `musicalIntent.explanation` (<=300 characters) describing the reasoning.
+- **D**: Use "inspirado en [estilo]" framing — cultural accuracy guard.
+
+`SYSTEM_PROMPT` version includes a concrete JSON example (kpanlogo ghanes) per ADR 0021 D5.
+`SYSTEM_PROMPT_EVOLUTION` version is scoped to the autopilot context (evolving, not creating from scratch).
+
+All prompt text in Spanish per ADR 0017 D7. No schema changes. No i18n changes. Template literal integrity confirmed by `tsc --noEmit`.
+
+### Prompt verification (proxy:static-analysis)
+
+**A-05-02 — SYSTEM_PROMPT constraint block** (lines 128-134 in committed file):
+- Present: `"steps" debe tener EXACTAMENTE 16 elementos (0 o 1). Nunca 8, 12 ni otro numero.`
+- Present: `{ "euclid": { "k": 3, "n": 4, "rot": 0 } }  (E(3,4) = negras en 3/4)` — 3/4 example
+- Present: prohibition on non-16 `steps` arrays for 3/4, 6/8, 12/8 meters
+
+**A-05-03 — SYSTEM_PROMPT_EVOLUTION constraint block** (lines 321-327 in committed file):
+- Same 16-step constraint block present in `RESTRICCIONES ABSOLUTAS` section.
+- Same `IMPROVISACION INFORMADA` section appended at end.
+
+**A-05-04 — Four sub-instructions in both prompts**:
+- A (reason first): present in both — `RAZONA PRIMERO (internamente):`
+- B (valid formats only): present in both — `GENERA CON FORMATOS VALIDOS:`
+- C (include explanation): present in both — `INCLUYE musicalIntent.explanation`
+- D (cultural accuracy): present in both — `PRECISION CULTURAL:` + "inspirado en" framing
+
+### Source files modified
+
+| File | Change |
+|------|--------|
+| `src/agent/agent.ts` | Added 16-step constraint block + IMPROVISACION INFORMADA section to both SYSTEM_PROMPT and SYSTEM_PROMPT_EVOLUTION |
+
+### Validation
+
+- `pnpm exec tsc --noEmit` — clean (template literal integrity confirmed)
+- `pnpm test` — 1483/1483 passed (no regressions)
+
+### Environment fix log
+
+None.
+
+### Acceptance Coverage Table (step 05.3)
+
+| Criterion | Status | Evidence |
+|-----------|--------|---------|
+| A-05-01 (RHYTHM_CATALOG >=45 entries) | COVERED | Step 05.2 — 46 entries, 320 congruence tests |
+| A-05-02 (SYSTEM_PROMPT constraint strengthening) | COVERED | proxy:static-analysis — constraint block + 3/4 euclid example present |
+| A-05-03 (SYSTEM_PROMPT_EVOLUTION constraint + fallback) | COVERED | proxy:static-analysis — constraint block + IMPROVISACION INFORMADA at end |
+| A-05-04 (improvisation fallback 4 sub-instructions) | COVERED | proxy:static-analysis — A/B/C/D present in both prompts |
+| A-05-05 (RHYTHM_HARMONY_RECIPES >=13 entries) | PENDING | Step 05.4 |
 | A-05-06 (full quality gate) | PENDING | Step 05.4 |
