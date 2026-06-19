@@ -236,6 +236,21 @@ export interface Dictionary {
     execErrorEnableAutofix: string;
     /** Dynamic language directive appended to agent requests — {languageName} interpolated */
     languageDirective: string;
+    /** Autopilot toggle strings (ai-jam Phase 01) */
+    autopilot: {
+      /** Button label when autopilot is off */
+      btnOff: string;
+      /** Button label when autopilot is on (includes active indicator) */
+      btnOn: string;
+      /** Button title attribute when autopilot is off */
+      titleOff: string;
+      /** Button title attribute when autopilot is on */
+      titleOn: string;
+      /** Label for the N-cycles interval input */
+      cyclesLabel: string;
+      /** ⓘ info icon tooltip explaining how autopilot works */
+      infoTooltip: string;
+    };
   };
 
   /** PersistencePanel.svelte strings */

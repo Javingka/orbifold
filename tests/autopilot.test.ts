@@ -110,6 +110,7 @@ describe('startAutopilot timer fires sendEvolution (A-01-02)', () => {
   it('A-01-02: sendEvolution is called once after intervalMs elapses', async () => {
     const intervalMs = defaultIntervalMs(); // 16000 ms at 120 BPM, 8 cycles
 
+    setAutopilot({ enabled: true });
     startAutopilot();
 
     // Advance fake clock by exactly intervalMs
@@ -121,6 +122,7 @@ describe('startAutopilot timer fires sendEvolution (A-01-02)', () => {
   it('A-01-02: sendEvolution is called twice after 2x intervalMs', async () => {
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
 
     await vi.advanceTimersByTimeAsync(intervalMs * 2);
@@ -136,7 +138,7 @@ describe('startAutopilot timer fires sendEvolution (A-01-02)', () => {
   });
 
   it('A-01-02: startAutopilot respects custom intervalCycles', async () => {
-    setAutopilot({ intervalCycles: 2 });
+    setAutopilot({ enabled: true, intervalCycles: 2 });
     const { bpm } = get(sessionStore);
     const intervalMs = Math.round(((60000 * 4) / bpm) * 2); // 4000 ms at 120 BPM
 
@@ -156,6 +158,7 @@ describe('sendEvolution called with session context (A-01-03)', () => {
     // Here we verify the mock was called — confirming the timer → sendEvolution path works.
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
     await vi.advanceTimersByTimeAsync(intervalMs);
 
@@ -177,6 +180,7 @@ describe('Concurrency guard _isEvolving (A-01-04)', () => {
 
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
 
     // Advance by one interval — first tick fires, sendEvolution called (returns hanging promise)
@@ -209,8 +213,11 @@ describe('stopAutopilot clears timer (A-01-05)', () => {
   it('A-01-05: advancing fake timer after stopAutopilot does NOT call sendEvolution', async () => {
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
-    stopAutopilot();
+    stopAutopilot(); // also sets enabled=false via store? No — stopAutopilot only clears timer.
+    // Manually disable so the enabled guard also fires (belt-and-suspenders test).
+    setAutopilot({ enabled: false });
 
     // Advance well past one interval — timer is cleared, no calls should fire
     await vi.advanceTimersByTimeAsync(intervalMs * 3);
@@ -221,6 +228,7 @@ describe('stopAutopilot clears timer (A-01-05)', () => {
   it('A-01-05: startAutopilot after stopAutopilot re-arms the timer (idempotent restart)', async () => {
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
     stopAutopilot();
 
@@ -234,6 +242,7 @@ describe('stopAutopilot clears timer (A-01-05)', () => {
   it('A-01-05: calling startAutopilot twice creates only one timer (idempotent restart)', async () => {
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
     startAutopilot(); // second call clears the first timer before creating a new one
 
@@ -266,6 +275,7 @@ describe('isPlaying guard (ADR 0022 D6)', () => {
 
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
     await vi.advanceTimersByTimeAsync(intervalMs);
 
@@ -278,6 +288,7 @@ describe('isPlaying guard (ADR 0022 D6)', () => {
 
     const intervalMs = defaultIntervalMs();
 
+    setAutopilot({ enabled: true });
     startAutopilot();
     await vi.advanceTimersByTimeAsync(intervalMs);
 

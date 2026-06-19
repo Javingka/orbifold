@@ -549,12 +549,12 @@
       class="autopilot-btn"
       class:active={autopilot.enabled}
       on:click={toggleAutopilot}
-      title={autopilot.enabled ? 'Autopilot ON — click to stop' : 'Start autopilot'}
+      title={autopilot.enabled ? $t('agent.autopilot.titleOn') : $t('agent.autopilot.titleOff')}
     >
-      {autopilot.enabled ? 'Autopilot ON' : 'Autopilot'}
+      {autopilot.enabled ? $t('agent.autopilot.btnOn') : $t('agent.autopilot.btnOff')}
     </button>
     <label class="interval-label">
-      Ciclos:
+      {$t('agent.autopilot.cyclesLabel')}:
       <input
         type="number"
         class="interval-input"
@@ -567,6 +567,11 @@
           setAutopilot({ intervalCycles: +(/** @type {HTMLInputElement} */ (e.target).value) })}
       />
     </label>
+    <span
+      class="autopilot-info"
+      data-tip={$t('agent.autopilot.infoTooltip')}
+      aria-label={$t('agent.autopilot.infoTooltip')}>ⓘ</span
+    >
   </div>
 
   <!--

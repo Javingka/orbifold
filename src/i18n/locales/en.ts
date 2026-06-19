@@ -206,6 +206,15 @@ const en: Dictionary = {
     execErrorEnableAutofix: '\n(enable 🔧 auto-fix)',
     // {languageName} interpolated — e.g. "Spanish", "English"
     languageDirective: 'Respond in {languageName}.',
+    autopilot: {
+      btnOff: 'Autopilot',
+      btnOn: 'Autopilot ●',
+      titleOff: 'Start autopilot',
+      titleOn: 'Autopilot active — click to stop',
+      cyclesLabel: 'Cycles',
+      infoTooltip:
+        'Autopilot: the agent automatically evolves rhythm and harmony every N cycles while audio is playing. Set N before enabling.',
+    },
   },
 
   persistence: {

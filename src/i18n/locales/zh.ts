@@ -201,6 +201,14 @@ const zh: Dictionary = {
     execErrorEnableAutofix: '\n（请启用 🔧 自动修复）',
     // {languageName} interpolated — e.g. "español", "中文"
     languageDirective: '请用{languageName}回答。',
+    autopilot: {
+      btnOff: '自动演奏',
+      btnOn: '自动演奏 ●',
+      titleOff: '开启自动演奏',
+      titleOn: '自动演奏运行中 — 点击停止',
+      cyclesLabel: '循环',
+      infoTooltip: '自动演奏：音频播放时，AI每N个循环自动演化节奏和和声。激活前请先设置N。',
+    },
   },
 
   persistence: {

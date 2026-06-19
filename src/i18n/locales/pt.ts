@@ -206,6 +206,15 @@ const pt: Dictionary = {
     execErrorEnableAutofix: '\n(ative 🔧 auto-corrigir)',
     // {languageName} interpolated — e.g. "español", "português"
     languageDirective: 'Responda em {languageName}.',
+    autopilot: {
+      btnOff: 'Autopilot',
+      btnOn: 'Autopilot ●',
+      titleOff: 'Ativar piloto automático',
+      titleOn: 'Piloto automático ativo — clique para parar',
+      cyclesLabel: 'Ciclos',
+      infoTooltip:
+        'Piloto automático: o agente evolui ritmo e harmonia automaticamente a cada N ciclos enquanto o áudio toca. Configure N antes de ativar.',
+    },
   },
 
   persistence: {

@@ -443,6 +443,10 @@ stack(
               <div style="font-family:'Fraunces',serif; font-size:16px; margin-bottom:5px;">{{ t.opt4Name }}</div>
               <div style="font-size:13px; color:#9097a6; line-height:1.55;">{{ t.opt4Desc }}</div>
             </div>
+            <div style="padding:14px; border-radius:12px; background:rgba(138,160,255,.08); border:1px solid rgba(138,160,255,.2);">
+              <div style="font-family:'Fraunces',serif; font-size:16px; margin-bottom:5px; color:#8aa0ff;">{{ t.opt5Name }}</div>
+              <div style="font-size:13px; color:#9097a6; line-height:1.55;">{{ t.opt5Desc }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -474,6 +478,11 @@ stack(
           <span style="display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; padding:5px 11px; border-radius:9px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); color:#9097a6; margin-left:6px;">{{ t.chatQueue }}</span>
         </div>
       </div>
+    </div>
+
+    <div data-reveal style="margin-top:28px; border-radius:14px; background:rgba(138,160,255,.07); border:1px solid rgba(138,160,255,.22); padding:18px 22px; max-width:640px;">
+      <div style="font-family:'Fraunces',serif; font-size:15px; color:#8aa0ff; margin-bottom:8px;">{{ t.autopilotTitle }}</div>
+      <div style="font-size:14px; color:#b6bccb; line-height:1.6;">{{ t.autopilotDesc }}</div>
     </div>
 
     <div data-reveal style="margin-top:24px; text-align:center;">
@@ -703,6 +712,10 @@ const I18N = {
     opt3Desc:'Si el código generado produce un error, el agente recibe el error y lo corrige automáticamente. Puedes desactivarlo para ver los errores crudos.',
     opt4Name:'Prompts rápidos',
     opt4Desc:'Botones de acceso rápido para las peticiones más comunes: bajo, acorde de paso, variación percusiva, etc.',
+    opt5Name:'Piloto automático (Autopilot)',
+    opt5Desc:'El agente evoluciona el ritmo y la armonía de forma autónoma cada N ciclos mientras suena audio. Actívalo con el botón Autopilot en el panel del agente y ajusta N (ciclos de intervalo) antes de empezar.',
+    autopilotTitle:'Piloto automático en acción',
+    autopilotDesc:'1. Toca un groove o una sesión (▶ Ritmo / ▶ Sesión). 2. Abre el panel del Agente IA. 3. Ajusta los ciclos de intervalo (por defecto 8 ciclos ≈ ~16 s a 120 BPM). 4. Haz clic en Autopilot — el agente empieza a evolucionar la música en cada intervalo sin que tengas que hacer nada.',
     chatBrand:'Agente IA',
     chatModel:'Claude / GPT-4 / tu modelo',
     chatUser:'dame un bajo sincopado en mi menor que complemente el groove',
@@ -855,6 +868,10 @@ const I18N = {
     opt3Desc:'If the generated code errors, the agent receives the error and fixes it automatically. You can turn it off to see the raw errors.',
     opt4Name:'Quick prompts',
     opt4Desc:'Shortcut buttons for the most common requests: bass, passing chord, percussive variation, and more.',
+    opt5Name:'Autopilot',
+    opt5Desc:'The agent autonomously evolves rhythm and harmony every N cycles while audio is playing. Enable it with the Autopilot button in the agent panel and set N (interval cycles) before starting.',
+    autopilotTitle:'Autopilot in action',
+    autopilotDesc:'1. Play a groove or session (▶ Rhythm / ▶ Session). 2. Open the AI Agent panel. 3. Set the interval cycles (default 8 cycles ≈ ~16 s at 120 BPM). 4. Click Autopilot — the agent starts evolving the music at each interval with no further input needed.',
     chatBrand:'AI Agent',
     chatModel:'Claude / GPT-4 / your model',
     chatUser:'give me a syncopated bass in E minor that complements the groove',
@@ -1007,6 +1024,10 @@ const I18N = {
     opt3Desc:'Se o código gerado der erro, o agente recebe o erro e o corrige automaticamente. Você pode desativar para ver os erros crus.',
     opt4Name:'Prompts rápidos',
     opt4Desc:'Botões de acesso rápido para os pedidos mais comuns: baixo, acorde de passagem, variação percussiva, e mais.',
+    opt5Name:'Piloto automático (Autopilot)',
+    opt5Desc:'O agente evolui ritmo e harmonia de forma autônoma a cada N ciclos enquanto o áudio toca. Ative com o botão Autopilot no painel do agente e ajuste N (ciclos de intervalo) antes de começar.',
+    autopilotTitle:'Piloto automático em ação',
+    autopilotDesc:'1. Toque um groove ou sessão (▶ Ritmo / ▶ Sessão). 2. Abra o painel do Agente IA. 3. Ajuste os ciclos de intervalo (padrão 8 ciclos ≈ ~16 s a 120 BPM). 4. Clique em Autopilot — o agente começa a evoluir a música em cada intervalo sem precisar de mais ações.',
     chatBrand:'Agente IA',
     chatModel:'Claude / GPT-4 / seu modelo',
     chatUser:'me dê um baixo sincopado em mi menor que complemente o groove',
@@ -1159,6 +1180,10 @@ const I18N = {
     opt3Desc:'若生成的代码报错，助手会收到该错误并自动修正。你可以关闭它以查看原始错误。',
     opt4Name:'快捷提示',
     opt4Desc:'用于最常见请求的快捷按钮：贝斯、经过和弦、打击乐变体等。',
+    opt5Name:'自动演奏 (Autopilot)',
+    opt5Desc:'AI每N个循环自动演化节奏和和声，无需手动操作。在AI助手面板中点击Autopilot按钮启用，启动前请先设置N（间隔循环数）。',
+    autopilotTitle:'自动演奏运行演示',
+    autopilotDesc:'1. 播放groove或会话（▶ 节奏 / ▶ 会话）。2. 打开AI助手面板。3. 设置间隔循环数（默认8循环≈120 BPM时约16秒）。4. 点击Autopilot — AI将在每个间隔自动演化音乐，无需额外操作。',
     chatBrand:'AI 助手',
     chatModel:'Claude / GPT-4 / 你的模型',
     chatUser:'给我一条 E 小调的切分贝斯，配合这个 groove',

@@ -38,6 +38,7 @@ let _timerId: ReturnType<typeof setInterval> | null = null;
  * Per ADR 0022 D3/D6.
  */
 async function tick(): Promise<void> {
+  if (!get(sessionStore).autopilot.enabled) return;
   if (_isEvolving) return;
 
   // Dynamic import keeps autopilot.ts unit-testable in Node

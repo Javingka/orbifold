@@ -926,6 +926,13 @@ textarea {
   opacity: 0.4;
 }
 
+.autopilot-info {
+  font-size: 10px;
+  color: var(--muted);
+  cursor: help;
+  user-select: none;
+}
+
 /* Input row */
 .agent-input {
   display: flex;
