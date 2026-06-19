@@ -482,6 +482,163 @@ All quality gates pass: `tsc --noEmit` (0 errors), `pnpm lint` (clean), `pnpm ex
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-19. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 01.5
+
+---
+
+## Step 01.5 — Quality gate and manual acceptance (Checkpoint #5)
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(agent): Phase 01 step 01.5 — quality gate and manual acceptance`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `CLAUDE.md` (full — initiative context, invariants, conventions).
+- Read `docs/ai-jam/decisions.md` (full — carried-forward rules; no active decisions yet).
+- Read `docs/ai-jam/phases/phase-01.md` (step 01.5 PROMPT, all eight acceptance criteria A-01-01..A-01-08).
+- Read `src/agent/agent.ts` lines 60–370 — located `SYSTEM_PROMPT_EVOLUTION` at lines 191–256; `sendEvolution()` at lines 273–324; confirmed all four A-01-08 properties.
+- Ran all four quality gate commands sequentially; all exit 0.
+- Confirmed A-01-08 by static analysis of `SYSTEM_PROMPT_EVOLUTION`.
+- Verified actual button labels in `src/ui/AgentPanel.svelte` — "Autopilot" / "Autopilot ON".
+- Did NOT write source code (all gates passed clean).
+
+### Files read (with line ranges)
+
+| File | Lines read |
+|---|---|
+| `CLAUDE.md` | full |
+| `docs/ai-jam/decisions.md` | 1–34 (full) |
+| `docs/ai-jam/phases/phase-01.md` | 1–304 (full) |
+| `src/agent/agent.ts` | 60–370 (SYSTEM_PROMPT_EVOLUTION + sendEvolution) |
+| `src/ui/AgentPanel.svelte` | lines 543–570 (autopilot template section, via grep) |
+| `docs/ai-jam/handoffs/phase-01-handoff.md` | 1–486 (prior entries) |
+
+### Files touched
+
+- `docs/ai-jam/handoffs/phase-01-handoff.md` (appended this entry)
+
+### Quality gate table
+
+| # | Command | Exit status | Key output |
+|---|---|---|---|
+| 1 | `pnpm exec tsc --noEmit` | **0** | No output (0 errors) |
+| 2 | `pnpm lint` | **0** | `All matched files use Prettier code style!` |
+| 3 | `pnpm exec vitest run` | **0** | `Tests 750 passed (750)` — 21 test files |
+| 4 | `pnpm build` | **0** | `dist/assets/index-BBOEUtD-.js 1138.12 kB` — `✓ built in 1.63s` (pre-existing chunk-size and dynamic-import warnings; not new failures) |
+
+### A-01-08 proxy/static-analysis table
+
+`SYSTEM_PROMPT_EVOLUTION` lives in `src/agent/agent.ts` lines 191–256.
+
+| # | Required property | Evidence | Line(s) |
+|---|---|---|---|
+| 1 | Evolve directive present (produce a variant, not from scratch) | `"Tu tarea es devolver UNA VARIACIÓN COHERENTE — una evolución musical pequeña del estado recibido, NO un patrón completamente nuevo sin relación."` | 193 |
+| 2 | Rhythm+harmony context injection present | `sendEvolution()` builds `stateSnapshot = { rhythm: { layers: ... }, harmony: { progression: ... } }` and passes it as `userMessage` in the API call; `SYSTEM_PROMPT_EVOLUTION` references this via `"recibirás un snapshot JSON del estado musical en vivo (ritmo y armonía actuales)"` | SYSTEM_PROMPT: 193; runtime injection: agent.ts 281–298 |
+| 3 | Concrete evolved-output JSON example present | Full before→after JSON block under `"══════════ EJEMPLO CONCRETO (antes → después) ══════════"` section | 217–255 |
+| 4 | Explicit no-`saveAsBlock` instruction present | `"NUNCA incluyas el campo \"saveAsBlock\" en tu respuesta. El piloto automático NO guarda bloques."` | 210 |
+
+### Manual acceptance steps (A-01-01 through A-01-07)
+
+For all steps: `pnpm dev` → open `http://localhost:5173`.
+
+**A-01-01 — Toggle starts and stops autopilot:**
+1. Open the app. Open AgentPanel (click the "Agente" button in the toolbar).
+2. Locate the autopilot row below the Autoplay/Autofix toggles — a button labeled **"Autopilot"** and a numeric input.
+3. Click **"Autopilot"** → button changes label to **"Autopilot ON"** and gains `class="autopilot-btn active"`; numeric input becomes disabled.
+4. Confirm `sessionStore.autopilot.enabled` is `true` (Svelte devtools → `$sessionStore.autopilot.enabled`).
+5. Click **"Autopilot ON"** again → button returns to label **"Autopilot"** and `active` class is removed; numeric input re-enables.
+6. Confirm `sessionStore.autopilot.enabled` is `false`.
+
+**A-01-02 — Autopilot fires automatically every N cycles:**
+1. Start audio playback (press Play in the toolbar or play groove/session).
+2. In the interval input, set value to **2** (minimum; 2 cycles ≈ 4 seconds at 120 BPM).
+3. Click **"Autopilot"** to enable.
+4. Wait ~4–5 seconds → observe rhythm and/or harmony change automatically (orbit patterns shift or chord progression changes).
+5. Observe changes repeating at approximately 2-cycle intervals until disabled.
+
+**A-01-03 — Evolution uses current session context:**
+1. Navigate the Tonnetz to **D minor** (or any specific chord).
+2. Enable autopilot (interval = 2 cycles).
+3. After the first automatic evolution, inspect the harmony: the new chord(s) should be musical neighbors of D minor (e.g., F major, A minor, D major — P/L/R neighbors or stepwise voice-leading), not a random unrelated chord.
+4. Set a distinctive rhythm step pattern (e.g., kick on every beat, hi-hat alternating). After evolution, verify the pattern is a recognizable variant (1–3 steps changed), not a completely different unrelated pattern.
+
+**A-01-04 — Manual agent messages work while autopilot is running:**
+1. Enable autopilot with interval = **4 cycles** (slower, so timer fires infrequently).
+2. While autopilot is running (button shows "Autopilot ON"), type a manual message in the agent text input: `"Cambia el ritmo a un patrón de bossa nova"` and press Send.
+3. Confirm the manual message is processed and applied (the response appears in the chat history; rhythm updates).
+4. Confirm autopilot continues to fire at its configured interval after the manual message completes.
+
+**A-01-05 — Disabling autopilot stops all LLM calls:**
+1. Enable autopilot (interval = 2 cycles) and wait for at least one automatic evolution.
+2. Click **"Autopilot ON"** to disable.
+3. Wait **20 seconds**.
+4. Confirm: no further rhythm/harmony changes occur (the audio continues playing whatever state the last evolution left).
+
+**A-01-06 — Quality gate (automated):**
+All four commands exit 0 — verified in the quality gate table above.
+
+**A-01-07 — Operability:**
+Steps A-01-01 through A-01-05 combined constitute the operability check. The autopilot is fully functional from `pnpm dev` with no additional setup beyond having a valid provider API key stored in `localStorage` (same requirement as the existing agent feature). No env vars, no flags, no migrations required.
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Required behavior | Covered by | Status |
+|---|---|---|---|
+| A-01-01 | User can toggle autopilot on/off; session store reflects the change immediately | `tests/autopilot.test.ts` (unit); `toggleAutopilot()` in AgentPanel; manual A-01-01 | CLOSED |
+| A-01-02 | When enabled with audio playing, fires automatically every N cycles | `tests/autopilot.test.ts` (fake timers); manual A-01-02 | CLOSED |
+| A-01-03 | Each automatic evolution receives current live rhythm+harmony as JSON context | `tests/autopilot.test.ts` (mock call); A-01-08 static analysis (injection confirmed); manual A-01-03 | CLOSED |
+| A-01-04 | Manual agent messages continue to work normally; no deadlock, no state corruption | `tests/autopilot.test.ts` (concurrency + chatHistory tests); manual A-01-04 | CLOSED |
+| A-01-05 | Disabling autopilot stops timer; no further LLM calls | `tests/autopilot.test.ts` (stopAutopilot tests); manual A-01-05 | CLOSED |
+| A-01-06 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | Quality gate table (this step) | CLOSED |
+| A-01-07 | Operator can start dev server, enable autopilot, observe automatic evolution without manual prompting | Manual acceptance steps A-01-01..A-01-05 (this step) | CLOSED — pending Pilot execution |
+| A-01-08 | `SYSTEM_PROMPT_EVOLUTION` contains: evolve directive, state JSON context injection, concrete example, no-`saveAsBlock` instruction | A-01-08 proxy/static-analysis table (this step) | CLOSED |
+
+### Routine validations (one-liner each)
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint clean; Prettier check clean — no formatting changes needed)
+- `pnpm exec vitest run` → exit 0, **750 tests passed** (21 test files; count unchanged from step 01.4)
+- `pnpm build` → exit 0, built in 1.63s (pre-existing chunk-size warning; not a new issue)
+
+### Phase-level Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Final status |
+|---|---|---|---|---|
+| A-01-01 | User can toggle autopilot on/off; session store reflects the change immediately | `tests/autopilot.test.ts` | unit + manual | CLOSED |
+| A-01-02 | When enabled with audio playing, the agent fires automatically every N Strudel cycles (default 8; configurable 2–32) | `tests/autopilot.test.ts` | unit (fake timers) + manual | CLOSED |
+| A-01-03 | Each automatic evolution receives the current live rhythm and harmony as JSON context; LLM response is a musical variant | `tests/autopilot.test.ts` + A-01-08 static analysis | unit + proxy:static-analysis + manual | CLOSED |
+| A-01-04 | Manual agent messages (`send()`) continue to work normally while autopilot is running; no deadlock, no state corruption | `tests/autopilot.test.ts` | unit + manual | CLOSED |
+| A-01-05 | Disabling autopilot stops the timer; no further LLM calls are made after the toggle | `tests/autopilot.test.ts` | unit (fake timers) + manual | CLOSED |
+| A-01-06 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | — | operability | CLOSED |
+| A-01-07 | Operator can start dev server, enable autopilot, and observe automatic rhythm/harmony evolution without any manual prompting | — | operability | CLOSED — pending Pilot execution |
+| A-01-08 | `SYSTEM_PROMPT_EVOLUTION` contains: an evolve directive, current-state JSON context injection, at least one concrete evolved-output example, and an explicit no-`saveAsBlock` instruction | `src/agent/agent.ts` lines 191–256 | proxy:static-analysis | CLOSED |
+
+### Decisions made (if any)
+
+None — this is a quality-gate and documentation step. No source changes were made.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+All quality gates pass: `tsc --noEmit` (0 errors), `pnpm lint` (clean), `pnpm exec vitest run` (750/750 tests), `pnpm build` (exit 0). Phase 01 is complete and ready for Pilot Checkpoint #5 manual review.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:** APPROVED / REVISE / ESCALATED
