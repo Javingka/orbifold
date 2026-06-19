@@ -336,6 +336,35 @@ export interface AutopilotState {
   intervalCycles: number;
 }
 
+// ── LastRecipeDisplay ────────────────────────────────────────────────────────
+// Runtime-only; excluded from SavedSessionSchema (ADR 0022 D1/D7 pattern).
+// Populated by sendEvolution() when musicalIntent.recipeId resolves to a known
+// MusicalRecipe. Cleared when applyLoadedSession() runs (satisfies A-04-06).
+//
+// ai-jam Phase 04 step 04.2.
+
+/**
+ * Ephemeral display state for the last recipe applied by the autopilot.
+ * Excluded from SavedSessionSchema (ADR 0022 D1/D7 pattern).
+ *
+ * Required fields are sourced from MusicalRecipe (always available).
+ * `explanation` is optional — present only if the LLM supplied it (OD-2).
+ */
+export interface LastRecipeDisplay {
+  /** Stable recipe id (e.g. 'bossa-nova-groove'). */
+  recipeId: string;
+  /** Human-readable recipe name (e.g. 'Bossa Nova Groove'). */
+  recipeName: string;
+  /** One or more rhythm catalog ids (joined with commas in the UI). */
+  rhythmIds: string[];
+  /** Harmony catalog id (e.g. 'bossa-nova-loop'). */
+  harmonyId: string;
+  /** Qualitative density from the recipe catalog (authoritative). */
+  density: 'sparse' | 'medium' | 'dense';
+  /** Brief LLM note explaining the recipe choice (≤ 300 chars). OD-2: only if LLM supplied it. */
+  explanation?: string;
+}
+
 /**
  * The single source of truth for the application session.
  *
@@ -358,6 +387,8 @@ export interface SessionState {
   composition: Composition; // imported from core/composition/model.ts
   nowPlaying: NowPlaying;
   autopilot: AutopilotState; // NEW in ai-jam Phase 01 (ADR 0022 D1)
+  /** Ephemeral — excluded from SavedSessionSchema (ADR 0022 D1/D7 pattern). */
+  lastRecipeApplied?: LastRecipeDisplay; // NEW in ai-jam Phase 04 step 04.2
 }
 
 // ── Default initial state ──────────────────────────────────────────────────
@@ -396,6 +427,8 @@ export const DEFAULT_SESSION_STATE: SessionState = {
     enabled: false,
     intervalCycles: 8,
   },
+  // lastRecipeApplied: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7 pattern)
+  lastRecipeApplied: undefined,
 };
 
 // ── Svelte writable store ──────────────────────────────────────────────────
@@ -517,6 +550,17 @@ export function setAutopilot(patch: Partial<AutopilotState>): void {
     ...s,
     autopilot: { ...s.autopilot, ...patch },
   }));
+}
+
+/**
+ * Set or clear the last recipe applied by the autopilot.
+ * Pass null to clear the card (dismiss button or next evolution clears it).
+ *
+ * Follows the setAutopilot pattern (ADR 0022 D1/D7).
+ * ai-jam Phase 04 step 04.2.
+ */
+export function setLastRecipeApplied(display: LastRecipeDisplay | null): void {
+  sessionStore.update((s) => ({ ...s, lastRecipeApplied: display ?? undefined }));
 }
 
 /**
@@ -1687,6 +1731,7 @@ export function applyLoadedSession(saved: SavedSession): void {
     },
     composition: { blocks: newBlocks, tracks: newTracks },
     nowPlaying: { label: null, source: null },
+    lastRecipeApplied: undefined, // ephemeral reset (A-04-06 — ADR 0022 D7 pattern)
   }));
 }
 

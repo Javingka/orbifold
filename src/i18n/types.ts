@@ -251,6 +251,21 @@ export interface Dictionary {
       /** ⓘ info icon tooltip explaining how autopilot works */
       infoTooltip: string;
     };
+    /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
+    recipeCard: {
+      /** Card header label */
+      title: string;
+      /** Label before the rhythm id list */
+      rhythmLabel: string;
+      /** Label before the harmony id */
+      harmonyLabel: string;
+      /** Label before the density value */
+      densityLabel: string;
+      /** Label before the explanation text (shown only when LLM supplied it) */
+      explanationLabel: string;
+      /** Tooltip / aria-label for the dismiss button */
+      clearTitle: string;
+    };
   };
 
   /** PersistencePanel.svelte strings */

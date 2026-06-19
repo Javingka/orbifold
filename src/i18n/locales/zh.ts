@@ -209,6 +209,15 @@ const zh: Dictionary = {
       cyclesLabel: '循环',
       infoTooltip: '自动演奏：音频播放时，AI每N个循环自动演化节奏和和声。激活前请先设置N。',
     },
+    recipeCard: {
+      // i18n-draft
+      title: '已应用配方',
+      rhythmLabel: '节奏',
+      harmonyLabel: '和声',
+      densityLabel: '密度',
+      explanationLabel: '说明',
+      clearTitle: '关闭',
+    },
   },
 
   persistence: {

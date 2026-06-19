@@ -215,6 +215,15 @@ const pt: Dictionary = {
       infoTooltip:
         'Piloto automático: o agente evolui ritmo e harmonia automaticamente a cada N ciclos enquanto o áudio toca. Configure N antes de ativar.',
     },
+    recipeCard: {
+      // i18n-draft
+      title: 'Receita aplicada',
+      rhythmLabel: 'Ritmo',
+      harmonyLabel: 'Harmonia',
+      densityLabel: 'Densidade',
+      explanationLabel: 'Nota',
+      clearTitle: 'Fechar',
+    },
   },
 
   persistence: {
