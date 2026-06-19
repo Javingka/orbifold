@@ -504,13 +504,11 @@ Step 02.5 creates `src/core/music-knowledge/query.ts` exporting `findRecipesForP
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** <ISO date>
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-19
 **Iteration:** 1 of 1
-**Reason:**
-**Next action:**
+**Reason:** All 8 checklist items pass. Commit scope is clean — two new files (`rhythm-harmony-recipes.ts`, `recipes.test.ts`) plus handoff append; no existing source modified; commit message format correct. Acceptance Coverage Table complete for all seven A-02-xx IDs: A-02-04 COVERED with `describe.each` over all 10 recipes applying 6 invariants each; A-02-01/02/03 carried forward as COVERED; A-02-05 correctly deferred; A-02-06/07 honestly PARTIAL with forward reference to 02.5. Referential integrity tests are genuine behavioral checks against live catalog data (not stubs) — the meter-agreement invariant (invariant 6) is notably rigorous, requiring that every rhythmId in a recipe resolves to an entry whose `meter` matches the recipe `meter` field. No new runtime dependencies. Prototype parity and flag-off checklist items not applicable. Byte-identical guarantee holds trivially.
+**Next action:** Dev proceeds to step 02.5
 
 ---
 
@@ -669,13 +667,12 @@ Phase 02 complete. All 7 acceptance criteria (A-02-01 through A-02-07) are COVER
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** <ISO date>
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-19
 **Iteration:** 1 of 1
-**Reason:**
-**Next action:**
+**Reason:** All 8 checklist items pass. Commit scope is clean — two new files (`query.ts`, `query.test.ts`) plus handoff append; no existing source modified; commit message matches required format. Acceptance Coverage Table is complete and fully resolved: all seven A-02-xx IDs are COVERED with no partials remaining. A-02-05 verified in detail: afro-cuban/clave phrase coverage (4 tests), west-african/12-8 (4 tests), aksak/odd-meter (4 tests), nonsense → `[]` (4 tests), diacritic-insensitivity including hyphen=space (5 tests), determinism + score-order (3 tests including a mirror-logic score verification), all three id getters for known/unknown/empty-string inputs. A-02-06 confirmed: `grep -r "import.*music-knowledge" src/` returns no matches — no pre-existing module imports the new code; `query.ts` imports only three pure-core sibling modules. A-02-07 confirmed with verbatim full-suite transcript: `tsc --noEmit` clean, `pnpm lint` clean, `pnpm test` 1320/1320, `pnpm build` succeeds. AGPL-3.0 header present in both new files. Algorithm documented in JSDoc with 5-step normalization procedure, score calculation, sort behavior, and ES2019+ stable-sort rationale — fully satisfies the spec requirement. `normalizeWord` redundancy is benign and disclosed. Prototype parity and flag-off checklist items not applicable. No Register proposals pending.
+
+**Next action:** Pilot approval required before Phase 03 scoping, reason: this is the final step of Phase 02.
 
 ---
 
