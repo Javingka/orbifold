@@ -44,6 +44,9 @@ import {
   clampBars,
   barsLabel,
   reorderSlot,
+  addBlock,
+  addBlockAsNewTrack,
+  removeTrack,
 } from '../src/state/session.js';
 import type { SessionState, Chord, ProgressionSlot } from '../src/state/session.js';
 
@@ -637,5 +640,96 @@ describe('reorderSlot — A-10-12', () => {
     reorderSlot(0, 1);
     expect(getProgression()).toEqual(before);
     expect(getProgression().length).toBe(0);
+  });
+});
+
+// ── addBlockAsNewTrack — phantom track regression (Checkpoint #5 bug-fix) ──────
+// Regression test for: delete-last-track + addBlockAsNewTrack → TWO tracks.
+//
+// Root cause: removeTrack's "keep-at-least-one" guard auto-creates an empty
+// placeholder track. A subsequent addBlockAsNewTrack must reuse that placeholder
+// instead of appending a second track.
+//
+// ai-composition-authoring Phase 01, Checkpoint #5 bug-fix.
+
+describe('addBlockAsNewTrack — phantom track regression', () => {
+  // addBlock requires non-empty rhythm layers to produce code; seed a minimal layer.
+  const SEED_LAYER: RhythmLayer = {
+    sound: 'bd',
+    steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+  };
+
+  function seedGrooveState(): void {
+    sessionStore.set({
+      ...DEFAULT_SESSION_STATE,
+      rhythm: { layers: [SEED_LAYER] },
+    });
+  }
+
+  function getTracks() {
+    return get(sessionStore).composition.tracks;
+  }
+
+  it('creates exactly ONE track when addBlockAsNewTrack is called on a fresh store', () => {
+    seedGrooveState();
+    addBlock('groove');
+    const blocks = get(sessionStore).composition.blocks;
+    expect(blocks.length).toBe(1);
+    addBlockAsNewTrack(blocks[0].id);
+    expect(getTracks().length).toBe(1);
+    expect(getTracks()[0].blocks.length).toBe(1);
+  });
+
+  it('delete-last-track then addBlockAsNewTrack → still ONE track (no phantom)', () => {
+    // Step 1: add a groove block and put it in a new track.
+    seedGrooveState();
+    addBlock('groove');
+    const blocks1 = get(sessionStore).composition.blocks;
+    addBlockAsNewTrack(blocks1[0].id);
+    expect(getTracks().length).toBe(1);
+
+    // Step 2: user deletes that track — removeTrack auto-creates empty placeholder.
+    removeTrack(0);
+    // After deletion, exactly one empty placeholder track should exist.
+    expect(getTracks().length).toBe(1);
+    expect(getTracks()[0].blocks.length).toBe(0);
+
+    // Step 3: agent calls addBlock + addBlockAsNewTrack again.
+    addBlock('groove');
+    const blocks2 = get(sessionStore).composition.blocks;
+    const newBlock = blocks2[blocks2.length - 1];
+    addBlockAsNewTrack(newBlock.id);
+
+    // Must result in ONE track with the block, not two (one empty + one populated).
+    const tracks = getTracks();
+    expect(tracks.length).toBe(1);
+    expect(tracks[0].blocks.length).toBe(1);
+    expect(tracks[0].blocks[0].blockId).toBe(newBlock.id);
+  });
+
+  it('does NOT reuse placeholder when existing track already has blocks', () => {
+    // Two tracks already exist (one with content, one empty placeholder).
+    seedGrooveState();
+    addBlock('groove');
+    const blocks = get(sessionStore).composition.blocks;
+    addBlockAsNewTrack(blocks[0].id); // track with content
+    // Manually add a second empty track to simulate a second placeholder.
+    sessionStore.update((s) => ({
+      ...s,
+      composition: {
+        ...s.composition,
+        tracks: [...s.composition.tracks, { id: 't_placeholder', blocks: [] }],
+      },
+    }));
+    expect(getTracks().length).toBe(2);
+
+    // Adding another block should create a THIRD track (not reuse, since first track is non-empty).
+    addBlock('groove');
+    const allBlocks = get(sessionStore).composition.blocks;
+    const newestBlock = allBlocks[allBlocks.length - 1];
+    addBlockAsNewTrack(newestBlock.id);
+
+    // 2 existing tracks + 1 new = 3 tracks
+    expect(getTracks().length).toBe(3);
   });
 });

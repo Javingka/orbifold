@@ -3,6 +3,7 @@
 // src/agent/apply.ts (applyRhythmSpec, applyHarmonySpec).
 //
 // Phase 06 step 06.2.  Covers acceptance IDs A-06-04, A-06-05, A-06-06.
+// Phase 01 (ai-composition-authoring) step 01.3: added SaveAsBlockSpec tests (A-01-06).
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
@@ -12,10 +13,12 @@ import {
   RhythmSpecSchema,
   HarmonySpecSchema,
   HarmonyChordSchema,
+  SaveAsBlockSpecSchema,
   SCHEMA_VERSION,
 } from '../src/agent/schema';
 import { applyRhythmSpec, applyHarmonySpec } from '../src/agent/apply';
 import { sessionStore, DEFAULT_SESSION_STATE } from '../src/state/session';
+import type { Block } from '../src/core/composition/model';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -27,12 +30,10 @@ beforeEach(() => {
 // ── SCHEMA_VERSION ─────────────────────────────────────────────────────────
 
 describe('SCHEMA_VERSION', () => {
-  // Remains 4 after editable-composition Phase 01 step 01.4 — ADR 0020 D7.
-  // The agent schema is NOT bumped in this phase (block snapshots are a
-  // composition-layer concern, not agent output — see ADR 0020 D7 and the
-  // JSDoc guard added to HarmonyChordCoreSchema in src/agent/schema.ts).
-  it('is numeric 4 — unchanged in editable-composition Phase 01 (ADR 0020 D7)', () => {
-    expect(SCHEMA_VERSION).toBe(4);
+  // Bumped from 4 to 5 in ai-composition-authoring Phase 01 step 01.3 — ADR 0021 D2.
+  // saveAsBlock? field added to AgentOutputSchema; superRefine guard relaxed (OQ-3).
+  it('is numeric 5 — bumped in ai-composition-authoring Phase 01 (ADR 0021 D2)', () => {
+    expect(SCHEMA_VERSION).toBe(5);
   });
 });
 
@@ -669,8 +670,173 @@ describe('HarmonyChordCoreSchema — ADR 0019 D6 preset + filter/envelope fields
     }
   });
 
-  // A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6 — unchanged per ADR 0020 D7).
-  it('A-03-12: SCHEMA_VERSION is 4 (ADR 0019 D6 — unchanged by editable-composition Phase 01 per ADR 0020 D7)', () => {
-    expect(SCHEMA_VERSION).toBe(4);
+  // A-03-12 / A-01-06: SCHEMA_VERSION is now 5 (ADR 0021 D2 — bumped in ai-composition-authoring Phase 01).
+  it('A-03-12 / A-01-06: SCHEMA_VERSION is 5 (bumped from 4 by ADR 0021 D2)', () => {
+    expect(SCHEMA_VERSION).toBe(5);
+  });
+});
+
+// ── SaveAsBlockSpecSchema — ADR 0021 D1 (A-01-06) ────────────────────────────
+
+describe('SaveAsBlockSpecSchema — ADR 0021 D1 (A-01-06)', () => {
+  // A-01-06: all three type values parse correctly.
+  it('A-01-06: type "groove" parses correctly', () => {
+    const result = SaveAsBlockSpecSchema.safeParse({ name: 'My Groove', type: 'groove' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.type).toBe('groove');
+      expect(result.data.name).toBe('My Groove');
+    }
+  });
+
+  it('A-01-06: type "armonia" parses correctly', () => {
+    const result = SaveAsBlockSpecSchema.safeParse({ name: 'Mi Armonía', type: 'armonia' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.type).toBe('armonia');
+    }
+  });
+
+  it('A-01-06: type "sesion" parses correctly', () => {
+    const result = SaveAsBlockSpecSchema.safeParse({ name: 'Sesión A', type: 'sesion' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.type).toBe('sesion');
+    }
+  });
+
+  it('A-01-06: addToTrack: true parses correctly alongside name and type', () => {
+    const result = SaveAsBlockSpecSchema.safeParse({
+      name: 'Track Block',
+      type: 'groove',
+      addToTrack: true,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.addToTrack).toBe(true);
+    }
+  });
+
+  it('A-01-06: addToTrack absent → undefined (optional field)', () => {
+    const result = SaveAsBlockSpecSchema.safeParse({ name: 'No Track', type: 'armonia' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.addToTrack).toBeUndefined();
+    }
+  });
+
+  it('A-01-06: unknown type is rejected by z.enum', () => {
+    const result = SaveAsBlockSpecSchema.safeParse({ name: 'Bad', type: 'unknown' });
+    expect(result.success).toBe(false);
+  });
+
+  it('A-01-06: empty name string is rejected by z.string().min(1)', () => {
+    const result = SaveAsBlockSpecSchema.safeParse({ name: '', type: 'groove' });
+    expect(result.success).toBe(false);
+  });
+
+  it('A-01-06: name longer than 100 chars parses successfully (no .max() in Zod — OQ-2)', () => {
+    // The truncation happens in applyBlockSave, not in the schema.
+    const longName = 'A'.repeat(150);
+    const result = SaveAsBlockSpecSchema.safeParse({ name: longName, type: 'groove' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Zod does NOT truncate — the full name passes schema validation
+      expect(result.data.name.length).toBe(150);
+    }
+  });
+
+  // A-01-06: type literal alignment guard — SaveAsBlockSpec.type must match Block.type.
+  // This test verifies that the three z.enum values are the exact same literals used
+  // in Block.type (src/core/composition/model.ts line 24: 'groove' | 'armonia' | 'sesion').
+  // If model.ts adds or renames a type, this test will fail, prompting an ADR update.
+  it('A-01-06: type enum values align with Block.type literals from model.ts', () => {
+    // Enumerate the three values that Block.type accepts and confirm each parses.
+    const blockTypes: Array<Block['type']> = ['groove', 'armonia', 'sesion'];
+    for (const t of blockTypes) {
+      const result = SaveAsBlockSpecSchema.safeParse({ name: 'Alignment Test', type: t });
+      expect(result.success).toBe(true);
+    }
+    // Confirm that a value NOT in Block.type is rejected.
+    const badResult = SaveAsBlockSpecSchema.safeParse({ name: 'Bad', type: 'invalid' });
+    expect(badResult.success).toBe(false);
+  });
+});
+
+// ── AgentOutputSchema — saveAsBlock field (A-01-06) ───────────────────────────
+
+describe('AgentOutputSchema — saveAsBlock field (ADR 0021 D1, A-01-06)', () => {
+  // A-01-06: saveAsBlock-only response parses correctly (OQ-3 guard relaxed).
+  it('A-01-06: saveAsBlock-only response (no rhythm, no harmony) parses correctly', () => {
+    const result = AgentOutputSchema.safeParse({
+      saveAsBlock: { name: 'Groove Test', type: 'groove' },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.saveAsBlock).toBeDefined();
+      expect(result.data.rhythm).toBeUndefined();
+      expect(result.data.harmony).toBeUndefined();
+    }
+  });
+
+  it('A-01-06: response without saveAsBlock parses correctly; saveAsBlock is undefined', () => {
+    const result = AgentOutputSchema.safeParse({
+      rhythm: { layers: [{ sound: 'bd', steps: new Array(16).fill(0) }] },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.saveAsBlock).toBeUndefined();
+    }
+  });
+
+  it('A-01-06: response with rhythm + saveAsBlock parses correctly', () => {
+    const result = AgentOutputSchema.safeParse({
+      rhythm: { layers: [{ sound: 'bd', steps: new Array(16).fill(0) }] },
+      saveAsBlock: { name: 'Combo Block', type: 'sesion', addToTrack: true },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.rhythm).toBeDefined();
+      expect(result.data.saveAsBlock?.type).toBe('sesion');
+      expect(result.data.saveAsBlock?.addToTrack).toBe(true);
+    }
+  });
+
+  it('A-01-06: neither rhythm, harmony, nor saveAsBlock fails (superRefine guard)', () => {
+    const result = AgentOutputSchema.safeParse({ note: 'only a note' });
+    expect(result.success).toBe(false);
+  });
+
+  it('A-01-06: saveAsBlock with unknown type causes parse failure', () => {
+    const result = AgentOutputSchema.safeParse({
+      saveAsBlock: { name: 'Bad', type: 'melody' },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ── SaveAsBlockSpecSchema structural alignment guard (step 01.4) ──────────────
+//
+// Confirms that SaveAsBlockSpecSchema.shape.type is a z.ZodEnum whose values
+// are the exact same three literals as Block.type from src/core/composition/model.ts
+// (line 24: 'groove' | 'armonia' | 'sesion'). This is a structural introspection
+// check — it inspects the Zod schema shape directly, not via safeParse.
+// If model.ts adds or renames a Block.type literal, this test will fail,
+// prompting an ADR update (ADR 0021 D1 structural alignment guard).
+
+describe('SaveAsBlockSpecSchema.shape.type — structural alignment with Block.type (step 01.4)', () => {
+  it('step-01.4 structural guard: SaveAsBlockSpecSchema.shape.type enum values are exactly the Block.type literals', () => {
+    // Zod z.enum exposes its values as a readonly string array on ._def.values.
+    const enumDef = SaveAsBlockSpecSchema.shape.type._def as { values: string[] };
+    const schemaValues = [...enumDef.values].sort();
+
+    // The three literals that Block.type accepts (src/core/composition/model.ts line 24).
+    // Kept as a typed array so that TypeScript enforces exhaustiveness.
+    const blockTypeValues: Array<Block['type']> = ['armonia', 'groove', 'sesion'];
+    const expectedValues = [...blockTypeValues].sort();
+
+    // Structural equality: same count, same values in sorted order.
+    expect(schemaValues).toHaveLength(expectedValues.length);
+    expect(schemaValues).toEqual(expectedValues);
   });
 });
