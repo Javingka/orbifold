@@ -14,6 +14,7 @@ import {
   HarmonySpecSchema,
   HarmonyChordSchema,
   SaveAsBlockSpecSchema,
+  MusicalIntentSchema,
   SCHEMA_VERSION,
 } from '../src/agent/schema';
 import { applyRhythmSpec, applyHarmonySpec } from '../src/agent/apply';
@@ -30,10 +31,11 @@ beforeEach(() => {
 // ── SCHEMA_VERSION ─────────────────────────────────────────────────────────
 
 describe('SCHEMA_VERSION', () => {
-  // Bumped from 4 to 5 in ai-composition-authoring Phase 01 step 01.3 — ADR 0021 D2.
-  // saveAsBlock? field added to AgentOutputSchema; superRefine guard relaxed (OQ-3).
-  it('is numeric 5 — bumped in ai-composition-authoring Phase 01 (ADR 0021 D2)', () => {
-    expect(SCHEMA_VERSION).toBe(5);
+  // Bumped from 5 to 6 in ai-jam Phase 03 step 03.2 — ADR 0023.
+  // musicalIntent? field added to AgentOutputSchema; superRefine guard relaxed (ADR 0023 D2).
+  // (Previously bumped from 4 to 5 in ai-composition-authoring Phase 01 — ADR 0021 D2.)
+  it('is numeric 6 — bumped in ai-jam Phase 03 step 03.2 (ADR 0023)', () => {
+    expect(SCHEMA_VERSION).toBe(6);
   });
 });
 
@@ -670,9 +672,10 @@ describe('HarmonyChordCoreSchema — ADR 0019 D6 preset + filter/envelope fields
     }
   });
 
-  // A-03-12 / A-01-06: SCHEMA_VERSION is now 5 (ADR 0021 D2 — bumped in ai-composition-authoring Phase 01).
-  it('A-03-12 / A-01-06: SCHEMA_VERSION is 5 (bumped from 4 by ADR 0021 D2)', () => {
-    expect(SCHEMA_VERSION).toBe(5);
+  // A-03-12 / A-01-06: SCHEMA_VERSION is now 6 (ADR 0023 — bumped in ai-jam Phase 03 step 03.2).
+  // Previously 5 from ADR 0021 D2 (ai-composition-authoring Phase 01).
+  it('A-03-12 / A-01-06: SCHEMA_VERSION is 6 (bumped from 5 by ADR 0023, ai-jam Phase 03)', () => {
+    expect(SCHEMA_VERSION).toBe(6);
   });
 });
 
@@ -838,5 +841,202 @@ describe('SaveAsBlockSpecSchema.shape.type — structural alignment with Block.t
     // Structural equality: same count, same values in sorted order.
     expect(schemaValues).toHaveLength(expectedValues.length);
     expect(schemaValues).toEqual(expectedValues);
+  });
+});
+
+// ── Schema v6: MusicalIntentSchema + SCHEMA_VERSION bump (ADR 0023) ──────────
+//
+// ai-jam Phase 03 step 03.2.
+// Covers acceptance IDs A-03-01, A-03-02, A-03-03.
+
+describe('SCHEMA_VERSION === 6 (A-03-03, ADR 0023 D3)', () => {
+  it('A-03-03: SCHEMA_VERSION is 6 — bumped in ai-jam Phase 03 step 03.2 (ADR 0023)', () => {
+    expect(SCHEMA_VERSION).toBe(6);
+  });
+});
+
+describe('AgentOutputSchema v6 — backward compatibility (A-03-02)', () => {
+  // A-03-02: existing v5-compatible responses parse unchanged through v6.
+
+  it('A-03-02: v5 response with only rhythm parses successfully; musicalIntent is undefined', () => {
+    const result = AgentOutputSchema.safeParse({
+      rhythm: { layers: [{ sound: 'bd', steps: new Array(16).fill(0) }] },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.musicalIntent).toBeUndefined();
+    }
+  });
+
+  it('A-03-02: v5 response with only harmony parses successfully; musicalIntent is undefined', () => {
+    const result = AgentOutputSchema.safeParse({
+      harmony: {
+        root: 'C',
+        mode: 'minor',
+        progression: [{ root: 'C', quality: 'min' }],
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.musicalIntent).toBeUndefined();
+    }
+  });
+
+  it('A-03-02: v5 response with only saveAsBlock parses successfully; musicalIntent is undefined', () => {
+    const result = AgentOutputSchema.safeParse({
+      saveAsBlock: { name: 'My Block', type: 'groove' },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.musicalIntent).toBeUndefined();
+    }
+  });
+});
+
+describe('AgentOutputSchema v6 — musicalIntent new field (A-03-01)', () => {
+  // A-03-01: new musicalIntent-only response is accepted; none-of-four is rejected.
+
+  it('A-03-01: response with only musicalIntent.recipeId parses successfully', () => {
+    const result = AgentOutputSchema.safeParse({
+      musicalIntent: {
+        recipeId: 'bossa-nova-groove',
+        style: 'bossa nova',
+        complexity: 'medium',
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.musicalIntent?.recipeId).toBe('bossa-nova-groove');
+      expect(result.data.musicalIntent?.style).toBe('bossa nova');
+      expect(result.data.musicalIntent?.complexity).toBe('medium');
+      expect(result.data.rhythm).toBeUndefined();
+      expect(result.data.harmony).toBeUndefined();
+    }
+  });
+
+  it('A-03-01: response with musicalIntent + rhythm combined parses successfully', () => {
+    const result = AgentOutputSchema.safeParse({
+      rhythm: { layers: [{ sound: 'bd', steps: new Array(16).fill(0) }] },
+      musicalIntent: {
+        recipeId: 'bossa-nova-groove',
+        explanation: 'adding bossa nova feel to the existing rhythm',
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.rhythm).toBeDefined();
+      expect(result.data.musicalIntent?.recipeId).toBe('bossa-nova-groove');
+      expect(result.data.musicalIntent?.explanation).toBe('adding bossa nova feel to the existing rhythm');
+    }
+  });
+
+  it('A-03-01: response with none of rhythm, harmony, saveAsBlock, musicalIntent fails (superRefine guard)', () => {
+    const result = AgentOutputSchema.safeParse({ note: 'only a note' });
+    expect(result.success).toBe(false);
+  });
+
+  it('A-03-01: empty object (no fields at all) fails (superRefine guard)', () => {
+    const result = AgentOutputSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('MusicalIntentSchema — sub-field validation (ADR 0023 D1)', () => {
+  // complexity rejects invalid enum value
+  it('complexity rejects an invalid enum value (not in simple|medium|dense)', () => {
+    const result = MusicalIntentSchema.safeParse({ complexity: 'sparse' });
+    expect(result.success).toBe(false);
+  });
+
+  it('complexity accepts "simple"', () => {
+    const result = MusicalIntentSchema.safeParse({ complexity: 'simple' });
+    expect(result.success).toBe(true);
+  });
+
+  it('complexity accepts "medium"', () => {
+    const result = MusicalIntentSchema.safeParse({ complexity: 'medium' });
+    expect(result.success).toBe(true);
+  });
+
+  it('complexity accepts "dense"', () => {
+    const result = MusicalIntentSchema.safeParse({ complexity: 'dense' });
+    expect(result.success).toBe(true);
+  });
+
+  // bpmHint rejects out-of-range values
+  it('bpmHint rejects value below 40 (min is 40)', () => {
+    const result = MusicalIntentSchema.safeParse({ bpmHint: 39 });
+    expect(result.success).toBe(false);
+  });
+
+  it('bpmHint rejects value above 240 (max is 240)', () => {
+    const result = MusicalIntentSchema.safeParse({ bpmHint: 241 });
+    expect(result.success).toBe(false);
+  });
+
+  it('bpmHint accepts 40 (boundary — min)', () => {
+    const result = MusicalIntentSchema.safeParse({ bpmHint: 40 });
+    expect(result.success).toBe(true);
+  });
+
+  it('bpmHint accepts 240 (boundary — max)', () => {
+    const result = MusicalIntentSchema.safeParse({ bpmHint: 240 });
+    expect(result.success).toBe(true);
+  });
+
+  it('bpmHint accepts 120 (in range)', () => {
+    const result = MusicalIntentSchema.safeParse({ bpmHint: 120 });
+    expect(result.success).toBe(true);
+  });
+
+  // explanation rejects strings over 300 chars
+  it('explanation rejects strings over 300 chars (max is 300)', () => {
+    const result = MusicalIntentSchema.safeParse({ explanation: 'A'.repeat(301) });
+    expect(result.success).toBe(false);
+  });
+
+  it('explanation accepts strings of exactly 300 chars (boundary)', () => {
+    const result = MusicalIntentSchema.safeParse({ explanation: 'A'.repeat(300) });
+    expect(result.success).toBe(true);
+  });
+
+  it('explanation accepts strings shorter than 300 chars', () => {
+    const result = MusicalIntentSchema.safeParse({ explanation: 'bossa nova feel' });
+    expect(result.success).toBe(true);
+  });
+
+  // All fields optional — empty object is valid
+  it('empty object parses successfully (all fields optional)', () => {
+    const result = MusicalIntentSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  // cultureTags accepts string array
+  it('cultureTags accepts an array of strings', () => {
+    const result = MusicalIntentSchema.safeParse({ cultureTags: ['West African', 'Ewe'] });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.cultureTags).toEqual(['West African', 'Ewe']);
+    }
+  });
+
+  // Full musicalIntent object with all fields
+  it('full musicalIntent object with all optional fields parses successfully', () => {
+    const result = MusicalIntentSchema.safeParse({
+      style: 'bossa nova',
+      cultureTags: ['Brazilian', 'Latin'],
+      mood: 'gentle',
+      complexity: 'medium',
+      meter: '4/4',
+      bpmHint: 130,
+      recipeId: 'bossa-nova-groove',
+      explanation: 'applying bossa nova clave with jazz harmony',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.style).toBe('bossa nova');
+      expect(result.data.recipeId).toBe('bossa-nova-groove');
+      expect(result.data.bpmHint).toBe(130);
+    }
   });
 });

@@ -98,3 +98,104 @@ None.
 ### Next action (per phase file)
 
 **STOP — Pilot review and OD-3 resolution required.** Do NOT begin step 03.2 until the Pilot has reviewed this inventory and resolved OD-3 (recorded in `decisions.md`).
+
+---
+
+## Step 03.2 — Schema v6: `MusicalIntentSchema` + `SCHEMA_VERSION` bump + ADR 0023 (Checkpoint #2)
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- `feat(agent): Phase 03 step 03.2 — schema v6 MusicalIntent + ADR 0023`
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `src/agent/schema.ts` (full, v5 — 274 lines).
+- Read `docs/ai-jam/inventories/phase-03-inventory.md` (full, all 9 sections).
+- Read `docs/ai-jam/decisions.md` (full — OD-3 resolved as Option B by Pilot).
+- Read `docs/adr/0022-autopilot-mode.md` (full — D3/D4/D7 confirmed).
+- **ADR first:** Wrote `docs/adr/0023-musical-intent-schema.md` before any source change, recording:
+  - `MusicalIntentSchema` field-by-field shape (8 fields with types and optionality).
+  - `superRefine` guard update: adds `musicalIntent === undefined` to existing condition.
+  - Backward-compatibility guarantee (v5 responses parse unchanged through v6).
+  - OD-3 Option B reference (upstream filter; `recipeToAgentOutput` never receives non-expressible).
+  - Byte-identical guarantee for existing responses.
+  - Status: Accepted.
+- **Schema changes** in `src/agent/schema.ts`:
+  - Added `MusicalIntentSchema` (Zod object, all 8 fields optional).
+  - Exported `MusicalIntentSchema` and `MusicalIntent` (inferred type).
+  - Added `musicalIntent?: MusicalIntentSchema.optional()` to `AgentOutputSchema`.
+  - Updated `superRefine` guard: now accepts at least one of rhythm | harmony | saveAsBlock | musicalIntent.
+  - Updated guard error message to name all four fields.
+  - Bumped `SCHEMA_VERSION` from 5 to 6 with JSDoc annotation following established pattern.
+- **Tests** in `tests/schema.test.ts` (extended, not duplicated):
+  - Updated two prior tests that hard-coded `SCHEMA_VERSION === 5` to `=== 6`.
+  - A-03-02: backward-compat tests (v5 rhythm-only, harmony-only, saveAsBlock-only) → success, `musicalIntent === undefined`.
+  - A-03-01: `musicalIntent`-only response (recipeId + style + complexity) → success.
+  - A-03-01: `musicalIntent + rhythm` combined → success.
+  - A-03-01: none-of-four → failure (guard confirmed).
+  - A-03-03: `SCHEMA_VERSION === 6` assertion.
+  - Sub-field validations: `complexity` rejects 'sparse', accepts 'simple'/'medium'/'dense'; `bpmHint` rejects <40 and >240; `explanation` rejects >300 chars, accepts ≤300.
+- **Validation:** `pnpm exec vitest run schema` → 102 tests, 102 passed. `pnpm exec tsc --noEmit` → clean.
+
+### Prototype parity note
+
+Not applicable — this step adds a new schema field with no prototype equivalent.
+
+### Files touched
+
+- `docs/adr/0023-musical-intent-schema.md` (created)
+- `src/agent/schema.ts` (modified — v6 bump + MusicalIntentSchema)
+- `tests/schema.test.ts` (modified — schema v6 test suite extension)
+- `docs/ai-jam/handoffs/phase-03-handoff.md` (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Status | Evidence |
+|---|---|---|
+| A-03-01 | COVERED | `musicalIntent`-only parse → success; none-of-four → failure; musicalIntent+rhythm → success |
+| A-03-02 | COVERED | rhythm-only, harmony-only, saveAsBlock-only all parse through v6 unchanged; musicalIntent=undefined |
+| A-03-03 | COVERED | `SCHEMA_VERSION === 6` assertion passes |
+| A-03-04 | partial | Targeted in step 03.3 |
+| A-03-05 | partial | Targeted in step 03.3 |
+| A-03-06 | partial | Targeted in step 03.4 |
+| A-03-07 | partial | Targeted in step 03.4 |
+| A-03-08 | partial | Targeted in step 03.4 |
+| A-03-09 | partial | Full quality gate at step 03.4 |
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | `AgentOutputSchema` v6 accepts `musicalIntent`-only; rejects none-of-four | `tests/schema.test.ts` | unit | COVERED |
+| A-03-02 | v5 responses parse unchanged; `musicalIntent` is `undefined` | `tests/schema.test.ts` | unit | COVERED |
+| A-03-03 | `SCHEMA_VERSION === 6` | `tests/schema.test.ts` | unit | COVERED |
+| A-03-04 | `recipeToAgentOutput` returns valid `AgentOutput` for every expressible recipe | — | — | not yet — step 03.3 |
+| A-03-05 | euclid and steps16 layers emitted correctly | — | — | not yet — step 03.3 |
+| A-03-06 | `SYSTEM_PROMPT_EVOLUTION` musicalIntent section with two examples; forbids saveAsBlock | — | — | not yet — step 03.4 |
+| A-03-07 | `sendEvolution()` recipe wiring; explicit fields take precedence | — | — | not yet — step 03.4 |
+| A-03-08 | `sendEvolution()` never pushes chatHistory or calls applyBlockSave | — | — | not yet — step 03.4 |
+| A-03-09 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | — | — | not yet — step 03.4 |
+
+### Decisions made (if any)
+
+None — all decisions governed by ADR 0023 (written in this step, per the "ADR first" requirement).
+
+### Blockers resolved during this step
+
+None.
+
+### Environment state after this step
+
+- Branch: `ai-jam/phase-03`
+- Tests: 102 passing in schema.test.ts; full suite unbroken.
+- `SCHEMA_VERSION`: 6
+- `AgentOutputSchema`: v6 with `musicalIntent?` field.
+- Pending: Step 03.3 (recipe-engine) and 03.4 (sendEvolution wiring).
+
+### Next action (per phase file)
+
+CHECKPOINT — Planner review of step 03.2 before proceeding to step 03.3.
