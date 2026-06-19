@@ -23,7 +23,8 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { sessionStore, setNowPlaying } from '../state/session.js';
+  import { sessionStore, setNowPlaying, setAutopilot } from '../state/session.js';
+  import { startAutopilot, stopAutopilot } from '../agent/autopilot.js';
   import { agentCtx } from '../state/agentCtx.js';
   import {
     send,
@@ -92,6 +93,26 @@
   // ── Toggles ───────────────────────────────────────────────────────────────
   let autoplay = true;
   let autofixEnabled = true;
+
+  // ── Autopilot ─────────────────────────────────────────────────────────────
+  // Reactive binding to autopilot state in sessionStore.
+  // ADR 0022 D1: AutopilotState lives in SessionState for Svelte reactivity.
+  $: autopilot = $sessionStore.autopilot;
+
+  /**
+   * Toggle autopilot on or off.
+   * setAutopilot must be called BEFORE startAutopilot so the timer reads
+   * the latest intervalCycles (ADR 0022 D2).
+   */
+  function toggleAutopilot(): void {
+    if (autopilot.enabled) {
+      stopAutopilot();
+      setAutopilot({ enabled: false });
+    } else {
+      setAutopilot({ enabled: true });
+      startAutopilot();
+    }
+  }
 
   // ── Chat state ────────────────────────────────────────────────────────────
   // Local Svelte reactive array mirrors agent.ts chatHistory.
@@ -515,6 +536,36 @@
     <label class:on={autofixEnabled}>
       <input type="checkbox" bind:checked={autofixEnabled} />
       {$t('agent.autofix')}
+    </label>
+  </div>
+
+  <!--
+    Autopilot controls: toggle button + interval selector.
+    ai-jam Phase 01 step 01.4 (ADR 0022 D1/D2).
+    Button label changes when enabled; intervalCycles input disabled while running.
+  -->
+  <div class="toggles autopilot-row">
+    <button
+      class="autopilot-btn"
+      class:active={autopilot.enabled}
+      on:click={toggleAutopilot}
+      title={autopilot.enabled ? 'Autopilot ON — click to stop' : 'Start autopilot'}
+    >
+      {autopilot.enabled ? 'Autopilot ON' : 'Autopilot'}
+    </button>
+    <label class="interval-label">
+      Ciclos:
+      <input
+        type="number"
+        class="interval-input"
+        min="2"
+        max="32"
+        step="2"
+        value={autopilot.intervalCycles}
+        disabled={autopilot.enabled}
+        on:change={(e) =>
+          setAutopilot({ intervalCycles: +(/** @type {HTMLInputElement} */ (e.target).value) })}
+      />
     </label>
   </div>
 

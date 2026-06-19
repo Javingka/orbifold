@@ -367,6 +367,121 @@ All quality gates pass: `tsc --noEmit` (0 errors), `pnpm lint` (clean), `pnpm ex
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-18. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 01.4
+
+---
+
+## Step 01.4 — Minimal UI toggle in AgentPanel
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(ui): Phase 01 step 01.4 — autopilot toggle and interval selector in AgentPanel`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `CLAUDE.md` (system context — initiative, conventions, guardrails).
+- Read `docs/ai-jam/decisions.md` (full — carried-forward rules; no active decisions yet).
+- Read `docs/adr/0022-autopilot-mode.md` (full — D1 for store shape; D2 for `intervalCycles` range 2–32).
+- Read `docs/ai-jam/phases/phase-01.md` (full — step 01.4 PROMPT, implementation targets, validation, acceptance criteria).
+- Read `src/ui/AgentPanel.svelte` (full — existing structure: reactive store bindings, button/toggle pattern, import layout).
+- Read `src/state/session.ts` (lines 317–520 — confirmed `setAutopilot` export at line 515; `AutopilotState` interface at lines 334–337; `autopilot` field in `SessionState` at line 360).
+- Read `src/agent/autopilot.ts` (full — confirmed `startAutopilot()` at line 65; `stopAutopilot()` at line 86; both exported).
+- Added `setAutopilot` to the existing `sessionStore` import line (line 26).
+- Added new import line for `startAutopilot`/`stopAutopilot` from `../agent/autopilot.js` (line 27).
+- Added `$: autopilot = $sessionStore.autopilot` reactive binding in script section.
+- Added `toggleAutopilot()` function (calls `setAutopilot` before `startAutopilot` per ADR 0022 D2).
+- Added autopilot controls div (`class="toggles autopilot-row"`) after the existing toggles div — button + numeric input.
+- Fixed one Prettier formatting issue (auto-applied via `pnpm exec prettier --write`).
+
+### Files read (with line ranges)
+
+| File | Lines read |
+|---|---|
+| `CLAUDE.md` | lines 1–20 (header) + system context |
+| `docs/ai-jam/decisions.md` | 1–34 (full) |
+| `docs/adr/0022-autopilot-mode.md` | 1–554 (full) |
+| `docs/ai-jam/phases/phase-01.md` | 1–304 (full) |
+| `src/ui/AgentPanel.svelte` | 1–591 (full, before edits) |
+| `src/state/session.ts` | 317–520 (AutopilotState, SessionState, setAutopilot) |
+| `src/agent/autopilot.ts` | 1–93 (full) |
+| `docs/ai-jam/handoffs/phase-01-handoff.md` | 1–372 (prior entries) |
+
+### Files touched
+
+| File | Nature of change |
+|---|---|
+| `src/ui/AgentPanel.svelte` | Added `setAutopilot` to session import; added `startAutopilot`/`stopAutopilot` import; added `$: autopilot` reactive binding; added `toggleAutopilot()` handler; added autopilot-row div with button + numeric input |
+| `docs/ai-jam/handoffs/phase-01-handoff.md` | Appended this entry |
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Required behavior | Covered by | Status |
+|---|---|---|---|
+| A-01-01 | User can toggle autopilot on/off; session store reflects the change immediately | `toggleAutopilot()` calls `setAutopilot({ enabled: true/false })` + UI button with `class:active={autopilot.enabled}` | CLOSED (unit tests in 01.3; UI wiring here) |
+| A-01-02 | When enabled with audio playing, the agent fires automatically every N Strudel cycles | `toggleAutopilot()` calls `startAutopilot()` after `setAutopilot` | CLOSED |
+| A-01-03 | Each automatic evolution receives the current live rhythm and harmony as JSON context | No change — covered by `sendEvolution()` in step 01.3 | PARTIAL — static analysis in 01.5 |
+| A-01-04 | Manual agent messages continue to work normally while autopilot is running | No change to `handleSend()` / `send()` path | CLOSED |
+| A-01-05 | Disabling autopilot stops the timer | `toggleAutopilot()` calls `stopAutopilot()` then `setAutopilot({ enabled: false })` | CLOSED |
+| A-01-06 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | tsc/lint/vitest pass in this step; `pnpm build` in step 01.5 | PARTIAL — build in 01.5 |
+| A-01-07 | Operator can start dev server and observe automatic evolution | UI toggle now exists in AgentPanel | PARTIAL — manual operability check in 01.5 |
+| A-01-08 | `SYSTEM_PROMPT_EVOLUTION` contains required content | No change — covered in step 01.3 | not yet — static analysis in 01.5 |
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint clean; Prettier required one auto-fix via `prettier --write`, then passed)
+- `pnpm exec vitest run` → exit 0, **750 tests passed** (21 test files; count unchanged from step 01.3)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | User can toggle autopilot on/off; session store reflects the change immediately | `tests/autopilot.test.ts` (unit) + AgentPanel toggle (UI) | unit + manual | CLOSED — store tests in 01.3; UI wiring here |
+| A-01-02 | When enabled with audio playing, the agent fires automatically every N Strudel cycles | `tests/autopilot.test.ts` (fake timers) | unit | CLOSED |
+| A-01-03 | Each automatic evolution receives the current live rhythm and harmony as JSON context | `tests/autopilot.test.ts` (mock call) | unit + proxy:static-analysis | PARTIAL — static analysis in 01.5 |
+| A-01-04 | Manual agent messages (`send()`) continue to work normally while autopilot is running | `tests/autopilot.test.ts` | unit | CLOSED |
+| A-01-05 | Disabling autopilot stops the timer; no further LLM calls are made after the toggle | `tests/autopilot.test.ts` | unit | CLOSED |
+| A-01-06 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | — | operability | PARTIAL — `pnpm build` in step 01.5 |
+| A-01-07 | Operator can start dev server, enable autopilot, and observe automatic rhythm/harmony evolution | — | operability | PARTIAL — manual check in step 01.5 |
+| A-01-08 | `SYSTEM_PROMPT_EVOLUTION` contains: evolve directive, state JSON context injection, concrete example, no-`saveAsBlock` instruction | — | proxy:static-analysis | not yet — step 01.5 |
+
+### Key findings
+
+1. **TypeScript cast in Svelte template required JSDoc comment pattern** — `as HTMLInputElement` inside a Svelte template event handler is rejected by the ESLint Svelte parser. Used `/** @type {HTMLInputElement} */ (e.target).value` instead (same semantics, accepted by the parser). This is consistent with how `handleProviderChange` in the same file casts `(e.target).value` via JSDoc comment (line 433).
+
+2. **`startAutopilot()` called after `setAutopilot({ enabled: true })`** — Order is critical per ADR 0022 D2: the timer reads `intervalCycles` from the store at `startAutopilot()` call time. If `setAutopilot` were called after, the timer might read a stale value. The `toggleAutopilot()` function enforces this ordering.
+
+3. **`stopAutopilot()` called before `setAutopilot({ enabled: false })`** — This order clears the timer first, then updates the store. Prevents the UI from showing "disabled" while the timer is still running.
+
+4. **No layout restructuring** — The autopilot controls are added as a second `div.toggles` row after the existing autoplay/autofix row. This is the smallest possible layout addition and matches the existing `class="toggles"` pattern.
+
+5. **Prettier formatting** — Prettier reformatted the JSDoc inline comment inside the `on:change` handler. The final formatted form `+(/** @type {HTMLInputElement} */ (e.target).value)` is accepted by both ESLint and Prettier.
+
+### Decisions made (if any)
+
+None beyond ADR 0022. The JSDoc-comment cast pattern is an implementation detail, not a governance decision.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+All quality gates pass: `tsc --noEmit` (0 errors), `pnpm lint` (clean), `pnpm exec vitest run` (750/750 tests). Working tree committed (pending this commit).
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:** APPROVED / REVISE / ESCALATED
@@ -374,4 +489,3 @@ All quality gates pass: `tsc --noEmit` (0 errors), `pnpm lint` (clean), `pnpm ex
 **Iteration:** 1 of 1
 **Reason:**
 **Next action:**
-
