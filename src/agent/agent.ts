@@ -33,7 +33,7 @@ import {
   recipeToAgentOutput,
   getExpressibleRecipes,
 } from '../core/music-knowledge/recipe-engine.js';
-import { getRecipeById } from '../core/music-knowledge/query.js';
+import { getRecipeById, getRhythmById } from '../core/music-knowledge/query.js';
 
 // ── ADR 0017 D7: language directive ──────────────────────────────────────────
 // Maps LangCode → user-facing language name used in the directive injected into
@@ -443,7 +443,23 @@ export async function sendEvolution(): Promise<void> {
   // The list is dynamic (computed from the expressible recipe catalog) and injected
   // into the user message — not hardcoded in SYSTEM_PROMPT_EVOLUTION (which is static).
   const availableRecipes = getExpressibleRecipes().map((r) => r.id);
-  const userMessage = JSON.stringify({ ...stateSnapshot, availableRecipes }, null, 2);
+
+  // Inject rhythm hint when the user has selected a style preference (Phase 06 step 06.2).
+  // Uses human-readable name for catalog ids (getRhythmById fallback to id string).
+  // 'otro' with free text injects rhythmHintFreeText; empty hint omits both fields (ADR 0022 D3).
+  const { rhythmHint, rhythmHintText } = state.autopilot;
+  const rhythmHintPayload: Record<string, string> = {};
+  if (rhythmHint && rhythmHint !== 'otro') {
+    rhythmHintPayload['rhythmHint'] = getRhythmById(rhythmHint)?.name ?? rhythmHint;
+  } else if (rhythmHint === 'otro' && rhythmHintText.trim()) {
+    rhythmHintPayload['rhythmHintFreeText'] = rhythmHintText.trim();
+  }
+
+  const userMessage = JSON.stringify(
+    { ...stateSnapshot, availableRecipes, ...rhythmHintPayload },
+    null,
+    2
+  );
 
   // Fetch using SYSTEM_PROMPT_EVOLUTION (NOT SYSTEM_PROMPT).
   // No chatHistory used — this is a clean-slate one-shot call (ADR 0022 D3/D4).

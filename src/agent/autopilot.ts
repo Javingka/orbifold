@@ -16,7 +16,7 @@
 
 import { get } from 'svelte/store';
 
-import { sessionStore } from '../state/session.js';
+import { sessionStore, setAutopilot } from '../state/session.js';
 import { sendEvolution } from './agent.js';
 
 /**
@@ -46,6 +46,10 @@ async function tick(): Promise<void> {
   const { isPlaying } = await import('../audio/strudel.js');
   if (!isPlaying()) return;
 
+  // Mark the start of the new interval so AgentPanel's progress bar can
+  // compute elapsed / intervalMs. OD-1 Option A: timerStartedAt in sessionStore.
+  setAutopilot({ timerStartedAt: Date.now() });
+
   _isEvolving = true;
   sendEvolution()
     .catch(() => {
@@ -72,6 +76,9 @@ export function startAutopilot(): void {
   }
   const { bpm, autopilot } = get(sessionStore);
   const intervalMs = Math.round(((60000 * 4) / bpm) * autopilot.intervalCycles);
+  // Mark the timer start time so AgentPanel can compute progress bar fill.
+  // OD-1 Option A: timerStartedAt lives in AutopilotState in sessionStore.
+  setAutopilot({ timerStartedAt: Date.now() });
   _timerId = setInterval(tick, intervalMs);
 }
 
@@ -91,4 +98,9 @@ export function stopAutopilot(): void {
     _timerId = null;
   }
   _isEvolving = false;
+  // Reset timerStartedAt so the progress bar returns to 0 when stopped.
+  // OD-1 Option A: timerStartedAt in AutopilotState (sessionStore).
+  // NOTE: `enabled` is NOT set here — callers (UI handler) set enabled via
+  // setAutopilot({ enabled: false }) separately, per ADR 0022 D2 ordering contract.
+  setAutopilot({ timerStartedAt: 0 });
 }

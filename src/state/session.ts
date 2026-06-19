@@ -330,10 +330,24 @@ export interface NowPlaying {
  * - `intervalCycles`  Number of Strudel cycles between automatic evolution
  *                     calls. Range: 2–32 (step 2). Default: 8.
  *                     At 120 BPM, 8 cycles = 16 seconds.
+ * - `panelOpen`       Whether the autopilot config panel is expanded.
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
+ * - `rhythmHint`      Catalog rhythm id, 'otro', or '' (no hint).
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
+ * - `rhythmHintText`  Free-text hint when rhythmHint === 'otro'.
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
+ * - `timerStartedAt`  Epoch ms when the current interval began (Date.now()).
+ *                     0 when stopped. Updated at start and on each tick boundary.
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
+ *                     OD-1 resolved: Option A (field in AutopilotState).
  */
 export interface AutopilotState {
   enabled: boolean;
   intervalCycles: number;
+  panelOpen: boolean;
+  rhythmHint: string;
+  rhythmHintText: string;
+  timerStartedAt: number;
 }
 
 // ── LastRecipeDisplay ────────────────────────────────────────────────────────
@@ -423,9 +437,15 @@ export const DEFAULT_SESSION_STATE: SessionState = {
     source: null,
   },
   // autopilot: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7)
+  // Four new fields (Phase 06 step 06.2) are also ephemeral — automatically excluded
+  // because the entire `autopilot` key is absent from SavedSessionSchema (see persistence.ts).
   autopilot: {
     enabled: false,
     intervalCycles: 8,
+    panelOpen: false,
+    rhythmHint: '',
+    rhythmHintText: '',
+    timerStartedAt: 0,
   },
   // lastRecipeApplied: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7 pattern)
   lastRecipeApplied: undefined,
@@ -549,6 +569,39 @@ export function setAutopilot(patch: Partial<AutopilotState>): void {
   sessionStore.update((s) => ({
     ...s,
     autopilot: { ...s.autopilot, ...patch },
+  }));
+}
+
+/**
+ * Set the autopilot config panel open/closed state.
+ * EPHEMERAL — excluded from SavedSessionSchema (ADR 0022 D1/D7).
+ *
+ * Phase 06 step 06.2.
+ */
+export function setAutopilotPanel(open: boolean): void {
+  sessionStore.update((s) => ({
+    ...s,
+    autopilot: { ...s.autopilot, panelOpen: open },
+  }));
+}
+
+/**
+ * Set the rhythm hint for the next sendEvolution() call.
+ *
+ * @param hint - Catalog entry id, 'otro', or '' to clear.
+ * @param text - Free-text string (only used when hint === 'otro').
+ *
+ * EPHEMERAL — excluded from SavedSessionSchema (ADR 0022 D1/D7).
+ * Phase 06 step 06.2.
+ */
+export function setRhythmHint(hint: string, text?: string): void {
+  sessionStore.update((s) => ({
+    ...s,
+    autopilot: {
+      ...s.autopilot,
+      rhythmHint: hint,
+      rhythmHintText: text !== undefined ? text : s.autopilot.rhythmHintText,
+    },
   }));
 }
 
