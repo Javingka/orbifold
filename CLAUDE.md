@@ -20,21 +20,18 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 ## Current initiative
 
-**Name:** `ai-composition-authoring` — **IN PROGRESS**
-**Goal:** The AI Agent gains the ability to create composition Blocks — saving the current live groove/harmony/session as a named editable Block, and optionally placing it on a timeline track — producing blocks that are structurally identical to user-created ones (editable, round-trippable via `openBlock`). This is the second dependency (after `editable-composition`) for the AI-jam / autopilot initiative.
+**Name:** `ai-jam` — **IN PROGRESS**
+**Goal:** The AI Agent evolves rhythm and/or harmony autonomously over time (every N Strudel cycles) while the user plays along, enabling an AI jam / autopilot mode. The user enables a toggle; the agent fires the LLM on a BPM-derived timer and applies evolved patterns to the live session without explicit user prompting.
 **Started:** 2026-06-18
-**Docs:** `docs/ai-composition-authoring/` · Decisions Register: `docs/ai-composition-authoring/decisions.md` · ADRs: 0021.
+**Docs:** `docs/ai-jam/` · Decisions Register: `docs/ai-jam/decisions.md` · ADRs: 0022 (pending).
 
-- **Phase 01 (complete, on branch `ai-composition-authoring/phase-01`, pending merge to `main`)** — Agent schema v5 (`saveAsBlock?: { name, type, addToTrack? }`); `applyBlockSave` in `apply.ts` (read-back pattern via `addBlock`); relaxed `superRefine` guard (saveAsBlock-only responses valid); save-only `send()` result path; `SYSTEM_PROMPT` updated with `save_as_block` skill + explicit `addToTrack` trigger phrases; persistence confirmed unchanged (`SESSION_SCHEMA_VERSION` stays 5); ADR 0021. 732 tests. Checkpoint #5 manual acceptance passed by Pilot 2026-06-18 (two regressions fixed: prompt trigger phrases for `addToTrack`; phantom empty track on delete+recreate).
-
-**Roadmap (planned next, dependency-ordered):**
-- **AI jam / autopilot mode (the original F3)** — the agent evolves rhythm and/or harmony autonomously over time (e.g. X cycles per change) while the user plays along (e.g. bass). Both `editable-composition` and `ai-composition-authoring` are now complete prerequisites.
+- **Phase 01 (in progress)** — Autopilot core: `AutopilotState` in session, BPM-derived timer, `sendEvolution()` + `SYSTEM_PROMPT_EVOLUTION`, `src/agent/autopilot.ts`, minimal UI toggle in AgentPanel.
 
 **Deferred items carried forward:**
 - Note-level free placement on the Pentagrama (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note) — deferred from orbifold-v2 Phase 10.
 - Per-chord `lpf`/`lpq` direct user slider (D-3) — deferred from harmonic-rhythm-improvements Phase 01 triage.
 
-**Previous initiatives:** `editable-composition` (Phase 01, complete, merged `main` 2026-06-18) — Block-as-State foundation; ADR 0020; 682 tests. `harmonic-rhythm-improvements` (Phases 01–03, complete, merged `main` 2026-06-18) — oscillator/presets/chord sound; ADRs 0018–0019. Prior: `orbifold-v2` (Phases 01–11) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
+**Previous initiatives:** `ai-composition-authoring` (Phase 01, complete, merged `main` 2026-06-18) — agent `saveAsBlock` skill; ADR 0021; 732 tests. `editable-composition` (Phase 01, complete, merged `main` 2026-06-18) — Block-as-State foundation; ADR 0020; 682 tests. `harmonic-rhythm-improvements` (Phases 01–03, complete, merged `main` 2026-06-18) — oscillator/presets/chord sound; ADRs 0018–0019. Prior: `orbifold-v2` (Phases 01–11) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
 
 ## Project-specific conventions
 
@@ -54,13 +51,13 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 ### Branch and commit
 
 - Main branch: `main`
-- Initiative branch pattern: `ai-composition-authoring/phase-NN` (current initiative; prior: `editable-composition/phase-NN`, `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`)
+- Initiative branch pattern: `ai-jam/phase-NN` (current initiative; prior: `ai-composition-authoring/phase-NN`, `editable-composition/phase-NN`, `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`)
 - Commit format: `<type>(<scope>): Phase NN step NN.N — <description>` (types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`)
 - PR convention: one PR (or one merge commit) per phase, with its acceptance criteria verified, without breaking prior phases.
 
 ### Spec location
 
-Specs are the phase files in `docs/harmonic-rhythm-improvements/phases/phase-NN.md`. The master brief is `ORBIFOLD_KICKOFF.md` (architecture, domain model, invariants). Prior initiative specs: `docs/orbifold-v2/phases/` and `docs/orbifold-v1/phases/`.
+Specs are the phase files in `docs/ai-jam/phases/phase-NN.md` (current initiative). The master brief is `ORBIFOLD_KICKOFF.md` (architecture, domain model, invariants). Prior initiative specs: `docs/ai-composition-authoring/phases/`, `docs/harmonic-rhythm-improvements/phases/`, `docs/orbifold-v2/phases/`, and `docs/orbifold-v1/phases/`.
 
 ### Test commands
 
