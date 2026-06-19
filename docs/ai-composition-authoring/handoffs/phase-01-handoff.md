@@ -452,3 +452,193 @@ Step 01.5 is the quality gate + manual acceptance. It adds `pnpm build` to the q
 **Iteration:** 1 of 5
 **Reason:**
 **Next action:**
+
+---
+
+## Step 01.5 — Quality gate and manual acceptance (Checkpoint #5)
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(agent): Phase 01 step 01.5 — quality gate and manual acceptance`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read `CLAUDE.md`, `docs/ai-composition-authoring/decisions.md`, `docs/ai-composition-authoring/phases/phase-01.md` (all ten acceptance criteria, step 01.5 scope), and the step 01.4 handoff entry (729 tests confirmed at close).
+- Ran all four quality gate commands — all exited clean (details in Routine validations below).
+- Read `src/agent/agent.ts` lines 87–162 (`SYSTEM_PROMPT` in full) and verified A-01-09 ADR 0021 D5 content points (see proxy verification below).
+- Documented manual acceptance steps A-01-01 through A-01-05 as ready-for-Pilot.
+- No source changes were required — all four gate commands passed on first run with no failures.
+
+### Files touched
+
+- `docs/ai-composition-authoring/handoffs/phase-01-handoff.md` (updated, this entry)
+
+### Quality gate results
+
+All four commands run from `/Users/virtualmachine/Development/personal/Orbifold`:
+
+| Command | Exit status | Key output |
+|---|---|---|
+| `pnpm exec tsc --noEmit` | 0 (clean — no output) | 0 type errors |
+| `pnpm lint` | 0 (clean) | ESLint + Prettier both clean |
+| `pnpm exec vitest run` | 0 | **729 tests passed** (20 test files, 0 failed, 0 skipped) |
+| `pnpm build` | 0 | 560 modules transformed; `dist/assets/index-BAt-7SKI.js` 1,132.34 kB (gzip: 357.22 kB); two pre-existing chunk-size and dynamic-vs-static import warnings (present since prior phases; not new to this phase; build exits 0) |
+
+### A-01-09 proxy/static-analysis verification
+
+`SYSTEM_PROMPT` is defined at `src/agent/agent.ts` lines 87–162. The `save_as_block` capability section spans lines 129–157. ADR 0021 D5 requires four content points; each is verified below by citing the exact lines:
+
+| D5 content point | Line(s) | Exact text (truncated for display) |
+|---|---|---|
+| **1. When to use `saveAsBlock`** (trigger phrases) | 130–131 | `"guarda esto como bloque", "save the current groove", "crea un bloque con esta armonía", "añade esto a la composición" o frases similares` |
+| **2. Three `type` values with definitions** | 138–141 | `"groove" → captura solo las capas rítmicas … "armonia" → captura solo la progresión armónica … "sesion" → captura ritmo + armonía juntos` |
+| **3. Example JSON — minimal** | 146–149 | `{ "saveAsBlock": { "name": "Groove Afrobeat", "type": "groove" } }` |
+| **3. Example JSON — full (with addToTrack)** | 151–157 | `{ "rhythm": { … }, "saveAsBlock": { "name": "Pulso Base", "type": "sesion", "addToTrack": true } }` |
+| **4. `saveAsBlock` may appear alone** | 133 | `"saveAsBlock" puede aparecer SOLO (sin "rhythm" ni "harmony") o junto a ellos.` |
+
+All four ADR 0021 D5 content points are present in the `SYSTEM_PROMPT`. `addToTrack` is described at lines 142–144 (definition, optional, default false, when to set true). A-01-09 confirmed closed by static analysis.
+
+### Manual acceptance documentation (A-01-01 through A-01-05) — READY FOR PILOT — Checkpoint #5
+
+The unit tests in steps 01.3–01.4 exercised these code paths programmatically. The following browser steps are for the Pilot to verify the complete end-to-end flow (agent API call → JSON parse → apply → store → UI render → `openBlock`).
+
+#### A-01-01 — Agent creates groove block
+
+**Browser steps:**
+1. Start `pnpm dev`; open `http://localhost:5173` in Chrome/Firefox.
+2. Start rhythm playback (so a live groove state exists — at least one step layer active).
+3. Open the agent panel (bottom toolbar or dedicated button).
+4. In the message box, type: **"Guarda el groove actual como bloque llamado 'Groove Test'"**
+5. Send the message. The agent should produce a JSON response containing `"saveAsBlock": { "name": "Groove Test", "type": "groove" }` (or the agent may add rhythm/harmony alongside it).
+6. Open the Composition drawer (≡ or composition icon).
+7. Confirm: the block **"Groove Test"** appears in the block library card list.
+8. Click **"✎ abrir"** on that card.
+9. Confirm: the Ritmo editor opens and displays the same layers/step pattern that was active when the agent responded (not blank, not default).
+10. Confirm: no audio auto-started (transport remains in the prior state — playback does NOT automatically start for the restored groove).
+
+**Expected result:** Block appears in library; Ritmo editor shows correct layers; no auto-play.
+
+#### A-01-02 — Agent creates armonia block
+
+**Browser steps:**
+1. Ensure a non-default harmonic progression is active (navigate the Tonnetz to pick 2–3 chords).
+2. In the agent panel, type: **"Guarda la armonía actual como bloque llamado 'Harmony Test'"**
+3. Send. Agent should produce `"saveAsBlock": { "name": "Harmony Test", "type": "armonia" }`.
+4. Open Composition drawer.
+5. Confirm: block **"Harmony Test"** appears.
+6. Click **"✎ abrir"**.
+7. Confirm: the Armonía editor (Tonnetz / Pentagrama) opens and shows the same progression that was active when the agent responded.
+8. Confirm: no audio auto-started.
+
+**Expected result:** Block appears in library; Armonía editor shows correct progression; no auto-play.
+
+#### A-01-03 — Agent creates block and adds to track
+
+**Browser steps:**
+1. Note the current number of tracks in the Composition timeline (may be 0).
+2. In the agent panel, type: **"Guarda el ritmo actual como bloque 'Track Test' y añádelo al timeline"**
+3. Send. Agent should produce `"saveAsBlock": { "name": "Track Test", "type": "groove", "addToTrack": true }`.
+4. Open Composition drawer.
+5. Confirm: block **"Track Test"** appears in the library.
+6. Confirm: the timeline shows a **new track** referencing "Track Test" (track count increased by 1 from step 1).
+7. Confirm: the block is playable (clicking it does not error).
+
+**Expected result:** Block in library AND new track in timeline referencing it.
+
+#### A-01-04 — No `saveAsBlock` → library unchanged
+
+**Browser steps:**
+1. Count the current number of blocks in the Composition library (N). Note them.
+2. In the agent panel, type: **"Cambia el ritmo a un patrón de cumbia simple"** (or similar — a request that produces a rhythm change but NOT a block save).
+3. Send. Confirm the agent responds with a JSON containing only `"rhythm": { … }` (no `"saveAsBlock"` key).
+4. Open Composition drawer.
+5. Confirm: the block count is still N (no new block was added).
+6. Confirm: none of the existing blocks were renamed or altered.
+
+**Expected result:** Composition library count unchanged; no new block; no mutation of existing blocks.
+
+#### A-01-05 — openBlock round-trip (Ritmo editor)
+
+**Browser steps:**
+1. Using the block created in A-01-01 ("Groove Test"), open the Composition drawer.
+2. Click **"✎ abrir"** on "Groove Test".
+3. Confirm: (a) the Ritmo editor becomes visible and displays the groove layers/steps from when the block was created; (b) BPM display is unchanged from whatever it was before clicking (no bpm change); (c) no audio auto-started.
+4. Navigate away (switch to Tonnetz or another tab).
+5. Return to the Composition drawer and click **"✎ abrir"** again.
+6. Confirm: the same state is shown (round-trip is stable).
+
+**Expected result:** Ritmo editor shows correct state; BPM unchanged; no auto-play; round-trip stable.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-01** — Unit: `tests/apply-block.test.ts` (3 tests on groove block name/type/snapshot/discriminant/code). Manual: documented above — READY FOR PILOT.
+- **A-01-02** — Unit: `tests/apply-block.test.ts` (2 tests on armonia block). Manual: documented above — READY FOR PILOT.
+- **A-01-03** — Unit: `tests/apply-block.test.ts` (3 tests on addToTrack). Manual: documented above — READY FOR PILOT.
+- **A-01-04** — Unit: `tests/apply-block.test.ts` (4 tests, reference-identical after rhythm/harmony only). Manual: documented above — READY FOR PILOT.
+- **A-01-05** — Unit: `tests/apply-block.test.ts` (3 tests on openBlock round-trip). Manual: documented above — READY FOR PILOT.
+- **A-01-06** — Unit: `tests/schema.test.ts` (14 tests for schema v5 parsing). CLOSED (step 01.3).
+- **A-01-07** — Unit: `tests/agent-block-persistence.test.ts` (5 tests for groove block round-trip). CLOSED (step 01.4).
+- **A-01-08** — Unit: `tests/agent-block-persistence.test.ts` (3 tests for block+track round-trip). CLOSED (step 01.4).
+- **A-01-09** — `proxy:static-analysis`: `SYSTEM_PROMPT` lines 129–157 in `src/agent/agent.ts` cover all four ADR 0021 D5 content points (see table above). CLOSED.
+- **A-01-10** — All four gate commands exited 0 (tsc: 0 errors; lint: ESLint+Prettier clean; vitest: 729/729; build: 0 errors). CLOSED.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → 0 errors (no output — clean exit).
+- `pnpm lint` → clean (`eslint .` + `prettier --check .` both clean).
+- `pnpm exec vitest run` → **729 tests passed**, 0 failed, 0 skipped, 20 test files.
+- `pnpm build` → 560 modules transformed, exit 0; two pre-existing warnings (chunk size, dynamic+static import) carry over from prior phases; no new warnings; build succeeds.
+
+### Acceptance Coverage Table (phase-level — all ten IDs)
+
+| Acceptance ID | Required behavior | Test file / evidence | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | Groove block: name, type, non-null snapshot discriminant `'groove'` | `tests/apply-block.test.ts` + manual A-01-01 steps (Checkpoint #5) | unit + manual | READY FOR PILOT |
+| A-01-02 | Armonia block: name, type, non-null snapshot discriminant `'armonia'` | `tests/apply-block.test.ts` + manual A-01-02 steps (Checkpoint #5) | unit + manual | READY FOR PILOT |
+| A-01-03 | `addToTrack: true` → block in library AND new track referencing it | `tests/apply-block.test.ts` + manual A-01-03 steps (Checkpoint #5) | unit + manual | READY FOR PILOT |
+| A-01-04 | No `saveAsBlock` → `composition.blocks` reference-identical to pre-call state | `tests/apply-block.test.ts` + manual A-01-04 steps (Checkpoint #5) | unit + manual | READY FOR PILOT |
+| A-01-05 | `openBlock(id)` on agent-created block: correct editors, no auto-play, round-trip stable | `tests/apply-block.test.ts` + manual A-01-05 steps (Checkpoint #5) | unit + manual | READY FOR PILOT |
+| A-01-06 | Schema v5: all three `type` values parse; absent `saveAsBlock` ok; unknown type rejected | `tests/schema.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-07 | Agent-created block survives persistence round-trip (name, type, code, snapshot intact) | `tests/agent-block-persistence.test.ts` | unit | CLOSED (step 01.4) |
+| A-01-08 | Block + track reference survive persistence round-trip | `tests/agent-block-persistence.test.ts` | unit | CLOSED (step 01.4) |
+| A-01-09 | `SYSTEM_PROMPT` describes `saveAsBlock` sub-fields, all three types, two examples, standalone use | `src/agent/agent.ts` lines 129–157 | proxy:static-analysis | CLOSED (step 01.3; cited above) |
+| A-01-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | CI commands | automated | CLOSED (this step) |
+
+### Decisions made (if any)
+
+None — this is a gate + documentation step. All governing decisions are recorded in ADR 0021 (steps 01.2–01.3).
+
+### Proposed Decisions Register entries (if any)
+
+None new in this step.
+
+### Blockers resolved during this step (if any)
+
+None. All four gate commands passed on first run. No source changes were required.
+
+### Environment state after this step
+
+729 tests pass. `tsc --noEmit` clean. `pnpm lint` clean. `pnpm build` exits 0. Working tree clean after commit. Phase 01 implementation is complete; Pilot manual acceptance (A-01-01..A-01-05) is pending Checkpoint #5 browser verification.
+
+### Key findings summary
+
+1. **All four quality gate commands pass clean** — `tsc`, `lint`, `vitest` (729 tests), `build` all exit 0 on first run. A-01-10 is now fully closed.
+2. **A-01-09 confirmed by static analysis** — `SYSTEM_PROMPT` lines 129–157 cover all four ADR 0021 D5 content points: trigger phrases (lines 130–131), all three `type` values with definitions (lines 138–141), two JSON examples (lines 146–156), and explicit standalone-use statement (line 133).
+3. **Manual acceptance (A-01-01..A-01-05) documented** — exact browser steps are written out for the Pilot; unit tests for all five criteria already pass; Checkpoint #5 browser verification is the remaining gate.
+4. **No source changes in this step** — gate + documentation only.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 5
+**Reason:**
+**Next action:**
