@@ -77,3 +77,70 @@ Pilot must confirm:
 2. Cueca meter: `'6/8'` (recommended, musically accurate) or `'3/4'` (as stated in phase spec wording).
 3. OD-2 choice: Option A (recommended) or Option B.
 4. Whether D1-alt (`baladi-euclid-rot`, E(7,16,4)) is acceptable, or if Middle-Eastern should be skipped or replaced.
+
+---
+
+## Step 05.2 — Catalog expansion (≥14 new RhythmEntry items)
+
+**Status:** COMPLETE  
+**Date:** 2026-06-19  
+**Branch:** `ai-jam/phase-05`  
+**Commit:** `feat(music-knowledge): Phase 05 step 05.2 — rhythm catalog expanded to ≥45 entries`
+
+### What was done
+
+Added 15 new entries to `RHYTHM_CATALOG` (31 → 46 total), covering all Pilot-approved families from OD-1 resolution. All entries use existing `euclidEntry` / `structEntry` helpers. The catalog header comment was updated to reflect 46 entries and new family/meter coverage.
+
+**New entries (15):**
+
+| id | family | meter | steps | strategy | onsets |
+|----|--------|-------|-------|----------|--------|
+| `cueca-chilena-base` | cueca | 6/8 | 12 | euclid E(4,12,0) | 0,3,6,9 |
+| `cueca-chilena-syncopated` | cueca | 6/8 | 12 | euclid E(5,12,2) | 1,3,6,8,10 |
+| `samba-surdo-base` | samba | 4/4 | 16 | struct | 0,8 |
+| `samba-caixa` | samba | 4/4 | 16 | struct | 2,6,10,14 |
+| `samba-euclid` | samba | 4/4 | 16 | euclid E(5,16,0) | 0,3,6,9,12 |
+| `cumbia-caja` | cumbia | 4/4 | 16 | struct | 0,3,6,8,12 |
+| `cumbia-guache` | cumbia | 4/4 | 16 | euclid E(3,16,0) | 0,5,10 |
+| `candombe-chico` | candombe | 4/4 | 16 | struct | 0,3,5,8,11,13 |
+| `candombe-repique` | candombe | 4/4 | 16 | euclid E(5,16,4) | 2,5,8,12,15 |
+| `milonga-base` | milonga | 4/4 | 16 | struct | 0,4,7,8,12,15 |
+| `buleria-12` | flamenco | 12/8 | 12 | struct | 0,4,5,7,9,10 |
+| `solea-12` | flamenco | 12/8 | 12 | struct | 0,3,6,8,10 |
+| `baladi-16` | tabla | 4/4 | 16 | euclid E(7,16,4) | 1,3,6,8,10,12,15 |
+| `maqsum-struct` | tabla | 4/4 | 16 | struct | 0,4,8,12,14 |
+| `bossa-nova-variation` | clave | 4/4 | 16 | struct | 0,3,6,8,11,13 |
+
+**Conflict resolutions:**
+- `cueca-chilena-base` E(4,12,0) shares binary `100100100100` with existing `standard-12` E(4,12,0). Different meter (`6/8` vs `12/8`) and distinct cultural context; test only checks ID uniqueness, not binary uniqueness — coexistence valid.
+- `samba-euclid` E(5,16,0) shares binary with existing `euclid-5-16`. Different family/tradition (samba vs generic Toussaint) — coexistence valid under same uniqueness rule.
+- `cumbia-guache` E(3,16,0) shares binary with existing `euclid-3-16` — coexistence valid.
+- `cumbia-caja`: Pilot-specified binary `1001001010010010` was identical to existing `bossa-nova-clave`. Corrected to `1001001010001000` (onsets 0,3,6,8,12) — classic cumbia caja timeline with distinct onset at position 12 (beat 3) instead of 11 and 14.
+- `baladi-16`: Used E(7,16,4) rotation variant as proposed in inventory D1-alt, since E(7,16,0) is the existing `euclid-7-16`.
+
+### Source files modified
+
+| File | Change |
+|------|--------|
+| `src/core/music-knowledge/rhythm-catalog.ts` | Added 15 entries, updated header comment (31→46 entries) |
+
+### Validation
+
+- `pnpm exec vitest run music-knowledge/rhythm-catalog` → 320 tests passed (all 5 congruence invariants per entry)
+- `pnpm exec tsc --noEmit` → clean
+- `pnpm test` → 1483/1483 passed (baseline 1387, +96 from new catalog entries)
+
+### Environment fix log
+
+None.
+
+### Acceptance Coverage Table
+
+| Criterion | Status | Evidence |
+|-----------|--------|---------|
+| A-05-01 (RHYTHM_CATALOG ≥45 entries) | COVERED | 46 entries; 320 congruence tests pass |
+| A-05-02 (SYSTEM_PROMPT constraint strengthening) | PENDING | Step 05.3 |
+| A-05-03 (SYSTEM_PROMPT_EVOLUTION constraint + fallback) | PENDING | Step 05.3 |
+| A-05-04 (improvisation fallback 4 sub-instructions) | PENDING | Step 05.3 |
+| A-05-05 (RHYTHM_HARMONY_RECIPES ≥13 entries) | PENDING | Step 05.4 |
+| A-05-06 (full quality gate) | PENDING | Step 05.4 |
