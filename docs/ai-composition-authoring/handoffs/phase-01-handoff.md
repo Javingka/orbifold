@@ -834,3 +834,20 @@ New `describe` block `'addBlockAsNewTrack — phantom track regression'` with th
 ### Bug-fix decisions
 
 None — bug-fix only. No new ADR decisions required. `_trkSeq` counter and track IDs are unchanged.
+
+---
+
+## Pilot Checkpoint #5 — Phase 01 COMPLETE (2026-06-18)
+
+Pilot (Javier) ran manual acceptance and resolved the checkpoint:
+
+- **A-01-01 (agent creates groove block + openBlock round-trip)** — PASS.
+- **A-01-02 (agent creates armonia block + openBlock round-trip)** — PASS.
+- **A-01-03 (agent creates block + adds to track)** — PASS (after two Checkpoint #5 bug-fixes: prompt trigger phrases for `addToTrack`; phantom empty track after delete+recreate).
+- **A-01-04 (no saveAsBlock → library unchanged)** — PASS.
+- **A-01-05 (openBlock on agent-created block: no auto-play, bpm unchanged)** — PASS.
+- **A-01-06 through A-01-10** — CLOSED (unit tests + quality gate).
+
+Two Checkpoint #5 regressions found and fixed: (1) `SYSTEM_PROMPT` trigger phrases for `addToTrack` too vague → LLM silently omitted the field; (2) `addBlockAsNewTrack` appended a second track instead of reusing the placeholder empty track left by `removeTrack`'s keep-at-least-one guard.
+
+**All 10 acceptance IDs closed. PHASE 01 COMPLETE.** The AI agent can now save the current live state as a named, editable composition Block (groove / armonia / sesion), optionally add it to a track, and the resulting block is fully round-trippable via `openBlock`. 732 tests. `SCHEMA_VERSION = 5`. Foundation for the AI jam / autopilot initiative.

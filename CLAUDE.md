@@ -20,23 +20,21 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 ## Current initiative
 
-**Name:** `editable-composition` — **IN PROGRESS**
-**Goal:** Make composition Blocks first-class **editable** artifacts. A Block must carry the editable state it was built from (not just opaque Strudel code) so it can be **round-tripped** back into the Armonía (Pentagrama/Tonnetz) and Ritmo editors. This is the data-model foundation that the planned AI-composition-authoring and AI-jam initiatives depend on (see roadmap below).
+**Name:** `ai-composition-authoring` — **IN PROGRESS**
+**Goal:** The AI Agent gains the ability to create composition Blocks — saving the current live groove/harmony/session as a named editable Block, and optionally placing it on a timeline track — producing blocks that are structurally identical to user-created ones (editable, round-trippable via `openBlock`). This is the second dependency (after `editable-composition`) for the AI-jam / autopilot initiative.
 **Started:** 2026-06-18
-**Docs:** `docs/editable-composition/` · Decisions Register: `docs/editable-composition/decisions.md` · ADRs: 0020.
+**Docs:** `docs/ai-composition-authoring/` · Decisions Register: `docs/ai-composition-authoring/decisions.md` · ADRs: 0021.
 
-- **Phase 01 (complete, on branch `editable-composition/phase-01`, pending merge to `main`)** — Block-as-State: `Block` gains an optional typed `snapshot` (`GrooveSnapshot` | `ArmoniaSnapshot` | `SesionSnapshot`) captured at `addBlock` time; `code` stays canonical for playback (`buildComposition` unchanged → byte-identical-at-default); pure `core/composition/snapshot.ts` capture/restore engine; persistence schema v5 (lossy bump; agent `SCHEMA_VERSION` stays 4 per ADR 0020 D7); `openBlock(blockId)` restore-only action (no auto-play, no bpm change, no-op on snapshot-less blocks); `✎ abrir` button + discreet "legacy" badge in `CompositionDrawer`; i18n ES/EN/PT/ZH. ADR 0020. 682 tests. Checkpoint #5 manual acceptance passed by Pilot 2026-06-18 (one layout regression fixed — block-card action row).
+- **Phase 01 (complete, on branch `ai-composition-authoring/phase-01`, pending merge to `main`)** — Agent schema v5 (`saveAsBlock?: { name, type, addToTrack? }`); `applyBlockSave` in `apply.ts` (read-back pattern via `addBlock`); relaxed `superRefine` guard (saveAsBlock-only responses valid); save-only `send()` result path; `SYSTEM_PROMPT` updated with `save_as_block` skill + explicit `addToTrack` trigger phrases; persistence confirmed unchanged (`SESSION_SCHEMA_VERSION` stays 5); ADR 0021. 732 tests. Checkpoint #5 manual acceptance passed by Pilot 2026-06-18 (two regressions fixed: prompt trigger phrases for `addToTrack`; phantom empty track on delete+recreate).
 
-**Roadmap (planned next initiatives, dependency-ordered):**
-- **AI composition authoring** — the agent creates composition Blocks (records grooves/harmony into tracks with durations), producing *editable* blocks because this initiative made blocks state-backed. Depends on `editable-composition`.
-- **AI jam / autopilot mode (the original F3)** — the agent evolves rhythm and/or harmony autonomously over time (e.g. X cycles per change) while the user plays along (e.g. bass). Depends on AI composition authoring.
-- (Note: "agent output lands as editable harmony/rhythm state as if user-made" already works today — `apply.ts` mutates the same `sessionStore.harmony.progression` / `rhythm.layers` the UI edits.)
+**Roadmap (planned next, dependency-ordered):**
+- **AI jam / autopilot mode (the original F3)** — the agent evolves rhythm and/or harmony autonomously over time (e.g. X cycles per change) while the user plays along (e.g. bass). Both `editable-composition` and `ai-composition-authoring` are now complete prerequisites.
 
 **Deferred items carried forward:**
 - Note-level free placement on the Pentagrama (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note) — deferred from orbifold-v2 Phase 10.
 - Per-chord `lpf`/`lpq` direct user slider (D-3) — deferred from harmonic-rhythm-improvements Phase 01 triage.
 
-**Previous initiative:** `harmonic-rhythm-improvements` (Phases 01–03, complete, merged to `main` 2026-06-18) — live sound-layer enrichment: per-chord timbre/room/decay (F1), oscillator + presets (F2). ADRs 0018, 0019; docs in `docs/harmonic-rhythm-improvements/`. Its F3 (AI improvisation) was reframed and moved into the roadmap above once the editable-composition dependency surfaced. Prior: `orbifold-v2` (Phases 01–11, complete, merged 2026-06-17) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
+**Previous initiatives:** `editable-composition` (Phase 01, complete, merged `main` 2026-06-18) — Block-as-State foundation; ADR 0020; 682 tests. `harmonic-rhythm-improvements` (Phases 01–03, complete, merged `main` 2026-06-18) — oscillator/presets/chord sound; ADRs 0018–0019. Prior: `orbifold-v2` (Phases 01–11) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
 
 ## Project-specific conventions
 
@@ -56,7 +54,7 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 ### Branch and commit
 
 - Main branch: `main`
-- Initiative branch pattern: `editable-composition/phase-NN` (current initiative; prior: `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`, `orbifold-v1/phase-NN`)
+- Initiative branch pattern: `ai-composition-authoring/phase-NN` (current initiative; prior: `editable-composition/phase-NN`, `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`)
 - Commit format: `<type>(<scope>): Phase NN step NN.N — <description>` (types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`)
 - PR convention: one PR (or one merge commit) per phase, with its acceptance criteria verified, without breaking prior phases.
 
