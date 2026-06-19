@@ -96,7 +96,7 @@ None in this step. OD-1 and OD-2 are pending Pilot resolution. OD-3 is confirmed
 **Commit(s):**
 - `feat(state): Phase 04 step 04.2 — LastRecipeDisplay type + sendEvolution wiring` (38309c6)
 
-**Iteration:** 1 of 1
+**Iteration:** 2 of 2 (Iteration 1 = REVISE — see iteration note below)
 
 **Pilot resolutions applied:**
 - OD-1 = Option A: `lastRecipeApplied?: LastRecipeDisplay` in `SessionState`, excluded from `SavedSessionSchema`.
@@ -129,6 +129,14 @@ None in this step. OD-1 and OD-2 are pending Pilot resolution. OD-3 is confirmed
 
 - `pnpm exec tsc --noEmit` → clean (0 errors)
 - `pnpm test` → 1387/1387 tests pass (baseline maintained)
+
+### Iteration note (Iteration 2 — REVISE fix)
+
+**Review verdict:** REVISE (phase-04-review-r1.md) — Blocking item: A-04-06 claim was factually incorrect. `applyLoadedSession` spreads `...s`, carrying `lastRecipeApplied` through; it did NOT reset the field. The static-analysis claim in the original handoff was wrong.
+
+**Fix applied (2026-06-19):** Added `lastRecipeApplied: undefined` to the `sessionStore.update` call in `applyLoadedSession()` at `src/state/session.ts` line 1733, parallel to the `nowPlaying` reset. The comment in `session.ts` (line 342) stating "Cleared when applyLoadedSession() runs (satisfies A-04-06)" is now accurate. One line added; no other files changed.
+
+**Commit:** `fix(state): Phase 04 step 04.2 — applyLoadedSession resets lastRecipeApplied`
 
 ---
 
@@ -255,7 +263,7 @@ The following A-04-01 through A-04-07 criteria require a browser run. The Dev ca
 | A-04-03 | Dismiss button clears the card; display state resets to undefined | `live-system` | PILOT-VERIFY (checklist item 3) |
 | A-04-04 | Manual `send()` calls do NOT produce a recipe card | `proxy:static-analysis` | COVERED — `send()` in `agent.ts` has no `setLastRecipeApplied` call; confirmed by reading full `send()` body (lines 696–765) |
 | A-04-05 | Card does not appear when autopilot fires explicit rhythm/harmony without `musicalIntent.recipeId` | `live-system` | PILOT-VERIFY (checklist item 5) |
-| A-04-06 | `LastRecipeDisplay` excluded from serialized session; loading a saved session does not restore the card | `proxy:static-analysis` | COVERED — `serializeSession` not modified; `lastRecipeApplied` absent from `SavedSessionSchema`; `applyLoadedSession` resets store from saved fields only |
+| A-04-06 | `LastRecipeDisplay` excluded from serialized session; loading a saved session does not restore the card | `proxy:static-analysis` | COVERED — `serializeSession` not modified; `lastRecipeApplied` absent from `SavedSessionSchema`; `applyLoadedSession` now explicitly sets `lastRecipeApplied: undefined` (REVISE fix — iteration 2) |
 | A-04-07 | Card fits Apple-like aesthetic; no tonal-function colors; does not overflow 768px viewport | `live-system` | PILOT-VERIFY (checklist item 7) |
 | A-04-08 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass; test count >= 1387 | `tool-output` | COVERED — full gate output above; 1387/1387 tests; build exits 0 |
 

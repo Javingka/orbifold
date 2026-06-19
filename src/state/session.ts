@@ -1731,6 +1731,7 @@ export function applyLoadedSession(saved: SavedSession): void {
     },
     composition: { blocks: newBlocks, tracks: newTracks },
     nowPlaying: { label: null, source: null },
+    lastRecipeApplied: undefined, // ephemeral reset (A-04-06 — ADR 0022 D7 pattern)
   }));
 }
 
