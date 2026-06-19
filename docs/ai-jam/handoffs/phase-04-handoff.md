@@ -86,3 +86,194 @@ None in this step. OD-1 and OD-2 are pending Pilot resolution. OD-3 is confirmed
 
 - OD-1: Choose Option A (`SessionState` field, recommended, no ADR) or Option B (separate store, needs ADR).
 - OD-2: Confirm which optional fields appear in the card (`explanation` recommended; `style` optional; Pilot decides).
+
+---
+
+## Step 04.2 — State: `LastRecipeDisplay` + `setLastRecipeApplied` + `sendEvolution()` wiring
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+- `feat(state): Phase 04 step 04.2 — LastRecipeDisplay type + sendEvolution wiring` (38309c6)
+
+**Iteration:** 1 of 1
+
+**Pilot resolutions applied:**
+- OD-1 = Option A: `lastRecipeApplied?: LastRecipeDisplay` in `SessionState`, excluded from `SavedSessionSchema`.
+- OD-2 = Minimum + explanation: fields shown are `recipeName`, `rhythmIds`, `harmonyId`, `density`, and optionally `explanation`. No `style`, no `complexity`.
+- OD-3 = Autopilot only (confirmed by inventory — no action needed).
+
+### Completed
+
+- Added `LastRecipeDisplay` interface to `src/state/session.ts` (exported) with 5 required fields from `MusicalRecipe` (`recipeId`, `recipeName`, `rhythmIds`, `harmonyId`, `density`) and 1 optional field (`explanation`) per OD-2. JSDoc notes ephemeral status and exclusion from `SavedSessionSchema`.
+- Added `lastRecipeApplied?: LastRecipeDisplay` to `SessionState` interface with JSDoc comment: `"Ephemeral — excluded from SavedSessionSchema (ADR 0022 D1/D7 pattern)."`.
+- Added `lastRecipeApplied: undefined` to `DEFAULT_SESSION_STATE` with exclusion comment.
+- Added `setLastRecipeApplied(display: LastRecipeDisplay | null): void` store action following the exact `setAutopilot` pattern. Null input coerces to `undefined` via `display ?? undefined`.
+- `serializeSession` in `src/lib/persistence.ts` was NOT modified — `lastRecipeApplied` remains excluded (Option A: the field is silently excluded because `serializeSession` enumerates fields explicitly, not via spread).
+- In `src/agent/agent.ts`: imported `setLastRecipeApplied` and `LastRecipeDisplay` from `'../state/session.js'`. Added store update call inside `if (recipe !== undefined)` block, after the `if (engineOutput !== null)` rhythm/harmony application block, building `LastRecipeDisplay` from `recipe` + `skill.musicalIntent?.explanation`. Spreads `explanation` only if the LLM supplied it (per OD-2).
+- Confirmed `sendEvolution()` still NEVER pushes to `chatHistory` and NEVER calls `applyBlockSave` (ADR 0022 D3/D4 unchanged).
+
+### Files touched
+
+- `src/state/session.ts` — `LastRecipeDisplay` interface, `SessionState` field, `DEFAULT_SESSION_STATE` entry, `setLastRecipeApplied` action (+33 lines)
+- `src/agent/agent.ts` — imports + `setLastRecipeApplied` call in `sendEvolution()` (+14 lines)
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Evidence |
+|---|---|
+| A-04-04 | `proxy:static-analysis` — `send()` in `agent.ts` (lines 696–765) has no `setLastRecipeApplied` call; the new call is only inside `sendEvolution()`. Confirmed by reading the full `send()` body. |
+| A-04-06 | `proxy:static-analysis` — `serializeSession` in `src/lib/persistence.ts` not modified; it enumerates fields explicitly. `lastRecipeApplied` is not enumerated. Loading a saved session calls `applyLoadedSession` which replaces the entire store from `DEFAULT_SESSION_STATE` merged with the loaded fields — `lastRecipeApplied` is absent from both, so it resets to `undefined`. |
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → clean (0 errors)
+- `pnpm test` → 1387/1387 tests pass (baseline maintained)
+
+---
+
+## Step 04.3 — i18n keys for the recipe card
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+- `feat(i18n): Phase 04 step 04.3 — recipe card i18n keys (all 4 locales)` (1dc0031)
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `src/i18n/types.ts`, all four locale files, and the inventory i18n section (Section 6) before writing.
+- Added `recipeCard` sub-object under the `agent` namespace in `src/i18n/types.ts` with 6 required string fields: `title`, `rhythmLabel`, `harmonyLabel`, `densityLabel`, `explanationLabel`, `clearTitle`. No optional fields at the type level (per inventory Section 6 convention — all locales must have all keys). No `styleLabel` or `complexityLabel` (OD-2: minimum + explanation).
+- Added `recipeCard` group to `src/i18n/locales/es.ts` (primary): Receta aplicada / Ritmo / Armonía / Densidad / Nota / Cerrar.
+- Added `recipeCard` group to `src/i18n/locales/en.ts`: Applied recipe / Rhythm / Harmony / Density / Note / Close.
+- Added `recipeCard` group to `src/i18n/locales/pt.ts` with `// i18n-draft` comment: Receita aplicada / Ritmo / Harmonia / Densidade / Nota / Fechar.
+- Added `recipeCard` group to `src/i18n/locales/zh.ts` with `// i18n-draft` comment: 已应用配方 / 节奏 / 和声 / 密度 / 说明 / 关闭.
+- No existing i18n keys were modified.
+
+### Files touched
+
+- `src/i18n/types.ts` (+14 lines — `recipeCard` sub-type in `agent` namespace)
+- `src/i18n/locales/es.ts` (+8 lines)
+- `src/i18n/locales/en.ts` (+8 lines)
+- `src/i18n/locales/pt.ts` (+9 lines — includes `// i18n-draft` comment)
+- `src/i18n/locales/zh.ts` (+9 lines — includes `// i18n-draft` comment)
+
+### Validation evidence
+
+- `pnpm exec tsc --noEmit` → clean (0 errors); i18n types are structurally checked at compile time — all locales conform to the updated `Translations` type.
+- `pnpm test` → 1387/1387 pass; `tests/i18n/key-parity.test.ts` (8 tests) validates that all locale files export the same key set — confirms all 4 locales have the new `recipeCard` group.
+
+### Routine validations (04.3)
+
+- `pnpm exec tsc --noEmit` → clean (0 errors)
+- `pnpm test` → 1387/1387 tests pass
+
+---
+
+## Step 04.4 — UI: Recipe card in AgentPanel + full quality gate
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+- `feat(ui): Phase 04 step 04.4 — recipe intent card in AgentPanel` (fc16249)
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `src/ui/AgentPanel.svelte` (full, 411 lines before edit) — confirmed template order, existing import style, CSS variable usage (`var(--muted)`, `var(--faint)`, `var(--stroke)`, `var(--text)`). Confirmed styles are in `src/app/app.css` (no `<style>` block in the component).
+- Added `setLastRecipeApplied` to the import from `'../state/session.js'` in AgentPanel.svelte `<script lang="ts">`. Prettier reformatted the import to multi-line (no logic change).
+- Inserted recipe card `{#if $sessionStore.lastRecipeApplied}` block in the template between the closing `</div>` of `.toggles.autopilot-row` (line 575) and the `<div class="agent-input">` (line 581), matching the anchor point identified in the inventory (Section 5).
+- Card structure: `.recipe-card-header` (title + dismiss button) and `.recipe-card-body` (recipeName, rhythmIds joined with `', '`, harmonyId, density, and conditional explanation row). All labels use `$t('agent.recipeCard.*')` keys from step 04.3.
+- Dismiss button: `on:click={() => setLastRecipeApplied(null)}` — clears the store field to `undefined` via the store action.
+- Added `.recipe-card` CSS family to `src/app/app.css` (inserted before `.agent-input` block):
+  - `font-size: 11px`, `color: var(--muted)`, `border: 1px solid var(--stroke)`, `background: rgba(255,255,255,0.035)`, `max-height: 120px`, `overflow: hidden`.
+  - No tonal-function colors (`--tonic`, `--subdom`, `--dom`, `--accent` absent from card styles).
+  - Card name uses `var(--text)` with `font-weight: 600` for mild emphasis; labels use `var(--faint)` for subdued appearance.
+  - Explanation row: `font-style: italic`, `max-height: 36px` to prevent long LLM notes from overflowing.
+  - Card is height-capped at 120px total — will not push `agent-input` off a 768px viewport.
+- `send()` in `agent.ts` has NO `setLastRecipeApplied` call — A-04-04 satisfied by code inspection.
+- `serializeSession` in `src/lib/persistence.ts` not modified — `lastRecipeApplied` excluded by omission — A-04-06 satisfied.
+
+### Card behavior note (A-04-04 / A-04-05)
+
+The card appears ONLY when `sendEvolution()` fires AND `skill.musicalIntent?.recipeId` resolves to a known `MusicalRecipe`. If the LLM returns explicit `rhythm`/`harmony` without `musicalIntent.recipeId` (A-04-05), `setLastRecipeApplied` is never called in `sendEvolution()`, so the card does not appear. The card from a previous evolution persists until dismissed or until a new evolution fires with a valid recipe (at which point `setLastRecipeApplied` overwrites it with the new data).
+
+### Files touched
+
+- `src/ui/AgentPanel.svelte` — import addition + recipe card template block (+44 lines)
+- `src/app/app.css` — `.recipe-card` CSS family (+65 lines)
+- `src/agent/agent.ts` — Prettier formatting fix only (no logic change)
+
+### Full quality gate output (A-04-08)
+
+```
+pnpm exec tsc --noEmit
+  → (no output) — clean
+
+pnpm lint
+  → eslint . && prettier --check .
+  → All matched files use Prettier code style!
+  → exit 0 — clean
+
+pnpm test
+  → Test Files  27 passed (27)
+  → Tests  1387 passed (1387)
+  → Duration  2.39s
+  → exit 0 — clean
+
+pnpm build
+  → vite v5.4.11 building for production...
+  → ✓ 566 modules transformed.
+  → dist/index.html                     2.32 kB │ gzip:   1.25 kB
+  → dist/assets/index-DrFkygvr.css     34.01 kB │ gzip:   6.76 kB
+  → dist/assets/index-mD4I6wDq.js   1,163.84 kB │ gzip: 365.39 kB
+  → ✓ built in 2.97s
+  → exit 0 — clean
+  (chunk-size and dynamic-import warnings are pre-existing, not introduced by this step)
+```
+
+### Live-system verification checklist (for Pilot)
+
+The following A-04-01 through A-04-07 criteria require a browser run. The Dev cannot run a browser, so these are documented as Pilot-verified items:
+
+1. **A-04-01** — Enable autopilot, wait for the first evolution with a `musicalIntent.recipeId` LLM response. Confirm the card appears in AgentPanel showing the correct recipe name, rhythm id(s) (comma-joined), harmony id, and density.
+2. **A-04-02** — If the LLM response includes `musicalIntent.explanation`, the explanation row appears. If not, the row is absent (no empty label rendered). Test both cases by checking `$sessionStore.lastRecipeApplied.explanation` in browser devtools.
+3. **A-04-03** — Click the "x" dismiss button. Confirm the card disappears immediately and `$sessionStore.lastRecipeApplied` is `undefined`.
+4. **A-04-04** — Send a manual message via the chat input. Confirm no recipe card appears, even if the LLM response includes a `musicalIntent` field in its JSON.
+5. **A-04-05** — Trigger an autopilot evolution where the LLM returns explicit `rhythm`/`harmony` fields but no `musicalIntent.recipeId`. Confirm no recipe card appears.
+6. **A-04-06** — Save a session while a recipe card is visible. Reload. Confirm no recipe card appears after loading the saved session (the field is not persisted).
+7. **A-04-07** — Visually confirm the card fits the "Apple-like" aesthetic: no orange/teal/pink/blue tonal colors; text is smaller and more muted than the autopilot controls; card does not overflow or push the textarea off-screen on a 768px-height viewport.
+
+### Acceptance Coverage Table (full — A-04-01 through A-04-08)
+
+| Acceptance ID | Required behavior | Test type | Gap status |
+|---|---|---|---|
+| A-04-01 | After autopilot fires with `musicalIntent.recipeId`, card shows recipe name, rhythm id(s), harmony id, density | `live-system` | PILOT-VERIFY (checklist item 1) |
+| A-04-02 | If LLM includes `explanation`, card shows it; if absent, explanation row omitted | `live-system` | PILOT-VERIFY (checklist item 2) |
+| A-04-03 | Dismiss button clears the card; display state resets to undefined | `live-system` | PILOT-VERIFY (checklist item 3) |
+| A-04-04 | Manual `send()` calls do NOT produce a recipe card | `proxy:static-analysis` | COVERED — `send()` in `agent.ts` has no `setLastRecipeApplied` call; confirmed by reading full `send()` body (lines 696–765) |
+| A-04-05 | Card does not appear when autopilot fires explicit rhythm/harmony without `musicalIntent.recipeId` | `live-system` | PILOT-VERIFY (checklist item 5) |
+| A-04-06 | `LastRecipeDisplay` excluded from serialized session; loading a saved session does not restore the card | `proxy:static-analysis` | COVERED — `serializeSession` not modified; `lastRecipeApplied` absent from `SavedSessionSchema`; `applyLoadedSession` resets store from saved fields only |
+| A-04-07 | Card fits Apple-like aesthetic; no tonal-function colors; does not overflow 768px viewport | `live-system` | PILOT-VERIFY (checklist item 7) |
+| A-04-08 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass; test count >= 1387 | `tool-output` | COVERED — full gate output above; 1387/1387 tests; build exits 0 |
+
+### Phase completion summary
+
+Phase 04 is code-complete. All three implementation steps (04.2, 04.3, 04.4) have been committed to `ai-jam/phase-04`.
+
+Files introduced or modified:
+- `src/state/session.ts` — `LastRecipeDisplay` interface, `SessionState.lastRecipeApplied`, `DEFAULT_SESSION_STATE` entry, `setLastRecipeApplied` action
+- `src/agent/agent.ts` — imports + `setLastRecipeApplied` call in `sendEvolution()`; Prettier format fix
+- `src/i18n/types.ts` — `agent.recipeCard` type group
+- `src/i18n/locales/es.ts`, `en.ts`, `pt.ts`, `zh.ts` — `recipeCard` translations
+- `src/ui/AgentPanel.svelte` — recipe card template + `setLastRecipeApplied` import
+- `src/app/app.css` — `.recipe-card` CSS family
+- `docs/ai-jam/handoffs/phase-04-handoff.md` — this handoff (three step entries)
+
+Quality gates at phase close: `tsc --noEmit` clean, `pnpm lint` clean, `pnpm test` 1387/1387, `pnpm build` exits 0. Test count >= 1387 baseline (Phase 03). No schema changes; no new dependencies; no `SavedSessionSchema` modifications; ADR 0022 D1/D7/D3/D4 invariants all preserved.
+
+A-04-04 and A-04-06 are covered by `proxy:static-analysis`. A-04-08 is covered by `tool-output`. A-04-01, A-04-02, A-04-03, A-04-05, A-04-07 require Pilot live-system verification per the checklist above.
+
+**Next action:** Pilot reviews and verifies live-system items. If all pass, Phase 04 can be merged to `main`.
