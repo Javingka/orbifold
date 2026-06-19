@@ -474,3 +474,38 @@ Phase 03 is complete. This is the final step. Commit and merge to `main`.
 | A-03-09 | COVERED | step 03.4 (live-system gate) |
 
 **All 9 acceptance criteria COVERED. Phase 03 complete.**
+
+---
+
+## Planner Review — Step 03.4 (Final Step)
+
+**Date:** 2026-06-19
+**Reviewer:** Planner (Sonnet 4.6)
+**Decision: APPROVE**
+
+### 8-Item Pilot Review Checklist
+
+1. **Spec compliance** — PASS. All step 03.4 requirements implemented: SYSTEM_PROMPT_EVOLUTION updated with Spanish musicalIntent section, two labeled JSON examples (Ejemplo 1 musicalIntent-only, Ejemplo 2 rhythm+harmony+musicalIntent), sendEvolution wiring with explicit-field precedence, availableRecipes injected dynamically into user message as `getExpressibleRecipes().map(r => r.id)`, static imports present.
+
+2. **Acceptance Coverage Table** — PASS. All 9 A-03-xx criteria populated with test file, test type, and COVERED status. No partial or missing entries at phase close. A-03-06 covered by 7 proxy:static-analysis tests; A-03-07 by 4 unit tests covering all precedence branches; A-03-08 by 4 unit tests covering all sendEvolution paths.
+
+3. **ADR 0021 D5 — two JSON examples + saveAsBlock prohibition + Spanish** — PASS. Ejemplo 1 (musicalIntent-only, lines 232–242 of agent.ts) and Ejemplo 2 (rhythm+harmony+musicalIntent, lines 244–269) are both labeled and parseable JSON. Prompt is entirely Spanish. "saveAsBlock NO debe aparecer NUNCA" at line 230 and "NUNCA incluyas el campo 'saveAsBlock'" at line 272. Tests 03-06 verify all three requirements including JSON parsing of both examples.
+
+4. **ADR 0022 D3/D4 — no chatHistory push, no applyBlockSave** — PASS. sendEvolution() contains no chatHistory.push() call anywhere in its body. applyBlockSave is explicitly omitted and the comment on line 408 confirms intentional ignorance of skill.saveAsBlock. Four dedicated A-03-08 tests verify this across all code paths including the musicalIntent path.
+
+5. **availableRecipes dynamic injection** — PASS. Computed at call time from getExpressibleRecipes().map(r => r.id) and spread into the user message JSON. SYSTEM_PROMPT_EVOLUTION itself contains no hardcoded recipe ids.
+
+6. **Explicit-field precedence** — PASS. Explicit skill.rhythm/skill.harmony applied unconditionally first (lines 406–407); recipe paths guarded by `!skill.rhythm` and `!skill.harmony` (lines 421, 425). Tests 07b and 07d verify each precedence branch independently.
+
+7. **A-03-09 live-system gate** — PASS. Four-command sequence evidenced: tsc (exit 0, no output), lint (exit 0, no errors), test (1387/1387, 27 files, exit 0), build (exit 0, 566 modules).
+
+8. **No silent governance conflicts** — PASS. OD-3 Option B implemented as Pilot-resolved. ADR 0023 governs schema v6. ADR 0022 D3/D4 inviolate. One cosmetic observation: comment at sendEvolution line 400 still says "schema v5" — this is a stale inline comment, not a behavioral defect; the actual `AgentOutputSchema.safeParse` call references the updated Zod object and correctly uses v6. Does not warrant REVISE.
+
+### Phase-Completion Assessment
+
+All 9 acceptance criteria COVERED. No partials. No open decisions. Quality gate passed. Test count: 1387/1387 (+67 from Phase 02 baseline of 1320). Phase 03 is fully done.
+
+**Pending Register proposals (Pilot decides at phase approval):**
+None. All decisions in Phase 03 were pre-authorized (OD-3 Option B at inventory step 03.1, ADR 0023 at step 03.2). No new open decisions surfaced.
+
+Next action: Pilot approval required before Phase 04 scoping, reason: phase boundary — Pilot must authorize Phase 04 goals and scope before Dev proceeds.
