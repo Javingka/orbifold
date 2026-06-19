@@ -284,3 +284,59 @@ None.
 | A-05-04 (improvisation fallback 4 sub-instructions) | COVERED | proxy:static-analysis — A (RAZONA PRIMERO), B (GENERA CON FORMATOS VALIDOS), C (INCLUYE musicalIntent.explanation), D (PRECISION CULTURAL) present in both prompts |
 | A-05-05 (RHYTHM_HARMONY_RECIPES >=13 entries) | COVERED | 15 entries (10+5); all referential integrity invariants pass (172 tests); cueca-chilena-folk uses 6/8 meter entry |
 | A-05-06 (full quality gate) | COVERED | tsc clean; lint clean; 1533/1533 tests; build successful |
+
+---
+
+## Planner Review — Steps 05.2, 05.3, 05.4 (unit review + phase completion)
+
+**Reviewer:** Planner  
+**Date:** 2026-06-19  
+**Verdict:** APPROVE
+
+### 8-Item Pilot Review Checklist
+
+**1. Commit scope matches step boundaries.**
+Three commits confirmed per handoff: 05.2 = rhythm-catalog.ts only; 05.3 = agent.ts only; 05.4 = rhythm-harmony-recipes.ts + recipe-engine.test.ts (stale-count fix). No step bled into another. PASS.
+
+**2. A-05-01 — RHYTHM_CATALOG ≥45 entries; congruence invariants pass.**
+Source verified: 46 entries (31 original + 15 new). All 5 congruence invariants (binary length, onsets derivation, mini derivation, struct/euclid field alignment, euclid engine agreement) are exercised automatically per entry. 320 congruence tests passing. Spot-check: `cueca-chilena-base` E(4,12,0) → binary `100100100100` — 4 evenly-spaced onsets across 12 steps (positions 0,3,6,9) is correct Bjorklund output. `samba-surdo-base` binary `1000000010000000` → onsets [0,8] — correct for beats 1 and 3 on a 16-step grid. No existing entries modified (confirmed by reading the source: Phase 05 additions are in a clearly delineated block below the original 31). PASS.
+
+**3. A-05-02 — SYSTEM_PROMPT constraint block present with 3/4 euclid example.**
+Verified at agent.ts lines 128–134: prohibition present (`Nunca 8, 12 ni otro número`), 3/4 example present (`{"k": 3, "n": 4, "rot": 0}`), 6/8 and 12/8 examples also present. The block is placed immediately after the existing constraint bullet, preserving surrounding structure. PASS.
+
+**4. A-05-03/04 — SYSTEM_PROMPT_EVOLUTION constraint + improvisation fallback; all 4 sub-instructions.**
+Verified at agent.ts lines 321–327 (constraint block in RESTRICCIONES ABSOLUTAS) and lines 378–395 (IMPROVISACION INFORMADA). Four sub-instructions confirmed in both prompts: A (RAZONA PRIMERO), B (GENERA CON FORMATOS VALIDOS), C (INCLUYE musicalIntent.explanation), D (PRECISION CULTURAL / "inspirado en"). All text in Spanish per ADR 0017 D7. OD-2 Option A respected: purely additive trailing section, no existing text removed. PASS.
+
+**5. A-05-05 — RHYTHM_HARMONY_RECIPES ≥13 entries; referential integrity; non-4/4 recipe present.**
+15 entries confirmed in source. All rhythm ids reference entries that exist in RHYTHM_CATALOG (verified by reading both files). `cueca-chilena-folk` meter `6/8` matches `cueca-chilena-base` meter `6/8`. `buleria-flamenco-phrygian` meter `12/8` matches `buleria-12` meter `12/8`. Harmony ids were cross-checked against known HARMONY_CATALOG ids used by pre-existing recipes (`pop-i-v-vi-iv`, `latin-minor-dominant-loop`, `dorian-modal-drone` all existed before Phase 05; `flamenco-phrygian-descent` is the one new-to-recipes harmony id). Referential integrity tests run automatically across all recipes. PASS.
+
+**6. Bulería expressibility and round-trip test integrity.**
+`buleria-12` is `strudelStrategy: 'struct'` with `steps: 12`. `isRhythmIdExpressible` in recipe-engine.ts requires `steps === 16` for struct entries — therefore `buleria-flamenco-phrygian` is correctly excluded from `getExpressibleRecipes()`. The round-trip test at recipe-engine.test.ts line 128 runs only on `getExpressibleRecipes()` output. The expressible count assertion (line 116) states `>= 14`, which is satisfied by 15 total recipes minus 1 non-expressible = 14. Consistent with decisions.md OD-2 deferral. PASS.
+
+**7. A-05-06 — Full quality gate; no regressions.**
+1533/1533 tests passing; tsc clean; lint clean; build successful. Test count trajectory: 1387 (Phase 04 baseline) → 1483 (05.2: +96 from 15 new catalog entries × ~6 tests each) → 1483 (05.3: prompt strings only, no new tests) → 1533 (05.4: +50 from 5 new recipes × ~10 integrity tests each + recipe-engine test updates). Trajectory is arithmetically consistent. PASS.
+
+**8. No unauthorized schema changes, no new dependencies.**
+`SCHEMA_VERSION` unchanged. No new Zod fields. No new package imports in any modified file. The recipe-engine.test.ts change is purely a stale-count fix (no behavioral change). PASS.
+
+### Non-blocking observation (Pilot awareness only)
+
+`src/agent/agent.ts` line 4 carries a file-level comment `// Phase 06 step 06.3.` This is a forward reference to a non-existent phase. Most likely this was a pre-existing draft artifact in the file before Phase 05 touched it, not introduced by step 05.3. It has no functional impact (test suite green, tsc clean). The Pilot may wish to correct it in the next phase that touches `agent.ts`. No action required before merge.
+
+### Phase 05 completion assessment
+
+All six acceptance criteria are COVERED:
+
+| Criterion | Final Status |
+|-----------|-------------|
+| A-05-01 | COVERED — 46 catalog entries; 320 congruence tests |
+| A-05-02 | COVERED — SYSTEM_PROMPT constraint block + 3/4 example verified in source |
+| A-05-03 | COVERED — SYSTEM_PROMPT_EVOLUTION constraint + IMPROVISACION INFORMADA verified in source |
+| A-05-04 | COVERED — All 4 sub-instructions (A/B/C/D) present in both prompts |
+| A-05-05 | COVERED — 15 recipes; referential integrity tests pass; 6/8 cueca recipe present |
+| A-05-06 | COVERED — tsc/lint/1533 tests/build all clean |
+
+**Pending Register proposals (Pilot decides at phase approval):**
+None. OD-1 and OD-2 were resolved by the Pilot during step 05.1. The bulería non-expressibility is pre-existing behavior under the OD-2 deferral rule already in decisions.md — no new entry required.
+
+Next action: Pilot approval required before Phase 06 scoping, reason: phase complete — merge ai-jam/phase-05 to main before scoping Phase 06.
