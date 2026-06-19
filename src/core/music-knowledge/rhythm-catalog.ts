@@ -157,19 +157,24 @@ function structEntry(
 }
 
 // ---------------------------------------------------------------------------
-// RHYTHM_CATALOG — ≥30 entries
+// RHYTHM_CATALOG — ≥45 entries (Phase 05 expansion)
 //
 // Coverage:
-//   Euclidean 8-step  : 6 entries  (tresillo, cinquillo, habanera rotation,
-//                                    8th-half, near-full, 4-of-8)
-//   Euclidean 12-step : 4 entries  (West-African bell, sparse, minimal, standard)
-//   Euclidean 16-step : 8 entries  (sparse/medium/dense/near-full/quarter/8th/
-//                                    cascara-Euclidean)
-//   Euclidean odd     : 7 entries  (3/4, 7/8 ×2, 9/8 ×2, 5/4 ×2)
-//   Struct 16-step    : 4 entries  (son clave 3-2 / 2-3, rumba 3-2 / 2-3)
-//   Struct 8/16-step  : 2 entries  (bossa nova clave 16, backbeat snare 16)
+//   Euclidean 8-step   : 6 entries  (tresillo, cinquillo, habanera rotation,
+//                                     8th-half, near-full, 4-of-8)
+//   Euclidean 12-step  : 6 entries  (West-African bell, sparse, minimal,
+//                                     standard, cueca-base, bulería-euclid)
+//   Euclidean 16-step  : 11 entries (sparse/medium/dense/near-full/quarter/
+//                                     8th/cascara-Euclidean, samba-euclid,
+//                                     cumbia-guache, candombe-repique, baladi)
+//   Euclidean odd      : 7 entries  (3/4, 7/8 ×2, 9/8 ×2, 5/4 ×2)
+//   Struct 12-step     : 3 entries  (cueca-syncopated, bulería, soleá)
+//   Struct 16-step     : 12 entries (son clave 3-2/2-3, rumba 3-2/2-3,
+//                                     bossa-nova-clave, backbeat, samba-surdo,
+//                                     samba-caixa, cumbia-caja, candombe-chico,
+//                                     milonga, maqsum, bossa-nova-variation)
 //
-// Total: 31 entries
+// Total: 46 entries (Phase 05: +15 new entries appended below existing 31)
 //
 // Binary strings are pre-computed from the real bjorklund() engine (verified
 // by the test suite via invariant 5). Do NOT change them without updating
@@ -567,5 +572,206 @@ export const RHYTHM_CATALOG: RhythmEntry[] = [
     roles: ['snare', 'backbeat'],
     binary: '0000100000001000',
     // Onsets: 4,12 — beats 2 and 4 in 16th-note grid
+  }),
+
+  // -----------------------------------------------------------------------
+  // Phase 05 additions — 15 new entries (OD-1 Pilot resolution 2026-06-19)
+  // -----------------------------------------------------------------------
+
+  // --- Cueca Chilena (6/8, 12 steps) ---
+
+  euclidEntry({
+    id: 'cueca-chilena-base',
+    name: 'Cueca Chilena Base (6/8)',
+    family: 'cueca',
+    traditions: ['Chilean folk-inspired', 'south-american', 'cueca'],
+    meter: '6/8',
+    steps: 12,
+    roles: ['groove', 'bass', 'timeline'],
+    binary: '100100100100', // E(4,12,0) — four evenly-spaced onsets across 12 steps
+    euclid: { k: 4, n: 12, rot: 0 },
+  }),
+
+  euclidEntry({
+    id: 'cueca-chilena-syncopated',
+    name: 'Cueca Chilena Syncopated (6/8)',
+    family: 'cueca',
+    traditions: ['Chilean folk-inspired', 'cueca'],
+    meter: '6/8',
+    steps: 12,
+    roles: ['groove', 'melody'],
+    binary: '010100101010', // E(5,12,2) — syncopated 5-onset cueca variation
+    euclid: { k: 5, n: 12, rot: 2 },
+  }),
+
+  // --- Samba (4/4, 16 steps) ---
+
+  structEntry({
+    id: 'samba-surdo-base',
+    name: 'Samba Surdo Base (16-step)',
+    family: 'samba',
+    traditions: ['samba-inspired', 'Brazilian-inspired', 'Afro-Brazilian'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['bass', 'groove'],
+    binary: '1000000010000000',
+    // Onsets: 0,8 — surdo bass drum on beats 1 and 3 (the samba heartbeat)
+  }),
+
+  structEntry({
+    id: 'samba-caixa',
+    name: 'Samba Caixa (Snare, 16-step)',
+    family: 'samba',
+    traditions: ['samba-inspired', 'Brazilian-inspired'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['snare', 'decoration'],
+    binary: '0010001000100010',
+    // Onsets: 2,6,10,14 — snare syncopation on 16th-note off-beats
+  }),
+
+  euclidEntry({
+    id: 'samba-euclid',
+    name: 'Samba Euclidean Feel (16-step)',
+    family: 'samba',
+    traditions: ['samba-inspired', 'Brazilian-inspired', 'Afro-Brazilian'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['groove', 'timeline'],
+    binary: '1001001001001000', // E(5,16,0) — bright samba-feel euclidean pattern
+    euclid: { k: 5, n: 16, rot: 0 },
+  }),
+
+  // --- Cumbia (4/4, 16 steps) ---
+
+  structEntry({
+    id: 'cumbia-caja',
+    name: 'Cumbia Caja (16-step)',
+    family: 'cumbia',
+    traditions: ['Colombian-inspired', 'cumbia', 'Latin-Caribbean'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['bass', 'groove'],
+    binary: '1001001010001000',
+    // Onsets: 0,3,6,8,12 — classic cumbia caja timeline (strong 1, syncopated mid)
+  }),
+
+  euclidEntry({
+    id: 'cumbia-guache',
+    name: 'Cumbia Guache (16-step, euclid)',
+    family: 'cumbia',
+    traditions: ['Colombian-inspired', 'cumbia', 'Latin American'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['groove', 'timeline'],
+    binary: '1000010000100000', // E(3,16,0) — lighter cumbia texture
+    euclid: { k: 3, n: 16, rot: 0 },
+  }),
+
+  // --- Candombe (4/4, 16 steps) ---
+
+  structEntry({
+    id: 'candombe-chico',
+    name: 'Candombe Chico (16-step)',
+    family: 'candombe',
+    traditions: ['candombe-inspired', 'Uruguayan-inspired', 'Afro-Uruguayan'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['groove', 'timeline'],
+    binary: '1001010010010100',
+    // Onsets: 0,3,5,8,11,13 — chico drum part in Afro-Uruguayan candombe
+  }),
+
+  euclidEntry({
+    id: 'candombe-repique',
+    name: 'Candombe Repique (16-step, euclid)',
+    family: 'candombe',
+    traditions: ['candombe-inspired', 'Uruguayan-inspired', 'Afro-Uruguayan'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['decoration', 'melody'],
+    binary: '0010010010001001', // E(5,16,4) — repique syncopation
+    euclid: { k: 5, n: 16, rot: 4 },
+  }),
+
+  // --- Milonga (4/4, 16 steps) ---
+
+  structEntry({
+    id: 'milonga-base',
+    name: 'Milonga Base (16-step)',
+    family: 'milonga',
+    traditions: ['milonga-inspired', 'Argentinian-inspired', 'Rioplatense'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['bass', 'groove'],
+    binary: '1000100110001001',
+    // Onsets: 0,4,7,8,12,15 — milonga bass timeline with characteristic syncopation
+  }),
+
+  // --- Flamenco (12/8, 12 steps) ---
+
+  structEntry({
+    id: 'buleria-12',
+    name: 'Bulería Flamenca (12-step, struct)',
+    family: 'flamenco',
+    traditions: ['flamenco-inspired', 'Andalusian-inspired', 'Spanish folk-inspired'],
+    meter: '12/8',
+    steps: 12,
+    roles: ['groove', 'timeline'],
+    binary: '100011010110',
+    // Onsets: 0,4,5,7,9,10 — iconic bulería 12-beat accent pattern
+  }),
+
+  structEntry({
+    id: 'solea-12',
+    name: 'Soleá Flamenca (12-step, struct)',
+    family: 'flamenco',
+    traditions: ['flamenco-inspired', 'Andalusian-inspired', 'Spanish folk-inspired'],
+    meter: '12/8',
+    steps: 12,
+    roles: ['groove', 'timeline'],
+    binary: '100100101010',
+    // Onsets: 0,3,6,8,10 — soleá slower and more sparse than bulería
+  }),
+
+  // --- Baladi / Maqsum (4/4, 16 steps) ---
+
+  euclidEntry({
+    id: 'baladi-16',
+    name: 'Baladi/Maqsum-Inspired (16-step, euclid)',
+    family: 'tabla',
+    traditions: ['Middle-Eastern-inspired', 'Arabic-inspired', 'Egyptian-inspired'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['groove', 'timeline'],
+    binary: '0101001010101001', // E(7,16,4) — rotation 4 of E(7,16), distinct from euclid-7-16
+    euclid: { k: 7, n: 16, rot: 4 },
+  }),
+
+  structEntry({
+    id: 'maqsum-struct',
+    name: 'Maqsum Classic (16-step, struct)',
+    family: 'tabla',
+    traditions: ['Middle-Eastern-inspired', 'Arabic-inspired', 'maqsum'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['groove', 'timeline'],
+    binary: '1000100010001010',
+    // Onsets: 0,4,8,12,14 — Doum Doum Tak pattern adapted to 16-step grid
+  }),
+
+  // --- Bossa Nova additional variation ---
+
+  structEntry({
+    id: 'bossa-nova-variation',
+    name: 'Bossa Nova Variation (16-step)',
+    family: 'clave',
+    traditions: ['bossa nova-inspired', 'Brazilian-inspired', 'samba-inspired'],
+    meter: '4/4',
+    steps: 16,
+    roles: ['timeline', 'groove'],
+    binary: '1001001010010100',
+    // Onsets: 0,3,6,8,11,13 — tamborim/repique variation; distinct from bossa-nova-clave
+    // (bossa-nova-clave has onsets at 0,3,6,8,11,14)
   }),
 ];

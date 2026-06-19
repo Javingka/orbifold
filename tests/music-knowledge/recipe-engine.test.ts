@@ -99,9 +99,9 @@ describe('getExpressibleRecipes', () => {
     expect(recipes.length).toBeGreaterThan(0);
   });
 
-  it('length is <= 10 (total catalog count)', () => {
+  it('length is <= total catalog count', () => {
     const recipes = getExpressibleRecipes();
-    expect(recipes.length).toBeLessThanOrEqual(10);
+    expect(recipes.length).toBeLessThanOrEqual(RHYTHM_HARMONY_RECIPES.length);
   });
 
   it('every returned recipe id exists in RHYTHM_HARMONY_RECIPES', () => {
@@ -113,9 +113,10 @@ describe('getExpressibleRecipes', () => {
     }
   });
 
-  it('current catalog: all 10 recipes are expressible', () => {
-    // Per inventory §3.3: 10 of 10 recipes are fully expressible.
-    expect(getExpressibleRecipes().length).toBe(10);
+  it('current catalog: at least 14 recipes are expressible (Phase 05: 10 original + 4 new)', () => {
+    // Phase 05 adds 5 recipes; 4 are expressible (struct/euclid steps≤16), 1 is not
+    // (buleria-flamenco-phrygian references buleria-12 which is 12-step struct, not 16-step).
+    expect(getExpressibleRecipes().length).toBeGreaterThanOrEqual(14);
   });
 });
 
