@@ -1424,21 +1424,42 @@ export function addBlockToTrack(trackIndex: number, blockId: string): void {
  * Prototype: `el.querySelector('[data-a="add"]').onclick` (line 1962):
  *   `tracks.push({id:'t'+(trkSeq++), blocks:[{blockId:b.id,bars:b.bars}]}); renderTimeline();`.
  *
+ * Bug fix (Checkpoint #5, ai-composition-authoring Phase 01): when `removeTrack`
+ * deletes the last track it auto-creates a single empty placeholder track to keep
+ * the timeline non-empty. A subsequent `addBlockAsNewTrack` call must detect that
+ * placeholder (exactly one track, no block refs) and populate it in place rather
+ * than appending a second track — otherwise two tracks appear (one empty phantom +
+ * one populated). This does NOT affect the normal case where existing tracks are
+ * non-empty; in that case a new track is always appended as before.
+ *
  * @param blockId - The `id` of the block to place in the new track.
  */
 export function addBlockAsNewTrack(blockId: string): void {
   sessionStore.update((s) => {
     const block = s.composition.blocks.find((b) => b.id === blockId);
     if (!block) return s;
+    const ref = { blockId, bars: block.bars };
+    // Reuse the sole empty placeholder left by removeTrack instead of appending a
+    // second track. Condition: exactly one track AND that track has no block refs.
+    const tracks = s.composition.tracks;
+    if (tracks.length === 1 && tracks[0].blocks.length === 0) {
+      return {
+        ...s,
+        composition: {
+          ...s.composition,
+          tracks: [{ ...tracks[0], blocks: [ref] }],
+        },
+      };
+    }
     const newTrack = {
       id: 't' + _trkSeq++,
-      blocks: [{ blockId, bars: block.bars }],
+      blocks: [ref],
     };
     return {
       ...s,
       composition: {
         ...s.composition,
-        tracks: [...s.composition.tracks, newTrack],
+        tracks: [...tracks, newTrack],
       },
     };
   });

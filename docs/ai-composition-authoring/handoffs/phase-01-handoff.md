@@ -730,3 +730,107 @@ Alternative trigger phrases that should also work after this fix:
 ### Bug-fix decisions
 
 None — bug-fix only. No new ADR decisions required.
+
+---
+
+## Step 01.5 — Checkpoint #5 bug-fix #2: phantom empty track after delete + recreate
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `fix(composition): Phase 01 Checkpoint #5 — phantom empty track after delete+recreate`
+  - Hash: self-referential — not recorded
+
+**Iteration:** 3 of 5 (second Checkpoint #5 bug-fix)
+
+### Root cause
+
+**Hypothesis D confirmed — `removeTrack`'s "keep-at-least-one" guard creates a phantom empty placeholder that persists into the next `addBlockAsNewTrack` call.**
+
+Trace:
+
+1. `addBlockAsNewTrack('b1')` → track `t1` created (`_trkSeq = 2`). State: `tracks = [{id:'t1', blocks:[{blockId:'b1', bars:4}]}]`.
+2. User deletes track index 0 (`removeTrack(0)`). After filter, `tracks = []`. The guard at `src/state/session.ts` line 1382–1385 fires because `tracks.length === 0`: creates replacement `{id:'t2', blocks:[]}` (`_trkSeq = 3`). State: `tracks = [{id:'t2', blocks:[]}]`.
+3. Agent calls `addBlock('groove')` again → `b2` created.
+4. Agent calls `addBlockAsNewTrack('b2')` → appends a **new** track `{id:'t3', blocks:[{blockId:'b2', bars:4}]}` (`_trkSeq = 4`). State: `tracks = [{id:'t2', blocks:[]}, {id:'t3', blocks:[{blockId:'b2', bars:4}]}]`.
+
+**Result:** Two tracks render — the empty placeholder `t2` and the populated `t3`.
+
+Neither Hypothesis A (UI phantom slot iteration) nor Hypothesis B (`buildComposition` padding) nor Hypothesis C (deleteTrack store bug) were the cause. The tracks array itself contains two genuine entries; both render correctly. The bug is in the data layer: `addBlockAsNewTrack` blindly appends without checking whether an existing sole-empty placeholder can be reused.
+
+### What changed
+
+**`src/state/session.ts` — `addBlockAsNewTrack` function only:**
+
+Added a reuse check before the new-track append. When `state.composition.tracks.length === 1` AND `tracks[0].blocks.length === 0`, the function populates the existing placeholder in-place instead of pushing a new track:
+
+```typescript
+const tracks = s.composition.tracks;
+if (tracks.length === 1 && tracks[0].blocks.length === 0) {
+  return {
+    ...s,
+    composition: {
+      ...s.composition,
+      tracks: [{ ...tracks[0], blocks: [ref] }],
+    },
+  };
+}
+```
+
+The `_trkSeq` counter is **not reset or changed** — the placeholder's existing id (`t2` in the trace above) is preserved as the stable React-style key for the reused track. The condition is tight: it only fires when there is exactly one track and it has no blocks — in all other cases (including the normal "multiple existing tracks" case) a new track is always appended as before.
+
+**`tests/session.test.ts` — three new regression tests:**
+
+New `describe` block `'addBlockAsNewTrack — phantom track regression'` with three tests:
+
+1. **Fresh-store case:** `addBlockAsNewTrack` on a store with no tracks creates exactly one track.
+2. **Delete-then-recreate case (the bug):** delete-last-track → add block → `addBlockAsNewTrack` → exactly one track, one block reference. This is the exact reproduction scenario.
+3. **Non-empty-track guard:** when the sole existing track has blocks (non-empty), a new track is always appended (reuse does NOT trigger). Two existing tracks + new block → three tracks.
+
+### Files touched
+
+- `src/state/session.ts` (`addBlockAsNewTrack` function — condition added before append)
+- `tests/session.test.ts` (three new tests in new `describe` block; `addBlock`, `addBlockAsNewTrack`, `removeTrack` added to import list)
+- `docs/ai-composition-authoring/handoffs/phase-01-handoff.md` (this entry)
+
+### Quality gate results
+
+| Command | Exit status | Key output |
+|---|---|---|
+| `pnpm exec tsc --noEmit` | 0 (clean) | 0 type errors |
+| `pnpm lint` | 0 (clean) | ESLint + Prettier both clean |
+| `pnpm exec vitest run` | 0 | **732 tests passed** (20 test files, 0 failed, 0 skipped; +3 from 729) |
+| `pnpm build` | 0 | 560 modules transformed; pre-existing warnings only; exit 0 |
+
+### Manual re-verification path for the Pilot
+
+1. Start `pnpm dev`; open `http://localhost:5173`.
+2. Ensure a live rhythm state (at least one active step layer).
+3. Open agent panel; send: **"Guarda el groove actual como bloque 'Groove A' y añádelo al timeline"**
+4. Confirm: ONE track "Pista 1" appears in the Composition timeline containing "Groove A".
+5. In the Composition view, click the 🗑 (delete) button on "Pista 1" to remove it.
+6. Confirm: the track disappears (the timeline shows one empty placeholder "Pista 1" — this is expected; the keep-at-least-one guard keeps one empty lane visible).
+7. Open agent panel; send: **"Guarda el groove actual como bloque 'Groove B' y añádelo al timeline"**
+8. Confirm: **ONE** track appears in the timeline (not two). It should contain "Groove B".
+   - Before this fix: two tracks appeared ("Pista 1" empty, "Pista 2" with Groove B).
+   - After this fix: one track, containing Groove B.
+
+### Bug-fix acceptance coverage
+
+| Acceptance ID | Required behavior | Test file / evidence | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | Groove block: name, type, non-null snapshot discriminant `'groove'` | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-02 | Armonia block: name, type, non-null snapshot discriminant `'armonia'` | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-03 | `addToTrack: true` → block in library AND new track referencing it | `tests/apply-block.test.ts` + manual re-verification (bug-fix #1 and this fix) | unit + manual | CLOSED — phantom track eliminated; one track appears after delete+recreate |
+| A-01-04 | No `saveAsBlock` → `composition.blocks` reference-identical to pre-call state | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-05 | `openBlock(id)` on agent-created block: correct editors, no auto-play, round-trip stable | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-06 | Schema v5: all three `type` values parse; absent `saveAsBlock` ok; unknown type rejected | `tests/schema.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-07 | Agent-created block survives persistence round-trip | `tests/agent-block-persistence.test.ts` | unit | CLOSED (step 01.4) |
+| A-01-08 | Block + track reference survive persistence round-trip | `tests/agent-block-persistence.test.ts` | unit | CLOSED (step 01.4) |
+| A-01-09 | `SYSTEM_PROMPT` describes `saveAsBlock` sub-fields, all three types, two examples, standalone use | `src/agent/agent.ts` | proxy:static-analysis | CLOSED (bug-fix #1) |
+| A-01-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | CI commands | automated | CLOSED — 732 tests, all gates clean |
+
+### Bug-fix decisions
+
+None — bug-fix only. No new ADR decisions required. `_trkSeq` counter and track IDs are unchanged.
