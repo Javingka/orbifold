@@ -76,8 +76,13 @@ export interface MusicalRecipe {
 //  8. West-African triplet groove — layered 12/8 bells      (12/8, two rhythms)
 //  9. Rumba clave with minor blues turnaround               (4/4, single rhythm)
 // 10. Gospel soul — Euclidean 16 with add9 harmony          (4/4, single rhythm)
+// 11. Cueca chilena folk — 6/8 cueca with major folk harmony (6/8, single rhythm)
+// 12. Samba afro-brasileiro — layered surdo + caixa          (4/4, two rhythms)
+// 13. Buleria flamenca phrygian — 12/8 flamenco over descent (12/8, single rhythm)
+// 14. Cumbia latina groove — cumbia caja over minor loop      (4/4, single rhythm)
+// 15. Candombe dorian — Afro-Uruguayan chico over modal drone (4/4, single rhythm)
 //
-// Total: 10 recipes (≥8 required).
+// Total: 15 recipes (Phase 05: +5 new entries from 10 original).
 // ---------------------------------------------------------------------------
 
 export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
@@ -349,5 +354,145 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'add9 progression (Dadd9–Gadd9–Bm–Asus4–A). ' +
       'The dense rhythm fills the space with energy; the add9 chords add warmth and color. ' +
       'Suggested tempo: 80–110 BPM.',
+  },
+
+  // -------------------------------------------------------------------------
+  // 11. Cueca chilena folk — 6/8 compound meter, Chilean folk character
+  // -------------------------------------------------------------------------
+  {
+    id: 'cueca-chilena-folk',
+    name: 'Cueca Chilena — Chilean Folk (6/8)',
+    userIntents: [
+      'cueca',
+      'cueca chilena',
+      'chilean folk',
+      'latin waltz',
+      'south american folk',
+      'cueca groove',
+      '6/8 folk',
+      'chilean dance',
+    ],
+    rhythmIds: ['cueca-chilena-base'],
+    harmonyId: 'pop-i-v-vi-iv',
+    bpmRange: [100, 170],
+    meter: '6/8',
+    density: 'medium',
+    agentInstruction:
+      'Apply the cueca base pattern (E(4,12) in 6/8 — 4 evenly-spaced onsets) ' +
+      'over a major I-V-vi-IV progression. The 6/8 compound meter gives the ' +
+      'zapateado dance feel of Chilean cueca. ' +
+      'Suggested tempo: 120–150 BPM.',
+  },
+
+  // -------------------------------------------------------------------------
+  // 12. Samba afro-brasileiro — layered surdo + caixa, Latin minor
+  // -------------------------------------------------------------------------
+  {
+    id: 'samba-afro-brasileiro',
+    name: 'Samba Afro-Brasileiro — Surdo & Caixa',
+    userIntents: [
+      'samba',
+      'brazilian samba',
+      'samba groove',
+      'afro-brazilian rhythm',
+      'samba beat',
+      'surdo samba',
+      'samba carnival',
+      'samba drums',
+    ],
+    rhythmIds: ['samba-surdo-base', 'samba-caixa'],
+    harmonyId: 'latin-minor-dominant-loop',
+    bpmRange: [100, 160],
+    meter: '4/4',
+    density: 'dense',
+    agentInstruction:
+      'Layer samba surdo bass (beats 1 and 3, 16-step) with samba caixa snare ' +
+      '(syncopated 16th off-beats at steps 2, 6, 10, 14) over a Latin minor-dominant ' +
+      'loop (Dm7–G7–Cmaj7–A7). The surdo/caixa interlock creates the authentic ' +
+      'samba batucada feel. Suggested tempo: 120–145 BPM.',
+  },
+
+  // -------------------------------------------------------------------------
+  // 13. Bulería flamenca — 12/8 asymmetric flamenco over phrygian descent
+  // -------------------------------------------------------------------------
+  {
+    id: 'buleria-flamenco-phrygian',
+    name: 'Bulería Flamenca — Phrygian Descent (12/8)',
+    userIntents: [
+      'flamenco',
+      'bulería',
+      'buleria flamenco',
+      'spanish rhythm',
+      'flamenco groove',
+      'flamenco dance',
+      'andalusian rhythm',
+      '12/8 flamenco',
+    ],
+    rhythmIds: ['buleria-12'],
+    harmonyId: 'flamenco-phrygian-descent',
+    bpmRange: [80, 160],
+    meter: '12/8',
+    density: 'dense',
+    agentInstruction:
+      'Use the bulería-inspired 12-step struct pattern (onsets at 0,4,5,7,9,10 — ' +
+      'the characteristic asymmetric flamenco accent) over a Phrygian descent ' +
+      '(Am–G–F–E). The off-center accents evoke the rasgueado feel of flamenco compás. ' +
+      'Suggested tempo: 100–140 BPM.',
+  },
+
+  // -------------------------------------------------------------------------
+  // 14. Cumbia latina groove — Colombian-inspired caja over minor loop
+  // -------------------------------------------------------------------------
+  {
+    id: 'cumbia-latina-groove',
+    name: 'Cumbia Latina — Colombian Groove (4/4)',
+    userIntents: [
+      'cumbia',
+      'colombian groove',
+      'cumbia bass',
+      'latin cumbia',
+      'cumbia rhythm',
+      'colombian latin',
+      'cumbia beat',
+      'tropical groove',
+    ],
+    rhythmIds: ['cumbia-caja'],
+    harmonyId: 'latin-minor-dominant-loop',
+    bpmRange: [80, 130],
+    meter: '4/4',
+    density: 'medium',
+    agentInstruction:
+      'Apply the cumbia caja pattern (onsets at 0,3,6,8,12 — strong beat 1 with ' +
+      'syncopated mid-section) over a Latin minor-dominant loop. The pattern ' +
+      'evokes the driving bass drum feel of Colombian cumbia processions. ' +
+      'Suggested tempo: 95–115 BPM.',
+  },
+
+  // -------------------------------------------------------------------------
+  // 15. Candombe dorian — Afro-Uruguayan chico drum over modal drone
+  // -------------------------------------------------------------------------
+  {
+    id: 'candombe-dorian-groove',
+    name: 'Candombe Dorian — Afro-Uruguayan Groove (4/4)',
+    userIntents: [
+      'candombe',
+      'uruguayan groove',
+      'afro-uruguayan rhythm',
+      'rioplatense drums',
+      'candombe beat',
+      'afro latin groove',
+      'candombe ritual',
+      'uruguayan drums',
+    ],
+    rhythmIds: ['candombe-chico'],
+    harmonyId: 'dorian-modal-drone',
+    bpmRange: [70, 130],
+    meter: '4/4',
+    density: 'medium',
+    agentInstruction:
+      'Use the candombe chico pattern (6-onset syncopated 16-step struct inspired ' +
+      'by the chico drum in Afro-Uruguayan candombe) over a Dorian modal drone ' +
+      '(Dm–F–Gsus4). The driving syncopation contrasts with the open modal harmony. ' +
+      'Suggested tempo: 85–110 BPM.',
   },
 ];
