@@ -105,3 +105,135 @@ Pilot review of this inventory is mandatory before step 02.2 begins (methodology
 **Iteration:** 1 of 1
 **Reason:**
 **Next action:**
+
+---
+
+## Step 02.2 — Rhythm catalog + congruence tests (Checkpoint #2)
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(music-knowledge): Phase 02 step 02.2 — rhythm catalog + congruence tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/ai-jam/decisions.md`, `docs/ai-jam/phases/phase-02.md`, `docs/ai-jam/inventories/phase-02-inventory.md`, `src/core/rhythm/euclid.ts`.
+- Pre-verified 31 binary strings using a local port of the `bjorklund`/`rotate` engine before writing the catalog (confirmed in Node before coding).
+- Created `src/core/music-knowledge/rhythm-catalog.ts`:
+  - Exports `HARMONY_QUALITIES` (17-member `as const` array) and `HarmonyQuality` type — placed here per inventory §f so harmony-catalog.ts can import from this file.
+  - Exports `StrudelStrategy` type (`'euclid' | 'struct'`).
+  - Exports `StepCount` type as `type StepCount = number` with JSDoc noting typical values (4, 5, 7, 8, 9, 12, 16) — per StepCount nit in task instructions (no `8 | 12 | 16 | number` union).
+  - Exports `RhythmEntry` interface (exact shape from inventory §d.1).
+  - Exports `RHYTHM_CATALOG: RhythmEntry[]` with **31 entries** (≥30 required).
+  - Pure data: zero DOM/PIXI/Svelte imports; no imports from `src/agent/` or `src/state/`.
+  - Two internal helper functions (`miniFromBinary`, `onsetsFromBinary`, `euclidEntry`, `structEntry`) ensure consistent construction.
+- Created `tests/music-knowledge/rhythm-catalog.test.ts`:
+  - **224 tests** verifying all 5 invariants from inventory §d.1, plus catalog-level checks and `HARMONY_QUALITIES` export.
+  - Invariant 5 calls the real `bjorklund` + `rotate` from `src/core/rhythm/euclid.ts` — does NOT re-implement.
+  - Covers: 25 `euclid`-strategy entries × engine-agreement test + per-entry congruence; 6 `struct`-strategy entries; catalog-wide uniqueness/count/step-diversity.
+
+### Catalog content summary
+
+| Category | Count | Step counts | Notes |
+|---|---|---|---|
+| Euclidean 8-step | 6 | 8 | tresillo, cinquillo, habanera (E(3,8,3)), 8th-half, 7-of-8, 4-of-8 |
+| Euclidean 12-step | 4 | 12 | West-African bell E(7,12,0), sparse, minimal, standard |
+| Euclidean 16-step | 8 | 16 | E(5,16), E(7,16), E(9,16), E(3,16), E(11,16), 8ths, quarters, cascara E(10,16) |
+| Euclidean odd | 7 | 4, 5, 7, 9 | 3/4, aksak 7/8×2, aksak 9/8×2, 5/4×2 |
+| Struct 16-step | 6 | 16 | Son clave 3-2/2-3, Rumba clave 3-2/2-3, Bossa nova clave, Backbeat snare |
+| **Total** | **31** | | |
+
+**Notable discovery:** Cascara (Afro-Cuban) is Euclidean — `E(10,16,0)` reproduces it exactly (`1011010110110101`). Habanera cell is `E(3,8,3)` (rotation of tresillo). Both get `strudelStrategy: 'euclid'`.
+
+### Files touched
+
+- `src/core/music-knowledge/rhythm-catalog.ts` (created)
+- `tests/music-knowledge/rhythm-catalog.test.ts` (created)
+- `docs/ai-jam/handoffs/phase-02-handoff.md` (appended, this entry)
+
+### Validation evidence
+
+```
+$ pnpm exec vitest run music-knowledge/rhythm-catalog
+✓ tests/music-knowledge/rhythm-catalog.test.ts (224 tests) 16ms
+Test Files  1 passed (1)
+Tests  224 passed (224)
+
+$ pnpm exec tsc --noEmit
+(no output — clean)
+
+$ pnpm test
+Test Files  22 passed (22)
+Tests  974 passed (974)
+(prior 750 + 224 new)
+```
+
+### Validation evidence (per Acceptance ID)
+
+- **A-02-01 — COVERED (full):** 31 entries ≥ 30 required; each has stable unique id, meter, roles, binary + onsets + mini; euclid params on all `euclid`-strategy entries. Test: `'catalog contains at least 30 entries'` and per-entry shape checks.
+- **A-02-02 — COVERED (full):** All 5 congruence invariants verified for every entry. Invariant 5 calls the real `bjorklund` + `rotate` engine from `src/core/rhythm/euclid.ts` for all 25 Euclidean entries. Test: `Invariant 5 — euclid entries reproduce binary via bjorklund+rotate`.
+- **A-02-06 — PARTIAL:** No new runtime dependency; no audio files; no DOM/PIXI/Svelte import (confirmed statically — `rhythm-catalog.ts` has zero imports). Full closure verification deferred to step 02.5.
+- **A-02-07 — PARTIAL:** `tsc --noEmit` clean; `pnpm test` 974/974 passing. Full quality gate (`pnpm lint`, `pnpm build`) deferred to step 02.5 per phase spec.
+
+### Routine validations
+
+- `pnpm exec vitest run music-knowledge/rhythm-catalog` → 224/224 tests pass.
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm test` → 974/974 tests pass (22 test files). No regressions.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Rhythm catalog ≥30 entries; each with stable id, meter, roles, binary+onsets+mini | `tests/music-knowledge/rhythm-catalog.test.ts` | unit | **COVERED** — 31 entries, all fields present |
+| A-02-02 | All rhythm representations mutually congruent; euclid entries reproduce binary via real engine | `tests/music-knowledge/rhythm-catalog.test.ts` | unit | **COVERED** — invariants 1–5, engine call for all 25 euclid entries |
+| A-02-03 | Harmony catalog ≥8 entries; each with stable id, modeCenter, chordMode, valid chords | — | — | not yet — targeted in step 02.3 |
+| A-02-04 | Recipe catalog ≥8 recipes; referential integrity to both catalogs; valid bpmRange and meter | — | — | not yet — targeted in step 02.4 |
+| A-02-05 | `findRecipesForPrompt` returns expected recipes for intent phrases; id getters return entry or undefined | — | — | not yet — targeted in step 02.5 |
+| A-02-06 | No new runtime dependency; no audio files; no DOM/PIXI/Svelte import | `tests/music-knowledge/rhythm-catalog.test.ts` | unit + static | PARTIAL — rhythm-catalog.ts has zero imports; full closure at 02.5 |
+| A-02-07 | Byte-identical guarantee; all quality gates pass | — | live-system | PARTIAL — tsc clean, pnpm test 974/974; lint+build at 02.5 |
+
+### Decisions made (if any)
+
+None new — OD-1 and OD-2 already resolved and confirmed feasible by inventory.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+`src/core/music-knowledge/` directory created. 31-entry rhythm catalog committed.
+974/974 tests passing. `tsc --noEmit` clean.
+No pre-existing module imports `music-knowledge` — byte-identical guarantee holds trivially.
+
+### Key findings summary
+
+1. **Cascara is Euclidean:** `E(10,16,0)` reproduces the cascara pattern exactly. Represented as `strudelStrategy: 'euclid'` — cleaner future emission path.
+2. **Habanera is `E(3,8,3)`:** A rotation of tresillo. Also gets `strudelStrategy: 'euclid'`.
+3. **Struct entries (6):** Son clave 3-2/2-3, Rumba clave 3-2/2-3, Bossa nova clave, and Backbeat snare are non-Euclidean at their native step count and correctly use `strudelStrategy: 'struct'`.
+4. **No imports in rhythm-catalog.ts:** The file is entirely self-contained (computes `mini` and `onsets` from binary inline via helper functions). This makes the purity invariant trivially satisfied.
+5. **224 tests generated** from 31 entries × multiple invariants + catalog-level + HARMONY_QUALITIES checks.
+
+### Next-step context
+
+Step 02.3 creates `src/core/music-knowledge/harmony-catalog.ts` importing `HARMONY_QUALITIES` and `HarmonyQuality` from this file, plus `tests/music-knowledge/harmony-catalog.test.ts`.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 1
+**Reason:**
+**Next action:**
