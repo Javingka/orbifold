@@ -137,3 +137,48 @@ One pre-existing autopilot test (`A-01-05: startAutopilot after stopAutopilot re
 
 - `pnpm exec tsc --noEmit` — clean
 - `pnpm test` — 1541 tests pass (8 new; no regressions)
+
+---
+
+## Step 06.3 — i18n keys (all four locales)
+
+**Status:** COMPLETE  
+**Date:** 2026-06-19  
+**Branch:** `ai-jam/phase-06`  
+**Commit:** `feat(i18n): Phase 06 step 06.3 — autopilot panel i18n keys (all 4 locales)`
+
+### What was done
+
+**`src/i18n/types.ts`**
+
+Added 7 new string keys to `Dictionary.agent.autopilot`:
+
+- `panelToggleLabel` — aria/title for the expand/collapse chevron button
+- `rhythmHintLabel` — label displayed before the rhythm hint dropdown
+- `rhythmHintOther` — text shown in the "Otro…" option
+- `rhythmHintPlaceholder` — placeholder for the select default option and free-text input
+- `playLabel` — label for the play/start button
+- `stopLabel` — label for the stop button
+- `progressTitle` — title/aria-label on the progress bar container
+
+All 6 existing keys (`btnOff`, `btnOn`, `titleOff`, `titleOn`, `cyclesLabel`, `infoTooltip`) retained unchanged.
+
+**All four locale files updated:**
+
+| Key | es | en | pt | zh |
+|---|---|---|---|---|
+| `panelToggleLabel` | `'Piloto automático'` | `'Autopilot'` | `'Piloto automático'` | `'自动驾驶'` |
+| `rhythmHintLabel` | `'Estilo rítmico'` | `'Rhythm style'` | `'Estilo rítmico'` | `'节奏风格'` |
+| `rhythmHintOther` | `'Otro…'` | `'Other…'` | `'Outro…'` | `'其他…'` |
+| `rhythmHintPlaceholder` | `'— ninguno —'` | `'— none —'` | `'— nenhum —'` | `'— 无 —'` |
+| `playLabel` | `'▶ Iniciar'` | `'▶ Start'` | `'▶ Iniciar'` | `'▶ 开始'` |
+| `stopLabel` | `'■ Detener'` | `'■ Stop'` | `'■ Parar'` | `'■ 停止'` |
+| `progressTitle` | `'Progreso del ciclo de evolución'` | `'Evolution cycle progress'` | `'Progresso do ciclo de evolução'` | `'进化周期进度'` |
+
+`pt` and `zh` keys marked `// i18n-draft` per phase spec.
+
+### Validation
+
+- `pnpm exec tsc --noEmit` — clean
+- `pnpm exec vitest run i18n` — key-parity test passes (53 i18n tests)
+- `pnpm test` — 1541 tests pass (no regressions)

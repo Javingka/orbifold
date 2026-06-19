@@ -883,26 +883,9 @@ textarea {
   color: var(--accent);
 }
 
-/* Autopilot button + interval input */
-.autopilot-btn {
-  padding: 2px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
-  font-size: 10.5px;
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
-}
+/* Autopilot redesigned panel — Phase 06 step 06.4 */
 
-.autopilot-btn.active {
-  color: var(--accent);
-  border-color: rgba(138, 160, 255, 0.45);
-  background: rgba(138, 160, 255, 0.12);
-}
-
+/* Interval input (kept from Phase 01 — still used in config panel) */
 .interval-label {
   display: flex;
   align-items: center;
@@ -916,7 +899,7 @@ textarea {
   background: rgba(0, 0, 0, 0.34);
   border: 1px solid var(--stroke);
   border-radius: 5px;
-  color: var(--fg);
+  color: var(--text);
   font-size: 10.5px;
   padding: 1px 4px;
   text-align: center;
@@ -926,11 +909,148 @@ textarea {
   opacity: 0.4;
 }
 
-.autopilot-info {
-  font-size: 10px;
+/* Autopilot section container */
+.autopilot-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 12px;
+  margin: 4px 0;
+}
+
+/* Header row: always visible */
+.autopilot-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Chevron toggle button */
+.autopilot-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 0;
   color: var(--muted);
-  cursor: help;
-  user-select: none;
+  font-size: 10.5px;
+  flex: 1;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.autopilot-toggle:hover {
+  color: var(--text);
+}
+
+.autopilot-toggle.open {
+  color: var(--text);
+}
+
+/* Pulsing dot when playing + panel collapsed (reuses @keyframes pulse from app.css) */
+.autopilot-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dom);
+  animation: pulse 1.2s infinite;
+  flex-shrink: 0;
+}
+
+/* Expandable config panel */
+.autopilot-config {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 4px 8px;
+}
+
+/* Rhythm hint dropdown label + select */
+.rhythm-hint-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.rhythm-hint-select {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid var(--stroke);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 10.5px;
+  padding: 1px 4px;
+}
+
+.rhythm-hint-select:disabled {
+  opacity: 0.4;
+}
+
+/* Free-text input (shown when "otro" selected) */
+.rhythm-hint-text {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid var(--stroke);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 10.5px;
+  padding: 2px 6px;
+}
+
+.rhythm-hint-text:disabled {
+  opacity: 0.4;
+}
+
+/* Play / Stop button */
+.autopilot-play-btn {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.autopilot-play-btn.active {
+  color: var(--dom);
+  border-color: rgba(232, 123, 172, 0.45);
+  background: rgba(232, 123, 172, 0.12);
+}
+
+/* Progress timeline */
+.autopilot-progress-track {
+  height: 4px;
+  background: var(--stroke);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.autopilot-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.autopilot-progress-fill.phase-accent {
+  background: var(--accent);
+}
+
+.autopilot-progress-fill.phase-tonic {
+  background: var(--tonic);
+}
+
+.autopilot-progress-fill.phase-dom {
+  background: var(--dom);
 }
 
 /* Recipe card — last autopilot recipe applied (ai-jam Phase 04 step 04.4) */
