@@ -192,3 +192,137 @@ Step 01.3 is source code. ADR 0021 is the binding authority. The step 01.3 imple
 **Iteration:** 1 of 5
 **Reason:**
 **Next action:**
+
+---
+
+## Step 01.3 — Schema extension, `applyBlockSave`, and unit tests (Checkpoint #3)
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(agent): Phase 01 step 01.3 — schema v5 + applyBlockSave + unit tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read `CLAUDE.md`, `docs/ai-composition-authoring/decisions.md`, `docs/adr/0021-agent-block-authoring.md` (all six decisions D1–D6, binding), `docs/ai-composition-authoring/phases/phase-01.md` (step 01.3 scope and all ten acceptance criteria), step 01.2 handoff entry (ADR approved, all six decisions confirmed).
+- Read `src/agent/schema.ts` (full — `SCHEMA_VERSION = 4`, current `AgentOutputSchema`), `src/agent/apply.ts` (full — `applyRhythmSpec`, `applyHarmonySpec`, `getSessionState`), `src/agent/agent.ts` (full — `SYSTEM_PROMPT`, `send()` dispatch at lines 354–390), `src/state/session.ts` lines 1237–1445 (`addBlock` void, `renameBlock`, `addBlockAsNewTrack`), `src/core/composition/model.ts` (Block.type literals confirmed `'groove' | 'armonia' | 'sesion'` at line 24).
+- Read existing `tests/schema.test.ts` (full — confirmed structure before adding new suites).
+
+**`src/agent/schema.ts` changes:**
+- Bumped `SCHEMA_VERSION` from `4` to `5` with version history comment (ADR 0021 D2).
+- Added `SaveAsBlockSpecSchema` (Zod object): `name: z.string().min(1)`, `type: z.enum(['groove', 'armonia', 'sesion'] as const)`, `addToTrack: z.boolean().optional()`. No `.max(100)` on `name` (OQ-2 → B). Exported inferred `SaveAsBlockSpec` type.
+- Added `saveAsBlock: SaveAsBlockSpecSchema.optional()` to `AgentOutputSchema`.
+- Updated `superRefine` guard to require at least one of `rhythm`, `harmony`, or `saveAsBlock` (OQ-3 / D1).
+
+**`src/agent/apply.ts` changes:**
+- Added imports: `addBlock`, `renameBlock`, `addBlockAsNewTrack` from `'../state/session.js'`; `SaveAsBlockSpec` from `'./schema.js'`.
+- Implemented `applyBlockSave(spec: SaveAsBlockSpec): void` per ADR 0021 D3 call sequence:
+  1. `addBlock(spec.type)` — delegates snapshot capture (single capture path).
+  2. `get(sessionStore)` read-back.
+  3. Guard on empty blocks (early-return if addBlock was a no-op).
+  4. `finalName = spec.name.trim().slice(0, 100)`.
+  5. `renameBlock(newBlock.id, finalName)`.
+  6. If `spec.addToTrack === true` → `addBlockAsNewTrack(newBlock.id)`.
+
+**`src/agent/agent.ts` changes:**
+- Added `applyBlockSave` import from `'./apply.js'`.
+- Updated `SYSTEM_PROMPT`: Changed "DOS habilidades" to "TRES habilidades"; added third capability block `save_as_block` (ADR 0021 D5 all four required content points covered — see proxy verification below).
+- In `send()`: Added `if (skill.saveAsBlock) { applyBlockSave(skill.saveAsBlock); }` after `applyHarmonySpec` block (D4 ordering).
+- Updated `did.length === 0` guard to `if (did.length === 0 && !skill.saveAsBlock)` (OQ-3 / D4).
+- Added OQ-4 save-only code path: `code = sessionCode(updatedState)` when `did` is empty; summary = `"✓ Guardé el ${type} actual como bloque «${name}»"`.
+- Added combined-action summary suffix when both `did` is non-empty AND `skill.saveAsBlock` fires.
+
+**`tests/schema.test.ts` changes:**
+- Added import for `SaveAsBlockSpecSchema` and `Block` type.
+- Updated `SCHEMA_VERSION` test expectation from `4` to `5`.
+- Updated duplicate `SCHEMA_VERSION` assertion at line 673.
+- Added `SaveAsBlockSpecSchema` suite (9 tests): all three `type` values; `addToTrack: true`; absent `addToTrack`; unknown type rejected; empty name rejected; long name (150 chars) passes schema (truncation in apply); type-literal alignment guard vs `Block.type`.
+- Added `AgentOutputSchema — saveAsBlock` suite (5 tests): saveAsBlock-only parses; absent saveAsBlock is undefined; rhythm + saveAsBlock parses; neither rhythm/harmony/saveAsBlock fails; saveAsBlock with unknown type fails.
+
+**`tests/apply-block.test.ts` (new file):**
+- AGPL-3.0 header present.
+- 19 tests covering: A-01-01 (groove block name/type/snapshot/code), A-01-02 (armonia block), A-01-03 (addToTrack creates new track, absent/false does not), A-01-04 (applyRhythmSpec / applyHarmonySpec alone leave composition.blocks and .tracks reference-identical), A-01-05 (openBlock does not throw, block survives in store with correct type), name truncation at 150/100/trim, multiple blocks accumulate.
+
+### Files touched
+
+- `src/agent/schema.ts` (modified)
+- `src/agent/apply.ts` (modified)
+- `src/agent/agent.ts` (modified)
+- `tests/schema.test.ts` (modified — new suites added)
+- `tests/apply-block.test.ts` (created)
+- `docs/ai-composition-authoring/handoffs/phase-01-handoff.md` (updated, this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-01** — `apply-block.test.ts` "groove block (A-01-01)": 3 tests assert block name, type, snapshot presence, snapshot discriminant `'groove'`, and non-empty code. PASS.
+- **A-01-02** — `apply-block.test.ts` "armonia block (A-01-02)": 2 tests assert name, type, snapshot presence, discriminant `'armonia'`. PASS.
+- **A-01-03** — `apply-block.test.ts` "addToTrack (A-01-03)": 3 tests assert new track created + block referenced; absent/false does not create track. PASS.
+- **A-01-04** — `apply-block.test.ts` "without applyBlockSave (A-01-04)": 4 tests assert `composition.blocks` and `.tracks` are reference-identical after `applyRhythmSpec` and/or `applyHarmonySpec`. PASS.
+- **A-01-05** — `apply-block.test.ts` "openBlock round-trip (A-01-05)": 3 tests assert openBlock does not throw; block survives with correct type/snapshot; non-existent id is safe. PASS.
+- **A-01-06** — `schema.test.ts` "SaveAsBlockSpecSchema (A-01-06)" + "AgentOutputSchema — saveAsBlock (A-01-06)": 14 tests cover all three type values, addToTrack, absent saveAsBlock, unknown type rejection, empty name rejection, long-name pass-through (OQ-2), type-literal alignment vs `Block.type`, saveAsBlock-only parse (OQ-3), combined parse, superRefine guard. PASS.
+- **A-01-07 / A-01-08** — deferred to step 01.4 (persistence round-trip tests).
+- **A-01-09** — `proxy:static-analysis`: `SYSTEM_PROMPT` in `src/agent/agent.ts` now contains a "SKILL: save_as_block" section covering all four ADR 0021 D5 binding points: (1) when to use `saveAsBlock` (example phrases: "guarda esto como bloque", "save the current groove", "crea un bloque con esta armonía", "añade esto a la composición"); (2) three sub-fields with exact types and definitions for all three `type` values; (3) two example JSON snippets (minimal and full); (4) explicit statement that `saveAsBlock` may appear alone. All four D5 content points are covered.
+- **A-01-10** — `tsc --noEmit`: 0 errors. `pnpm lint`: clean. `pnpm exec vitest run`: 715 tests passed (682 prior + 33 new). `pnpm build`: not yet run (step 01.5).
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → 0 errors (clean output).
+- `pnpm lint` → clean (ESLint clean; Prettier formatting confirmed after `--write`).
+- `pnpm exec vitest run` → 715 tests passed, 0 failed, 0 skipped across 19 test files.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | Groove block: correct name, type, non-null snapshot with discriminant `'groove'` | `tests/apply-block.test.ts` | unit | CLOSED |
+| A-01-02 | Armonia block: correct name, type, non-null snapshot with discriminant `'armonia'` | `tests/apply-block.test.ts` | unit | CLOSED |
+| A-01-03 | `addToTrack: true` → block in library AND new track referencing block id | `tests/apply-block.test.ts` | unit | CLOSED |
+| A-01-04 | No `saveAsBlock` → `composition.blocks` reference-identical to pre-call state | `tests/apply-block.test.ts` | unit | CLOSED |
+| A-01-05 | `openBlock(id)` on agent-created block does not throw; snapshot survives in store | `tests/apply-block.test.ts` | unit | CLOSED |
+| A-01-06 | Schema v5: all three `type` values parse; absent `saveAsBlock` ok; type-literal alignment | `tests/schema.test.ts` | unit | CLOSED |
+| A-01-07 | Agent-created block survives persistence round-trip | — | unit | open — step 01.4 |
+| A-01-08 | Block + track reference survive persistence round-trip | — | unit | open — step 01.4 |
+| A-01-09 | System prompt describes `saveAsBlock` sub-fields, types, examples, standalone use | `src/agent/agent.ts` `SYSTEM_PROMPT` | proxy:static-analysis | CLOSED |
+| A-01-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | CI commands | automated | partial — build in step 01.5 |
+
+### Decisions made (if any)
+
+None beyond ADR 0021 D1–D6 (already recorded). Implementation followed the ADR verbatim.
+
+### Proposed Decisions Register entries (if any)
+
+None new in this step. The ADR 0021 active decision proposed in step 01.2 should be entered by the Pilot.
+
+### Blockers resolved during this step (if any)
+
+None. One Prettier formatting issue (`apply.ts`, `apply-block.test.ts`) was a transient formatting issue — fixed by running `pnpm exec prettier --write` before the lint gate.
+
+### Environment state after this step
+
+715 tests pass. `tsc --noEmit` clean. `pnpm lint` clean. Working tree will be clean after commit.
+
+### Key findings summary
+
+1. **`applyBlockSave` read-back pattern works correctly** — `addBlock` is synchronous (Svelte `writable.update` is synchronous), so `get(sessionStore)` immediately after returns the just-created block. The guard `if (state.composition.blocks.length === 0)` correctly handles the `addBlock` early-return case.
+2. **SYSTEM_PROMPT updated with all four D5 content points** — the `save_as_block` section covers all required items: when-to-use phrases, all three type definitions with examples, two JSON snippets (minimal and full), and explicit statement that `saveAsBlock` can appear alone.
+3. **33 new tests added** — 19 in `apply-block.test.ts` and 14 net new in `schema.test.ts` (plus 2 updated existing tests).
+4. **`A-01-04` byte-identical guarantee**: `applyRhythmSpec` and `applyHarmonySpec` produce reference-identical `composition.blocks` arrays because they only call `sessionStore.update` with spread of `s.rhythm` or `s.harmony` — `s.composition` is not touched.
+
+### Next-step context (only if non-obvious)
+
+Step 01.4 targets A-01-07 and A-01-08 (persistence round-trip for agent-created blocks). Per ADR 0021 D2, `SESSION_SCHEMA_VERSION` remains 5; no source changes to `persistence.ts` are expected — only new test assertions.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 5
+**Reason:**
+**Next action:**

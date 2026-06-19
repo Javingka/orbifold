@@ -18,8 +18,11 @@ import { z } from 'zod';
  * Phase 03 (harmonic-rhythm-improvements): bumped from 3 to 4 — `HarmonyChordCoreSchema`
  * gains `preset?`, `lpf?`, `attack?`, `sustain?`, `release?`, `lpenv?`, `lpa?`, `lpd?`,
  * `lpq?` optional fields (ADR 0019 D6).
+ * Phase 01 (ai-composition-authoring): bumped from 4 to 5 — `AgentOutputSchema` gains
+ * `saveAsBlock?` field (`SaveAsBlockSpecSchema`); `superRefine` guard relaxed to accept
+ * at least one of `rhythm`, `harmony`, or `saveAsBlock` (ADR 0021 D1–D2).
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 // ── Constants (prototype lines 1670–1673) ─────────────────────────────────
 
@@ -190,27 +193,73 @@ export const HarmonySpecSchema = z.object({
   progression: z.array(HarmonyChordSchema).min(1).max(8).optional(),
 });
 
+// ── SaveAsBlockSpec ────────────────────────────────────────────────────────
+
+/**
+ * Spec for the agent to save the current live state as a named, editable
+ * composition Block. When present, applyBlockSave is called AFTER
+ * applyRhythmSpec and applyHarmonySpec, so the snapshot reflects the
+ * fully-applied agent state.
+ *
+ * Per ADR 0021 D1.
+ */
+export const SaveAsBlockSpecSchema = z.object({
+  /**
+   * User-visible name for the new block.
+   * The agent may supply any non-empty string; applyBlockSave truncates to
+   * 100 characters via .trim().slice(0, 100) (OQ-2 → Option B).
+   * No .max(100) constraint in Zod — a too-long name does NOT invalidate the
+   * entire agent output (which would also drop valid rhythm/harmony specs).
+   */
+  name: z.string().min(1),
+  /**
+   * Which live state to capture:
+   * - 'groove'  → captures rhythm layers (GrooveSnapshot)
+   * - 'armonia' → captures harmony progression (ArmoniaSnapshot)
+   * - 'sesion'  → captures both rhythm + harmony (SesionSnapshot)
+   *
+   * Accepted as the agent's declaration (OQ-1 → Option A). If the declared
+   * type results in empty code (e.g., 'armonia' with no progression),
+   * addBlock's existing early-return guard handles the no-op gracefully.
+   *
+   * Must match Block.type literals (src/core/composition/model.ts line 24).
+   */
+  type: z.enum(['groove', 'armonia', 'sesion'] as const),
+  /**
+   * When true, also creates a new composition track referencing the new block.
+   * Absent = false (block is saved to the library only).
+   */
+  addToTrack: z.boolean().optional(),
+});
+
+export type SaveAsBlockSpec = z.infer<typeof SaveAsBlockSpecSchema>;
+
 // ── AgentOutput ────────────────────────────────────────────────────────────
 
 /**
  * The top-level schema for agent JSON output.
- * At least one of `rhythm` or `harmony` must be present.
+ * At least one of `rhythm`, `harmony`, or `saveAsBlock` must be present
+ * (guard relaxed in ADR 0021 D1 / OQ-3 from "rhythm or harmony only").
  * `note` is an optional freetext annotation (≤300 chars).
  *
  * Prototype §7 and tryApplySkill (lines 1725–1738): if neither rhythm nor
  * harmony is present the skill is rejected (returns null).
+ * ADR 0021 D1: relaxed to also accept saveAsBlock-only responses.
  */
 export const AgentOutputSchema = z
   .object({
     rhythm: RhythmSpecSchema.optional(),
     harmony: HarmonySpecSchema.optional(),
     note: z.string().max(300).optional(),
+    saveAsBlock: SaveAsBlockSpecSchema.optional(), // NEW in schema v5 (ADR 0021 D1)
   })
   .superRefine((val, ctx) => {
-    if (val.rhythm === undefined && val.harmony === undefined) {
+    // Relaxed guard per OQ-3: at least one of rhythm, harmony, or saveAsBlock required.
+    // Previously: rhythm || harmony only.
+    if (val.rhythm === undefined && val.harmony === undefined && val.saveAsBlock === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'AgentOutput must have at least one of: rhythm, harmony',
+        message: 'AgentOutput must have at least one of: rhythm, harmony, saveAsBlock',
       });
     }
   });

@@ -19,8 +19,14 @@ import { QUAL_INTERVALS } from '../core/theory/chords.js';
 import type { Quality } from '../core/theory/chords.js';
 import type { RhythmLayer, Sound } from '../core/rhythm/layers.js';
 import type { Chord, RestSlot, ProgressionSlot } from '../state/session.js';
-import { sessionStore, clampBars } from '../state/session.js';
-import type { RhythmSpec, HarmonySpec } from './schema.js';
+import {
+  sessionStore,
+  clampBars,
+  addBlock,
+  renameBlock,
+  addBlockAsNewTrack,
+} from '../state/session.js';
+import type { RhythmSpec, HarmonySpec, SaveAsBlockSpec } from './schema.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -190,6 +196,48 @@ export function applyHarmonySpec(spec: HarmonySpec): void {
       harmony: { ...s.harmony, root: harmRoot, mode, octave, progression },
     };
   });
+}
+
+// ── applyBlockSave ─────────────────────────────────────────────────────────
+
+/**
+ * Apply a saveAsBlock spec: capture current live state as a named block,
+ * optionally add it to a new composition track.
+ *
+ * Must be called AFTER applyRhythmSpec and applyHarmonySpec so the snapshot
+ * reflects the fully-applied agent state. Per ADR 0021 D3–D4.
+ *
+ * Internal call sequence (ADR 0021 D3):
+ *   1. addBlock(spec.type)   — creates the block and captures the snapshot.
+ *   2. get(sessionStore)     — read-back immediately after addBlock.
+ *   3. Guard on empty blocks — early-return if addBlock no-op'd (empty code).
+ *   4. finalName = spec.name.trim().slice(0, 100)  — OQ-2 truncation.
+ *   5. renameBlock(newBlock.id, finalName)          — rename in store.
+ *   6. if addToTrack === true → addBlockAsNewTrack(newBlock.id).
+ *
+ * @param spec - The validated SaveAsBlockSpec from AgentOutputSchema.
+ */
+export function applyBlockSave(spec: SaveAsBlockSpec): void {
+  // Step 1: delegate snapshot capture entirely to addBlock (ADR 0021 D3 binding).
+  addBlock(spec.type);
+
+  // Step 2: read back immediately (addBlock is synchronous, no interleaving).
+  const state = get(sessionStore);
+
+  // Step 3: guard — addBlock early-returns on empty code; detect via block count.
+  if (state.composition.blocks.length === 0) return;
+  const newBlock = state.composition.blocks[state.composition.blocks.length - 1];
+
+  // Step 4: apply OQ-2 name truncation (no .max(100) in Zod — truncate here).
+  const finalName = spec.name.trim().slice(0, 100);
+
+  // Step 5: rename the block.
+  renameBlock(newBlock.id, finalName);
+
+  // Step 6: optionally add to a new track.
+  if (spec.addToTrack === true) {
+    addBlockAsNewTrack(newBlock.id);
+  }
 }
 
 // ── Re-export ──────────────────────────────────────────────────────────────

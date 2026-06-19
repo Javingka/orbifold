@@ -25,7 +25,7 @@ import { rhythmCode, harmonyCode, sessionCode } from '../state/session.js';
 import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { PROVIDERS, loadApiKey, type ProviderKey, type ChatMessage } from './providers.js';
 import { AgentOutputSchema, type AgentOutput } from './schema.js';
-import { applyRhythmSpec, applyHarmonySpec } from './apply.js';
+import { applyRhythmSpec, applyHarmonySpec, applyBlockSave } from './apply.js';
 import { lang, t_raw } from '../i18n/index.js';
 import type { LangCode } from '../i18n/index.js';
 
@@ -87,9 +87,10 @@ export function setModel(m: string): void {
 export const SYSTEM_PROMPT = `Eres el co-compositor de Orbifold, músico experto en live coding con Strudel (TidalCycles para JS).
 
 ══════════ SKILLS (modo preferido) ══════════
-Tienes DOS habilidades que actualizan DIRECTAMENTE la interfaz de Orbifold:
+Tienes TRES habilidades que actualizan DIRECTAMENTE la interfaz de Orbifold:
   • create_rhythm  → define las órbitas rítmicas (rejilla de 16 pasos / compás 4/4)
   • create_harmony → define la clave y la progresión de acordes (geometría Tonnetz)
+  • save_as_block  → guarda el estado actual como un bloque editable en la biblioteca de composición
 
 Cuando el usuario pida CREAR o MODIFICAR un groove/ritmo/batería y/o una progresión/armonía/acordes,
 responde EXCLUSIVAMENTE con UN bloque \`\`\`json siguiendo este esquema EXACTO (incluye solo las claves que apliquen):
@@ -124,6 +125,36 @@ RESTRICCIONES (obligatorio, la interfaz solo admite esto):
 - Compón pensando en voice-leadings pequeños entre acordes (la app está organizada por la geometría de acordes).
 - Detecta la intención: si solo piden ritmo → solo "rhythm"; si solo armonía → solo "harmony"; si ambos → las dos claves.
 - NADA fuera del bloque json (sin texto antes ni después).
+
+══════════ SKILL: save_as_block ══════════
+Cuando el usuario diga "guarda esto como bloque", "save the current groove", "crea un bloque con esta armonía",
+"añade esto a la composición" o frases similares, incluye el campo "saveAsBlock" en el JSON.
+
+"saveAsBlock" puede aparecer SOLO (sin "rhythm" ni "harmony") o junto a ellos.
+Cuando aparece junto a "rhythm"/"harmony", el bloque captura el estado YA actualizado.
+
+Sub-campos de "saveAsBlock":
+  • "name"       (string, obligatorio) — etiqueta visible para el bloque; usa un nombre descriptivo.
+  • "type"       (string, obligatorio) — uno de exactamente tres valores:
+      - "groove"  → captura solo las capas rítmicas actuales (GrooveSnapshot)
+      - "armonia" → captura solo la progresión armónica actual (ArmoniaSnapshot)
+      - "sesion"  → captura ritmo + armonía juntos (SesionSnapshot)
+  • "addToTrack" (boolean, opcional, por defecto false) — si true, crea también una nueva
+      pista en el timeline de composición referenciando el bloque guardado.
+      Ponlo en true solo cuando el usuario pida explícitamente añadir a la línea de tiempo / timeline.
+
+Ejemplo mínimo (solo guarda el groove actual):
+\`\`\`json
+{ "saveAsBlock": { "name": "Groove Afrobeat", "type": "groove" } }
+\`\`\`
+
+Ejemplo completo (crea ritmo, lo guarda como sesión y lo añade al timeline):
+\`\`\`json
+{
+  "rhythm": { "layers": [{ "sound": "bd", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }] },
+  "saveAsBlock": { "name": "Pulso Base", "type": "sesion", "addToTrack": true }
+}
+\`\`\`
 
 ══════════ MODO CÓDIGO (solo si NO aplica una skill) ══════════
 Si piden algo que no encaja en las skills (un efecto suelto, código Strudel libre), responde con UN bloque \`\`\`strudel ejecutable y comentado.
@@ -363,8 +394,16 @@ export async function send(text: string, ctx: AgentSendContext): Promise<AgentSe
       applyHarmonySpec(skill.harmony);
       did.push('armonía');
     }
+    // ADR 0021 D4: applyBlockSave runs AFTER applyRhythmSpec and applyHarmonySpec,
+    // so the snapshot captures the fully-applied agent state.
+    // 'saveAsBlock' is intentionally NOT added to the `did` array —
+    // `did` drives the summary text; block-save summary is handled separately per OQ-4.
+    if (skill.saveAsBlock) {
+      applyBlockSave(skill.saveAsBlock);
+    }
 
-    if (did.length === 0) {
+    // ADR 0021 D4 / OQ-3: updated guard — do NOT return 'text' if only saveAsBlock fired.
+    if (did.length === 0 && !skill.saveAsBlock) {
       // Schema guards against this via superRefine, but be defensive
       return { type: 'text', text: txt };
     }
@@ -376,15 +415,33 @@ export async function send(text: string, ctx: AgentSendContext): Promise<AgentSe
       code = sessionCode(updatedState);
     } else if (did.includes('ritmo')) {
       code = rhythmCode(updatedState);
-    } else {
+    } else if (did.includes('armonía')) {
       code = harmonyCode(updatedState).trim();
+    } else {
+      // OQ-4: save-only path (did is empty; only saveAsBlock fired).
+      // Use full sessionCode so the live code drawer shows what is playing.
+      code = sessionCode(updatedState);
     }
 
-    // Build summary (prototype lines 1771–1773)
-    const summary =
-      `✓ Actualicé la interfaz: ${did.join(' + ')}.` +
-      (skill.note ? `\n${skill.note}` : '') +
-      `\nLa ${did.includes('ritmo') && did.includes('armonía') ? 'Sesión (ritmo + armonía)' : did.includes('ritmo') ? 'Ritmo (groove)' : 'Armonía (progresión)'} "actual" ya quedó lista — puedes guardarla como bloque (🎚 composición) o tocarla aquí. La valido al sonar (auto-corrector activo).`;
+    // Build summary
+    let summary: string;
+    if (did.length === 0 && skill.saveAsBlock) {
+      // OQ-4: save-only summary — acknowledge the block save explicitly.
+      const savedName = skill.saveAsBlock.name.trim().slice(0, 100);
+      const savedType = skill.saveAsBlock.type;
+      summary = `✓ Guardé el ${savedType} actual como bloque «${savedName}»`;
+    } else {
+      // Standard summary (prototype lines 1771–1773)
+      summary =
+        `✓ Actualicé la interfaz: ${did.join(' + ')}.` +
+        (skill.note ? `\n${skill.note}` : '') +
+        `\nLa ${did.includes('ritmo') && did.includes('armonía') ? 'Sesión (ritmo + armonía)' : did.includes('ritmo') ? 'Ritmo (groove)' : 'Armonía (progresión)'} "actual" ya quedó lista — puedes guardarla como bloque (🎚 composición) o tocarla aquí. La valido al sonar (auto-corrector activo).`;
+      if (skill.saveAsBlock) {
+        // Both rhythm/harmony AND saveAsBlock fired — append block-save acknowledgment.
+        const savedName = skill.saveAsBlock.name.trim().slice(0, 100);
+        summary += `\n✓ También guardé el bloque «${savedName}».`;
+      }
+    }
 
     return { type: 'skill', code, summary, note: skill.note };
   }
