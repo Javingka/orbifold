@@ -314,7 +314,8 @@ export const AgentOutputSchema = z
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'AgentOutput must have at least one of: rhythm, harmony, saveAsBlock, musicalIntent',
+        message:
+          'AgentOutput must have at least one of: rhythm, harmony, saveAsBlock, musicalIntent',
       });
     }
   });

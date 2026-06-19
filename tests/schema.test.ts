@@ -926,7 +926,9 @@ describe('AgentOutputSchema v6 — musicalIntent new field (A-03-01)', () => {
     if (result.success) {
       expect(result.data.rhythm).toBeDefined();
       expect(result.data.musicalIntent?.recipeId).toBe('bossa-nova-groove');
-      expect(result.data.musicalIntent?.explanation).toBe('adding bossa nova feel to the existing rhythm');
+      expect(result.data.musicalIntent?.explanation).toBe(
+        'adding bossa nova feel to the existing rhythm'
+      );
     }
   });
 

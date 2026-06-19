@@ -199,3 +199,111 @@ None.
 ### Next action (per phase file)
 
 CHECKPOINT — Planner review of step 03.2 before proceeding to step 03.3.
+
+---
+
+## Step 03.3 — Recipe→State engine + tests (Checkpoint #3)
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- `feat(music-knowledge): Phase 03 step 03.3 — recipe-engine recipeToAgentOutput`
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `src/agent/schema.ts` (full, v6 — SCHEMA_VERSION=6, MusicalIntentSchema, updated superRefine guard).
+- Read `src/core/music-knowledge/rhythm-catalog.ts` (full — RhythmEntry, HARMONY_QUALITIES, RHYTHM_CATALOG, strudelStrategy, euclid fields).
+- Read `src/core/music-knowledge/harmony-catalog.ts` (full — HarmonyEntry, CatalogChord, HARMONY_CATALOG, 17-member quality enum).
+- Read `src/core/music-knowledge/rhythm-harmony-recipes.ts` (full — MusicalRecipe interface, 10 RHYTHM_HARMONY_RECIPES entries).
+- Read `src/core/music-knowledge/query.ts` (full — getRhythmById, getHarmonyById, getRecipeById).
+- Read `docs/ai-jam/decisions.md` (full — OD-3 resolved as Option B by Pilot).
+- Read `docs/ai-jam/inventories/phase-03-inventory.md` (full — §3 expressibility table, §5 downsample map, §7 purity constraints).
+- Created `src/core/music-knowledge/recipe-engine.ts` with:
+  - `QUALITY_DOWNSAMPLE: Record<HarmonyQuality, 'maj'|'min'|'dim'|'aug'>` — 17→4 downsample map (total coverage), embedded as a const in source (not test-only).
+  - `RecipeEngineOptions` type: `{ layerSound?: string }` — optional sound override for single-layer recipes.
+  - `recipeToAgentOutput(recipe, options?): AgentOutput | null` — pure translation function:
+    - Euclid path: `strudelStrategy==='euclid' && euclid.n<=16` → emits `{ sound, euclid: { k, n, rot } }`.
+    - Steps16 path: `strudelStrategy==='struct' && steps===16` → emits `{ sound, steps: binary.split('').map(Number) }` (length-16 number[]).
+    - Defensive guard: non-expressible layers return null (OD-3 Option B — should never be reached in normal flow).
+    - Sound assignment by layer index: 0→'bd', 1→'hh', 2→'sd', 3→'oh', 4→'cp', 5→'rim'. Single-layer override via `options.layerSound`.
+    - Harmony translation (OD-1): modeCenter→root, 'minor'→mode (safe default), octave=3; progression with QUALITY_DOWNSAMPLE applied; gain=0.7.
+    - Internal `AgentOutputSchema.safeParse` guard before returning; null on failure.
+  - `getExpressibleRecipes(): MusicalRecipe[]` — filters RHYTHM_HARMONY_RECIPES to fully-expressible recipes (OD-3 Option B upstream filter).
+  - Purity: no DOM/PIXI/Svelte imports; no imports from src/state/; runtime import of AgentOutputSchema (pure Zod, safe in Node).
+- Created `tests/music-knowledge/recipe-engine.test.ts` with 24 tests:
+  - QUALITY_DOWNSAMPLE: totality (all 17 members covered), all map to {maj,min,dim,aug}, identity mappings, extended quality spot checks.
+  - getExpressibleRecipes: non-empty, length<=10, all ids in RHYTHM_HARMONY_RECIPES, current catalog returns all 10.
+  - Round-trip (A-03-04): every expressible recipe produces valid AgentOutput per safeParse; all harmony qualities are {maj,min,dim,aug}; mode='minor', octave=3.
+  - OD-2 euclid path (A-03-05): west-african-bell-modal layer 0 has euclid {k:7,n:12,rot:0}; dorian-ritual-sparse layer 0 has euclid {k:3,n:16,rot:0}; gospel-soul-euclid has euclid {k:9,n:16,rot:0}.
+  - OD-2 steps16 path (A-03-05): afro-cuban-clave-minor layer 0 has steps[16] matching son-clave-3-2 binary; bossa-nova-groove; rumba-blues-minor.
+  - Multi-layer: latin-jazz-clave-swing has 2 layers (steps16 + euclid); sound assignment by index (bd, hh).
+  - Null return: non-existent rhythmId; non-existent harmonyId; defensive non-expressible guard.
+  - options.layerSound: overrides single-layer sound; ignored for multi-layer.
+
+### Prototype parity note
+
+Not applicable — `recipeToAgentOutput` has no prototype equivalent. The catalog and engine are new in this initiative.
+
+### Files touched
+
+- `src/core/music-knowledge/recipe-engine.ts` (created)
+- `tests/music-knowledge/recipe-engine.test.ts` (created)
+- `docs/ai-jam/handoffs/phase-03-handoff.md` (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Status | Evidence |
+|---|---|---|
+| A-03-01 | COVERED (step 03.2) | schema.test.ts — no new coverage needed |
+| A-03-02 | COVERED (step 03.2) | schema.test.ts — no new coverage needed |
+| A-03-03 | COVERED (step 03.2) | schema.test.ts — no new coverage needed |
+| A-03-04 | COVERED | Round-trip test: every expressible recipe → safeParse success; harmony qualities ∈ {maj,min,dim,aug} confirmed |
+| A-03-05 | COVERED | Euclid path tests: bell-pattern {k:7,n:12,rot:0}, euclid-3-16 {k:3,n:16,rot:0}, euclid-9-16 {k:9,n:16,rot:0}; Steps16 path tests: son-clave-3-2, bossa-nova-clave, rumba-clave-3-2 binary match |
+| A-03-06 | partial | Targeted in step 03.4 |
+| A-03-07 | partial | Targeted in step 03.4 |
+| A-03-08 | partial | Targeted in step 03.4 |
+| A-03-09 | partial | Full quality gate at step 03.4 |
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | `AgentOutputSchema` v6 accepts `musicalIntent`-only; rejects none-of-four | `tests/schema.test.ts` | unit | COVERED (step 03.2) |
+| A-03-02 | v5 responses parse unchanged; `musicalIntent` is `undefined` | `tests/schema.test.ts` | unit | COVERED (step 03.2) |
+| A-03-03 | `SCHEMA_VERSION === 6` | `tests/schema.test.ts` | unit | COVERED (step 03.2) |
+| A-03-04 | `recipeToAgentOutput(recipe)` returns valid `AgentOutput` for every expressible recipe; harmony uses only `quality ∈ {maj,min,dim,aug}` | `tests/music-knowledge/recipe-engine.test.ts` | unit | COVERED |
+| A-03-05 | euclid layers emitted as `{ euclid: {k,n,rot} }`; steps16 layers as `{ steps: number[16] }` matching catalog | `tests/music-knowledge/recipe-engine.test.ts` | unit | COVERED |
+| A-03-06 | `SYSTEM_PROMPT_EVOLUTION` musicalIntent section with trigger phrases + two JSON examples; forbids saveAsBlock | — | — | not yet — step 03.4 |
+| A-03-07 | `sendEvolution()` recipe wiring; explicit fields take precedence | — | — | not yet — step 03.4 |
+| A-03-08 | `sendEvolution()` never pushes chatHistory or calls applyBlockSave | — | — | not yet — step 03.4 |
+| A-03-09 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | — | — | not yet — step 03.4 |
+
+### Routine validations
+
+- `pnpm exec vitest run music-knowledge/recipe-engine` → 24/24 tests passed.
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm test` → 1367/1367 tests passed (all 26 test files; up from 1320 — 47 new tests in this step).
+
+### Decisions made (if any)
+
+OD-3 Option B (upstream filter) implemented as directed by Pilot: `recipeToAgentOutput` includes a defensive null-return guard for non-expressible layers but, in normal flow, is only called with expressible recipes (via `getExpressibleRecipes()`). The guard is tested via the null-return suite.
+
+### Blockers resolved during this step
+
+None.
+
+### Environment state after this step
+
+- Branch: `ai-jam/phase-03`
+- Tests: 1367/1367 passing (26 test files).
+- New files: `src/core/music-knowledge/recipe-engine.ts`, `tests/music-knowledge/recipe-engine.test.ts`.
+- `QUALITY_DOWNSAMPLE` const embedded in source (not test-only).
+- `getExpressibleRecipes()` exported and tested; returns all 10 current recipes.
+- Pending: Step 03.4 (sendEvolution wiring + SYSTEM_PROMPT_EVOLUTION update).
+
+### Next action (per phase file)
+
+CHECKPOINT — Planner review of step 03.3 before proceeding to step 03.4.
