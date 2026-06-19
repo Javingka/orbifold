@@ -182,3 +182,83 @@ All 6 existing keys (`btnOff`, `btnOn`, `titleOff`, `titleOn`, `cyclesLabel`, `i
 - `pnpm exec tsc --noEmit` — clean
 - `pnpm exec vitest run i18n` — key-parity test passes (53 i18n tests)
 - `pnpm test` — 1541 tests pass (no regressions)
+
+---
+
+## Step 06.4 — UI redesign + full quality gate
+
+**Status:** COMPLETE  
+**Date:** 2026-06-19  
+**Branch:** `ai-jam/phase-06`  
+**Commit:** `feat(ui): Phase 06 step 06.4 — autopilot panel redesign (expand/collapse, dropdown, play button, progress bar)`
+
+### What was done
+
+**`src/ui/AgentPanel.svelte`**
+
+Script changes:
+- Added `onDestroy` to Svelte imports.
+- Added `setAutopilotPanel`, `setRhythmHint` to imports from `session.js`.
+- Added `import { RHYTHM_CATALOG } from '../core/music-knowledge/rhythm-catalog.js'`.
+- Built `families: Map<string, typeof RHYTHM_CATALOG>` at module load time (static catalog — no reactivity needed). Map insertion order preserves catalog order.
+- Removed `toggleAutopilot()`. Replaced with `togglePanel()` (flips `panelOpen` via `setAutopilotPanel`; does NOT touch the timer) and `handlePlayStop()` (starts/stops timer; follows ADR 0022 D2 ordering: `setAutopilot` before `startAutopilot`).
+- Added `requestAnimationFrame` progress bar poll: `_rafTick()` updates `now = Date.now()` at ~60 fps; started in `onMount`, cleaned up in `onDestroy`.
+- Reactive derivations: `timerStart`, `intervalMs`, `progressPct` (clamped 0–100), `progressPhase` ('accent' / 'tonic' / 'dom' thresholds at 60% and 85%).
+
+Markup changes:
+- Replaced `<div class="toggles autopilot-row">` entirely with `<div class="autopilot-section">`.
+- Header row: chevron button (`togglePanel`) + `autopilot-live-dot` (shown when `enabled && !panelOpen`).
+- Config panel (`{#if autopilot.panelOpen}`): interval input, rhythm hint `<select>` with `<optgroup>` per family + "Otro…" option, free-text input (`{#if rhythmHint === 'otro'}`), play/stop button (`handlePlayStop`), progress bar (`role="progressbar"` with aria-valuenow).
+- Recipe card and input row remain unchanged in position.
+
+**`src/app/app.css`**
+
+- Removed `.autopilot-btn`, `.autopilot-btn.active`, `.autopilot-info` (no longer used).
+- Fixed pre-existing typo: `.interval-input { color: var(--fg) }` → `color: var(--text)` (`--fg` is undefined; `--text` is the correct token).
+- Added new rules: `.autopilot-section`, `.autopilot-header`, `.autopilot-toggle` (with `.open` and `:hover`), `.autopilot-live-dot` (pulsing dot using `@keyframes pulse` from `app.css`), `.autopilot-config`, `.rhythm-hint-label`, `.rhythm-hint-select`, `.rhythm-hint-text`, `.autopilot-play-btn` (with `.active` using `var(--dom)`), `.autopilot-progress-track`, `.autopilot-progress-fill`, `.phase-accent`, `.phase-tonic`, `.phase-dom`.
+- All color tokens use confirmed names: `--accent`, `--tonic`, `--dom`, `--stroke`, `--text`, `--muted`.
+
+### Live-system verification checklist (Pilot must verify in browser)
+
+The following acceptance criteria require live-system verification in the running dev server (`pnpm dev`):
+
+- **A-06-01:** Click the chevron (▶ → ▼) — config panel expands. Click again — panel collapses. Start autopilot while panel is open; collapse the panel — autopilot continues running (live-dot appears; timer not stopped).
+- **A-06-02:** Expand the config panel; open the rhythm hint dropdown. Verify all 46 catalog entries are grouped by family (15 optgroups) plus "Otro…" at the bottom. Select "Otro…" — free-text input appears. Select another option — free-text input disappears.
+- **A-06-05:** Click "▶ Iniciar" — button label changes to "■ Detener"; timer starts. Click again — timer stops; label reverts.
+- **A-06-06:** With autopilot running, observe the progress bar fill from 0% to 100% over one interval; color is `#8aa0ff` (accent) from 0–60%, `#f3b15a` (tonic) from 60–85%, `#e87bac` (dom) from 85–100%. At next tick, bar resets to 0%.
+- **A-06-07:** Start autopilot, then collapse the panel. A small pink pulsing dot appears in the header row confirming the autopilot is active.
+
+### Full quality gate output (A-06-09)
+
+```
+pnpm exec tsc --noEmit   → (no output — clean)
+pnpm lint                → All matched files use Prettier code style!
+pnpm test                → Tests  1541 passed (1541) — 28 test files
+pnpm build               → dist/assets/index-*.js 1,180 kB | built in 1.65s
+```
+
+Pre-existing build warnings (not introduced by this phase):
+- Dynamic import notices for `stage.ts` and `strudel.ts` (pre-existing architecture)
+- Chunk size > 500 kB (pre-existing — single-bundle Vite config)
+
+### Phase completion summary
+
+All steps complete. The autopilot section has been fully redesigned:
+- `AutopilotState` extended with 4 ephemeral fields (excluded from `SavedSessionSchema`)
+- `sendEvolution()` injects rhythm hint into the LLM user message
+- 7 i18n keys added to all 4 locales
+- AgentPanel redesigned with collapsible config panel, rhythm dropdown, play/stop button, progress timeline
+
+### Acceptance Coverage Table — All A-06-01 through A-06-09
+
+| Criterion | Method | Status | Evidence |
+|---|---|---|---|
+| A-06-01: expand/collapse panel; collapsing does NOT stop timer | live-system | LIVE — Pilot verify | Separate `togglePanel()` / `handlePlayStop()`; `panelOpen` does not touch timer |
+| A-06-02: rhythm dropdown ≥46 entries + families + Otro… | live-system | LIVE — Pilot verify | 46-entry `RHYTHM_CATALOG`, 15 families via `<optgroup>`, `'otro'` option |
+| A-06-03: catalog id → `rhythmHint` in LLM userMessage | proxy:static-analysis + unit | COVERED | `agent.ts` injection; `tests/sendEvolution-hint.test.ts` A-06-03a/b/c |
+| A-06-04: `'otro'` + text → `rhythmHintFreeText`; empty → neither | proxy:static-analysis + unit | COVERED | `tests/sendEvolution-hint.test.ts` A-06-04a/b/c/d/e |
+| A-06-05: play/stop button starts/stops timer; label switches | live-system | LIVE — Pilot verify | `handlePlayStop()` calls `startAutopilot()`/`stopAutopilot()`; i18n `playLabel`/`stopLabel` |
+| A-06-06: progress bar fills 0→100%; color accent→tonic→dom | live-system | LIVE — Pilot verify | `progressPct` via rAF poll; `progressPhase` at 60%/85%; phase-{accent,tonic,dom} CSS |
+| A-06-07: live-dot visible when collapsed + playing | live-system | LIVE — Pilot verify | `.autopilot-live-dot` shown when `enabled && !panelOpen`; `@keyframes pulse` |
+| A-06-08: 4 new `AutopilotState` fields excluded from `SavedSessionSchema` | proxy:static-analysis | COVERED | `autopilot` key absent from `SavedSessionSchema` wholesale; no schema version change |
+| A-06-09: tsc clean, lint clean, ≥1533 tests, build succeeds | live-system | COVERED | tsc: clean; lint: clean; tests: 1541; build: success 1.65s |
