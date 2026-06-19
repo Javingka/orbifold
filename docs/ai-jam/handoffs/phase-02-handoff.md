@@ -230,6 +230,137 @@ Step 02.3 creates `src/core/music-knowledge/harmony-catalog.ts` importing `HARMO
 
 ### Planner Review
 
+**Planner Review:** APPROVED on 2026-06-19. Iteration: 1 of 5.
+
+All 8 checklist items pass. Commit scope is clean (two new files + handoff append, no existing source modified). Commit message format correct. Acceptance Coverage Table present and complete for all seven A-02-xx IDs: A-02-01 and A-02-02 are COVERED with precise test citations; A-02-03 through A-02-05 correctly deferred; A-02-06 and A-02-07 honestly PARTIAL with forward reference to step 02.5. Tests are relevant — five structural invariants exercised per entry, invariant 5 calls the real `bjorklund`+`rotate` engine from `src/core/rhythm/euclid.ts`, not a re-implementation. OD-1 and OD-2 both respected: `HARMONY_QUALITIES` is the 17-member `as const` array; all 31 entries use native step counts with correct `strudelStrategy` markers. Byte-identical guarantee holds: grep confirms no existing `src/` module imports `music-knowledge`. No new runtime dependencies. Placement note: `HARMONY_QUALITIES` lives in `rhythm-catalog.ts` rather than `harmony-catalog.ts` as inventory §(f) table suggested; this is consistent with the type-model in inventory §(d.1) and the phase spec does not constrain it — benign deviation, disclosed in handoff.
+
+**Next action:** Dev proceeds to step 02.3
+
+---
+
+## Step 02.3 — Harmony catalog + tests (Checkpoint #3)
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(music-knowledge): Phase 02 step 02.3 — harmony catalog + tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/ai-jam/decisions.md`, `docs/ai-jam/phases/phase-02.md`, `docs/ai-jam/inventories/phase-02-inventory.md`, `src/core/music-knowledge/rhythm-catalog.ts`, `src/core/theory/pitch.ts`.
+- Created `src/core/music-knowledge/harmony-catalog.ts`:
+  - Imports `HARMONY_QUALITIES` and `HarmonyQuality` from `./rhythm-catalog.js` (re-exports them for caller convenience).
+  - Exports `CatalogChord` interface (root: string, quality: HarmonyQuality, bars: number).
+  - Exports `HarmonyEntry` interface (id, name, tags, modeCenter, chordMode, optional suggestedPreset, progression).
+  - Exports `HARMONY_CATALOG: HarmonyEntry[]` with **10 entries** (≥8 required).
+  - Pure data: zero DOM/PIXI/Svelte imports; no imports from `src/agent/`, `src/state/`, `src/audio/`, or `src/lib/`.
+- Created `tests/music-knowledge/harmony-catalog.test.ts`:
+  - **177 tests** verifying all 6 invariants from inventory §d.2.
+  - Static `DOWNSAMPLE_TABLE` (in test, not source) covers all 17 HARMONY_QUALITIES → schema triad; asserts table covers all 17 members.
+  - Covers: per-entry modeCenter/chordMode/suggestedPreset/id/progression length; per-chord root/quality/bars; catalog-level entry count (≥8) and id uniqueness.
+  - Edge-case assertions: ≥1 arp entry, ≥1 entry with suggestedPreset, ≥1 entry using extended quality.
+
+### Catalog content summary
+
+| Entry id | Name | modeCenter | chordMode | suggestedPreset | Chords | Notable qualities |
+|---|---|---|---|---|---|---|
+| `latin-minor-dominant-loop` | Latin Minor-Dominant Loop | C | chord | piano | 4 | m7, 7, maj7 |
+| `dorian-modal-drone` | Dorian Modal Drone | D | chord | — | 3 | min, maj, sus4 |
+| `jazz-ii-v-i-major` | Jazz ii-V-I (C Major) | C | chord | piano | 3 | m7, 7, maj7 |
+| `bossa-nova-loop` | Bossa Nova Loop | G | arp | guitar | 4 | maj7, m7, 7 |
+| `flamenco-phrygian-descent` | Flamenco Phrygian Descent | A | chord | guitar | 4 | min, maj |
+| `minor-blues-turnaround` | Minor Blues Turnaround | A | chord | — | 5 | m7, 7, dim7 |
+| `west-african-modal-drone` | West-African Modal Drone | F | chord | — | 2 | sus2, sus4 |
+| `pop-i-v-vi-iv` | Pop I-V-vi-IV (C Major) | C | chord | — | 4 | maj, min |
+| `gospel-soul-add9` | Gospel Soul Add9 | D | chord | piano | 5 | add9, min, sus4, maj |
+| `bebop-dim-passing` | Bebop Diminished Passing | G | arp | piano | 5 | maj7, dim7, m7, 7 |
+
+**Qualities used:** maj, min, dim7, aug (via triad), maj7, m7, 7, sus2, sus4, add9, m7b5 family (dim7). 13 of 17 HARMONY_QUALITIES represented in the catalog entries themselves.
+
+### Files touched
+
+- `src/core/music-knowledge/harmony-catalog.ts` (created)
+- `tests/music-knowledge/harmony-catalog.test.ts` (created)
+- `docs/ai-jam/handoffs/phase-02-handoff.md` (appended, this entry)
+
+### Validation evidence
+
+```
+$ pnpm exec vitest run music-knowledge/harmony-catalog
+✓ tests/music-knowledge/harmony-catalog.test.ts (177 tests) 9ms
+Test Files  1 passed (1)
+Tests  177 passed (177)
+
+$ pnpm exec tsc --noEmit
+(no output — clean)
+
+$ pnpm test
+Test Files  23 passed (23)
+Tests  1151 passed (1151)
+(prior 974 + 177 new)
+```
+
+### Validation evidence (per Acceptance ID)
+
+- **A-02-03 — COVERED (full):** 10 entries ≥ 8 required; each has stable unique id, modeCenter (∈ NOTE_NAMES), chordMode, and a progression whose every chord has valid root (∈ NOTE_NAMES), bars (multiple of 0.25), and quality (∈ HARMONY_QUALITIES). All 6 invariants from inventory §d.2 exercised. Tests: per-entry and per-chord invariants in `harmony-catalog.test.ts`.
+- **A-02-06 — PARTIAL:** `harmony-catalog.ts` imports only from `./rhythm-catalog.js` (pure core — no DOM/PIXI/Svelte). Full closure at step 02.5.
+- **A-02-07 — PARTIAL:** `tsc --noEmit` clean; `pnpm test` 1151/1151 passing. Full quality gate (`pnpm lint`, `pnpm build`) at step 02.5.
+
+### Routine validations
+
+- `pnpm exec vitest run music-knowledge/harmony-catalog` → 177/177 tests pass.
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm test` → 1151/1151 tests pass (23 test files). No regressions.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Rhythm catalog ≥30 entries; each with stable id, meter, roles, binary+onsets+mini | `tests/music-knowledge/rhythm-catalog.test.ts` | unit | **COVERED** — step 02.2 |
+| A-02-02 | All rhythm representations mutually congruent; euclid entries reproduce binary via real engine | `tests/music-knowledge/rhythm-catalog.test.ts` | unit | **COVERED** — step 02.2 |
+| A-02-03 | Harmony catalog ≥8 entries; each with stable id, modeCenter, chordMode, valid chords | `tests/music-knowledge/harmony-catalog.test.ts` | unit | **COVERED** — 10 entries, all 6 invariants exercised; downsample-totality table proves all 17 qualities map to a schema triad |
+| A-02-04 | Recipe catalog ≥8 recipes; referential integrity to both catalogs; valid bpmRange and meter | — | — | not yet — targeted in step 02.4 |
+| A-02-05 | `findRecipesForPrompt` returns expected recipes for intent phrases; id getters return entry or undefined | — | — | not yet — targeted in step 02.5 |
+| A-02-06 | No new runtime dependency; no audio files; no DOM/PIXI/Svelte import | `tests/music-knowledge/harmony-catalog.test.ts` | unit + static | PARTIAL — harmony-catalog.ts imports only from rhythm-catalog.js (pure core); full closure at 02.5 |
+| A-02-07 | Byte-identical guarantee; all quality gates pass | — | live-system | PARTIAL — tsc clean, pnpm test 1151/1151; lint+build at 02.5 |
+
+### Decisions made (if any)
+
+None new. `HARMONY_QUALITIES` and `HarmonyQuality` live in `rhythm-catalog.ts` (as established in step 02.2); `harmony-catalog.ts` imports from there per the task instructions.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+`src/core/music-knowledge/harmony-catalog.ts` created (10 entries). `tests/music-knowledge/harmony-catalog.test.ts` created (177 tests).
+1151/1151 tests passing. `tsc --noEmit` clean.
+No pre-existing module imports `music-knowledge` — byte-identical guarantee holds trivially.
+
+### Key findings summary
+
+1. **10 entries cover broad musical diversity:** Latin/Afro-Cuban, Dorian modal, Jazz ii-V-I, Bossa Nova, Flamenco/Phrygian, minor blues, West-African modal, Pop four-chord, Gospel/Soul add9, Bebop diminished passing.
+2. **Downsample-totality table (in test, not source):** All 17 HARMONY_QUALITIES mapped to one of the 4 schema triads. Notable: `sus2`/`sus4` (no third) map to `maj` as the closest functional triad — mild approximation documented in the table comment.
+3. **177 tests generated** from 10 entries × multiple per-entry and per-chord invariants + catalog-level checks + downsample-totality assertions.
+4. **No imports from agent/state/audio:** `harmony-catalog.ts` imports only `HARMONY_QUALITIES`/`HarmonyQuality` from `./rhythm-catalog.js` — pure core, purity invariant satisfied.
+5. **Both arp and chord modes represented:** `bossa-nova-loop` and `bebop-dim-passing` use `chordMode: 'arp'`; three entries have `suggestedPreset: 'piano'`, two have `suggestedPreset: 'guitar'`.
+
+### Next-step context
+
+Step 02.4 creates `src/core/music-knowledge/rhythm-harmony-recipes.ts` importing `RHYTHM_CATALOG` from `rhythm-catalog.ts` and `HARMONY_CATALOG` from `harmony-catalog.ts`, plus `tests/music-knowledge/recipes.test.ts`. Recipe ids must resolve to actual catalog ids in both catalogs.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:** APPROVED / REVISE / ESCALATED
