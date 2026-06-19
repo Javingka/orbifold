@@ -361,6 +361,149 @@ Step 02.4 creates `src/core/music-knowledge/rhythm-harmony-recipes.ts` importing
 
 ### Planner Review
 
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-19
+**Iteration:** 1 of 1
+**Reason:** All 8 checklist items pass. Commit scope is clean — two new files (`harmony-catalog.ts`, `harmony-catalog.test.ts`) plus handoff append; no existing source modified; commit message matches the required format exactly. Acceptance Coverage Table is complete for all seven A-02-xx IDs: A-02-03 is COVERED with precise test citation and explicit claim of all 6 invariants exercised; A-02-01/02 carry forward as COVERED from step 02.2; A-02-04/05 correctly deferred; A-02-06/07 honestly PARTIAL with a forward reference to step 02.5 that matches phase spec intent. Tests exercise actual invariants — per-chord root/quality/bars validation against live runtime sets (NOTE_NAMES, HARMONY_QUALITIES, VALID_PRESETS), not just shape; the `isBarsValid` helper correctly handles floating-point tolerance; the downsample-totality table is in the test file only (not source), as the spec explicitly requires, and four distinct assertions verify it is both exhaustive and consistent with `HARMONY_QUALITIES`. OD-1 respected: `HARMONY_QUALITIES` is the 17-member `as const` array imported from `rhythm-catalog.ts`; all 17 members present; the union type enforces the closed vocabulary at compile time. Byte-identical guarantee holds: grep of `src/` finds only the two `music-knowledge/` files — no pre-existing module imports either catalog. No new runtime dependencies introduced. Prototype parity and flag-off checklist items are not applicable (pure new catalog data, no prototype port, no runtime flag).
+**Next action:** Dev proceeds to step 02.4
+
+---
+
+## Step 02.4 — Recipes (intent → rhythm + harmony) + referential-integrity tests (Checkpoint #4)
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(music-knowledge): Phase 02 step 02.4 — rhythm-harmony recipes + integrity tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/ai-jam/decisions.md`, `docs/ai-jam/phases/phase-02.md`, `docs/ai-jam/inventories/phase-02-inventory.md` §d.3, `src/core/music-knowledge/rhythm-catalog.ts` (31 entries, with ids and meters), `src/core/music-knowledge/harmony-catalog.ts` (10 entries, with ids).
+- Catalogued all 31 rhythm ids and their meters; catalogued all 10 harmony ids — verified before writing any recipe.
+- Created `src/core/music-knowledge/rhythm-harmony-recipes.ts`:
+  - Exports `MusicalRecipe` interface (exact shape from inventory §d.3: id, name, userIntents[], rhythmIds[], harmonyId, bpmRange, meter, density, agentInstruction).
+  - Exports `RHYTHM_HARMONY_RECIPES: MusicalRecipe[]` with **10 recipes** (≥8 required).
+  - Pure data: zero DOM/PIXI/Svelte imports; no imports from `src/agent/`, `src/state/`, `src/audio/`, or `src/lib/`.
+- Created `tests/music-knowledge/recipes.test.ts`:
+  - **122 tests** verifying all 6 referential-integrity invariants from inventory §d.3.
+  - `describe.each` block iterates over all 10 recipes, applying per-recipe assertions (invariants 1–6).
+  - Named spot-checks for all 10 named entries by id.
+  - Catalog-level checks: at least 8 entries, unique ids, at least one layered recipe, density values, meter family coverage.
+
+### Recipe catalog summary
+
+| Recipe id | Meter | Rhythm id(s) | Harmony id | Density |
+|---|---|---|---|---|
+| `afro-cuban-clave-minor` | 4/4 | `son-clave-3-2` | `latin-minor-dominant-loop` | medium |
+| `west-african-bell-modal` | 12/8 | `bell-pattern-west-african` | `west-african-modal-drone` | medium |
+| `bossa-nova-groove` | 4/4 | `bossa-nova-clave` | `bossa-nova-loop` | medium |
+| `dorian-ritual-sparse` | 4/4 | `euclid-3-16` | `dorian-modal-drone` | sparse |
+| `latin-jazz-clave-swing` | 4/4 | `son-clave-2-3`, `cascara-euclid` | `jazz-ii-v-i-major` | dense |
+| `pop-rock-backbeat` | 4/4 | `backbeat-snare`, `quarter-notes-16` | `pop-i-v-vi-iv` | medium |
+| `aksak-dorian-odd` | 7/8 | `aksak-7-sparse` | `dorian-modal-drone` | sparse |
+| `west-african-triplet-groove` | 12/8 | `sparse-bell-12`, `minimal-12` | `west-african-modal-drone` | medium |
+| `rumba-blues-minor` | 4/4 | `rumba-clave-3-2` | `minor-blues-turnaround` | medium |
+| `gospel-soul-euclid` | 4/4 | `euclid-9-16` | `gospel-soul-add9` | dense |
+
+**Meter coverage:** 4/4 (7 recipes), 12/8 (2 recipes), 7/8 (1 recipe).
+**Layered recipes (multiple rhythmIds):** `latin-jazz-clave-swing` (2), `pop-rock-backbeat` (2), `west-african-triplet-groove` (2).
+
+### Culturally coherent pairings
+
+All 8+ required cultural categories are covered:
+- Afro-Cuban / clave-based with minor-dominant harmony → `afro-cuban-clave-minor`
+- West-African 12/8 bell pattern with modal harmony → `west-african-bell-modal`
+- Bossa nova / samba groove with bossa harmony → `bossa-nova-groove`
+- Modal / ritual with Dorian drone → `dorian-ritual-sparse`
+- Latin jazz with jazz ii-V-I harmony → `latin-jazz-clave-swing`
+- Straight pop/rock backbeat → `pop-rock-backbeat`
+- Aksak / odd-meter with fitting modal harmony → `aksak-dorian-odd`
+- Multiple rhythmIds (layered rhythms) → `latin-jazz-clave-swing`, `pop-rock-backbeat`, `west-african-triplet-groove`
+
+### Files touched
+
+- `src/core/music-knowledge/rhythm-harmony-recipes.ts` (created)
+- `tests/music-knowledge/recipes.test.ts` (created)
+- `docs/ai-jam/handoffs/phase-02-handoff.md` (appended, this entry)
+
+### Validation evidence
+
+```
+$ pnpm exec vitest run music-knowledge/recipes
+✓ tests/music-knowledge/recipes.test.ts (122 tests) 9ms
+Test Files  1 passed (1)
+Tests  122 passed (122)
+
+$ pnpm exec tsc --noEmit
+(no output — clean)
+
+$ pnpm test
+Test Files  24 passed (24)
+Tests  1273 passed (1273)
+(prior 1151 + 122 new)
+```
+
+### Validation evidence (per Acceptance ID)
+
+- **A-02-04 — COVERED (full):** 10 recipes ≥ 8 required; every rhythmId resolves in RHYTHM_CATALOG (invariant 1); every harmonyId resolves in HARMONY_CATALOG (invariant 2); all recipe ids are unique (invariant 3); userIntents is non-empty for every recipe (invariant 4); bpmRange satisfies 40 ≤ min ≤ max ≤ 240 (invariant 5); recipe meter equals the meter of every referenced rhythm (invariant 6). Tests: `describe.each` block in `recipes.test.ts` applies all 6 invariants to all 10 recipes.
+- **A-02-06 — PARTIAL:** `rhythm-harmony-recipes.ts` has zero imports (pure data file). Full closure verification at step 02.5.
+- **A-02-07 — PARTIAL:** `tsc --noEmit` clean; `pnpm test` 1273/1273 passing. Full quality gate (`pnpm lint`, `pnpm build`) at step 02.5.
+
+### Routine validations
+
+- `pnpm exec vitest run music-knowledge/recipes` → 122/122 tests pass.
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm test` → 1273/1273 tests pass (24 test files). No regressions.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-02-01 | Rhythm catalog ≥30 entries; each with stable id, meter, roles, binary+onsets+mini | `tests/music-knowledge/rhythm-catalog.test.ts` | unit | **COVERED** — step 02.2 |
+| A-02-02 | All rhythm representations mutually congruent; euclid entries reproduce binary via real engine | `tests/music-knowledge/rhythm-catalog.test.ts` | unit | **COVERED** — step 02.2 |
+| A-02-03 | Harmony catalog ≥8 entries; each with stable id, modeCenter, chordMode, valid chords | `tests/music-knowledge/harmony-catalog.test.ts` | unit | **COVERED** — step 02.3 |
+| A-02-04 | Recipe catalog ≥8 recipes; referential integrity to both catalogs; valid bpmRange and meter | `tests/music-knowledge/recipes.test.ts` | unit | **COVERED** — 10 recipes, all 6 invariants, `describe.each` over every recipe; named spot-checks for all 10 entries |
+| A-02-05 | `findRecipesForPrompt` returns expected recipes for intent phrases; id getters return entry or undefined | — | — | not yet — targeted in step 02.5 |
+| A-02-06 | No new runtime dependency; no audio files; no DOM/PIXI/Svelte import | `tests/music-knowledge/recipes.test.ts` | unit + static | PARTIAL — rhythm-harmony-recipes.ts has zero imports; full closure at 02.5 |
+| A-02-07 | Byte-identical guarantee; all quality gates pass | — | live-system | PARTIAL — tsc clean, pnpm test 1273/1273; lint+build at 02.5 |
+
+### Decisions made (if any)
+
+None new. OD-1 and OD-2 carry forward as resolved; the recipe file has no imports from agent/state/audio and introduces no new runtime dependencies.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+`src/core/music-knowledge/rhythm-harmony-recipes.ts` created (10 recipes). `tests/music-knowledge/recipes.test.ts` created (122 tests).
+1273/1273 tests passing. `tsc --noEmit` clean.
+No pre-existing module imports `music-knowledge` — byte-identical guarantee holds trivially.
+
+### Key findings summary
+
+1. **Meter discipline enforced by design:** Every recipe's `meter` field was verified against the actual `meter` field in `RHYTHM_CATALOG` before writing. Cross-meter recipes (e.g., pairing a 12/8 rhythm with a 4/4 recipe meter) would fail invariant 6 and were avoided.
+2. **Three layered recipes:** `latin-jazz-clave-swing` (son-clave-2-3 + cascara-euclid), `pop-rock-backbeat` (backbeat-snare + quarter-notes-16), `west-african-triplet-groove` (sparse-bell-12 + minimal-12) — all verify that multiple rhythmIds with matching meter work correctly.
+3. **Aksak recipe (7/8):** Uses `aksak-7-sparse` (verified meter: 7/8) paired with `dorian-modal-drone` — the harmony catalog has no meter constraint so any harmony id is valid; the critical check is the recipe meter vs rhythm meter.
+4. **Zero imports in recipes file:** `rhythm-harmony-recipes.ts` is entirely self-contained pure data. No runtime imports at all — the purity invariant is trivially satisfied.
+5. **122 tests:** Catalog-level (9 tests) + per-recipe `describe.each` (10 recipes × 9 assertions = 90 tests) + named spot-checks (12 tests) + meter coverage (3 tests) = 114 structured tests, plus 8 supplementary checks.
+
+### Next-step context
+
+Step 02.5 creates `src/core/music-knowledge/query.ts` exporting `findRecipesForPrompt`, `getRhythmById`, `getHarmonyById`, and `getRecipeById`, plus `tests/music-knowledge/query.test.ts`.
+
+### Planner Review
+
 (Filled by the Planner in review mode)
 
 **Decision:** APPROVED / REVISE / ESCALATED
