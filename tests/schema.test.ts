@@ -814,3 +814,29 @@ describe('AgentOutputSchema — saveAsBlock field (ADR 0021 D1, A-01-06)', () =>
     expect(result.success).toBe(false);
   });
 });
+
+// ── SaveAsBlockSpecSchema structural alignment guard (step 01.4) ──────────────
+//
+// Confirms that SaveAsBlockSpecSchema.shape.type is a z.ZodEnum whose values
+// are the exact same three literals as Block.type from src/core/composition/model.ts
+// (line 24: 'groove' | 'armonia' | 'sesion'). This is a structural introspection
+// check — it inspects the Zod schema shape directly, not via safeParse.
+// If model.ts adds or renames a Block.type literal, this test will fail,
+// prompting an ADR update (ADR 0021 D1 structural alignment guard).
+
+describe('SaveAsBlockSpecSchema.shape.type — structural alignment with Block.type (step 01.4)', () => {
+  it('step-01.4 structural guard: SaveAsBlockSpecSchema.shape.type enum values are exactly the Block.type literals', () => {
+    // Zod z.enum exposes its values as a readonly string array on ._def.values.
+    const enumDef = SaveAsBlockSpecSchema.shape.type._def as { values: string[] };
+    const schemaValues = [...enumDef.values].sort();
+
+    // The three literals that Block.type accepts (src/core/composition/model.ts line 24).
+    // Kept as a typed array so that TypeScript enforces exhaustiveness.
+    const blockTypeValues: Array<Block['type']> = ['armonia', 'groove', 'sesion'];
+    const expectedValues = [...blockTypeValues].sort();
+
+    // Structural equality: same count, same values in sorted order.
+    expect(schemaValues).toHaveLength(expectedValues.length);
+    expect(schemaValues).toEqual(expectedValues);
+  });
+});

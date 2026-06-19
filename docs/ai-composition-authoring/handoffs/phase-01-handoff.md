@@ -333,3 +333,122 @@ Step 01.4 targets A-01-07 and A-01-08 (persistence round-trip for agent-created 
 **Finding:** `applyBlockSave` no-op guard (`if (state.composition.blocks.length === 0)`) is incorrect when blocks already exist in the library. When `addBlock` no-ops on empty code and the pre-call block count is N > 0, the guard does not fire, `renameBlock` is called on the last pre-existing block, silently corrupting its name. Fix: capture `blockCountBefore = get(sessionStore).composition.blocks.length` before calling `addBlock`; replace the guard with `if (state.composition.blocks.length === blockCountBefore) return;`. One targeted test must be added that demonstrates the guard works when pre-existing blocks are present. No other changes required.
 
 **Iteration 2 fix applied:** Guard corrected in `src/agent/apply.ts`; one new test added in `tests/apply-block.test.ts`; 716 tests pass; `tsc --noEmit` and `pnpm lint` clean.
+
+---
+
+## Step 01.4 — Persistence and schema round-trip verification (Checkpoint #4)
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `test(agent): Phase 01 step 01.4 — agent-block persistence round-trip tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read `CLAUDE.md`, `docs/ai-composition-authoring/decisions.md`, `docs/adr/0021-agent-block-authoring.md` (D2 and D6 binding), `docs/ai-composition-authoring/phases/phase-01.md` (step 01.4 scope), and the step 01.3 handoff entry (716 tests confirmed at close of iteration 2).
+- Read `src/lib/persistence.ts` lines 1–19 — **`SESSION_SCHEMA_VERSION = 5` confirmed at line 19** (no change; agent-created blocks are structurally identical to user-created blocks at the persistence layer).
+- Read `src/lib/persistence.ts` lines 101–215 — **`SavedBlockSchema` already accommodates agent-created blocks**: `snapshot: SavedBlockSnapshotSchema.optional()` at line 200 covers all three discriminant types (`groove`, `armonia`, `sesion`) via the `SavedBlockSnapshotSchema` discriminated union (lines 188–192). No new Zod fields are required.
+- Confirmed no source changes to `src/lib/persistence.ts` or `src/core/composition/model.ts` are necessary.
+- Created `tests/agent-block-persistence.test.ts` (new file, AGPL-3.0 header) — 12 tests in four `describe` blocks.
+- Added one new `describe` block to `tests/schema.test.ts` — structural introspection test for `SaveAsBlockSpecSchema.shape.type` enum alignment with `Block.type`.
+- Ran `pnpm exec prettier --write` on `tests/agent-block-persistence.test.ts` to fix formatting; lint clean after.
+- Total tests: 729 (up from 716 at step 01.3 close).
+
+### `SESSION_SCHEMA_VERSION` confirmation
+
+**`SESSION_SCHEMA_VERSION = 5`** — confirmed at `src/lib/persistence.ts` line 19. No change. Agent-created blocks use the same `SavedBlockSchema` (with `snapshot?`) that was introduced in editable-composition Phase 01 step 01.4 (ADR 0020 D5). No new Zod fields and no version bump are required (ADR 0021 D2).
+
+### `SavedBlockSchema` accommodation confirmation
+
+`SavedBlockSchema` is defined at `src/lib/persistence.ts` lines 194–201:
+
+```typescript
+const SavedBlockSchema = z.object({
+  name: z.string().max(100),
+  type: z.enum(['groove', 'armonia', 'sesion'] as const),
+  code: z.string(),
+  bars: z.number().int().min(1).max(64),
+  snapshot: SavedBlockSnapshotSchema.optional(),  // line 200 — covers all 3 types
+});
+```
+
+`SavedBlockSnapshotSchema` (lines 188–192) is a `z.discriminatedUnion('type', ...)` over `SavedGrooveSnapshotSchema`, `SavedArmoniaSnapshotSchema`, and `SavedSesionSnapshotSchema`. This covers all three discriminant values that `applyBlockSave` can produce. No source changes needed.
+
+### Files touched
+
+- `tests/agent-block-persistence.test.ts` (created)
+- `tests/schema.test.ts` (one new `describe` block appended — structural alignment guard)
+- `docs/ai-composition-authoring/handoffs/phase-01-handoff.md` (updated, this entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-07** — `tests/agent-block-persistence.test.ts` "A-01-07: agent-created groove block — persistence round-trip" (5 tests): (1) block name survives `serializeSession → JSON → safeParse → deserializeSession`; (2) block type survives; (3) block code survives byte-identical; (4) block snapshot is non-null with correct discriminant after round-trip; (5) all four fields (name, type, code, snapshot) survive together. PASS.
+- **A-01-08** — `tests/agent-block-persistence.test.ts` "A-01-08: agent-created block with addToTrack: true — persistence round-trip" (3 tests): (1) block appears in `composition.blocks` after round-trip; (2) track referencing the block survives round-trip (blockIndex reference intact, confirmed as `'0'` placeholder from `deserializeSession`); (3) snapshot of the block in the track is intact after round-trip. PASS.
+- **A-01-01 through A-01-06** — remain closed from step 01.3 (no regressions; 716 tests from step 01.3 + 13 new = 729 all pass).
+
+### Structural alignment guard (new test in schema.test.ts)
+
+Added `describe('SaveAsBlockSpecSchema.shape.type — structural alignment with Block.type (step 01.4)', ...)` to `tests/schema.test.ts`. The test inspects `SaveAsBlockSpecSchema.shape.type._def.values` (Zod's internal enum values array) and compares sorted values against the three `Block['type']` literals (`'armonia'`, `'groove'`, `'sesion'`). This is a structural introspection guard distinct from the existing parse-based alignment guard at line 753. Passes.
+
+### Routine validations (one-liner each, no transcripts)
+
+- `pnpm exec tsc --noEmit` → 0 errors (clean, no output).
+- `pnpm lint` → clean (ESLint clean; Prettier formatting confirmed after `--write` on new test file).
+- `pnpm exec vitest run` → **729 tests passed** (20 test files), 0 failed, 0 skipped.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | Groove block: correct name, type, non-null snapshot with discriminant `'groove'` | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-02 | Armonia block: correct name, type, non-null snapshot with discriminant `'armonia'` | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-03 | `addToTrack: true` → block in library AND new track referencing block id | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-04 | No `saveAsBlock` → `composition.blocks` reference-identical to pre-call state | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-05 | `openBlock(id)` on agent-created block does not throw; snapshot survives in store | `tests/apply-block.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-06 | Schema v5: all three `type` values parse; absent `saveAsBlock` ok; type-literal alignment | `tests/schema.test.ts` | unit | CLOSED (step 01.3) |
+| A-01-07 | Agent-created block survives persistence round-trip (name, type, code, snapshot intact) | `tests/agent-block-persistence.test.ts` | unit | CLOSED |
+| A-01-08 | Block + track reference survive persistence round-trip | `tests/agent-block-persistence.test.ts` | unit | CLOSED |
+| A-01-09 | System prompt describes `saveAsBlock` sub-fields, types, examples, standalone use | `src/agent/agent.ts` `SYSTEM_PROMPT` | proxy:static-analysis | CLOSED (step 01.3) |
+| A-01-10 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | CI commands | automated | partial — build in step 01.5 |
+
+### Decisions made (if any)
+
+None — this is a test-only step. All governing decisions were recorded in ADR 0021 (steps 01.2–01.3).
+
+### Proposed Decisions Register entries (if any)
+
+None new in this step.
+
+### Blockers resolved during this step (if any)
+
+None. The transient lint issue (two unused-var errors — `applyHarmonySpec` import and `HARMONY_SPEC` fixture were included unnecessarily; removed before the gate) was a development-time mistake, not a real blocker.
+
+### Environment state after this step
+
+729 tests pass. `tsc --noEmit` clean. `pnpm lint` clean. Working tree will be clean after commit.
+
+### Key findings summary
+
+1. **`SESSION_SCHEMA_VERSION = 5` confirmed** (persistence.ts line 19) — no change required; agent-created blocks are persistence-identical to user-created blocks.
+2. **`SavedBlockSchema.snapshot?` already covers all 3 types** (persistence.ts line 200) — no new Zod fields needed; the discriminated union from editable-composition Phase 01 step 01.4 is the exact schema we need.
+3. **13 new tests added**: 12 in `tests/agent-block-persistence.test.ts` (5 for A-01-07, 3 for A-01-08, 3 regression guard, 1 SESSION_SCHEMA_VERSION confirmation) + 1 structural alignment introspection test in `tests/schema.test.ts`. Total: 729.
+4. **No source changes** outside test files — confirmed: `src/lib/persistence.ts` and `src/core/composition/model.ts` are unchanged.
+
+### Next-step context (only if non-obvious)
+
+Step 01.5 is the quality gate + manual acceptance. It adds `pnpm build` to the quality gate (currently partial for A-01-10), and requires browser-based manual testing for A-01-01 through A-01-05. All nine unit-only acceptance IDs (A-01-01..A-01-09) are now closed; A-01-10 partial (build not yet run).
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 5
+**Reason:**
+**Next action:**
