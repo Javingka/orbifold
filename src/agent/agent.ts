@@ -141,7 +141,16 @@ Sub-campos de "saveAsBlock":
       - "sesion"  → captura ritmo + armonía juntos (SesionSnapshot)
   • "addToTrack" (boolean, opcional, por defecto false) — si true, crea también una nueva
       pista en el timeline de composición referenciando el bloque guardado.
-      Ponlo en true solo cuando el usuario pida explícitamente añadir a la línea de tiempo / timeline.
+      Ponlo en true SIEMPRE que el usuario mencione alguna de estas palabras o frases:
+        "pista", "timeline", "añade a una pista", "ponlo en el timeline",
+        "crea una pista con este bloque", "agrégalo al timeline",
+        "incluye en el timeline", "addToTrack true", "addToTrack: true",
+        o cualquier petición explícita de agregar a la línea de tiempo de composición.
+      Ejemplo de frases que DEBEN disparar "addToTrack": true:
+        - "guarda el groove y añádelo al timeline"
+        - "usa saveAsBlock con addToTrack true"
+        - "crea una pista con este bloque"
+        - "agrégalo a una pista nueva"
 
 Ejemplo mínimo (solo guarda el groove actual):
 \`\`\`json
@@ -430,6 +439,9 @@ export async function send(text: string, ctx: AgentSendContext): Promise<AgentSe
       const savedName = skill.saveAsBlock.name.trim().slice(0, 100);
       const savedType = skill.saveAsBlock.type;
       summary = `✓ Guardé el ${savedType} actual como bloque «${savedName}»`;
+      if (skill.saveAsBlock.addToTrack === true) {
+        summary += ` y lo añadí a una pista nueva en la composición.`;
+      }
     } else {
       // Standard summary (prototype lines 1771–1773)
       summary =
@@ -439,7 +451,12 @@ export async function send(text: string, ctx: AgentSendContext): Promise<AgentSe
       if (skill.saveAsBlock) {
         // Both rhythm/harmony AND saveAsBlock fired — append block-save acknowledgment.
         const savedName = skill.saveAsBlock.name.trim().slice(0, 100);
-        summary += `\n✓ También guardé el bloque «${savedName}».`;
+        summary += `\n✓ También guardé el bloque «${savedName}»`;
+        if (skill.saveAsBlock.addToTrack === true) {
+          summary += ` y lo añadí a una pista nueva en la composición.`;
+        } else {
+          summary += `.`;
+        }
       }
     }
 
