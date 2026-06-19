@@ -285,3 +285,44 @@ Quality gates at phase close: `tsc --noEmit` clean, `pnpm lint` clean, `pnpm tes
 A-04-04 and A-04-06 are covered by `proxy:static-analysis`. A-04-08 is covered by `tool-output`. A-04-01, A-04-02, A-04-03, A-04-05, A-04-07 require Pilot live-system verification per the checklist above.
 
 **Next action:** Pilot reviews and verifies live-system items. If all pass, Phase 04 can be merged to `main`.
+
+---
+
+## Planner Review — Phase 04 steps 04.2–04.4 — Iteration 2
+
+**Date:** 2026-06-19
+**Verdict:** APPROVE
+**Iteration:** 2 of 5
+
+### Blocking item from r1: resolved
+
+The single blocking item from phase-04-review-r1.md was: `applyLoadedSession` spreads `...s` and did not reset `lastRecipeApplied`, making the A-04-06 static-analysis claim factually incorrect.
+
+Fix confirmed at `src/state/session.ts` line 1734:
+
+```ts
+lastRecipeApplied: undefined, // ephemeral reset (A-04-06 — ADR 0022 D7 pattern)
+```
+
+This line is inside the `sessionStore.update` call in `applyLoadedSession()`, parallel to `nowPlaying: { label: null, source: null }` at line 1733, exactly as the review required. The JSDoc comment at line 342 ("Cleared when applyLoadedSession() runs (satisfies A-04-06)") is now accurate.
+
+### Scope check
+
+One line added in one function (`applyLoadedSession`) in one file (`src/state/session.ts`). No other files touched by the fix commit. No scope creep.
+
+### Checklist summary
+
+1. Commit scope — PASS. Fix commit touches only `session.ts`, one function, one line.
+2. Commit message format — PASS. `fix(state): Phase 04 step 04.2 — applyLoadedSession resets lastRecipeApplied` matches convention.
+3. Correctness — PASS. Blocking item resolved; `lastRecipeApplied` is now explicitly cleared on session load. All other sub-checks from r1 remain PASS.
+4. ADR compliance — PASS. ADR 0022 D1/D7 ephemeral-field pattern is now fully satisfied end-to-end.
+5. i18n completeness — PASS (unchanged from r1).
+6. UI / aesthetic — PASS (unchanged from r1).
+7. Acceptance Coverage Table — PASS. A-04-06 row updated to COVERED with accurate evidence (iteration 2 note present).
+8. No unauthorized dependencies — PASS.
+
+### Quality gates
+
+tsc clean, 1387/1387 tests, lint clean, build exits 0 — confirmed in step 04.4 output; the one-line fix introduces no new type complexity.
+
+Next action: Pilot approval required before Phase 05 scoping, reason: live-system checks A-04-01 through A-04-07 must be verified in the browser before the phase is merged and Phase 05 scoped.
