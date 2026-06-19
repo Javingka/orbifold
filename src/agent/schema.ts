@@ -21,8 +21,11 @@ import { z } from 'zod';
  * Phase 01 (ai-composition-authoring): bumped from 4 to 5 — `AgentOutputSchema` gains
  * `saveAsBlock?` field (`SaveAsBlockSpecSchema`); `superRefine` guard relaxed to accept
  * at least one of `rhythm`, `harmony`, or `saveAsBlock` (ADR 0021 D1–D2).
+ * Phase 03 (ai-jam): bumped from 5 to 6 — `AgentOutputSchema` gains `musicalIntent?`
+ * field (`MusicalIntentSchema`); `superRefine` guard relaxed to accept at least one of
+ * `rhythm`, `harmony`, `saveAsBlock`, or `musicalIntent` (ADR 0023 D1–D2).
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 // ── Constants (prototype lines 1670–1673) ─────────────────────────────────
 
@@ -234,17 +237,63 @@ export const SaveAsBlockSpecSchema = z.object({
 
 export type SaveAsBlockSpec = z.infer<typeof SaveAsBlockSpecSchema>;
 
+// ── MusicalIntentSchema ────────────────────────────────────────────────────
+
+/**
+ * Optional annotation field for the agent to express musical intent,
+ * optionally referencing a known recipe id from the music-knowledge catalog.
+ *
+ * All fields are optional. The LLM may include only `recipeId` (and the
+ * recipe engine resolves it to rhythm/harmony), or add any combination of
+ * the other annotation fields.
+ *
+ * `recipeId` validation against the catalog is NOT enforced at Zod parse time
+ * — the recipe engine validates at call time (ADR 0023 D1).
+ *
+ * Per ADR 0023 D1/D4.
+ */
+export const MusicalIntentSchema = z.object({
+  /** Free-text style label (e.g. "bossa nova", "dorian modal", "afro-cuban"). */
+  style: z.string().optional(),
+  /** Cultural or tradition tags (e.g. ["West African", "Ewe"]). */
+  cultureTags: z.array(z.string()).optional(),
+  /** Emotional/expressive label (e.g. "meditative", "driving", "melancholic"). */
+  mood: z.string().optional(),
+  /**
+   * Qualitative rhythmic density. Mirrors `MusicalRecipe.density` vocabulary.
+   * Note: catalog uses 'sparse' while this field uses 'simple'; the LLM
+   * bridges the vocabulary gap via free-text fields.
+   */
+  complexity: z.enum(['simple', 'medium', 'dense']).optional(),
+  /** Time signature hint (e.g. "4/4", "12/8", "7/8"). */
+  meter: z.string().optional(),
+  /** BPM suggestion. Constrained to a playable range [40, 240]. */
+  bpmHint: z.number().min(40).max(240).optional(),
+  /**
+   * Id of a known `MusicalRecipe` from the music-knowledge catalog.
+   * When present, `sendEvolution()` resolves it via `recipeToAgentOutput`.
+   * Catalog validation happens at call time, not at Zod parse time.
+   */
+  recipeId: z.string().optional(),
+  /** Brief human-readable note about why this intent was chosen (≤300 chars). */
+  explanation: z.string().max(300).optional(),
+});
+
+export type MusicalIntent = z.infer<typeof MusicalIntentSchema>;
+
 // ── AgentOutput ────────────────────────────────────────────────────────────
 
 /**
  * The top-level schema for agent JSON output.
- * At least one of `rhythm`, `harmony`, or `saveAsBlock` must be present
- * (guard relaxed in ADR 0021 D1 / OQ-3 from "rhythm or harmony only").
+ * At least one of `rhythm`, `harmony`, `saveAsBlock`, or `musicalIntent` must
+ * be present (guard relaxed in ADR 0023 D2 — previously required at least one
+ * of `rhythm`, `harmony`, or `saveAsBlock` per ADR 0021 D1).
  * `note` is an optional freetext annotation (≤300 chars).
  *
  * Prototype §7 and tryApplySkill (lines 1725–1738): if neither rhythm nor
  * harmony is present the skill is rejected (returns null).
  * ADR 0021 D1: relaxed to also accept saveAsBlock-only responses.
+ * ADR 0023 D2: relaxed to also accept musicalIntent-only responses.
  */
 export const AgentOutputSchema = z
   .object({
@@ -252,14 +301,21 @@ export const AgentOutputSchema = z
     harmony: HarmonySpecSchema.optional(),
     note: z.string().max(300).optional(),
     saveAsBlock: SaveAsBlockSpecSchema.optional(), // NEW in schema v5 (ADR 0021 D1)
+    musicalIntent: MusicalIntentSchema.optional(), // NEW in schema v6 (ADR 0023 D1)
   })
   .superRefine((val, ctx) => {
-    // Relaxed guard per OQ-3: at least one of rhythm, harmony, or saveAsBlock required.
-    // Previously: rhythm || harmony only.
-    if (val.rhythm === undefined && val.harmony === undefined && val.saveAsBlock === undefined) {
+    // Relaxed guard per ADR 0023 D2: at least one of rhythm, harmony, saveAsBlock,
+    // or musicalIntent required. Previously (v5): rhythm || harmony || saveAsBlock.
+    if (
+      val.rhythm === undefined &&
+      val.harmony === undefined &&
+      val.saveAsBlock === undefined &&
+      val.musicalIntent === undefined
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'AgentOutput must have at least one of: rhythm, harmony, saveAsBlock',
+        message:
+          'AgentOutput must have at least one of: rhythm, harmony, saveAsBlock, musicalIntent',
       });
     }
   });
