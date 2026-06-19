@@ -246,3 +246,132 @@ ADR 0022 is complete and ready for Pilot review at Checkpoint #2. After Pilot ap
 **Iteration:** 1 of 1
 **Reason:**
 **Next action:**
+
+---
+
+## Step 01.3 — `AutopilotState` in session, `autopilot.ts` module, `SYSTEM_PROMPT_EVOLUTION`, and unit tests
+
+**Date:** 2026-06-18
+
+**Commit(s):**
+
+- **Terminal commit:** `feat(agent): Phase 01 step 01.3 — AutopilotState, sendEvolution, autopilot.ts, unit tests`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `CLAUDE.md` (full — initiative context, invariants, conventions).
+- Read `docs/ai-jam/decisions.md` (full — carried-forward rules; no active decisions yet).
+- Read `docs/adr/0022-autopilot-mode.md` (full — all seven decisions D1–D7, exact TypeScript snippets, binding constraints).
+- Read `docs/ai-jam/phases/phase-01.md` (full — step 01.3 PROMPT, implementation targets, validation, acceptance criteria A-01-01..A-01-08).
+- Read `src/state/session.ts` lines 1–400 — `SessionState` interface at lines 323–338; `DEFAULT_SESSION_STATE` lines 347–371; existing store action pattern (e.g., `setNowPlaying` lines 453–462, `setBpm` lines 473–477).
+- Read `src/lib/persistence.ts` lines 1–50; lines 320–420 — `SESSION_SCHEMA_VERSION = 5` line 19; `SavedSessionSchema` confirmed no `autopilot` field; `deserializeSession` function confirmed at line 339.
+- Read `src/agent/agent.ts` (full — `SYSTEM_PROMPT` lines 87–171; `send()` fetch pattern lines 363–388; `chatHistory` push at lines 358/391; `tryParseSkill` lines 191–218; `applyRhythmSpec`/`applyHarmonySpec`/`applyBlockSave` imports).
+- Read `src/agent/providers.ts` (full — fetch pattern: `provider.url`, `provider.headers(key)`, `provider.body(model, system, msgs)`, `provider.parse(data)` interfaces).
+- Read `tests/apply-block.test.ts` (full — AGPL header, import pattern, `describe`/`it` structure, `beforeEach` store reset pattern).
+- Implemented all four targets: `AutopilotState` + `setAutopilot` in `session.ts`; `SYSTEM_PROMPT_EVOLUTION` + `sendEvolution` in `agent.ts`; new `src/agent/autopilot.ts`; new `tests/autopilot.test.ts`.
+- Fixed one transient type error: `deserializeSession` return type in `persistence.ts` had to be updated from `Omit<SessionState, 'nowPlaying'>` to `Omit<SessionState, 'nowPlaying' | 'autopilot'>` because `SessionState` now has `autopilot`. No behavioral change — `applyLoadedSession` uses `sessionStore.update((s) => ({ ...s, ... }))` which preserves `autopilot` from the running store.
+- Fixed one test mock issue: initial `vi.mock('../src/agent/agent.js', () => ({ sendEvolution: vi.fn() }))` shadowed `chatHistory`; updated to `importOriginal` pattern to retain `chatHistory` while mocking `sendEvolution`.
+- All three validations pass clean.
+
+### Files read (with line ranges)
+
+| File | Lines read |
+|---|---|
+| `CLAUDE.md` | full |
+| `docs/ai-jam/decisions.md` | 1–34 (full) |
+| `docs/adr/0022-autopilot-mode.md` | 1–554 (full) |
+| `docs/ai-jam/phases/phase-01.md` | 1–304 (full) |
+| `src/state/session.ts` | 1–400 |
+| `src/lib/persistence.ts` | 1–50; 320–420 |
+| `src/agent/agent.ts` | 1–531 (full) |
+| `src/agent/providers.ts` | 1–165 (full) |
+| `tests/apply-block.test.ts` | 1–335 (full) |
+| `docs/ai-jam/handoffs/phase-01-handoff.md` | 1–249 (prior entries) |
+
+### Files touched
+
+| File | Nature of change |
+|---|---|
+| `src/state/session.ts` | Added `AutopilotState` interface (before `SessionState`); added `autopilot: AutopilotState` field to `SessionState`; added `autopilot: { enabled: false, intervalCycles: 8 }` to `DEFAULT_SESSION_STATE` with exclusion comment; added `setAutopilot(patch)` store action |
+| `src/agent/agent.ts` | Added `SYSTEM_PROMPT_EVOLUTION` constant (before `tryParseSkill`); added `sendEvolution(): Promise<void>` function (before `tryParseSkill`) |
+| `src/agent/autopilot.ts` | New file: AGPL header; `_isEvolving` flag; `_timerId` handle; `tick()` internal async function; `startAutopilot()`; `stopAutopilot()` |
+| `src/lib/persistence.ts` | Updated `deserializeSession` return type: `Omit<SessionState, 'nowPlaying'>` → `Omit<SessionState, 'nowPlaying' \| 'autopilot'>` (type-only fix; no behavioral change; added comment explaining exclusion) |
+| `tests/autopilot.test.ts` | New file: 18 tests covering A-01-01..A-01-05, chatHistory invariant, and audio-awareness guard |
+| `docs/ai-jam/handoffs/phase-01-handoff.md` | Appended this entry |
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Required behavior | Covered by | Status |
+|---|---|---|---|
+| A-01-01 | `setAutopilot` updates `sessionStore.autopilot.enabled` and `intervalCycles` correctly | `tests/autopilot.test.ts` — "setAutopilot store action (A-01-01)" describe block (5 tests) | CLOSED |
+| A-01-02 | `startAutopilot` fires `sendEvolution` after `intervalMs` (BPM-derived `setInterval`) | `tests/autopilot.test.ts` — "startAutopilot timer fires sendEvolution (A-01-02)" describe block (4 tests, fake timers) | CLOSED |
+| A-01-03 | Each evolution receives current session state as JSON context | `tests/autopilot.test.ts` (mock call verified); static analysis of `SYSTEM_PROMPT_EVOLUTION` in step 01.5 | PARTIAL — static analysis in 01.5 |
+| A-01-04 | Concurrency guard: second tick while `_isEvolving` does not call `sendEvolution` again | `tests/autopilot.test.ts` — hanging promise concurrency test + chatHistory non-mutation test | CLOSED |
+| A-01-05 | `stopAutopilot` clears timer; no further calls after stop | `tests/autopilot.test.ts` — "stopAutopilot clears timer (A-01-05)" (3 tests) | CLOSED |
+| A-01-06 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | tsc + lint + vitest pass in this step; `pnpm build` in step 01.5 | PARTIAL — build in 01.5 |
+| A-01-07 | Operator can start dev server and observe automatic evolution | Manual in step 01.5 | not yet |
+| A-01-08 | `SYSTEM_PROMPT_EVOLUTION` contains: evolve directive, state JSON context injection, concrete example, no-`saveAsBlock` instruction | Static analysis in step 01.5 | not yet |
+
+### Routine validations (one-liner each)
+
+- `pnpm exec tsc --noEmit` → exit 0 (0 errors)
+- `pnpm lint` → exit 0 (ESLint + Prettier both clean)
+- `pnpm exec vitest run` → exit 0, **750 tests passed** (21 test files; +18 new in `tests/autopilot.test.ts`; all 732 prior tests still pass)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | User can toggle autopilot on/off; session store reflects the change immediately | `tests/autopilot.test.ts` | unit | CLOSED — 5 tests in "setAutopilot store action" block |
+| A-01-02 | When enabled with audio playing, the agent fires automatically every N Strudel cycles | `tests/autopilot.test.ts` | unit (fake timers) | CLOSED — 4 tests in "startAutopilot timer fires sendEvolution" block |
+| A-01-03 | Each automatic evolution receives the current live rhythm and harmony as JSON context | `tests/autopilot.test.ts` (mock call) | unit + proxy:static-analysis | PARTIAL — mock call verified; JSON context injection verified via SYSTEM_PROMPT_EVOLUTION static analysis in step 01.5 |
+| A-01-04 | Manual agent messages (`send()`) continue to work normally; no deadlock, no state corruption | `tests/autopilot.test.ts` | unit | CLOSED — hanging promise concurrency test + chatHistory non-mutation test |
+| A-01-05 | Disabling autopilot stops the timer; no further LLM calls are made after the toggle | `tests/autopilot.test.ts` | unit (fake timers) | CLOSED — 3 tests: stop, re-arm, idempotent restart |
+| A-01-06 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | — | operability | PARTIAL — tsc/lint/test pass; `pnpm build` in step 01.5 |
+| A-01-07 | Operator can start dev server, enable autopilot, and observe automatic rhythm/harmony evolution | — | operability | not yet — step 01.5 |
+| A-01-08 | `SYSTEM_PROMPT_EVOLUTION` contains: evolve directive, state JSON context injection, concrete example, no-`saveAsBlock` instruction | — | proxy:static-analysis | not yet — step 01.5 |
+
+### Key findings summary
+
+1. **`deserializeSession` needed a type update** — Adding `autopilot: AutopilotState` to `SessionState` caused `deserializeSession`'s return type `Omit<SessionState, 'nowPlaying'>` to fail because `autopilot` was not returned. Fixed by widening the Omit to `Omit<SessionState, 'nowPlaying' | 'autopilot'>`. No behavioral change: `applyLoadedSession` uses `sessionStore.update((s) => ({ ...s, ... }))` which naturally preserves `autopilot` from the running store state.
+
+2. **`vi.mock` factory pattern needed `importOriginal`** — The initial `vi.mock('../src/agent/agent.js', () => ({ sendEvolution: vi.fn() }))` factory replaced the entire module including `chatHistory`. Tests accessing `chatHistory` failed with "No chatHistory export is defined on the mock". Fixed by using `importOriginal` to spread all actual exports and override only `sendEvolution`.
+
+3. **`SYSTEM_PROMPT_EVOLUTION` satisfies all ADR 0022 D4 requirements** — (1) autonomous evolution agent directive; (2) rhythm and harmony evolution instructions; (3) explicit no-`saveAsBlock` instruction; (4) concrete before→after JSON example matching the ADR 0022 D4 binding example; (5) Spanish prompt per ADR 0017 D7.
+
+4. **`sendEvolution` replicates `send()` fetch pattern without `chatHistory`** — Uses the same provider adapters (`PROVIDERS[agentProvider]`), passes `SYSTEM_PROMPT_EVOLUTION` (not `SYSTEM_PROMPT`), passes a single-element messages array `[{ role: 'user', content: userMessage }]` (not `chatHistory`). Never pushes to `chatHistory` (before or after).
+
+5. **Concurrency guard: `sendEvolution().finally(...)` not `await`** — `tick()` calls `sendEvolution().finally(() => { _isEvolving = false; })` without `await`, so `tick()` returns synchronously after setting `_isEvolving = true` and launching the promise. The `finally` resets the flag when the promise settles regardless of success or error.
+
+6. **Test count: 732 → 750** — 18 new tests in `tests/autopilot.test.ts`. All 21 test files pass (750/750).
+
+### Decisions made (if any)
+
+None beyond ADR 0022. The `persistence.ts` type fix was a necessary consequence of the `SessionState` extension, not a new governance decision.
+
+### Proposed Decisions Register entries (if any)
+
+None — ADR 0022 D1–D7 cover all decisions for this step.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+All quality gates pass: `tsc --noEmit` (0 errors), `pnpm lint` (clean), `pnpm exec vitest run` (750/750 tests). Working tree committed.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:** APPROVED / REVISE / ESCALATED
+**Reviewed on:** <ISO date>
+**Iteration:** 1 of 1
+**Reason:**
+**Next action:**
+

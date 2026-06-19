@@ -170,6 +170,159 @@ Si piden algo que no encaja en las skills (un efecto suelto, código Strudel lib
 CONOCIMIENTO STRUDEL: note("a3 c#4 e4"), s("bd hh sd hh"), stack(...), mini-notation (espacio=secuencia, ~=silencio, <a b>=alternar, [a b]=subdivisión, ,=paralelo, (3,8)=euclidiano), .s("sawtooth"), .lpf(n), .gain(n), .room(n), .euclidRot(k,n,r).
 NO uses setcps/setcpm/.fast/.slow para el tempo: la app fija el tempo vía setcps según el BPM. 1 ciclo = 1 compás 4/4.`;
 
+// ── SYSTEM_PROMPT_EVOLUTION ───────────────────────────────────────────────
+
+/**
+ * System prompt for autopilot evolution calls.
+ *
+ * Governs autonomous LLM calls fired by the autopilot timer in
+ * src/agent/autopilot.ts. Entirely distinct from SYSTEM_PROMPT (which
+ * governs user-initiated send() calls).
+ *
+ * Invariants (ADR 0022 D4):
+ * - Does NOT cause chatHistory mutation — sendEvolution() never pushes to
+ *   chatHistory; the history is not passed to the API request at all.
+ * - Instructs the LLM to produce a musical variant of the supplied state,
+ *   NOT to create from scratch.
+ * - Explicit no-saveAsBlock instruction (saveAsBlock forbidden in evolution).
+ * - Spanish prompt per ADR 0017 D7.
+ * - Uses same AgentOutputSchema v5 (D7 — no schema bump).
+ */
+export const SYSTEM_PROMPT_EVOLUTION = `Eres el motor de evolución autónoma de Orbifold, operando en MODO PILOTO AUTOMÁTICO.
+
+En cada llamada recibirás un snapshot JSON del estado musical en vivo (ritmo y armonía actuales). Tu tarea es devolver UNA VARIACIÓN COHERENTE — una evolución musical pequeña del estado recibido, NO un patrón completamente nuevo sin relación.
+
+══════════ INSTRUCCIONES DE EVOLUCIÓN ══════════
+
+RITMO (rhythm.layers):
+- Desplaza ligeramente algunos pasos (cambia 1–3 posiciones de 0→1 o 1→0).
+- Añade o elimina hits de percusión manteniendo el carácter sónico (mismo conjunto de sonidos o uno adyacente).
+- Si una capa usa euclid {k, n, rot}, ajusta k ±1 o rot ±1 dentro del rango válido.
+- Mantén la energía general: no vacíes la batería ni satures todos los pasos.
+
+ARMONÍA (harmony.progression):
+- Sustituye un acorde por un vecino neo-Riemanniano (transformación P, L o R: dos tonos comunes, un tono se mueve 1–2 semitonos).
+- Añade o elimina un acorde de la progresión (máximo ±1 acorde por evolución).
+- Ajusta el gain de uno o dos acordes en ±0.05–0.1 para dar dinamismo.
+- Mantén la clave armónica — los voice-leadings deben ser pequeños.
+
+══════════ RESTRICCIONES ABSOLUTAS ══════════
+- NUNCA incluyas el campo "saveAsBlock" en tu respuesta. El piloto automático NO guarda bloques.
+- Responde EXCLUSIVAMENTE con UN bloque \`\`\`json siguiendo el mismo esquema que el estado de entrada.
+- sound ∈ {bd, sd, hh, oh, cp, rim, lt, mt, ht}
+- quality ∈ {maj, min, dim, aug}
+- Cada capa usa "steps" (EXACTAMENTE 16 enteros 0/1) Ó "euclid" {k:1..16, n:2..16, rot:0..n-1}. No ambos.
+- NADA fuera del bloque json (sin texto antes ni después, sin "saveAsBlock").
+
+══════════ EJEMPLO CONCRETO (antes → después) ══════════
+
+Estado de entrada (ejemplo):
+\`\`\`json
+{
+  "rhythm": {
+    "layers": [
+      { "sound": "bd", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
+      { "sound": "sd", "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0] },
+      { "sound": "hh", "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] }
+    ]
+  },
+  "harmony": {
+    "progression": [
+      { "rootPc": 0, "qual": "maj", "gain": 0.7 },
+      { "rootPc": 9, "qual": "min", "gain": 0.7 }
+    ]
+  }
+}
+\`\`\`
+
+Respuesta de evolución válida (cambio coherente pequeño — añade un hit de bd, una nota de sd off-beat, y sustituye Am por FM por vecindad PLR):
+\`\`\`json
+{
+  "rhythm": {
+    "layers": [
+      { "sound": "bd", "steps": [1,0,0,0,1,0,0,1,1,0,0,0,1,0,0,0] },
+      { "sound": "sd", "steps": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0] },
+      { "sound": "hh", "steps": [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] }
+    ]
+  },
+  "harmony": {
+    "progression": [
+      { "rootPc": 0, "qual": "maj", "gain": 0.7 },
+      { "rootPc": 5, "qual": "maj", "gain": 0.65 },
+      { "rootPc": 9, "qual": "min", "gain": 0.7 }
+    ]
+  }
+}
+\`\`\``;
+
+// ── sendEvolution ─────────────────────────────────────────────────────────
+
+/**
+ * Fire a single autopilot evolution LLM call.
+ * Reads current rhythm + harmony from sessionStore, builds a one-shot
+ * LLM request using SYSTEM_PROMPT_EVOLUTION, and applies the result
+ * via applyRhythmSpec / applyHarmonySpec.
+ *
+ * Invariants (ADR 0022 D4):
+ * - NEVER pushes to chatHistory (OQ-3 / ADR 0022 D4).
+ * - NEVER calls applyBlockSave (saveAsBlock is forbidden in evolution output).
+ * - Returns void — the caller (tick()) uses .finally() to reset _isEvolving.
+ *
+ * Per ADR 0022 D4.
+ */
+export async function sendEvolution(): Promise<void> {
+  const provider = PROVIDERS[agentProvider];
+  const key = loadApiKey(agentProvider);
+  if (!key) return; // No API key — silently skip (background operation)
+
+  const model = agentModel || provider.defaultModel;
+
+  // Build the user message: a JSON dump of the current live state (ADR 0022 D4).
+  const state = get(sessionStore);
+  const stateSnapshot = {
+    rhythm: { layers: state.rhythm.layers },
+    harmony: {
+      progression: state.harmony.progression,
+    },
+  };
+  const userMessage = JSON.stringify(stateSnapshot, null, 2);
+
+  // Fetch using SYSTEM_PROMPT_EVOLUTION (NOT SYSTEM_PROMPT).
+  // No chatHistory used — this is a clean-slate one-shot call (ADR 0022 D3/D4).
+  let txt: string;
+  try {
+    const res = await fetch(provider.url, {
+      method: 'POST',
+      headers: provider.headers(key),
+      body: JSON.stringify(
+        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }])
+      ),
+    });
+    const data: unknown = await res.json();
+
+    const dataObj = data as Record<string, unknown>;
+    if (dataObj.error) return; // Provider-level error — skip silently
+
+    txt = provider.parse(data);
+    if (!txt) return; // Empty response — skip silently
+  } catch {
+    return; // Network error — skip silently
+  }
+
+  // Parse with AgentOutputSchema.safeParse (same schema v5, ADR 0022 D7).
+  const skill = tryParseSkill(txt);
+  if (!skill) return; // Non-JSON or schema-invalid response — skip silently
+
+  // Apply results — ONLY rhythm and harmony (never applyBlockSave per ADR 0022 D4).
+  if (skill.rhythm) {
+    applyRhythmSpec(skill.rhythm);
+  }
+  if (skill.harmony) {
+    applyHarmonySpec(skill.harmony);
+  }
+  // skill.saveAsBlock is intentionally ignored even if the LLM disobeyed the instruction.
+}
+
 // ── tryParseSkill ─────────────────────────────────────────────────────────
 
 /**

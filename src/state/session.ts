@@ -314,6 +314,28 @@ export interface NowPlaying {
   vars?: Record<string, string | number>;
 }
 
+// ── AutopilotState ──────────────────────────────────────────────────────────
+// Runtime-only; excluded from SavedSessionSchema (ADR 0022 D1/D7).
+// Lives in src/state/session.ts alongside SessionState.
+//
+// Per ADR 0022 D1.
+
+/**
+ * Autopilot runtime state: whether the timer is running and how many
+ * Strudel cycles elapse between LLM evolution calls.
+ *
+ * - `enabled`         Whether the autopilot timer is currently active.
+ *                     When true, startAutopilot() has been called and a
+ *                     setInterval handle is live in autopilot.ts.
+ * - `intervalCycles`  Number of Strudel cycles between automatic evolution
+ *                     calls. Range: 2–32 (step 2). Default: 8.
+ *                     At 120 BPM, 8 cycles = 16 seconds.
+ */
+export interface AutopilotState {
+  enabled: boolean;
+  intervalCycles: number;
+}
+
 /**
  * The single source of truth for the application session.
  *
@@ -335,6 +357,7 @@ export interface SessionState {
   rhythm: RhythmState;
   composition: Composition; // imported from core/composition/model.ts
   nowPlaying: NowPlaying;
+  autopilot: AutopilotState; // NEW in ai-jam Phase 01 (ADR 0022 D1)
 }
 
 // ── Default initial state ──────────────────────────────────────────────────
@@ -367,6 +390,11 @@ export const DEFAULT_SESSION_STATE: SessionState = {
   nowPlaying: {
     label: null,
     source: null,
+  },
+  // autopilot: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7)
+  autopilot: {
+    enabled: false,
+    intervalCycles: 8,
   },
 };
 
@@ -474,6 +502,21 @@ export function setBpm(bpm: number): void {
   sessionStore.update((s) => ({ ...s, bpm }));
   // Fire and forget — setTempo is synchronous internally but getAudio() is async.
   void getAudio().then((a) => a.setTempo(bpm));
+}
+
+/**
+ * Update autopilot state (enabled flag and/or intervalCycles).
+ * Does NOT start or stop the timer — callers must call
+ * startAutopilot() / stopAutopilot() from src/agent/autopilot.ts
+ * separately.
+ *
+ * Per ADR 0022 D1.
+ */
+export function setAutopilot(patch: Partial<AutopilotState>): void {
+  sessionStore.update((s) => ({
+    ...s,
+    autopilot: { ...s.autopilot, ...patch },
+  }));
 }
 
 /**

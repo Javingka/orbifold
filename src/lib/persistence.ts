@@ -336,7 +336,12 @@ export function serializeSession(state: SessionState): SavedSession {
  * Block.id and Track.id are set to '' (placeholder). Track blockId refs are set
  * to the string representation of blockIndex (placeholder rebuilt by applyLoadedSession).
  */
-export function deserializeSession(saved: SavedSession): Omit<SessionState, 'nowPlaying'> {
+// autopilot is also excluded: it is ephemeral runtime-only state (ADR 0022 D1/D7)
+// and is not present in SavedSession. Callers (applyLoadedSession) merge the
+// deserialized partial with the current store state, which already has autopilot.
+export function deserializeSession(
+  saved: SavedSession
+): Omit<SessionState, 'nowPlaying' | 'autopilot'> {
   return {
     bpm: saved.bpm,
     view: saved.view,
