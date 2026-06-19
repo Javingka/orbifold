@@ -20,7 +20,7 @@
 
 import { get } from 'svelte/store';
 
-import { sessionStore } from '../state/session.js';
+import { sessionStore, requeueLive } from '../state/session.js';
 import { rhythmCode, harmonyCode, sessionCode } from '../state/session.js';
 import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { PROVIDERS, loadApiKey, type ProviderKey, type ChatMessage } from './providers.js';
@@ -212,6 +212,7 @@ ARMONÍA (harmony.progression):
 - sound ∈ {bd, sd, hh, oh, cp, rim, lt, mt, ht}
 - quality ∈ {maj, min, dim, aug}
 - Cada capa usa "steps" (EXACTAMENTE 16 enteros 0/1) Ó "euclid" {k:1..16, n:2..16, rot:0..n-1}. No ambos.
+- CRÍTICO: "euclid" DEBE ser SIEMPRE un objeto JSON {"k": número, "n": número, "rot": número}. NUNCA una cadena. INCORRECTO: "euclid": "3,8,2". CORRECTO: "euclid": {"k": 3, "n": 8, "rot": 2}.
 - NADA fuera del bloque json (sin texto antes ni después, sin "saveAsBlock").
 
 ══════════ EJEMPLO CONCRETO (antes → después) ══════════
@@ -227,9 +228,12 @@ Estado de entrada (ejemplo):
     ]
   },
   "harmony": {
+    "root": "C",
+    "mode": "minor",
+    "octave": 4,
     "progression": [
-      { "rootPc": 0, "qual": "maj", "gain": 0.7 },
-      { "rootPc": 9, "qual": "min", "gain": 0.7 }
+      { "root": "C", "quality": "min", "gain": 0.7 },
+      { "root": "A", "quality": "min", "gain": 0.7 }
     ]
   }
 }
@@ -246,10 +250,13 @@ Respuesta de evolución válida (cambio coherente pequeño — añade un hit de 
     ]
   },
   "harmony": {
+    "root": "C",
+    "mode": "minor",
+    "octave": 4,
     "progression": [
-      { "rootPc": 0, "qual": "maj", "gain": 0.7 },
-      { "rootPc": 5, "qual": "maj", "gain": 0.65 },
-      { "rootPc": 9, "qual": "min", "gain": 0.7 }
+      { "root": "C", "quality": "min", "gain": 0.7 },
+      { "root": "F", "quality": "maj", "gain": 0.65 },
+      { "root": "A", "quality": "min", "gain": 0.7 }
     ]
   }
 }
@@ -277,12 +284,27 @@ export async function sendEvolution(): Promise<void> {
 
   const model = agentModel || provider.defaultModel;
 
-  // Build the user message: a JSON dump of the current live state (ADR 0022 D4).
+  // Build the user message in AgentOutputSchema format (NOT session-store format).
+  // Session Chord uses rootPc (number) + qual; AgentOutputSchema uses root (note name) + quality.
   const state = get(sessionStore);
   const stateSnapshot = {
     rhythm: { layers: state.rhythm.layers },
     harmony: {
-      progression: state.harmony.progression,
+      root: NOTE_NAMES[state.harmony.root],
+      mode: state.harmony.mode,
+      octave: state.harmony.octave,
+      progression: state.harmony.progression.map((ch) => {
+        if ('isRest' in ch) {
+          return ch.bars ? { isRest: true, bars: ch.bars } : { isRest: true };
+        }
+        const entry: Record<string, unknown> = {
+          root: NOTE_NAMES[ch.rootPc],
+          quality: ch.qual,
+          gain: ch.gain,
+        };
+        if (ch.bars !== undefined && ch.bars !== 1) entry['bars'] = ch.bars;
+        return entry;
+      }),
     },
   };
   const userMessage = JSON.stringify(stateSnapshot, null, 2);
@@ -301,12 +323,12 @@ export async function sendEvolution(): Promise<void> {
     const data: unknown = await res.json();
 
     const dataObj = data as Record<string, unknown>;
-    if (dataObj.error) return; // Provider-level error — skip silently
+    if (dataObj.error) return;
 
     txt = provider.parse(data);
     if (!txt) return; // Empty response — skip silently
   } catch {
-    return; // Network error — skip silently
+    return;
   }
 
   // Parse with AgentOutputSchema.safeParse (same schema v5, ADR 0022 D7).
@@ -314,13 +336,46 @@ export async function sendEvolution(): Promise<void> {
   if (!skill) return; // Non-JSON or schema-invalid response — skip silently
 
   // Apply results — ONLY rhythm and harmony (never applyBlockSave per ADR 0022 D4).
-  if (skill.rhythm) {
-    applyRhythmSpec(skill.rhythm);
-  }
-  if (skill.harmony) {
-    applyHarmonySpec(skill.harmony);
-  }
+  if (skill.rhythm) applyRhythmSpec(skill.rhythm);
+  if (skill.harmony) applyHarmonySpec(skill.harmony);
   // skill.saveAsBlock is intentionally ignored even if the LLM disobeyed the instruction.
+
+  // Trigger audio re-evaluation at the next cycle boundary.
+  // applyRhythmSpec / applyHarmonySpec update the store (visual) but do NOT call
+  // requeueLive() — the audio re-queue must be triggered explicitly here.
+  if (skill.rhythm || skill.harmony) requeueLive();
+}
+
+// ── normalizeEuclidStrings ────────────────────────────────────────────────
+
+/**
+ * Coerce `"euclid": "k,n,rot"` string values to `{k, n, rot}` objects.
+ *
+ * Some LLMs return `"euclid": "3,8,2"` (a comma-separated string) instead of
+ * the required JSON object `{"k":3,"n":8,"rot":2}`. This function normalizes
+ * the raw parsed JSON before Zod validation so the parse succeeds.
+ *
+ * Only touches `rhythm.layers[*].euclid` — everything else is passed through.
+ */
+function normalizeEuclidStrings(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const obj = raw as Record<string, unknown>;
+  if (!obj.rhythm || typeof obj.rhythm !== 'object' || Array.isArray(obj.rhythm)) return raw;
+  const rhythm = obj.rhythm as Record<string, unknown>;
+  if (!Array.isArray(rhythm.layers)) return raw;
+
+  const layers = (rhythm.layers as unknown[]).map((layer: unknown) => {
+    if (!layer || typeof layer !== 'object' || Array.isArray(layer)) return layer;
+    const l = layer as Record<string, unknown>;
+    if (typeof l.euclid !== 'string') return layer;
+    const parts = (l.euclid as string).split(',').map(Number);
+    if (parts.length >= 2 && parts.every((p) => Number.isFinite(p))) {
+      return { ...l, euclid: { k: parts[0], n: parts[1], rot: parts[2] ?? 0 } };
+    }
+    return layer;
+  });
+
+  return { ...obj, rhythm: { ...rhythm, layers } };
 }
 
 // ── tryParseSkill ─────────────────────────────────────────────────────────
@@ -356,10 +411,11 @@ export function tryParseSkill(txt: string): AgentOutput | null {
 
   if (!jsonStr) return null;
 
-  // Step 3: parse JSON
+  // Step 3: parse JSON and normalize LLM quirks before Zod validation
   let raw: unknown;
   try {
     raw = JSON.parse(jsonStr);
+    raw = normalizeEuclidStrings(raw); // coerce "3,8,2" → {k,n,rot}
   } catch {
     return null;
   }

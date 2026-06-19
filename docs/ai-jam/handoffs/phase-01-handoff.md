@@ -639,10 +639,58 @@ All quality gates pass: `tsc --noEmit` (0 errors), `pnpm lint` (clean), `pnpm ex
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
+**Decision:** APPROVE
+**Reviewed on:** 2026-06-19
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass — quality gate table shows actual command outputs with exit 0 (not claimed); A-01-08 table cites verified line numbers (193, 210, 217–255, 281–298); `sendEvolution()` confirmed chatHistory-free at lines 273–324 (no reference to `chatHistory` anywhere in the function); A-01-03 partial coverage correctly disclosed and closed by three-way evidence (unit mock + static analysis + manual step); manual steps A-01-01 through A-01-07 documented with exact browser actions; no new dependencies; default `autopilot.enabled = false` preserved.
+**Next action:** Pilot approval required before merging Phase 01 to `main`, reason: Checkpoint #5 manual execution of A-01-01 through A-01-07 browser steps required before phase is fully closed.
 
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** <ISO date>
-**Iteration:** 1 of 1
-**Reason:**
-**Next action:**
+**Pending Register proposals (Pilot decides at phase approval):**
+- `AutopilotState` is ephemeral (not persisted); `deserializeSession` Omit updated to exclude it — surfaced in step 01.3
+
+---
+
+### Checkpoint #5 Resolution — Bugs found and fixed during manual acceptance (iteration 2)
+
+**Date:** 2026-06-19
+
+Three bugs surfaced during the Pilot's Checkpoint #5 manual execution of A-01-01..A-01-07. All three are now fixed. Debug logging added during investigation was also cleaned up. Quality gate re-run: all pass.
+
+#### Bug 1: LLM returned `rootPc`/`qual` keys (session-store format) instead of `root`/`quality` (AgentOutputSchema format)
+
+**Symptom:** `tryParseSkill` returned `null` on every evolution tick.  
+**Root cause:** `sendEvolution()` was serializing `state.harmony.progression` using the internal `Chord` shape (`rootPc: number`, `qual: string`), which the LLM mirrored back. `AgentOutputSchema` requires `root: string` (note name) and `quality: string`.  
+**Fix:** `sendEvolution()` now converts `rootPc → NOTE_NAMES[rootPc]` and `qual → quality` when building `stateSnapshot`. Added `'isRest' in ch` discriminant guard for `RestSlot` entries.  
+**File:** `src/agent/agent.ts` — `stateSnapshot` mapping in `sendEvolution()`.
+
+#### Bug 2: LLM returned `"euclid": "3,8,2"` (string) instead of `{"k":3,"n":8,"rot":2}` (object)
+
+**Symptom:** `tryParseSkill` returned `null` when the LLM included a euclid layer; Zod validation failed on `euclid` field type mismatch.  
+**Root cause:** Some LLM providers serialize euclid as a comma-separated string.  
+**Fix 1 (normalization):** Added `normalizeEuclidStrings()` in `agent.ts`; called from `tryParseSkill` between `JSON.parse` and `AgentOutputSchema.safeParse`. Coerces `"k,n,rot"` → `{k, n, rot}` in `rhythm.layers[*].euclid`.  
+**Fix 2 (prompt hardening):** Added a `CRÍTICO` line to `SYSTEM_PROMPT_EVOLUTION`: `"euclid" DEBE ser SIEMPRE un objeto JSON {"k": número, "n": número, "rot": número}. NUNCA una cadena.`  
+**File:** `src/agent/agent.ts` — `normalizeEuclidStrings` helper, `tryParseSkill` body, `SYSTEM_PROMPT_EVOLUTION` restrictions.
+
+#### Bug 3: Audio not re-evaluating after evolution (visual update only)
+
+**Symptom:** Orbit display updated after each autopilot evolution, but the playing audio did not change.  
+**Root cause:** `applyRhythmSpec()` and `applyHarmonySpec()` only call `sessionStore.update()` (visual reactivity). They do NOT call `requeueLive()`. In the normal `send()` path the UI handles playback separately; `sendEvolution()` has no UI intermediary.  
+**Fix:** Added `if (skill.rhythm || skill.harmony) requeueLive();` at the end of `sendEvolution()`. Imported `requeueLive` from `../state/session.js`.  
+**File:** `src/agent/agent.ts` — import line + `sendEvolution()` body.
+
+#### Post-fix quality gate
+
+| # | Command | Exit status |
+| --- | --- | --- |
+| 1 | `pnpm exec tsc --noEmit` | **0** |
+| 2 | `pnpm lint` | **0** |
+| 3 | `pnpm exec vitest run` | **0** — 750/750 tests |
+| 4 | `pnpm build` | **0** |
+
+#### Updated Acceptance Coverage
+
+All 8 acceptance criteria are CLOSED. The fixes correct silent failures that prevented A-01-02, A-01-03, and A-01-07 from being behaviorally satisfied. Manual re-verification by Pilot confirmed:
+
+- **A-01-02:** Evolution fires on timer and produces audible + visual changes.
+- **A-01-03:** Evolved output is a recognizable musical variant of the supplied state.
+- **A-01-07:** Operator can start dev server, enable autopilot, and observe both visual orbit changes AND audio evolution.

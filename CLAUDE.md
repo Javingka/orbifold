@@ -23,15 +23,15 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 **Name:** `ai-jam` — **IN PROGRESS**
 **Goal:** The AI Agent evolves rhythm and/or harmony autonomously over time (every N Strudel cycles) while the user plays along, enabling an AI jam / autopilot mode. The user enables a toggle; the agent fires the LLM on a BPM-derived timer and applies evolved patterns to the live session without explicit user prompting.
 **Started:** 2026-06-18
-**Docs:** `docs/ai-jam/` · Decisions Register: `docs/ai-jam/decisions.md` · ADRs: 0022 (pending).
+**Docs:** `docs/ai-jam/` · Decisions Register: `docs/ai-jam/decisions.md` · ADRs: 0022.
 
-- **Phase 01 (in progress)** — Autopilot core: `AutopilotState` in session, BPM-derived timer, `sendEvolution()` + `SYSTEM_PROMPT_EVOLUTION`, `src/agent/autopilot.ts`, minimal UI toggle in AgentPanel.
+- **Phase 01 (complete, merged `main` 2026-06-19)** — Autopilot core: `AutopilotState` in session, BPM-derived timer, `sendEvolution()` + `SYSTEM_PROMPT_EVOLUTION`, `src/agent/autopilot.ts`, minimal UI toggle in AgentPanel; 750 tests.
 
 **Deferred items carried forward:**
 - Note-level free placement on the Pentagrama (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note) — deferred from orbifold-v2 Phase 10.
 - Per-chord `lpf`/`lpq` direct user slider (D-3) — deferred from harmonic-rhythm-improvements Phase 01 triage.
 
-**Previous initiatives:** `ai-composition-authoring` (Phase 01, complete, merged `main` 2026-06-18) — agent `saveAsBlock` skill; ADR 0021; 732 tests. `editable-composition` (Phase 01, complete, merged `main` 2026-06-18) — Block-as-State foundation; ADR 0020; 682 tests. `harmonic-rhythm-improvements` (Phases 01–03, complete, merged `main` 2026-06-18) — oscillator/presets/chord sound; ADRs 0018–0019. Prior: `orbifold-v2` (Phases 01–11) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
+**Previous initiatives:** `ai-composition-authoring` (Phase 01, complete, merged `main` 2026-06-18) — agent `saveAsBlock` skill; ADR 0021; 732 tests. (test count superseded by ai-jam Phase 01 → 750) `editable-composition` (Phase 01, complete, merged `main` 2026-06-18) — Block-as-State foundation; ADR 0020; 682 tests. `harmonic-rhythm-improvements` (Phases 01–03, complete, merged `main` 2026-06-18) — oscillator/presets/chord sound; ADRs 0018–0019. Prior: `orbifold-v2` (Phases 01–11) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
 
 ## Project-specific conventions
 

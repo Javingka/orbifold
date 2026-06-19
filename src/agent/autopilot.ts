@@ -38,19 +38,21 @@ let _timerId: ReturnType<typeof setInterval> | null = null;
  * Per ADR 0022 D3/D6.
  */
 async function tick(): Promise<void> {
-  // Concurrency guard: skip this tick if a previous call is still in flight
   if (_isEvolving) return;
 
-  // Audio-awareness guard: skip if nothing is playing (D6)
   // Dynamic import keeps autopilot.ts unit-testable in Node
   // (strudel.ts has DOM/WebAudio dependencies that fail in Node)
   const { isPlaying } = await import('../audio/strudel.js');
   if (!isPlaying()) return;
 
   _isEvolving = true;
-  sendEvolution().finally(() => {
-    _isEvolving = false;
-  });
+  sendEvolution()
+    .catch(() => {
+      // sendEvolution logs its own errors; swallow here to always reset the flag
+    })
+    .finally(() => {
+      _isEvolving = false;
+    });
 }
 
 /**
@@ -63,7 +65,6 @@ async function tick(): Promise<void> {
  * Per ADR 0022 D2.
  */
 export function startAutopilot(): void {
-  // Clear any existing timer before creating a new one (idempotent restart)
   if (_timerId !== null) {
     clearInterval(_timerId);
     _timerId = null;
