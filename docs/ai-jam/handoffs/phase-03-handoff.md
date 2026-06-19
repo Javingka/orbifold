@@ -307,3 +307,170 @@ None.
 ### Next action (per phase file)
 
 CHECKPOINT — Planner review of step 03.3 before proceeding to step 03.4.
+
+---
+
+## Step 03.4 — SYSTEM_PROMPT_EVOLUTION update + `sendEvolution` wiring + tests (Checkpoint #4 / Final)
+
+**Date:** 2026-06-19
+
+**Commit(s):**
+
+- `feat(agent): Phase 03 step 03.4 — sendEvolution recipe wiring + SYSTEM_PROMPT_EVOLUTION`
+
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `src/agent/agent.ts` (full — 740 lines, pre-step state).
+- Read `src/agent/schema.ts` (full — v6, SCHEMA_VERSION=6, MusicalIntentSchema).
+- Read `src/core/music-knowledge/recipe-engine.ts` (full — recipeToAgentOutput, getExpressibleRecipes).
+- Read `src/core/music-knowledge/query.ts` (full — getRecipeById).
+- Read `docs/ai-jam/decisions.md` (full — ADR 0022 D3/D4, OD-3 Option B).
+- Read `docs/ai-jam/phases/phase-03.md` (full — step 03.4 PROMPT, all acceptance criteria).
+- Read `docs/ai-jam/handoffs/phase-03-handoff.md` (full — prior steps context).
+- Read `tests/autopilot.test.ts` (full — determined test file focus and that sendEvolution is fully mocked there; a separate test file is the right approach).
+
+**`SYSTEM_PROMPT_EVOLUTION` update:**
+- Added `══════════ HABILIDAD: musicalIntent (receta musical) ══════════` section in Spanish (ADR 0017 D7).
+- Section covers: when to use `musicalIntent.recipeId`, all sub-fields (`recipeId`, `style`, `complexity`, `explanation`), explicit rule that `musicalIntent` does NOT replace `rhythm`/`harmony`, explicit rule that `saveAsBlock` must NOT appear.
+- Two concrete JSON examples per ADR 0021 D5:
+  - Ejemplo 1: musicalIntent-only response (no explicit rhythm/harmony).
+  - Ejemplo 2: explicit rhythm/harmony + musicalIntent as annotation.
+- Section placed BEFORE the RESTRICCIONES ABSOLUTAS block (logical ordering: capability described before restrictions).
+
+**`sendEvolution()` wiring in `src/agent/agent.ts`:**
+- Added static imports: `recipeToAgentOutput`, `getExpressibleRecipes` from `recipe-engine.js`; `getRecipeById` from `query.js`.
+- User message enriched: `availableRecipes` key added to the JSON object sent to the LLM, containing `getExpressibleRecipes().map(r => r.id)`. Dynamic context (not hardcoded in prompt).
+- After `tryParseSkill` succeeds: if `skill.musicalIntent?.recipeId` is present:
+  - `getRecipeById(recipeId)` → if found: `recipeToAgentOutput(recipe)` → if non-null:
+    - Apply recipe rhythm via `applyRhythmSpec(engineOutput.rhythm)` ONLY if `!skill.rhythm` (explicit takes precedence).
+    - Apply recipe harmony via `applyHarmonySpec(engineOutput.harmony)` ONLY if `!skill.harmony`.
+  - Unknown recipeId or null engineOutput: silent no-op.
+- `requeueLive()` updated to also fire when `recipeApplied` is true.
+- ADR 0022 D3/D4 inviolate: `chatHistory` never pushed, `applyBlockSave` never called.
+
+**Tests — new file `tests/agent-recipe-wiring.test.ts` (20 tests):**
+- A-03-06 (7 tests): SYSTEM_PROMPT_EVOLUTION content checks — musicalIntent field, recipeId, NUNCA/saveAsBlock prohibition, ≥3 json fences, Ejemplo 1 shape (musicalIntent-only), Ejemplo 2 shape (rhythm+harmony+musicalIntent), complexity+explanation sub-fields.
+- A-03-07 (4 tests): sendEvolution recipe wiring — 07a (musicalIntent-only → both apply functions called with engine output), 07b (explicit rhythm + musicalIntent → recipe rhythm NOT applied), 07c (nonexistent recipeId → no apply calls), 07d (explicit harmony + musicalIntent → recipe harmony NOT applied).
+- A-03-08 (4 tests): chatHistory invariant — unchanged after musicalIntent path, unchanged after explicit rhythm/harmony, unchanged after nonexistent recipeId, applyBlockSave never called.
+- Supporting (5 tests): getExpressibleRecipes sanity; tryParseSkill direct tests (musicalIntent-only, explicit rhythm, none-of-four).
+
+**Implementation note — fetch mock behavior in Vitest 2.1.8:**
+`vi.spyOn(global, 'fetch')` did not reliably intercept fetch calls from ESM modules. `vi.stubGlobal('fetch', fetchMock)` works correctly. Additionally, `vi.restoreAllMocks()` in `afterEach` was found to restore module-level mocks (from `vi.mock()`) back to original implementations — this was identified and removed from `afterEach`. The correct pattern: use `vi.mocked(fn).mockClear()` in `beforeEach` (preserves the mock, clears call history) and `vi.unstubAllGlobals()` in `afterEach` (restores global stubs only).
+
+### Prototype parity note
+
+Not applicable — `sendEvolution()` and `SYSTEM_PROMPT_EVOLUTION` have no prototype equivalent; they are new in the ai-jam initiative.
+
+### Files touched
+
+- `src/agent/agent.ts` (modified — SYSTEM_PROMPT_EVOLUTION section added, static imports, sendEvolution recipe wiring, userMessage enriched)
+- `tests/agent-recipe-wiring.test.ts` (created — 20 tests for A-03-06/07/08)
+- `docs/ai-jam/handoffs/phase-03-handoff.md` (this entry)
+
+### Validation evidence (per Acceptance ID)
+
+| Acceptance ID | Status | Evidence |
+|---|---|---|
+| A-03-01 | COVERED (step 03.2) | schema.test.ts — unchanged |
+| A-03-02 | COVERED (step 03.2) | schema.test.ts — unchanged |
+| A-03-03 | COVERED (step 03.2) | schema.test.ts — unchanged |
+| A-03-04 | COVERED (step 03.3) | recipe-engine.test.ts — unchanged |
+| A-03-05 | COVERED (step 03.3) | recipe-engine.test.ts — unchanged |
+| A-03-06 | COVERED | agent-recipe-wiring.test.ts — 7 prompt content checks pass; Ejemplo 1 parsed, musicalIntent-only confirmed; Ejemplo 2 parsed, rhythm+harmony+musicalIntent confirmed |
+| A-03-07 | COVERED | agent-recipe-wiring.test.ts — 07a (musicalIntent-only applies engine output); 07b (explicit rhythm takes precedence); 07c (unknown recipeId → no-op); 07d (explicit harmony takes precedence) |
+| A-03-08 | COVERED | agent-recipe-wiring.test.ts — chatHistory unchanged in all sendEvolution paths; applyBlockSave never called |
+| A-03-09 | COVERED | Live-system evidence below |
+
+### Quality gate evidence (A-03-09)
+
+**`pnpm exec tsc --noEmit`** — exit code 0, no output (clean).
+
+**`pnpm lint`** — exit code 0. ESLint: no errors. Prettier: all matched files use Prettier code style.
+
+**`pnpm test`** — exit code 0.
+```
+Test Files  27 passed (27)
+Tests  1387 passed (1387)
+Duration  1.28s (transform 1.53s, setup 0ms, collect 3.63s, tests 575ms, environment 4ms, prepare 2.25s)
+```
+Test count: 1387/1387 (up from 1367 in step 03.3; +20 new tests in agent-recipe-wiring.test.ts).
+
+**`pnpm build`** — exit code 0. 566 modules transformed. Pre-existing chunk-size warning (unchanged from prior steps). Build artifact: `dist/assets/index-PIfrr-4l.js` 1,159.93 kB (364.28 kB gzip).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | `AgentOutputSchema` v6 accepts `musicalIntent`-only; rejects none-of-four | `tests/schema.test.ts` | unit | COVERED (step 03.2) |
+| A-03-02 | v5 responses parse unchanged; `musicalIntent` is `undefined` | `tests/schema.test.ts` | unit | COVERED (step 03.2) |
+| A-03-03 | `SCHEMA_VERSION === 6` | `tests/schema.test.ts` | unit | COVERED (step 03.2) |
+| A-03-04 | `recipeToAgentOutput(recipe)` returns valid `AgentOutput` for every expressible recipe; harmony uses only `quality ∈ {maj,min,dim,aug}` | `tests/music-knowledge/recipe-engine.test.ts` | unit | COVERED (step 03.3) |
+| A-03-05 | euclid layers emitted as `{ euclid: {k,n,rot} }`; steps16 layers as `{ steps: number[16] }` matching catalog | `tests/music-knowledge/recipe-engine.test.ts` | unit | COVERED (step 03.3) |
+| A-03-06 | `SYSTEM_PROMPT_EVOLUTION` musicalIntent capability section (trigger phrases + two JSON examples); forbids saveAsBlock | `tests/agent-recipe-wiring.test.ts` | proxy:static-analysis | COVERED |
+| A-03-07 | `sendEvolution()` applies recipe engine output for musicalIntent.recipeId; explicit fields take precedence | `tests/agent-recipe-wiring.test.ts` | unit | COVERED |
+| A-03-08 | `sendEvolution()` never pushes to chatHistory and never calls applyBlockSave, including musicalIntent path | `tests/agent-recipe-wiring.test.ts` | unit | COVERED |
+| A-03-09 | `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build` all pass clean | live-system | live-system | COVERED |
+
+### Decisions made (if any)
+
+None beyond what is already recorded in ADR 0022 and ADR 0023. Implementation follows OD-3 Option B (upstream filter via `getExpressibleRecipes()`).
+
+### Blockers resolved during this step
+
+None.
+
+### Environment state after this step
+
+- Branch: `ai-jam/phase-03`
+- Tests: 1387/1387 passing (27 test files).
+- New files: `tests/agent-recipe-wiring.test.ts`.
+- Modified: `src/agent/agent.ts` (SYSTEM_PROMPT_EVOLUTION + sendEvolution recipe wiring).
+- All 9 acceptance criteria (A-03-01 through A-03-09) COVERED.
+
+### Next action (per phase file)
+
+Phase 03 is complete. This is the final step. Commit and merge to `main`.
+
+---
+
+## Phase 03 Completion Summary
+
+**Phase:** ai-jam Phase 03 — Recipe→Agent Wiring: Schema v6, Recipe Engine, and Prompt Update
+
+**Merged:** 2026-06-19
+
+**Total test count at phase close:** 1387/1387 (27 test files)
+- Baseline (Phase 02 close): 1320/1320
+- Step 03.2 added: 47 tests (schema v6 + recipe-engine round-trip)
+- Step 03.3 added: 24 tests (recipe-engine.test.ts)
+- Step 03.4 added: 20 tests (agent-recipe-wiring.test.ts)
+- Cumulative new tests this phase: +67
+
+**New files:**
+- `docs/adr/0023-musical-intent-schema.md`
+- `src/core/music-knowledge/recipe-engine.ts`
+- `tests/music-knowledge/recipe-engine.test.ts`
+- `tests/agent-recipe-wiring.test.ts`
+
+**Modified files:**
+- `src/agent/schema.ts` (v6 + MusicalIntentSchema)
+- `src/agent/agent.ts` (SYSTEM_PROMPT_EVOLUTION + sendEvolution recipe wiring)
+- `tests/schema.test.ts` (v6 backward-compat + new field tests)
+
+**Acceptance criteria summary:**
+
+| ID | Status | Covered in |
+|---|---|---|
+| A-03-01 | COVERED | step 03.2 |
+| A-03-02 | COVERED | step 03.2 |
+| A-03-03 | COVERED | step 03.2 |
+| A-03-04 | COVERED | step 03.3 |
+| A-03-05 | COVERED | step 03.3 |
+| A-03-06 | COVERED | step 03.4 |
+| A-03-07 | COVERED | step 03.4 |
+| A-03-08 | COVERED | step 03.4 |
+| A-03-09 | COVERED | step 03.4 (live-system gate) |
+
+**All 9 acceptance criteria COVERED. Phase 03 complete.**

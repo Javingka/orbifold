@@ -28,6 +28,11 @@ import { AgentOutputSchema, type AgentOutput } from './schema.js';
 import { applyRhythmSpec, applyHarmonySpec, applyBlockSave } from './apply.js';
 import { lang, t_raw } from '../i18n/index.js';
 import type { LangCode } from '../i18n/index.js';
+import {
+  recipeToAgentOutput,
+  getExpressibleRecipes,
+} from '../core/music-knowledge/recipe-engine.js';
+import { getRecipeById } from '../core/music-knowledge/query.js';
 
 // ── ADR 0017 D7: language directive ──────────────────────────────────────────
 // Maps LangCode → user-facing language name used in the directive injected into
@@ -206,6 +211,63 @@ ARMONÍA (harmony.progression):
 - Ajusta el gain de uno o dos acordes en ±0.05–0.1 para dar dinamismo.
 - Mantén la clave armónica — los voice-leadings deben ser pequeños.
 
+══════════ HABILIDAD: musicalIntent (receta musical) ══════════
+
+Cuando el estado actual encaje con una receta musical conocida, puedes incluir el campo "musicalIntent"
+en tu respuesta para indicar qué receta estás aplicando o anotando.
+
+Sub-campos de "musicalIntent":
+  • "recipeId"    — id de una receta de la lista "availableRecipes" proporcionada en el mensaje.
+                    Cuando incluyes solo "recipeId" (sin "rhythm" ni "harmony"), el motor de Orbifold
+                    resuelve automáticamente el ritmo y la armonía de esa receta.
+  • "style"       — etiqueta de estilo libre (ej. "bossa nova", "modal dórico", "afrocubano").
+  • "complexity"  — densidad rítmica: "simple", "medium" o "dense".
+  • "explanation" — nota breve sobre por qué elegiste esta receta (máx. 300 caracteres).
+
+REGLAS IMPORTANTES:
+1. "musicalIntent" NO reemplaza "rhythm"/"harmony": puedes incluir ambos (evolución explícita + anotación de intento) o solo "musicalIntent.recipeId" (el motor resuelve la receta).
+2. Usa solo ids que aparezcan en la lista "availableRecipes" del mensaje de usuario.
+3. "saveAsBlock" NO debe aparecer NUNCA en respuestas de evolución, tampoco junto a "musicalIntent".
+
+Ejemplo 1 — solo musicalIntent.recipeId (el motor aplica la receta completa):
+\`\`\`json
+{
+  "musicalIntent": {
+    "recipeId": "bossa-nova-groove",
+    "style": "bossa nova",
+    "complexity": "medium",
+    "explanation": "El estado actual tiene carácter suave; la receta bossa-nova-groove encaja bien."
+  }
+}
+\`\`\`
+
+Ejemplo 2 — rhythm/harmony explícitos + musicalIntent como anotación:
+\`\`\`json
+{
+  "rhythm": {
+    "layers": [
+      { "sound": "bd", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
+      { "sound": "hh", "euclid": { "k": 3, "n": 8, "rot": 0 } }
+    ]
+  },
+  "harmony": {
+    "root": "D",
+    "mode": "minor",
+    "octave": 3,
+    "progression": [
+      { "root": "D", "quality": "min", "gain": 0.7 },
+      { "root": "A", "quality": "maj", "gain": 0.65 }
+    ]
+  },
+  "musicalIntent": {
+    "recipeId": "dorian-ritual-sparse",
+    "style": "dorian modal",
+    "complexity": "simple",
+    "explanation": "Evolución explícita con sabor dorian; la receta sirve de referencia de intención."
+  }
+}
+\`\`\`
+
 ══════════ RESTRICCIONES ABSOLUTAS ══════════
 - NUNCA incluyas el campo "saveAsBlock" en tu respuesta. El piloto automático NO guarda bloques.
 - Responde EXCLUSIVAMENTE con UN bloque \`\`\`json siguiendo el mismo esquema que el estado de entrada.
@@ -307,7 +369,11 @@ export async function sendEvolution(): Promise<void> {
       }),
     },
   };
-  const userMessage = JSON.stringify(stateSnapshot, null, 2);
+  // Inject available recipe ids so the LLM knows which ids are valid at call time.
+  // The list is dynamic (computed from the expressible recipe catalog) and injected
+  // into the user message — not hardcoded in SYSTEM_PROMPT_EVOLUTION (which is static).
+  const availableRecipes = getExpressibleRecipes().map((r) => r.id);
+  const userMessage = JSON.stringify({ ...stateSnapshot, availableRecipes }, null, 2);
 
   // Fetch using SYSTEM_PROMPT_EVOLUTION (NOT SYSTEM_PROMPT).
   // No chatHistory used — this is a clean-slate one-shot call (ADR 0022 D3/D4).
@@ -336,14 +402,41 @@ export async function sendEvolution(): Promise<void> {
   if (!skill) return; // Non-JSON or schema-invalid response — skip silently
 
   // Apply results — ONLY rhythm and harmony (never applyBlockSave per ADR 0022 D4).
+  // Explicit skill.rhythm / skill.harmony take precedence over the recipe engine path.
   if (skill.rhythm) applyRhythmSpec(skill.rhythm);
   if (skill.harmony) applyHarmonySpec(skill.harmony);
   // skill.saveAsBlock is intentionally ignored even if the LLM disobeyed the instruction.
 
+  // ── musicalIntent.recipeId — recipe engine path (Phase 03 step 03.4) ───────
+  // If the LLM returned a recipeId (with or without explicit rhythm/harmony),
+  // resolve the recipe and apply whichever fields were NOT already applied by
+  // explicit skill fields. Explicit fields always take precedence.
+  let recipeApplied = false;
+  if (skill.musicalIntent?.recipeId) {
+    const recipe = getRecipeById(skill.musicalIntent.recipeId);
+    if (recipe !== undefined) {
+      const engineOutput = recipeToAgentOutput(recipe);
+      if (engineOutput !== null) {
+        // Apply recipe rhythm only if the LLM did NOT supply explicit rhythm
+        if (!skill.rhythm && engineOutput.rhythm) {
+          applyRhythmSpec(engineOutput.rhythm);
+          recipeApplied = true;
+        }
+        // Apply recipe harmony only if the LLM did NOT supply explicit harmony
+        if (!skill.harmony && engineOutput.harmony) {
+          applyHarmonySpec(engineOutput.harmony);
+          recipeApplied = true;
+        }
+      }
+      // If engineOutput is null: silent no-op (recipe is non-expressible or catalog failure)
+    }
+    // If recipe not found: silent no-op (unknown recipeId)
+  }
+
   // Trigger audio re-evaluation at the next cycle boundary.
   // applyRhythmSpec / applyHarmonySpec update the store (visual) but do NOT call
   // requeueLive() — the audio re-queue must be triggered explicitly here.
-  if (skill.rhythm || skill.harmony) requeueLive();
+  if (skill.rhythm || skill.harmony || recipeApplied) requeueLive();
 }
 
 // ── normalizeEuclidStrings ────────────────────────────────────────────────
