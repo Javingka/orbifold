@@ -20,7 +20,8 @@
 
 import { get } from 'svelte/store';
 
-import { sessionStore, requeueLive } from '../state/session.js';
+import { sessionStore, requeueLive, setLastRecipeApplied } from '../state/session.js';
+import type { LastRecipeDisplay } from '../state/session.js';
 import { rhythmCode, harmonyCode, sessionCode } from '../state/session.js';
 import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { PROVIDERS, loadApiKey, type ProviderKey, type ChatMessage } from './providers.js';
@@ -429,6 +430,19 @@ export async function sendEvolution(): Promise<void> {
         }
       }
       // If engineOutput is null: silent no-op (recipe is non-expressible or catalog failure)
+
+      // Update the recipe card display state (ai-jam Phase 04 step 04.2).
+      // Fires regardless of recipeApplied — even a non-expressible recipe should
+      // show the LLM's intent. NEVER pushes to chatHistory (ADR 0022 D3/D4).
+      const display: LastRecipeDisplay = {
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        rhythmIds: recipe.rhythmIds,
+        harmonyId: recipe.harmonyId,
+        density: recipe.density,
+        ...(skill.musicalIntent?.explanation ? { explanation: skill.musicalIntent.explanation } : {}),
+      };
+      setLastRecipeApplied(display);
     }
     // If recipe not found: silent no-op (unknown recipeId)
   }
