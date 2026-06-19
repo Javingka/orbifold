@@ -214,6 +214,14 @@ const pt: Dictionary = {
       cyclesLabel: 'Ciclos',
       infoTooltip:
         'Piloto automático: o agente evolui ritmo e harmonia automaticamente a cada N ciclos enquanto o áudio toca. Configure N antes de ativar.',
+      // Phase 06 step 06.3 — autopilot panel redesign keys // i18n-draft
+      panelToggleLabel: 'Piloto automático', // i18n-draft
+      rhythmHintLabel: 'Estilo rítmico', // i18n-draft
+      rhythmHintOther: 'Outro…', // i18n-draft
+      rhythmHintPlaceholder: '— nenhum —', // i18n-draft
+      playLabel: '▶ Iniciar', // i18n-draft
+      stopLabel: '■ Parar', // i18n-draft
+      progressTitle: 'Progresso do ciclo de evolução', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

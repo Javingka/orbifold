@@ -250,6 +250,20 @@ export interface Dictionary {
       cyclesLabel: string;
       /** ⓘ info icon tooltip explaining how autopilot works */
       infoTooltip: string;
+      /** aria/title for the expand/collapse chevron button (Phase 06 step 06.3) */
+      panelToggleLabel: string;
+      /** Label displayed before the rhythm hint dropdown (Phase 06 step 06.3) */
+      rhythmHintLabel: string;
+      /** Text shown in the "Otro…" option in the rhythm hint dropdown (Phase 06 step 06.3) */
+      rhythmHintOther: string;
+      /** Placeholder for the rhythm hint select default option and free-text input (Phase 06 step 06.3) */
+      rhythmHintPlaceholder: string;
+      /** Label for the play/start autopilot button (Phase 06 step 06.3) */
+      playLabel: string;
+      /** Label for the stop autopilot button (Phase 06 step 06.3) */
+      stopLabel: string;
+      /** title/aria-label on the progress bar container (Phase 06 step 06.3) */
+      progressTitle: string;
     };
     /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
     recipeCard: {

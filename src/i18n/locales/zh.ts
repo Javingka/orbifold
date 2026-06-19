@@ -208,6 +208,14 @@ const zh: Dictionary = {
       titleOn: '自动演奏运行中 — 点击停止',
       cyclesLabel: '循环',
       infoTooltip: '自动演奏：音频播放时，AI每N个循环自动演化节奏和和声。激活前请先设置N。',
+      // Phase 06 step 06.3 — autopilot panel redesign keys // i18n-draft
+      panelToggleLabel: '自动驾驶', // i18n-draft
+      rhythmHintLabel: '节奏风格', // i18n-draft
+      rhythmHintOther: '其他…', // i18n-draft
+      rhythmHintPlaceholder: '— 无 —', // i18n-draft
+      playLabel: '▶ 开始', // i18n-draft
+      stopLabel: '■ 停止', // i18n-draft
+      progressTitle: '进化周期进度', // i18n-draft
     },
     recipeCard: {
       // i18n-draft
