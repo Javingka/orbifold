@@ -440,7 +440,9 @@ export async function sendEvolution(): Promise<void> {
         rhythmIds: recipe.rhythmIds,
         harmonyId: recipe.harmonyId,
         density: recipe.density,
-        ...(skill.musicalIntent?.explanation ? { explanation: skill.musicalIntent.explanation } : {}),
+        ...(skill.musicalIntent?.explanation
+          ? { explanation: skill.musicalIntent.explanation }
+          : {}),
       };
       setLastRecipeApplied(display);
     }

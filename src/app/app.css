@@ -933,6 +933,79 @@ textarea {
   user-select: none;
 }
 
+/* Recipe card — last autopilot recipe applied (ai-jam Phase 04 step 04.4) */
+.recipe-card {
+  margin: 4px 12px 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+  color: var(--muted);
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.recipe-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.recipe-card-title {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9.5px;
+  color: var(--faint);
+}
+
+.recipe-card-clear {
+  background: none;
+  border: none;
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.recipe-card-clear:hover {
+  color: var(--muted);
+}
+
+.recipe-card-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipe-card-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+}
+
+.recipe-card-label {
+  color: var(--faint);
+  flex-shrink: 0;
+}
+
+.recipe-card-explanation {
+  font-style: italic;
+  white-space: normal;
+  max-height: 36px;
+  overflow: hidden;
+}
+
 /* Input row */
 .agent-input {
   display: flex;

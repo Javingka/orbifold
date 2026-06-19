@@ -23,7 +23,12 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { sessionStore, setNowPlaying, setAutopilot } from '../state/session.js';
+  import {
+    sessionStore,
+    setNowPlaying,
+    setAutopilot,
+    setLastRecipeApplied,
+  } from '../state/session.js';
   import { startAutopilot, stopAutopilot } from '../agent/autopilot.js';
   import { agentCtx } from '../state/agentCtx.js';
   import {
@@ -573,6 +578,46 @@
       aria-label={$t('agent.autopilot.infoTooltip')}>ⓘ</span
     >
   </div>
+
+  <!--
+    Recipe card: last autopilot recipe applied.
+    ai-jam Phase 04 step 04.4 (OD-1 Option A: $sessionStore.lastRecipeApplied).
+    Only shown when autopilot fires a musicalIntent.recipeId response.
+    Dismiss button calls setLastRecipeApplied(null) to clear the field.
+  -->
+  {#if $sessionStore.lastRecipeApplied}
+    <div class="recipe-card">
+      <div class="recipe-card-header">
+        <span class="recipe-card-title">{$t('agent.recipeCard.title')}</span>
+        <button
+          class="recipe-card-clear"
+          title={$t('agent.recipeCard.clearTitle')}
+          on:click={() => setLastRecipeApplied(null)}>×</button
+        >
+      </div>
+      <div class="recipe-card-body">
+        <div class="recipe-card-name">{$sessionStore.lastRecipeApplied.recipeName}</div>
+        <div class="recipe-card-row">
+          <span class="recipe-card-label">{$t('agent.recipeCard.rhythmLabel')}:</span>
+          <span>{$sessionStore.lastRecipeApplied.rhythmIds.join(', ')}</span>
+        </div>
+        <div class="recipe-card-row">
+          <span class="recipe-card-label">{$t('agent.recipeCard.harmonyLabel')}:</span>
+          <span>{$sessionStore.lastRecipeApplied.harmonyId}</span>
+        </div>
+        <div class="recipe-card-row">
+          <span class="recipe-card-label">{$t('agent.recipeCard.densityLabel')}:</span>
+          <span>{$sessionStore.lastRecipeApplied.density}</span>
+        </div>
+        {#if $sessionStore.lastRecipeApplied.explanation}
+          <div class="recipe-card-row recipe-card-explanation">
+            <span class="recipe-card-label">{$t('agent.recipeCard.explanationLabel')}:</span>
+            <span>{$sessionStore.lastRecipeApplied.explanation}</span>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   <!--
     Input row: textarea + send button.
