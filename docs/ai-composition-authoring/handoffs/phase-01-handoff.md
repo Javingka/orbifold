@@ -201,11 +201,12 @@ Step 01.3 is source code. ADR 0021 is the binding authority. The step 01.3 imple
 
 **Commit(s):**
 
-- **Terminal commit:** `feat(agent): Phase 01 step 01.3 — schema v5 + applyBlockSave + unit tests`
+- **Iteration 1 commit:** `feat(agent): Phase 01 step 01.3 — schema v5 + applyBlockSave + unit tests`
+- **Terminal commit (iteration 2):** `fix(agent): Phase 01 step 01.3 REVISE — applyBlockSave no-op guard when library non-empty`
   - Hash: self-referential — not recorded
   - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
 
-**Iteration:** 1 of 5
+**Iteration:** 2 of 5
 
 ### Completed
 
@@ -246,7 +247,13 @@ Step 01.3 is source code. ADR 0021 is the binding authority. The step 01.3 imple
 
 **`tests/apply-block.test.ts` (new file):**
 - AGPL-3.0 header present.
-- 19 tests covering: A-01-01 (groove block name/type/snapshot/code), A-01-02 (armonia block), A-01-03 (addToTrack creates new track, absent/false does not), A-01-04 (applyRhythmSpec / applyHarmonySpec alone leave composition.blocks and .tracks reference-identical), A-01-05 (openBlock does not throw, block survives in store with correct type), name truncation at 150/100/trim, multiple blocks accumulate.
+- 19 tests (iteration 1) + 1 guard test (iteration 2 REVISE fix) = 20 tests total.
+- Covers: A-01-01 (groove block name/type/snapshot/code), A-01-02 (armonia block), A-01-03 (addToTrack creates new track, absent/false does not), A-01-04 (applyRhythmSpec / applyHarmonySpec alone leave composition.blocks and .tracks reference-identical), A-01-05 (openBlock does not throw, block survives in store with correct type), name truncation at 150/100/trim, multiple blocks accumulate, and (new) no-op guard when library non-empty.
+
+**REVISE fix (iteration 2):**
+
+- `src/agent/apply.ts` `applyBlockSave`: captured `blockCountBefore = get(sessionStore).composition.blocks.length` before calling `addBlock(spec.type)`; replaced `if (state.composition.blocks.length === 0) return;` with `if (state.composition.blocks.length === blockCountBefore) return;`. This prevents silent renaming of the last pre-existing block when `addBlock` no-ops on empty code in a non-empty library.
+- `tests/apply-block.test.ts`: added one test ("A-01-01 no-op guard: applyBlockSave with empty harmonia state and existing blocks does not rename pre-existing block") that seeds a groove block, fires `applyBlockSave` for `armonia` with no harmony progression (empty DEFAULT_SESSION_STATE), and asserts block count unchanged and pre-existing name intact.
 
 ### Files touched
 
@@ -267,13 +274,13 @@ Step 01.3 is source code. ADR 0021 is the binding authority. The step 01.3 imple
 - **A-01-06** — `schema.test.ts` "SaveAsBlockSpecSchema (A-01-06)" + "AgentOutputSchema — saveAsBlock (A-01-06)": 14 tests cover all three type values, addToTrack, absent saveAsBlock, unknown type rejection, empty name rejection, long-name pass-through (OQ-2), type-literal alignment vs `Block.type`, saveAsBlock-only parse (OQ-3), combined parse, superRefine guard. PASS.
 - **A-01-07 / A-01-08** — deferred to step 01.4 (persistence round-trip tests).
 - **A-01-09** — `proxy:static-analysis`: `SYSTEM_PROMPT` in `src/agent/agent.ts` now contains a "SKILL: save_as_block" section covering all four ADR 0021 D5 binding points: (1) when to use `saveAsBlock` (example phrases: "guarda esto como bloque", "save the current groove", "crea un bloque con esta armonía", "añade esto a la composición"); (2) three sub-fields with exact types and definitions for all three `type` values; (3) two example JSON snippets (minimal and full); (4) explicit statement that `saveAsBlock` may appear alone. All four D5 content points are covered.
-- **A-01-10** — `tsc --noEmit`: 0 errors. `pnpm lint`: clean. `pnpm exec vitest run`: 715 tests passed (682 prior + 33 new). `pnpm build`: not yet run (step 01.5).
+- **A-01-10** — `tsc --noEmit`: 0 errors. `pnpm lint`: clean. `pnpm exec vitest run`: 716 tests passed (715 after iteration 1 + 1 new guard test in iteration 2). `pnpm build`: not yet run (step 01.5).
 
 ### Routine validations (one-liner each, no transcripts)
 
 - `pnpm exec tsc --noEmit` → 0 errors (clean output).
 - `pnpm lint` → clean (ESLint clean; Prettier formatting confirmed after `--write`).
-- `pnpm exec vitest run` → 715 tests passed, 0 failed, 0 skipped across 19 test files.
+- `pnpm exec vitest run` → 716 tests passed, 0 failed, 0 skipped across 19 test files (iteration 2: +1 guard test over iteration 1's 715).
 
 ### Acceptance Coverage Table
 
@@ -308,9 +315,9 @@ None. One Prettier formatting issue (`apply.ts`, `apply-block.test.ts`) was a tr
 
 ### Key findings summary
 
-1. **`applyBlockSave` read-back pattern works correctly** — `addBlock` is synchronous (Svelte `writable.update` is synchronous), so `get(sessionStore)` immediately after returns the just-created block. The guard `if (state.composition.blocks.length === 0)` correctly handles the `addBlock` early-return case.
+1. **`applyBlockSave` no-op guard fixed (REVISE)** — The original guard `if (state.composition.blocks.length === 0)` was correct only when the library started empty. When N > 0 blocks existed and `addBlock` no-oped on empty code, the guard passed and `renameBlock` corrupted the last pre-existing block. Fixed by capturing `blockCountBefore` before calling `addBlock` and comparing post-call length against it.
 2. **SYSTEM_PROMPT updated with all four D5 content points** — the `save_as_block` section covers all required items: when-to-use phrases, all three type definitions with examples, two JSON snippets (minimal and full), and explicit statement that `saveAsBlock` can appear alone.
-3. **33 new tests added** — 19 in `apply-block.test.ts` and 14 net new in `schema.test.ts` (plus 2 updated existing tests).
+3. **34 new tests added** — 20 in `apply-block.test.ts` (19 iteration 1 + 1 guard test iteration 2) and 14 net new in `schema.test.ts` (plus 2 updated existing tests).
 4. **`A-01-04` byte-identical guarantee**: `applyRhythmSpec` and `applyHarmonySpec` produce reference-identical `composition.blocks` arrays because they only call `sessionStore.update` with spread of `s.rhythm` or `s.harmony` — `s.composition` is not touched.
 
 ### Next-step context (only if non-obvious)
@@ -319,10 +326,10 @@ Step 01.4 targets A-01-07 and A-01-08 (persistence round-trip for agent-created 
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
+**Decision:** REVISE on 2026-06-18. Iteration: 1 of 5. See review file.
 
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** <ISO date>
-**Iteration:** 1 of 5
-**Reason:**
-**Next action:**
+**Review file:** `docs/ai-composition-authoring/reviews/phase-01-step-01.3-review-1.md`
+
+**Finding:** `applyBlockSave` no-op guard (`if (state.composition.blocks.length === 0)`) is incorrect when blocks already exist in the library. When `addBlock` no-ops on empty code and the pre-call block count is N > 0, the guard does not fire, `renameBlock` is called on the last pre-existing block, silently corrupting its name. Fix: capture `blockCountBefore = get(sessionStore).composition.blocks.length` before calling `addBlock`; replace the guard with `if (state.composition.blocks.length === blockCountBefore) return;`. One targeted test must be added that demonstrates the guard works when pre-existing blocks are present. No other changes required.
+
+**Iteration 2 fix applied:** Guard corrected in `src/agent/apply.ts`; one new test added in `tests/apply-block.test.ts`; 716 tests pass; `tsc --noEmit` and `pnpm lint` clean.

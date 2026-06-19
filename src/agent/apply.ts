@@ -218,14 +218,18 @@ export function applyHarmonySpec(spec: HarmonySpec): void {
  * @param spec - The validated SaveAsBlockSpec from AgentOutputSchema.
  */
 export function applyBlockSave(spec: SaveAsBlockSpec): void {
+  // Capture pre-call block count to detect addBlock no-op (empty code guard).
+  const blockCountBefore = get(sessionStore).composition.blocks.length;
+
   // Step 1: delegate snapshot capture entirely to addBlock (ADR 0021 D3 binding).
   addBlock(spec.type);
 
   // Step 2: read back immediately (addBlock is synchronous, no interleaving).
   const state = get(sessionStore);
 
-  // Step 3: guard — addBlock early-returns on empty code; detect via block count.
-  if (state.composition.blocks.length === 0) return;
+  // Step 3: guard — addBlock early-returns on empty code; detect by comparing count.
+  // Using length === 0 is wrong when blocks already exist (would pick last pre-existing block).
+  if (state.composition.blocks.length === blockCountBefore) return;
   const newBlock = state.composition.blocks[state.composition.blocks.length - 1];
 
   // Step 4: apply OQ-2 name truncation (no .max(100) in Zod — truncate here).

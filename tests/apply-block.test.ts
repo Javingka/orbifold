@@ -307,3 +307,28 @@ describe('applyBlockSave — multiple blocks accumulate', () => {
     expect(state.composition.blocks[1].name).toBe('Block 2');
   });
 });
+
+// ── No-op guard when library is non-empty (REVISE fix) ───────────────────
+
+describe('applyBlockSave — no-op guard with non-empty library', () => {
+  it('A-01-01 no-op guard: applyBlockSave with empty harmonia state and existing blocks does not rename pre-existing block', () => {
+    // Seed a groove block into the library first.
+    applyRhythmSpec(GROOVE_SPEC);
+    applyBlockSave({ name: 'Pre-existing Block', type: 'groove' });
+
+    const stateBefore = get(sessionStore);
+    expect(stateBefore.composition.blocks).toHaveLength(1);
+    const preExistingName = stateBefore.composition.blocks[0].name;
+
+    // Now fire saveAsBlock for 'armonia' with no harmony progression set.
+    // DEFAULT_SESSION_STATE has an empty progression, so addBlock('armonia') no-ops.
+    // The guard must detect the no-op and NOT rename the pre-existing block.
+    applyBlockSave({ name: 'Should Not Appear', type: 'armonia' });
+
+    const stateAfter = get(sessionStore);
+    // Block count must be unchanged (addBlock was a no-op).
+    expect(stateAfter.composition.blocks).toHaveLength(1);
+    // Pre-existing block name must be intact.
+    expect(stateAfter.composition.blocks[0].name).toBe(preExistingName);
+  });
+});
