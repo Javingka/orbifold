@@ -215,6 +215,14 @@ const en: Dictionary = {
       infoTooltip:
         'Autopilot: the agent automatically evolves rhythm and harmony every N cycles while audio is playing. Set N before enabling.',
     },
+    recipeCard: {
+      title: 'Applied recipe',
+      rhythmLabel: 'Rhythm',
+      harmonyLabel: 'Harmony',
+      densityLabel: 'Density',
+      explanationLabel: 'Note',
+      clearTitle: 'Close',
+    },
   },
 
   persistence: {

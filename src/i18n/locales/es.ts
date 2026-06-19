@@ -216,6 +216,14 @@ const es: Dictionary = {
       infoTooltip:
         'Piloto automático: el agente evoluciona ritmo y armonía automáticamente cada N ciclos mientras suena audio. Configura N antes de activarlo.',
     },
+    recipeCard: {
+      title: 'Receta aplicada',
+      rhythmLabel: 'Ritmo',
+      harmonyLabel: 'Armonía',
+      densityLabel: 'Densidad',
+      explanationLabel: 'Nota',
+      clearTitle: 'Cerrar',
+    },
   },
 
   persistence: {
