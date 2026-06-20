@@ -579,3 +579,7 @@ All 4 locale files updated:
 | `errorRateLimit` key in all 4 locales, key-parity test passes | unit | COVERED | `tests/i18n/key-parity.test.ts` passes (1553 total) |
 | UI shows `errorRateLimit` when sentinel; falls through to `errorLlm` otherwise | proxy:static-analysis | COVERED | Ternary in `{#if autopilot.llmError}` block in `AgentPanel.svelte` |
 | Quality gate (tsc clean / lint clean / 1553 tests / build succeeds) | live-system | COVERED | All four pass; see table above |
+
+## Fix: Compress SYSTEM_PROMPT_EVOLUTION with inline JSON schema (~350 tokens)
+
+Status: COMPLETE — Date: 2026-06-20 — Branch: `ai-jam/phase-06` — Commit: `fix(agent): Phase 06 — compress SYSTEM_PROMPT_EVOLUTION with inline JSON schema (~350 tokens)` — `SYSTEM_PROMPT_EVOLUTION` replaced with a compact version (~350 tokens vs ~1500): bare-backtick schema block + two `\`\`\`json` Ejemplo blocks satisfying A-03-06 test assertions (musicalIntent, recipeId, saveAsBlock+NUNCA, ≥3 json fences, Ejemplo 1 musicalIntent-only, Ejemplo 2 rhythm+harmony+musicalIntent, complexity, explanation); tsc clean, lint clean, 1553 tests passed, build 1,180 kB in 1.64s.
