@@ -213,9 +213,11 @@ const zh: Dictionary = {
       rhythmHintLabel: '节奏风格', // i18n-draft
       rhythmHintOther: '其他…', // i18n-draft
       rhythmHintPlaceholder: '— 无 —', // i18n-draft
+      rhythmHintOtherPlaceholder: '描述节奏风格，例如：cueca chilena、bossa nova…', // i18n-draft
       playLabel: '▶ 开始', // i18n-draft
       stopLabel: '■ 停止', // i18n-draft
       progressTitle: '进化周期进度', // i18n-draft
+      noKeyWarning: '在启动自动驾驶前，请配置 AI 服务、模型和 API 密钥。', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

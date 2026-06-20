@@ -44,7 +44,10 @@ async function tick(): Promise<void> {
   // Dynamic import keeps autopilot.ts unit-testable in Node
   // (strudel.ts has DOM/WebAudio dependencies that fail in Node)
   const { isPlaying } = await import('../audio/strudel.js');
-  if (!isPlaying()) return;
+  if (!isPlaying()) {
+    setAutopilot({ timerStartedAt: 0 }); // keep bar empty while nothing plays
+    return;
+  }
 
   // Mark the start of the new interval so AgentPanel's progress bar can
   // compute elapsed / intervalMs. OD-1 Option A: timerStartedAt in sessionStore.
@@ -76,9 +79,9 @@ export function startAutopilot(): void {
   }
   const { bpm, autopilot } = get(sessionStore);
   const intervalMs = Math.round(((60000 * 4) / bpm) * autopilot.intervalCycles);
-  // Mark the timer start time so AgentPanel can compute progress bar fill.
+  // Keep the bar at 0% until the first isPlaying=true tick fires.
   // OD-1 Option A: timerStartedAt lives in AutopilotState in sessionStore.
-  setAutopilot({ timerStartedAt: Date.now() });
+  setAutopilot({ timerStartedAt: 0 });
   _timerId = setInterval(tick, intervalMs);
 }
 

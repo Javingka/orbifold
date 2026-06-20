@@ -294,4 +294,32 @@ describe('isPlaying guard (ADR 0022 D6)', () => {
 
     expect(sendEvolution).toHaveBeenCalledTimes(1);
   });
+
+  it('D6: tick with isPlaying=false resets timerStartedAt to 0 (progress bar stays empty)', async () => {
+    vi.mocked(isPlaying).mockReturnValue(false);
+
+    const intervalMs = defaultIntervalMs();
+
+    // Pre-set a non-zero timerStartedAt to simulate a prior start
+    setAutopilot({ enabled: true, timerStartedAt: Date.now() - 1000 });
+    startAutopilot();
+    await vi.advanceTimersByTimeAsync(intervalMs);
+
+    // After a tick where isPlaying() returns false, timerStartedAt must be reset to 0
+    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
+  });
+});
+
+// ── Progress bar sync: startAutopilot sets timerStartedAt to 0 (A-06-07) ──
+
+describe('startAutopilot timerStartedAt init (A-06-07 fix)', () => {
+  it('A-06-07: startAutopilot sets timerStartedAt to 0 immediately (bar stays at 0% until first isPlaying tick)', () => {
+    // Pre-set a non-zero timerStartedAt to ensure it is overwritten
+    setAutopilot({ enabled: true, timerStartedAt: Date.now() });
+
+    startAutopilot();
+
+    // Immediately after startAutopilot(), timerStartedAt must be 0
+    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
+  });
 });

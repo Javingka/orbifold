@@ -219,9 +219,11 @@ const en: Dictionary = {
       rhythmHintLabel: 'Rhythm style',
       rhythmHintOther: 'Other…',
       rhythmHintPlaceholder: '— none —',
+      rhythmHintOtherPlaceholder: 'Describe the style, e.g. cueca chilena, bossa nova…',
       playLabel: '▶ Start',
       stopLabel: '■ Stop',
       progressTitle: 'Evolution cycle progress',
+      noKeyWarning: 'Set up the AI service, model, and API key before starting autopilot.',
     },
     recipeCard: {
       title: 'Applied recipe',

@@ -262,3 +262,56 @@ All steps complete. The autopilot section has been fully redesigned:
 | A-06-07: live-dot visible when collapsed + playing | live-system | LIVE — Pilot verify | `.autopilot-live-dot` shown when `enabled && !panelOpen`; `@keyframes pulse` |
 | A-06-08: 4 new `AutopilotState` fields excluded from `SavedSessionSchema` | proxy:static-analysis | COVERED | `autopilot` key absent from `SavedSessionSchema` wholesale; no schema version change |
 | A-06-09: tsc clean, lint clean, ≥1533 tests, build succeeds | live-system | COVERED | tsc: clean; lint: clean; tests: 1541; build: success 1.65s |
+
+---
+
+## Browser-test Fixes (post-step-06.4)
+
+**Status:** COMPLETE
+**Date:** 2026-06-19
+**Branch:** `ai-jam/phase-06`
+**Commit:** `fix(ui): Phase 06 browser-test fixes — live dot, placeholder, key guard, playback sync, variation enforcement`
+
+### What was done
+
+Five browser-test failures corrected before the phase merge. All changes are backward-compatible and do not alter existing passing tests.
+
+**A-06-02b — Live dot inside header button**
+- `src/ui/AgentPanel.svelte`: Moved `<span class="autopilot-live-dot">` inside `<button class="autopilot-toggle">` as its last child. The button is already `display:flex; align-items:center; gap:6px`, so the dot now appears inline with the label text instead of below the button.
+
+**A-06-04 (variation enforcement) — Variation mandate in SYSTEM_PROMPT_EVOLUTION**
+- `src/agent/agent.ts`: Appended `══════════ VARIACIÓN OBLIGATORIA ══════════` block to `SYSTEM_PROMPT_EVOLUTION` requiring the LLM to differ from the current state by at least 2 onsets (rhythm) or 1 chord (harmony) per call.
+
+**A-06-05 — Free-text placeholder i18n**
+- `src/i18n/types.ts`: Added `rhythmHintOtherPlaceholder` key to `agent.autopilot`.
+- All 4 locale files updated: es, en, pt (`// i18n-draft`), zh (`// i18n-draft`).
+- `src/ui/AgentPanel.svelte`: Free-text input `placeholder` changed from `$t('agent.autopilot.rhythmHintPlaceholder')` to `$t('agent.autopilot.rhythmHintOtherPlaceholder')`.
+
+**A-06-06 — API key guard before startAutopilot**
+- `src/i18n/types.ts`: Added `noKeyWarning` key to `agent.autopilot`.
+- All 4 locale files updated: es, en, pt (`// i18n-draft`), zh (`// i18n-draft`).
+- `src/ui/AgentPanel.svelte`: `handlePlayStop()` now checks `loadApiKey(agentProvider) && agentModel` before calling `startAutopilot()`; sets `showKeyWarning = true` and returns early if missing. Warning `<p class="autopilot-key-warning">` shown below play/stop button.
+- `src/app/app.css`: Added `.autopilot-key-warning { font-size: 10px; color: var(--dom); margin: 0; line-height: 1.4; }`.
+
+**A-06-07 — Progress bar sync with playback**
+- `src/agent/autopilot.ts`: `startAutopilot()` now sets `timerStartedAt: 0` (was `Date.now()`) so the bar stays at 0% until the first `isPlaying=true` tick fires. `tick()` now calls `setAutopilot({ timerStartedAt: 0 })` before returning when `!isPlaying()`.
+- `tests/autopilot.test.ts`: Added 2 new tests — `A-06-07: startAutopilot sets timerStartedAt to 0 immediately` and `D6: tick with isPlaying=false resets timerStartedAt to 0`.
+
+### Quality gate
+
+| Check | Result |
+|-------|--------|
+| `pnpm exec tsc --noEmit` | clean (no output) |
+| `pnpm lint` | clean — All matched files use Prettier code style! |
+| `pnpm test` | 1543 passed (28 test files) — +2 new tests |
+| `pnpm build` | dist/assets/index-*.js 1,181 kB — built in 1.75s |
+
+### Acceptance Coverage Table
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| A-06-02b: live dot inline in header button | CLOSED | `<span class="autopilot-live-dot">` moved inside `<button class="autopilot-toggle">` as last child |
+| A-06-04: variation enforcement in sendEvolution prompt | CLOSED | VARIACIÓN OBLIGATORIA block appended to `SYSTEM_PROMPT_EVOLUTION` |
+| A-06-05: free-text placeholder uses distinct i18n key | CLOSED | `rhythmHintOtherPlaceholder` key added; all 4 locales; template updated |
+| A-06-06: API key guard before startAutopilot | CLOSED | Key guard in `handlePlayStop()`; `noKeyWarning` key; warning `<p>` + CSS rule |
+| A-06-07: progress bar stays at 0% while not playing | CLOSED | `startAutopilot()` → `timerStartedAt: 0`; `tick(!isPlaying)` → `timerStartedAt: 0`; 2 new unit tests |

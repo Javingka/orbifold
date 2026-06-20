@@ -1053,6 +1053,14 @@ textarea {
   background: var(--dom);
 }
 
+/* API key warning — shown when autopilot start is blocked by missing key (Phase 06 fix A-06-06) */
+.autopilot-key-warning {
+  font-size: 10px;
+  color: var(--dom);
+  margin: 0;
+  line-height: 1.4;
+}
+
 /* Recipe card — last autopilot recipe applied (ai-jam Phase 04 step 04.4) */
 .recipe-card {
   margin: 4px 12px 2px;

@@ -392,6 +392,14 @@ C. INCLUYE musicalIntent.explanation (máx. 300 caracteres) describiendo el
 
 D. PRECISIÓN CULTURAL: usa "inspirado en [estilo]" — no afirmes autoría cultural
    definitiva sobre el patrón generado.
+
+══════════ VARIACIÓN OBLIGATORIA ══════════
+El patrón que envíes DEBE diferir del estado actual del usuario.
+- Ritmo: cambia al menos 2 onsets o usa un \`euclid\` distinto.
+- Armonía: cambia al menos 1 acorde (root, quality, o bars diferente).
+Si el cambio mínimo no es posible en el contexto musical, justifica
+en \`musicalIntent.explanation\` y genera la variación más cercana posible.
+══════════════════════════════════════════
 ══════════════════════════════════════════════`;
 
 // ── sendEvolution ─────────────────────────────────────────────────────────

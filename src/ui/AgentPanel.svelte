@@ -107,6 +107,10 @@
   // ADR 0022 D1: AutopilotState lives in SessionState for Svelte reactivity.
   $: autopilot = $sessionStore.autopilot;
 
+  // Warning shown when the user tries to start autopilot without an API key configured.
+  // Cleared on success and when autopilot is stopped (A-06-06 browser-test fix).
+  let showKeyWarning = false;
+
   // Group RHYTHM_CATALOG by family (static — computed once at module load).
   // Map insertion order preserves catalog order, so families appear in source order.
   const families = new Map<string, typeof RHYTHM_CATALOG>();
@@ -128,12 +132,19 @@
    * Play or stop the autopilot timer.
    * setAutopilot must be called BEFORE startAutopilot so the timer reads
    * the latest intervalCycles (ADR 0022 D2).
+   * Guards against starting without an API key (A-06-06 browser-test fix).
    */
   function handlePlayStop(): void {
     if (autopilot.enabled) {
       stopAutopilot();
       setAutopilot({ enabled: false });
+      showKeyWarning = false;
     } else {
+      if (!loadApiKey(agentProvider) || !agentModel) {
+        showKeyWarning = true;
+        return;
+      }
+      showKeyWarning = false;
       setAutopilot({ enabled: true });
       startAutopilot();
     }
@@ -610,12 +621,11 @@
       >
         {autopilot.panelOpen ? '▼' : '▶'}
         {$t('agent.autopilot.panelToggleLabel')}
+        <!-- Minimal "playing" indicator: visible when playing AND panel is collapsed -->
+        {#if autopilot.enabled && !autopilot.panelOpen}
+          <span class="autopilot-live-dot" aria-label={$t('agent.autopilot.btnOn')}></span>
+        {/if}
       </button>
-
-      <!-- Minimal "playing" indicator: visible when playing AND panel is collapsed -->
-      {#if autopilot.enabled && !autopilot.panelOpen}
-        <span class="autopilot-live-dot" aria-label={$t('agent.autopilot.btnOn')}></span>
-      {/if}
     </div>
 
     <!-- Expandable config panel -->
@@ -663,7 +673,7 @@
           <input
             type="text"
             class="rhythm-hint-text"
-            placeholder={$t('agent.autopilot.rhythmHintPlaceholder')}
+            placeholder={$t('agent.autopilot.rhythmHintOtherPlaceholder')}
             value={autopilot.rhythmHintText}
             disabled={autopilot.enabled}
             on:input={(e) =>
@@ -679,6 +689,11 @@
         >
           {autopilot.enabled ? $t('agent.autopilot.stopLabel') : $t('agent.autopilot.playLabel')}
         </button>
+
+        <!-- API key warning (A-06-06) -->
+        {#if showKeyWarning}
+          <p class="autopilot-key-warning">{$t('agent.autopilot.noKeyWarning')}</p>
+        {/if}
 
         <!-- Progress timeline -->
         <div

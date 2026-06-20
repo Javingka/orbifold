@@ -220,9 +220,12 @@ const es: Dictionary = {
       rhythmHintLabel: 'Estilo rítmico',
       rhythmHintOther: 'Otro…',
       rhythmHintPlaceholder: '— ninguno —',
+      rhythmHintOtherPlaceholder: 'Describe el estilo, p.ej. cueca chilena, bossa nova…',
       playLabel: '▶ Iniciar',
       stopLabel: '■ Detener',
       progressTitle: 'Progreso del ciclo de evolución',
+      noKeyWarning:
+        'Configura el servicio de IA, el modelo y la clave API antes de iniciar el autopilot.',
     },
     recipeCard: {
       title: 'Receta aplicada',

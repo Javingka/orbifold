@@ -219,9 +219,12 @@ const pt: Dictionary = {
       rhythmHintLabel: 'Estilo rítmico', // i18n-draft
       rhythmHintOther: 'Outro…', // i18n-draft
       rhythmHintPlaceholder: '— nenhum —', // i18n-draft
+      rhythmHintOtherPlaceholder: 'Descreva o estilo, ex.: cueca chilena, bossa nova…', // i18n-draft
       playLabel: '▶ Iniciar', // i18n-draft
       stopLabel: '■ Parar', // i18n-draft
       progressTitle: 'Progresso do ciclo de evolução', // i18n-draft
+      noKeyWarning:
+        'Configure o serviço de IA, o modelo e a chave API antes de iniciar o autopilot.', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

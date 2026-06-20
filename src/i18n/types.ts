@@ -258,12 +258,16 @@ export interface Dictionary {
       rhythmHintOther: string;
       /** Placeholder for the rhythm hint select default option and free-text input (Phase 06 step 06.3) */
       rhythmHintPlaceholder: string;
+      /** Placeholder for the free-text input shown when "Otro…" is selected (Phase 06 browser-test fix A-06-05) */
+      rhythmHintOtherPlaceholder: string;
       /** Label for the play/start autopilot button (Phase 06 step 06.3) */
       playLabel: string;
       /** Label for the stop autopilot button (Phase 06 step 06.3) */
       stopLabel: string;
       /** title/aria-label on the progress bar container (Phase 06 step 06.3) */
       progressTitle: string;
+      /** Warning shown when startAutopilot is attempted without an API key configured (Phase 06 browser-test fix A-06-06) */
+      noKeyWarning: string;
     };
     /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
     recipeCard: {
