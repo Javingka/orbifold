@@ -226,6 +226,7 @@ const en: Dictionary = {
       noKeyWarning: 'Set up the AI service, model, and API key before starting autopilot.',
       lagWarning: 'Cycle skipped: the AI service took longer than the configured interval.',
       errorLlm: 'AI service error: {error}',
+      errorRateLimit: 'Rate limit reached. Autopilot will retry on the next cycle.',
     },
     recipeCard: {
       title: 'Applied recipe',

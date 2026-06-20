@@ -227,6 +227,8 @@ const pt: Dictionary = {
         'Configure o serviço de IA, o modelo e a chave API antes de iniciar o autopilot.', // i18n-draft
       lagWarning: 'Ciclo ignorado: o serviço de IA demorou mais que o intervalo.', // i18n-draft
       errorLlm: 'Erro do serviço de IA: {error}', // i18n-draft
+      errorRateLimit:
+        'Limite de velocidade atingido. O autopilot tentará novamente no próximo ciclo.', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

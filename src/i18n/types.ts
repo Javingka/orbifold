@@ -272,6 +272,8 @@ export interface Dictionary {
       lagWarning: string;
       /** Error message from the LLM provider — {error} is the interpolated error string (Phase 06 heuristic fix) */
       errorLlm: string;
+      /** Rate-limit (429) specific error message — autopilot will retry next cycle (Phase 06 fix) */
+      errorRateLimit: string;
     };
     /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
     recipeCard: {

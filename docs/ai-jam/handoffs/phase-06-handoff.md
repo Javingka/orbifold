@@ -518,3 +518,64 @@ Not applicable — this change extends providers.ts beyond the prototype (which 
 | `localStorage` key `orbifold.apiKey.gemini` | proxy:static-analysis | COVERED | `loadApiKey`/`saveApiKey` use `orbifold.apiKey.${provider}` — no code change needed |
 | No i18n change needed (labels from PROVIDERS) | verified | COVERED | All 4 locale files searched; no provider strings found |
 | Quality gate (tsc/lint/1553 tests/build) | live-system | COVERED | All four pass; see table above |
+
+---
+
+## Fix: Slim availableRecipeSummaries + 429 rate-limit message
+
+Status: COMPLETE — Date: 2026-06-20 — Branch: `ai-jam/phase-06`
+Commit: `fix(agent): Phase 06 — slim availableRecipeSummaries + 429 rate-limit message`
+
+### Changes made
+
+Two targeted fixes: one reducing LLM input token count on every autopilot call, one adding a specific user-visible message for 429 rate-limit errors.
+
+#### Fix 1 — Slim `availableRecipeSummaries` payload (`src/agent/agent.ts`)
+
+Previously `sendEvolution()` sent only recipe ids in `availableRecipes` (an array of strings). Replaced with slim summary objects carrying only the fields the LLM needs for recipe selection: `id`, `name`, `density`, and `meter`. Full fields (`agentInstruction`, `userIntents[]`, `rhythmIds[]`) are not needed for the LLM to reference a recipe by id.
+
+- Renamed `availableRecipes` → `availableRecipeSummaries` throughout `sendEvolution()`.
+- The map is now `.map(({ id, name, density, meter }) => ({ id, name, density, meter }))`.
+- The `userMessage` JSON key is now `availableRecipeSummaries`.
+- All three occurrences of `"availableRecipes"` in `SYSTEM_PROMPT_EVOLUTION` updated to `"availableRecipeSummaries"`.
+
+Note: The prior code sent only ids (a `string[]`). This change shifts to `{id, name, density, meter}[]` — giving the LLM more context to choose the right recipe, while remaining smaller than full `MusicalRecipe` objects (which include `agentInstruction`, `userIntents[]`, `rhythmIds[]`, `harmonyId`, `bpmRange`).
+
+#### Fix 2 — 429 rate-limit specific error message
+
+`src/i18n/types.ts`: Added `errorRateLimit: string` key to `Dictionary.agent.autopilot`.
+
+All 4 locale files updated:
+
+| Locale | Value |
+| ------ | ----- |
+| es | `'Límite de velocidad alcanzado. El autopilot reintentará en el próximo ciclo.'` |
+| en | `'Rate limit reached. Autopilot will retry on the next cycle.'` |
+| pt | `'Limite de velocidade atingido. O autopilot tentará novamente no próximo ciclo.'` (i18n-draft) |
+| zh | `'达到速率限制。自动驾驶将在下一个周期重试。'` (i18n-draft) |
+
+`src/agent/agent.ts` — `sendEvolution()` `if (!res.ok)` block: Added `if (res.status === 429)` branch before the generic error handler: sets `llmError: '__rateLimit__'` (sentinel string) and returns early. The sentinel avoids interpolating an HTTP status into the error message; the UI decodes it.
+
+`src/ui/AgentPanel.svelte` — `{#if autopilot.llmError}` block: Updated to ternary: `autopilot.llmError === '__rateLimit__'` shows `$t('agent.autopilot.errorRateLimit')`; any other error string falls through to the existing `errorLlm` + `.replace('{error}', ...)` path.
+
+### Quality gate (slim payload + 429 fix)
+
+| Check | Result |
+| ----- | ------ |
+| `pnpm exec tsc --noEmit` | clean (no output) |
+| `pnpm lint` | clean — All matched files use Prettier code style! |
+| `pnpm test` | 1553 passed (28 test files) — no regressions |
+| `pnpm build` | dist/assets/index-*.js 1,185.24 kB — built in 1.69s |
+
+### Acceptance Coverage Table (slim payload + 429 fix)
+
+| Criterion | Method | Status | Evidence |
+| --------- | ------ | ------ | -------- |
+| `availableRecipeSummaries` replaces `availableRecipes` in LLM userMessage | proxy:static-analysis | COVERED | `sendEvolution()` builds `{id, name, density, meter}[]`; key in `JSON.stringify` is `availableRecipeSummaries` |
+| `SYSTEM_PROMPT_EVOLUTION` updated: all 3 occurrences of `availableRecipes` → `availableRecipeSummaries` | proxy:static-analysis | COVERED | 3 edits in prompt string confirmed |
+| `agentInstruction`, `userIntents`, `rhythmIds` NOT sent to LLM | proxy:static-analysis | COVERED | Destructuring `({ id, name, density, meter })` excludes all other fields |
+| 429 response → `llmError: '__rateLimit__'` sentinel | proxy:static-analysis | COVERED | `if (res.status === 429)` branch in `sendEvolution()` |
+| Non-429 HTTP errors → `llmError: errMsg` unchanged | proxy:static-analysis | COVERED | Generic branch after the 429 check |
+| `errorRateLimit` key in all 4 locales, key-parity test passes | unit | COVERED | `tests/i18n/key-parity.test.ts` passes (1553 total) |
+| UI shows `errorRateLimit` when sentinel; falls through to `errorLlm` otherwise | proxy:static-analysis | COVERED | Ternary in `{#if autopilot.llmError}` block in `AgentPanel.svelte` |
+| Quality gate (tsc clean / lint clean / 1553 tests / build succeeds) | live-system | COVERED | All four pass; see table above |

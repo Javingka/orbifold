@@ -720,7 +720,9 @@
         <!-- LLM error: shown when the provider returned an error -->
         {#if autopilot.llmError}
           <p class="autopilot-warning">
-            {$t('agent.autopilot.errorLlm').replace('{error}', autopilot.llmError)}
+            {autopilot.llmError === '__rateLimit__'
+              ? $t('agent.autopilot.errorRateLimit')
+              : $t('agent.autopilot.errorLlm').replace('{error}', autopilot.llmError)}
           </p>
         {/if}
       </div>

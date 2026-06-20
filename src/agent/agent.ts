@@ -269,7 +269,7 @@ Cuando el estado actual encaje con una receta musical conocida, puedes incluir e
 en tu respuesta para indicar qué receta estás aplicando o anotando.
 
 Sub-campos de "musicalIntent":
-  • "recipeId"    — id de una receta de la lista "availableRecipes" proporcionada en el mensaje.
+  • "recipeId"    — id de una receta de la lista "availableRecipeSummaries" proporcionada en el mensaje.
                     Cuando incluyes solo "recipeId" (sin "rhythm" ni "harmony"), el motor de Orbifold
                     resuelve automáticamente el ritmo y la armonía de esa receta.
   • "style"       — etiqueta de estilo libre (ej. "bossa nova", "modal dórico", "afrocubano").
@@ -278,7 +278,7 @@ Sub-campos de "musicalIntent":
 
 REGLAS IMPORTANTES:
 1. "musicalIntent" NO reemplaza "rhythm"/"harmony": puedes incluir ambos (evolución explícita + anotación de intento) o solo "musicalIntent.recipeId" (el motor resuelve la receta).
-2. Usa solo ids que aparezcan en la lista "availableRecipes" del mensaje de usuario.
+2. Usa solo ids que aparezcan en la lista "availableRecipeSummaries" del mensaje de usuario.
 3. "saveAsBlock" NO debe aparecer NUNCA en respuestas de evolución, tampoco junto a "musicalIntent".
 
 Ejemplo 1 — solo musicalIntent.recipeId (el motor aplica la receta completa):
@@ -384,7 +384,7 @@ Respuesta de evolución válida (cambio coherente pequeño — añade un hit de 
 \`\`\`
 
 ══════════ IMPROVISACIÓN INFORMADA ══════════
-Si el estado actual no encaja claramente con ninguna receta de "availableRecipes",
+Si el estado actual no encaja claramente con ninguna receta de "availableRecipeSummaries",
 puedes generar una evolución culturalmente informada:
 
 A. RAZONA PRIMERO (internamente): considera las características rítmicas/armónicas
@@ -455,10 +455,17 @@ export async function sendEvolution(): Promise<void> {
       }),
     },
   };
-  // Inject available recipe ids so the LLM knows which ids are valid at call time.
-  // The list is dynamic (computed from the expressible recipe catalog) and injected
-  // into the user message — not hardcoded in SYSTEM_PROMPT_EVOLUTION (which is static).
-  const availableRecipes = getExpressibleRecipes().map((r) => r.id);
+  // Inject available recipe summaries so the LLM knows which ids are valid at call time.
+  // Only send the minimal fields the LLM needs to reference a recipe:
+  // id (to use in musicalIntent.recipeId), name (human-readable), density, meter.
+  // Full agentInstruction / userIntents / rhythmIds are not needed for recipe selection.
+  // Saves ~1000-1500 input tokens vs sending full MusicalRecipe objects.
+  const availableRecipeSummaries = getExpressibleRecipes().map(({ id, name, density, meter }) => ({
+    id,
+    name,
+    density,
+    meter,
+  }));
 
   // Inject rhythm hint when the user has selected a style preference (Phase 06 step 06.2).
   // Uses human-readable name for catalog ids (getRhythmById fallback to id string).
@@ -472,7 +479,7 @@ export async function sendEvolution(): Promise<void> {
   }
 
   const userMessage = JSON.stringify(
-    { ...stateSnapshot, availableRecipes, ...rhythmHintPayload },
+    { ...stateSnapshot, availableRecipeSummaries, ...rhythmHintPayload },
     null,
     2
   );
@@ -491,6 +498,10 @@ export async function sendEvolution(): Promise<void> {
     const data: unknown = await res.json();
 
     if (!res.ok) {
+      if (res.status === 429) {
+        setAutopilot({ llmError: '__rateLimit__' }); // sentinel, decoded in UI
+        return;
+      }
       const dataObj = data as Record<string, unknown>;
       const errMsg =
         ((dataObj.error as Record<string, unknown>)?.message as string) ?? `HTTP ${res.status}`;

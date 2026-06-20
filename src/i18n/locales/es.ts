@@ -229,6 +229,8 @@ const es: Dictionary = {
       lagWarning:
         'El ciclo no pudo atenderse: la respuesta del servicio de IA tardó más que el intervalo configurado.',
       errorLlm: 'Error del servicio de IA: {error}',
+      errorRateLimit:
+        'Límite de velocidad alcanzado. El autopilot reintentará en el próximo ciclo.',
     },
     recipeCard: {
       title: 'Receta aplicada',
