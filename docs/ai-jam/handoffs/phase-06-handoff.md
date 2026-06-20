@@ -315,3 +315,56 @@ Five browser-test failures corrected before the phase merge. All changes are bac
 | A-06-05: free-text placeholder uses distinct i18n key | CLOSED | `rhythmHintOtherPlaceholder` key added; all 4 locales; template updated |
 | A-06-06: API key guard before startAutopilot | CLOSED | Key guard in `handlePlayStop()`; `noKeyWarning` key; warning `<p>` + CSS rule |
 | A-06-07: progress bar stays at 0% while not playing | CLOSED | `startAutopilot()` → `timerStartedAt: 0`; `tick(!isPlaying)` → `timerStartedAt: 0`; 2 new unit tests |
+
+---
+
+## Fix: A-06-07 — nowPlaying subscription drives timerStartedAt on playback start
+
+**Status:** COMPLETE
+**Date:** 2026-06-19
+**Branch:** `ai-jam/phase-06`
+**Commit:** `fix(agent): Phase 06 A-06-07 — nowPlaying subscription drives timerStartedAt on playback start`
+
+### Root cause
+
+The prior fix set `timerStartedAt: 0` in `startAutopilot()` and only promoted it to `Date.now()` inside `tick()`, which fires every N cycles (8+ seconds at typical BPM). The progress bar therefore stayed at 0% for the entire first interval, making the UI appear broken.
+
+### Implementation
+
+**`src/agent/autopilot.ts`**
+
+Three coordinated changes:
+
+1. **Module-level `_playbackUnsub`**: Added `let _playbackUnsub: (() => void) | null = null` to hold the `sessionStore` subscription handle. Null when autopilot is stopped.
+
+2. **`startAutopilot()` rewritten**: Reads `session.nowPlaying.label` at call time. If audio is already playing → sets `timerStartedAt: Date.now()` immediately. Otherwise → sets `timerStartedAt: 0` and subscribes to `sessionStore`; the subscription fires `setAutopilot({ timerStartedAt: Date.now() })` the moment `nowPlaying.label` becomes non-null (with guard: `enabled && timerStartedAt === 0` to prevent double-setting).
+
+3. **`tick()` simplified**: The `nowPlaying.label` check (synchronous, no dynamic import) is now the first audio gate. If `nowPlaying.label === null`, resets bar to 0 and returns. Then calls `isPlaying()` (dynamic import, ADR 0022 D6 engine-level guard) before calling `sendEvolution()`. The two guards are now distinct: `nowPlaying` for the bar, `isPlaying()` for the engine.
+
+4. **`stopAutopilot()` extended**: Cleans up `_playbackUnsub` (`_playbackUnsub(); _playbackUnsub = null`) so no stale subscription remains after stop.
+
+**`tests/autopilot.test.ts`**
+
+- Added `setPlaying()` / `setStopped()` helpers that update `sessionStore.nowPlaying` directly.
+- Updated all timer-progression tests (A-01-02 through A-01-05 concurrency/idempotency tests) to call `setPlaying()` before `startAutopilot()`, since the new `tick()` exits early when `nowPlaying.label === null`.
+- Updated D6 tests: renamed to clarify that `nowPlaying.label` is the bar gate and `isPlaying()` is the engine gate; the `isPlaying=false` test now sets `nowPlaying.label` non-null so the test actually exercises the `isPlaying()` path.
+- Replaced the single prior A-06-07 test with five targeted tests (`A-06-07a` through `A-06-07e`) covering: no audio → timerStartedAt stays 0; audio already playing → immediate non-zero; subscription fires on first play; subscription cleaned up after stop; subscription respects `enabled=false` guard.
+
+### Quality gate
+
+| Check | Result |
+|-------|--------|
+| `pnpm exec tsc --noEmit` | clean (no output) |
+| `pnpm lint` | clean — All matched files use Prettier code style! |
+| `pnpm test` | 1547 passed (28 test files) — +4 new tests vs prior (1543) |
+| `pnpm build` | dist/assets/index-*.js 1,182 kB — built in 1.68s |
+
+### Acceptance Coverage Table
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| A-06-07a: `startAutopilot` with no audio → `timerStartedAt` stays 0 | COVERED | Unit test A-06-07a; `startAutopilot()` reads `nowPlaying.label` at call time |
+| A-06-07b: `startAutopilot` with audio already playing → `timerStartedAt` non-zero immediately | COVERED | Unit test A-06-07b; `alreadyPlaying` branch sets `Date.now()` |
+| A-06-07c: subscription fires when `nowPlaying.label` becomes non-null after start | COVERED | Unit test A-06-07c; `sessionStore.subscribe` callback |
+| A-06-07d: `stopAutopilot` cleans up subscription | COVERED | Unit test A-06-07d; `_playbackUnsub()` in `stopAutopilot()` |
+| A-06-07e: subscription respects `enabled=false` guard | COVERED | Unit test A-06-07e; subscription condition checks `s.autopilot.enabled` |
