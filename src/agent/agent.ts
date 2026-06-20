@@ -485,7 +485,7 @@ export async function sendEvolution(): Promise<void> {
       method: 'POST',
       headers: provider.headers(key),
       body: JSON.stringify(
-        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }])
+        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }], 400)
       ),
     });
     const data: unknown = await res.json();

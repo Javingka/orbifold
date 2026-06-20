@@ -18,7 +18,7 @@
     - Chat messages held in local Svelte reactive array (mirrors chatHistory in agent.ts).
     - Code blocks rendered via Svelte {#each} (not innerHTML/DOM manipulation).
     - nowPlaying.source read from $sessionStore (not prototype global currentCode / setNowPlaying).
-    - Provider select shows only 'Anthropic' and 'OpenRouter' (no OpenAI — Pilot decision).
+    - Provider select iterates Object.entries(PROVIDERS) — shows Anthropic, OpenRouter, Google Gemini (no OpenAI — Pilot decision).
     - autofix retry indicator uses Svelte reactive variable, not prototype DOM load element.
 -->
 <script lang="ts">
@@ -516,8 +516,9 @@
       title={$t('agent.providerTitle')}
       on:change={(e) => handleProviderChange(/** @type {HTMLSelectElement} */ (e.target).value)}
     >
-      <option value="anthropic">Anthropic</option>
-      <option value="openrouter">OpenRouter</option>
+      {#each Object.entries(PROVIDERS) as [key, cfg]}
+        <option value={key}>{cfg.label}</option>
+      {/each}
     </select>
     <input
       id="agentModel"

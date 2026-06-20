@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Orbifold — AI provider adapters: Anthropic and OpenRouter.
+// Orbifold — AI provider adapters: Anthropic, OpenRouter, and Google Gemini.
 //
 // Phase 06 step 06.3.
 //
 // Prototype parity: reference/orbifold.html lines 1587–1603 (PROVIDERS object).
 // Known deviation: OpenAI provider omitted — Pilot decision (phase-06.md spec).
 // Anthropic model updated: 'claude-sonnet-4-6' (not prototype's 'claude-sonnet-4-20250514').
+// Google Gemini added via OpenAI-compatible endpoint (generativelanguage.googleapis.com/v1beta/openai).
 //
 // No DOM imports.
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /** Provider keys supported by this version of Orbifold. */
-export type ProviderKey = 'anthropic' | 'openrouter';
+export type ProviderKey = 'anthropic' | 'openrouter' | 'gemini';
 
 /**
  * A single message in the conversation history.
@@ -40,7 +41,7 @@ export interface ProviderConfig {
   defaultModel: string;
   keyHint: string;
   headers(key: string): Record<string, string>;
-  body(model: string, system: string, msgs: ChatMessage[]): unknown;
+  body(model: string, system: string, msgs: ChatMessage[], maxTokens?: number): unknown;
   parse(data: unknown): string;
 }
 
@@ -49,7 +50,7 @@ export interface ProviderConfig {
 /**
  * Provider adapter registry.
  *
- * Two entries: 'anthropic' and 'openrouter'.
+ * Three entries: 'anthropic', 'openrouter', and 'gemini'.
  * OpenAI is intentionally absent — Pilot decision (phase-06.md §step 06.3 spec).
  *
  * Prototype parity: reference/orbifold.html lines 1587–1603 (PROVIDERS object).
@@ -59,6 +60,7 @@ export interface ProviderConfig {
  *   - OpenRouter defaultModel changed from 'openrouter/owl-alpha' to 'openrouter/auto'
  *     per phase-06.md spec.
  *   - 'Content-Type' header included in all entries for clarity; prototype had it inline.
+ *   - Google Gemini added via OpenAI-compatible endpoint (not in prototype).
  */
 export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
   anthropic: {
@@ -77,9 +79,9 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     }),
 
     // Prototype line 1601: Anthropic uses top-level `system:` + `messages:` format.
-    body: (model: string, system: string, msgs: ChatMessage[]): unknown => ({
+    body: (model: string, system: string, msgs: ChatMessage[], maxTokens = 1000): unknown => ({
       model,
-      max_tokens: 1000,
+      max_tokens: maxTokens,
       system,
       messages: msgs,
     }),
@@ -107,13 +109,39 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     }),
 
     // Prototype line 1591: OpenAI-compatible body — system message prepended to messages.
-    body: (model: string, system: string, msgs: ChatMessage[]): unknown => ({
+    body: (model: string, system: string, msgs: ChatMessage[], maxTokens = 1000): unknown => ({
       model,
-      max_tokens: 1000,
+      max_tokens: maxTokens,
       messages: [{ role: 'system', content: system }, ...msgs],
     }),
 
     // Prototype line 1592: parse reads choices[0].message.content.
+    parse: (data: unknown): string => {
+      const d = data as { choices?: Array<{ message?: { content?: string } }> };
+      return d.choices?.[0]?.message?.content ?? '';
+    },
+  },
+
+  gemini: {
+    label: 'Google Gemini',
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    defaultModel: 'gemini-2.0-flash-lite',
+    keyHint: 'AIza…  (aistudio.google.com/apikey)',
+
+    // Google's OpenAI-compatible endpoint uses Bearer token auth (no special headers needed).
+    headers: (key: string): Record<string, string> => ({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + key,
+    }),
+
+    // OpenAI-compatible body — same shape as openrouter.
+    body: (model: string, system: string, msgs: ChatMessage[], maxTokens = 1000): unknown => ({
+      model,
+      max_tokens: maxTokens,
+      messages: [{ role: 'system', content: system }, ...msgs],
+    }),
+
+    // OpenAI-compatible parse — same as openrouter.
     parse: (data: unknown): string => {
       const d = data as { choices?: Array<{ message?: { content?: string } }> };
       return d.choices?.[0]?.message?.content ?? '';

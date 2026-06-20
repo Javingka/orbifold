@@ -451,3 +451,70 @@ Five coordinated fixes across state, agent, autopilot, i18n, and UI layers.
 | lagWarning i18n shown in UI | PROXY | `{#if autopilot.lagWarning}` block in AgentPanel; key-parity test passes |
 | llmError i18n shown in UI | PROXY | `{#if autopilot.llmError}` block in AgentPanel; key-parity test passes |
 | Quality gate (tsc/lint/test/build) | COVERED | All four pass; see table above |
+
+---
+
+## Fix: Gemini provider + max_tokens 400 for sendEvolution
+
+**Status:** COMPLETE
+**Date:** 2026-06-20
+**Branch:** `ai-jam/phase-06`
+**Commit:** `feat(agent): Phase 06 — Gemini provider + max_tokens 400 for sendEvolution`
+
+### Changes made
+
+**`src/agent/providers.ts`**
+
+- Added `'gemini'` to `ProviderKey` union: `'anthropic' | 'openrouter' | 'gemini'`.
+- Updated `ProviderConfig.body()` signature: added optional `maxTokens?: number` parameter.
+- Updated `anthropic` and `openrouter` body implementations to accept `maxTokens = 1000` (default unchanged — no behavioral change for callers that omit the argument).
+- Added `gemini` entry to `PROVIDERS` using Google's OpenAI-compatible endpoint (`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`). Uses `Bearer` auth header (no special headers beyond Content-Type). Body and parse shapes match `openrouter` (OpenAI-compatible format). Default model: `gemini-2.0-flash-lite`. Key hint: `AIza…  (aistudio.google.com/apikey)`. `localStorage` key is `orbifold.apiKey.gemini` (automatic from `loadApiKey` / `saveApiKey` using `orbifold.apiKey.${provider}` pattern).
+- Updated header comment from "Two entries: 'anthropic' and 'openrouter'" to "Three entries: 'anthropic', 'openrouter', and 'gemini'".
+
+**`src/agent/agent.ts`**
+
+- `sendEvolution()` now passes `400` as the 4th argument to `provider.body(...)`: `provider.body(model, SYSTEM_PROMPT_EVOLUTION, [...], 400)`.
+- `send()` and `requestAutofix()` calls remain as-is (no 4th argument → default 1000 applies).
+
+**`src/ui/AgentPanel.svelte`**
+
+- The hardcoded `<option value="anthropic">Anthropic</option>` / `<option value="openrouter">OpenRouter</option>` pair replaced with `{#each Object.entries(PROVIDERS) as [key, cfg]}<option value={key}>{cfg.label}</option>{/each}`.
+- Adding future providers to `PROVIDERS` automatically surfaces them in the selector — no UI change needed.
+- Key hint placeholder already driven by `PROVIDERS[agentProvider].keyHint` (unchanged); Gemini hint `AIza…  (aistudio.google.com/apikey)` appears automatically when Gemini is selected.
+- Provider deviation comment updated to reflect the three-provider set.
+
+### i18n verification
+
+Searched all locale files for `'anthropic'` and `'openrouter'`. Neither string appears in any locale file — provider labels come from `PROVIDERS[key].label`, not from the Dictionary. No i18n change needed.
+
+### Tests
+
+No `providers.test.ts` exists prior to this change. Per spec: "If there are no provider unit tests, no new test file needed — the TypeScript types + `tsc --noEmit` are the contract." The new `ProviderKey` union, the `maxTokens?` parameter, and the Gemini entry are all validated by the TypeScript compiler. All 1553 existing tests continue to pass.
+
+### Prototype parity
+
+Not applicable — this change extends providers.ts beyond the prototype (which had no Gemini entry). The `max_tokens` default value (1000) matches the prototype's hardcoded value.
+
+### Quality gate (Gemini + max_tokens fix)
+
+| Check | Result |
+|-------|--------|
+| `pnpm exec tsc --noEmit` | clean (no output) |
+| `pnpm lint` | clean — All matched files use Prettier code style! |
+| `pnpm test` | 1553 passed (28 test files) — no regressions |
+| `pnpm build` | dist/assets/index-*.js 1,184.64 kB — built in 1.67s |
+
+### Acceptance Coverage Table (Gemini + max_tokens fix)
+
+| Criterion | Method | Status | Evidence |
+| --- | --- | --- | --- |
+| `ProviderKey` includes `'gemini'` | TypeScript | COVERED | `tsc --noEmit` clean; union extended |
+| Gemini entry in `PROVIDERS` with correct URL, model, key hint, headers, body, parse | TypeScript | COVERED | `tsc --noEmit` enforces `ProviderConfig` shape; entry present |
+| `body()` signature accepts optional `maxTokens?: number` | TypeScript | COVERED | `ProviderConfig` interface updated; both existing providers default to 1000 |
+| `sendEvolution()` passes `maxTokens = 400` | proxy:static-analysis | COVERED | `provider.body(..., 400)` in `sendEvolution()` only |
+| `send()` and `requestAutofix()` use default 1000 | proxy:static-analysis | COVERED | Both call sites omit 4th argument |
+| Gemini option appears in provider selector | proxy:static-analysis | COVERED | `Object.entries(PROVIDERS)` loop renders all three keys |
+| Key hint driven by `PROVIDERS[agentProvider].keyHint` | proxy:static-analysis | COVERED | Pre-existing `keyPlaceholder = PROVIDERS[agentProvider].keyHint` unchanged |
+| `localStorage` key `orbifold.apiKey.gemini` | proxy:static-analysis | COVERED | `loadApiKey`/`saveApiKey` use `orbifold.apiKey.${provider}` — no code change needed |
+| No i18n change needed (labels from PROVIDERS) | verified | COVERED | All 4 locale files searched; no provider strings found |
+| Quality gate (tsc/lint/1553 tests/build) | live-system | COVERED | All four pass; see table above |
