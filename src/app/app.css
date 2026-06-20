@@ -1053,8 +1053,10 @@ textarea {
   background: var(--dom);
 }
 
-/* API key warning — shown when autopilot start is blocked by missing key (Phase 06 fix A-06-06) */
-.autopilot-key-warning {
+/* API key warning — shown when autopilot start is blocked by missing key (Phase 06 fix A-06-06).
+   .autopilot-warning is the generic alias added by the Phase 06 heuristic fix (lag / LLM error). */
+.autopilot-key-warning,
+.autopilot-warning {
   font-size: 10px;
   color: var(--dom);
   margin: 0;

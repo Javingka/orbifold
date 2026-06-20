@@ -710,6 +710,18 @@
             style="width: {progressPct}%"
           ></div>
         </div>
+
+        <!-- Lag warning: shown when LLM took longer than the interval -->
+        {#if autopilot.lagWarning}
+          <p class="autopilot-warning">{$t('agent.autopilot.lagWarning')}</p>
+        {/if}
+
+        <!-- LLM error: shown when the provider returned an error -->
+        {#if autopilot.llmError}
+          <p class="autopilot-warning">
+            {$t('agent.autopilot.errorLlm').replace('{error}', autopilot.llmError)}
+          </p>
+        {/if}
       </div>
     {/if}
   </div>

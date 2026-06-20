@@ -226,6 +226,9 @@ const es: Dictionary = {
       progressTitle: 'Progreso del ciclo de evolución',
       noKeyWarning:
         'Configura el servicio de IA, el modelo y la clave API antes de iniciar el autopilot.',
+      lagWarning:
+        'El ciclo no pudo atenderse: la respuesta del servicio de IA tardó más que el intervalo configurado.',
+      errorLlm: 'Error del servicio de IA: {error}',
     },
     recipeCard: {
       title: 'Receta aplicada',

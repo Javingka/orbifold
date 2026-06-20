@@ -39,6 +39,20 @@ vi.mock('../src/audio/strudel.js', () => ({
   setTempo: vi.fn(),
 }));
 
+// Mock session.js play functions: sendEvolution now calls playGroove/playProgression/
+// playSession when nowPlaying.label === null after applying a recipe. These functions
+// use getAudio() which pulls in the real strudel.ts (DOM/WebAudio). Mock them here
+// so the tests remain Node-safe and focus on recipe-wiring logic.
+vi.mock('../src/state/session.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/state/session.js')>();
+  return {
+    ...actual,
+    playGroove: vi.fn().mockResolvedValue(undefined),
+    playProgression: vi.fn().mockResolvedValue(undefined),
+    playSession: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 // Mock providers.js: loadApiKey returns a valid key so sendEvolution does not
 // early-exit. The provider adapter is set up to work with our fetch mock.
 vi.mock('../src/agent/providers.js', () => ({

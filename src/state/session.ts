@@ -340,6 +340,13 @@ export interface NowPlaying {
  *                     0 when stopped. Updated at start and on each tick boundary.
  *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
  *                     OD-1 resolved: Option A (field in AutopilotState).
+ * - `lagWarning`      True when the LLM took longer than the interval (previous
+ *                     tick's sendEvolution was still in flight when the next tick
+ *                     fired). Cleared when a new interval starts cleanly.
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
+ * - `llmError`        Human-readable error from the LLM provider, or null when
+ *                     the last evolution call succeeded. Cleared on success.
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
  */
 export interface AutopilotState {
   enabled: boolean;
@@ -348,6 +355,8 @@ export interface AutopilotState {
   rhythmHint: string;
   rhythmHintText: string;
   timerStartedAt: number;
+  lagWarning: boolean;
+  llmError: string | null;
 }
 
 // ── LastRecipeDisplay ────────────────────────────────────────────────────────
@@ -446,6 +455,8 @@ export const DEFAULT_SESSION_STATE: SessionState = {
     rhythmHint: '',
     rhythmHintText: '',
     timerStartedAt: 0,
+    lagWarning: false,
+    llmError: null,
   },
   // lastRecipeApplied: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7 pattern)
   lastRecipeApplied: undefined,

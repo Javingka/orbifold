@@ -20,7 +20,15 @@
 
 import { get } from 'svelte/store';
 
-import { sessionStore, requeueLive, setLastRecipeApplied } from '../state/session.js';
+import {
+  sessionStore,
+  requeueLive,
+  setLastRecipeApplied,
+  setAutopilot,
+  playGroove,
+  playProgression,
+  playSession,
+} from '../state/session.js';
 import type { LastRecipeDisplay } from '../state/session.js';
 import { rhythmCode, harmonyCode, sessionCode } from '../state/session.js';
 import { NOTE_NAMES } from '../core/theory/pitch.js';
@@ -482,8 +490,21 @@ export async function sendEvolution(): Promise<void> {
     });
     const data: unknown = await res.json();
 
+    if (!res.ok) {
+      const dataObj = data as Record<string, unknown>;
+      const errMsg =
+        ((dataObj.error as Record<string, unknown>)?.message as string) ?? `HTTP ${res.status}`;
+      setAutopilot({ llmError: errMsg });
+      return;
+    }
+
     const dataObj = data as Record<string, unknown>;
-    if (dataObj.error) return;
+    if (dataObj.error) {
+      const errMsg =
+        ((dataObj.error as Record<string, unknown>)?.message as string) ?? 'Unknown error';
+      setAutopilot({ llmError: errMsg });
+      return;
+    }
 
     txt = provider.parse(data);
     if (!txt) return; // Empty response — skip silently
@@ -546,6 +567,18 @@ export async function sendEvolution(): Promise<void> {
   // applyRhythmSpec / applyHarmonySpec update the store (visual) but do NOT call
   // requeueLive() — the audio re-queue must be triggered explicitly here.
   if (skill.rhythm || skill.harmony || recipeApplied) requeueLive();
+
+  // If nothing was playing before evolution, auto-start playback so the user hears the result.
+  const postState = get(sessionStore);
+  if (postState.nowPlaying.label === null) {
+    const hasRhythm = postState.rhythm.layers.length > 0;
+    const hasHarmony = postState.harmony.progression.length > 0;
+    if (hasRhythm && hasHarmony) await playSession();
+    else if (hasRhythm) await playGroove();
+    else if (hasHarmony) await playProgression();
+  }
+  // Clear any prior error on success
+  setAutopilot({ llmError: null });
 }
 
 // ── normalizeEuclidStrings ────────────────────────────────────────────────

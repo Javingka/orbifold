@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — unit tests for autopilot.ts and AutopilotState in session.ts.
 //
-// ai-jam Phase 01 step 01.3.
+// ai-jam Phase 01 step 01.3; revised Phase 06 heuristic fix.
+//
 // Covers acceptance IDs A-01-01 through A-01-05 and the chatHistory invariant.
-// A-06-07 fix: nowPlaying subscription drives timerStartedAt on playback start.
+// Phase 06 heuristic fix: removed isPlaying() guard (D6) and nowPlaying
+// subscription (A-06-07a–e). Added lag warning and auto-play heuristic tests.
 //
 // ADR 0022 binding:
 //   - D1: setAutopilot patches SessionState.autopilot; excluded from SavedSession (tested via store).
 //   - D2: startAutopilot fires sendEvolution after intervalMs (BPM-derived setInterval).
-//   - D3: _isEvolving concurrency guard prevents overlapping calls.
+//   - D3: _isEvolving concurrency guard prevents overlapping calls; lagWarning set on second tick.
 //   - D4: sendEvolution does NOT push to chatHistory.
 //   - D5: BPM from get(sessionStore).bpm.
-//   - D6: isPlaying() guard — tick is skipped when isPlaying returns false.
 //
 // Runs in Node (Vitest default env) — no AudioContext, no DOM required.
 // Fake timers via vi.useFakeTimers() / vi.useRealTimers().
@@ -29,14 +30,22 @@ vi.mock('../src/agent/agent.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/audio/strudel.js', () => ({
-  isPlaying: vi.fn().mockReturnValue(true),
-}));
+// Mock session.js: preserve the real store/actions, mock the play functions
+// that autopilot.ts calls for auto-play heuristics.
+vi.mock('../src/state/session.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/state/session.js')>();
+  return {
+    ...actual,
+    playGroove: vi.fn().mockResolvedValue(undefined),
+    playProgression: vi.fn().mockResolvedValue(undefined),
+    playSession: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 import { sessionStore, DEFAULT_SESSION_STATE, setAutopilot } from '../src/state/session';
+import { playGroove, playProgression, playSession } from '../src/state/session';
 import { chatHistory } from '../src/agent/agent';
 import { sendEvolution } from '../src/agent/agent.js';
-import { isPlaying } from '../src/audio/strudel.js';
 import { startAutopilot, stopAutopilot } from '../src/agent/autopilot';
 
 // ── Setup / teardown ──────────────────────────────────────────────────────
@@ -47,7 +56,12 @@ beforeEach(() => {
   // Reset mocks
   vi.mocked(sendEvolution).mockClear();
   vi.mocked(sendEvolution).mockResolvedValue(undefined);
-  vi.mocked(isPlaying).mockReturnValue(true);
+  vi.mocked(playGroove).mockClear();
+  vi.mocked(playGroove).mockResolvedValue(undefined);
+  vi.mocked(playProgression).mockClear();
+  vi.mocked(playProgression).mockResolvedValue(undefined);
+  vi.mocked(playSession).mockClear();
+  vi.mocked(playSession).mockResolvedValue(undefined);
   // Stop any running timer from previous test
   stopAutopilot();
   // Use fake timers for timer-based tests
@@ -66,20 +80,40 @@ function defaultIntervalMs(): number {
   return Math.round(((60000 * 4) / bpm) * autopilot.intervalCycles);
 }
 
-/** Put session into a "playing" state so tick() passes the nowPlaying guard. */
+/** Put session into a "playing" state. */
 function setPlaying(): void {
-  // Use sessionStore.update to avoid importing the full transport infrastructure.
   sessionStore.update((s) => ({
     ...s,
     nowPlaying: { label: 'session.playing.rhythm', source: 'rhythm' },
   }));
 }
 
-/** Put session into a "stopped" state so tick() fails the nowPlaying guard. */
+/** Put session into a "stopped" state. */
 function setStopped(): void {
   sessionStore.update((s) => ({
     ...s,
     nowPlaying: { label: null, source: null },
+  }));
+}
+
+/** Add a rhythm layer to the store so hasRhythm is true. */
+function addRhythmLayer(): void {
+  sessionStore.update((s) => ({
+    ...s,
+    rhythm: {
+      layers: [{ sound: 'bd' as const, steps: new Array(16).fill(1) as number[] }],
+    },
+  }));
+}
+
+/** Add a harmony chord to the store so hasHarmony is true. */
+function addHarmonyChord(): void {
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: {
+      ...s.harmony,
+      progression: [{ rootPc: 0, qual: 'maj' as const, gain: 0.6 }],
+    },
   }));
 }
 
@@ -120,6 +154,12 @@ describe('setAutopilot store action (A-01-01)', () => {
     expect(state.enabled).toBe(false);
     expect(state.intervalCycles).toBe(8);
   });
+
+  it('A-01-01: DEFAULT_SESSION_STATE.autopilot includes lagWarning: false and llmError: null', () => {
+    const state = get(sessionStore).autopilot;
+    expect(state.lagWarning).toBe(false);
+    expect(state.llmError).toBeNull();
+  });
 });
 
 // ── A-01-02: startAutopilot fires sendEvolution after intervalMs ──────────
@@ -129,7 +169,6 @@ describe('startAutopilot timer fires sendEvolution (A-01-02)', () => {
     const intervalMs = defaultIntervalMs(); // 16000 ms at 120 BPM, 8 cycles
 
     setAutopilot({ enabled: true });
-    setPlaying(); // nowPlaying.label must be non-null for tick() to proceed
     startAutopilot();
 
     // Advance fake clock by exactly intervalMs
@@ -142,7 +181,6 @@ describe('startAutopilot timer fires sendEvolution (A-01-02)', () => {
     const intervalMs = defaultIntervalMs();
 
     setAutopilot({ enabled: true });
-    setPlaying();
     startAutopilot();
 
     await vi.advanceTimersByTimeAsync(intervalMs * 2);
@@ -162,7 +200,6 @@ describe('startAutopilot timer fires sendEvolution (A-01-02)', () => {
     const { bpm } = get(sessionStore);
     const intervalMs = Math.round(((60000 * 4) / bpm) * 2); // 4000 ms at 120 BPM
 
-    setPlaying();
     startAutopilot();
     await vi.advanceTimersByTimeAsync(intervalMs);
 
@@ -173,14 +210,10 @@ describe('startAutopilot timer fires sendEvolution (A-01-02)', () => {
 // ── A-01-03: sendEvolution is called with session context (proxy test) ────
 
 describe('sendEvolution called with session context (A-01-03)', () => {
-  it('A-01-03: sendEvolution mock is called when timer fires (context injection tested via static analysis in step 01.5)', async () => {
-    // The actual context injection (JSON state passed to the LLM) is verified via
-    // SYSTEM_PROMPT_EVOLUTION static analysis in step 01.5 (A-01-08 proxy).
-    // Here we verify the mock was called — confirming the timer → sendEvolution path works.
+  it('A-01-03: sendEvolution mock is called when timer fires', async () => {
     const intervalMs = defaultIntervalMs();
 
     setAutopilot({ enabled: true });
-    setPlaying();
     startAutopilot();
     await vi.advanceTimersByTimeAsync(intervalMs);
 
@@ -193,7 +226,6 @@ describe('sendEvolution called with session context (A-01-03)', () => {
 describe('Concurrency guard _isEvolving (A-01-04)', () => {
   it('A-01-04: a second tick while sendEvolution is in flight does NOT call sendEvolution again', async () => {
     // Make sendEvolution hang: return a promise that never resolves during the test.
-    // This simulates a slow LLM call that keeps _isEvolving = true.
     let resolveEvolution!: () => void;
     const hangingPromise = new Promise<void>((resolve) => {
       resolveEvolution = resolve;
@@ -203,7 +235,6 @@ describe('Concurrency guard _isEvolving (A-01-04)', () => {
     const intervalMs = defaultIntervalMs();
 
     setAutopilot({ enabled: true });
-    setPlaying();
     startAutopilot();
 
     // Advance by one interval — first tick fires, sendEvolution called (returns hanging promise)
@@ -221,11 +252,8 @@ describe('Concurrency guard _isEvolving (A-01-04)', () => {
 
   it('A-01-04: manual send() chat history is unaffected by autopilot concurrency guard', () => {
     // chatHistory is module-level state from agent.ts; autopilot never touches it.
-    // This verifies the two paths (autopilot vs. manual send) are fully independent.
     const lengthBefore = chatHistory.length;
-    // Directly call sendEvolution (mocked — doesn't push to chatHistory)
     void sendEvolution();
-    // chatHistory length must be unchanged
     expect(chatHistory.length).toBe(lengthBefore);
   });
 });
@@ -237,10 +265,8 @@ describe('stopAutopilot clears timer (A-01-05)', () => {
     const intervalMs = defaultIntervalMs();
 
     setAutopilot({ enabled: true });
-    setPlaying();
     startAutopilot();
-    stopAutopilot(); // also sets enabled=false via store? No — stopAutopilot only clears timer.
-    // Manually disable so the enabled guard also fires (belt-and-suspenders test).
+    stopAutopilot();
     setAutopilot({ enabled: false });
 
     // Advance well past one interval — timer is cleared, no calls should fire
@@ -253,7 +279,6 @@ describe('stopAutopilot clears timer (A-01-05)', () => {
     const intervalMs = defaultIntervalMs();
 
     setAutopilot({ enabled: true });
-    setPlaying();
     startAutopilot();
     stopAutopilot();
 
@@ -268,7 +293,6 @@ describe('stopAutopilot clears timer (A-01-05)', () => {
     const intervalMs = defaultIntervalMs();
 
     setAutopilot({ enabled: true });
-    setPlaying();
     startAutopilot();
     startAutopilot(); // second call clears the first timer before creating a new one
 
@@ -283,150 +307,177 @@ describe('stopAutopilot clears timer (A-01-05)', () => {
 
 describe('chatHistory invariant (ADR 0022 D4)', () => {
   it('chatHistory.length is unchanged before and after calling sendEvolution directly', async () => {
-    // This test calls the REAL sendEvolution via the vi.mock — mock returns void immediately.
-    // The mock replaces the real sendEvolution, so no real fetch is made and no chatHistory push.
     const lengthBefore = chatHistory.length;
-
-    await sendEvolution(); // mock resolves immediately with undefined
-
+    await sendEvolution();
     expect(chatHistory.length).toBe(lengthBefore);
   });
 });
 
-// ── Audio-awareness guard: tick skipped when isPlaying returns false ──────
+// ── startAutopilot timerStartedAt — bar fills immediately ─────────────────
 
-describe('isPlaying guard (ADR 0022 D6)', () => {
-  it('D6: sendEvolution is NOT called when isPlaying() returns false (but nowPlaying.label is set)', async () => {
-    // nowPlaying.label must be non-null for tick() to reach the isPlaying() guard.
-    // If nowPlaying.label is null, tick() exits before ever calling isPlaying().
-    vi.mocked(isPlaying).mockReturnValue(false);
-
-    const intervalMs = defaultIntervalMs();
-
-    setAutopilot({ enabled: true });
-    setPlaying(); // nowPlaying.label = 'session.playing.rhythm' → passes nowPlaying guard
-    startAutopilot();
-    await vi.advanceTimersByTimeAsync(intervalMs);
-
-    // Tick fired: nowPlaying.label check passed, isPlaying() returned false → skipped
-    expect(sendEvolution).not.toHaveBeenCalled();
-  });
-
-  it('D6: sendEvolution IS called when isPlaying() returns true and nowPlaying.label is set', async () => {
-    vi.mocked(isPlaying).mockReturnValue(true);
-
-    const intervalMs = defaultIntervalMs();
-
-    setAutopilot({ enabled: true });
-    setPlaying(); // nowPlaying.label non-null → passes nowPlaying guard
-    startAutopilot();
-    await vi.advanceTimersByTimeAsync(intervalMs);
-
-    expect(sendEvolution).toHaveBeenCalledTimes(1);
-  });
-
-  it('D6: tick with nowPlaying.label=null resets timerStartedAt to 0 (progress bar stays empty)', async () => {
-    // With nowPlaying.label === null, tick() resets timerStartedAt to 0 and returns.
-    // isPlaying() is not consulted — the nowPlaying check is the first guard.
-    vi.mocked(isPlaying).mockReturnValue(true); // isPlaying irrelevant when nowPlaying.label=null
-
-    const intervalMs = defaultIntervalMs();
-
-    // Pre-set a non-zero timerStartedAt to simulate a prior start
-    setAutopilot({ enabled: true, timerStartedAt: Date.now() - 1000 });
+describe('startAutopilot timerStartedAt (bar fills immediately)', () => {
+  it('startAutopilot sets timerStartedAt to a non-zero value regardless of audio state', () => {
     setStopped(); // nowPlaying.label = null
-    startAutopilot();
-    // startAutopilot() will also set timerStartedAt to 0 because nowPlaying.label is null
-    // Then when tick fires, it also sees nowPlaying.label=null and keeps it at 0
-    await vi.advanceTimersByTimeAsync(intervalMs);
+    setAutopilot({ enabled: true });
 
-    // After a tick where nowPlaying.label is null, timerStartedAt must be 0
+    const before = Date.now();
+    startAutopilot();
+    const after = Date.now();
+
+    const ts = get(sessionStore).autopilot.timerStartedAt;
+    expect(ts).toBeGreaterThan(0);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
+  });
+
+  it('startAutopilot sets timerStartedAt to a non-zero value when audio is already playing', () => {
+    setPlaying();
+    setAutopilot({ enabled: true });
+
+    const before = Date.now();
+    startAutopilot();
+    const after = Date.now();
+
+    const ts = get(sessionStore).autopilot.timerStartedAt;
+    expect(ts).toBeGreaterThan(0);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
+  });
+
+  it('stopAutopilot resets timerStartedAt to 0', () => {
+    setAutopilot({ enabled: true });
+    startAutopilot();
+    expect(get(sessionStore).autopilot.timerStartedAt).toBeGreaterThan(0);
+    stopAutopilot();
     expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
   });
 });
 
-// ── Progress bar sync: A-06-07 — nowPlaying subscription drives timerStartedAt ──
+// ── Auto-play heuristics: startAutopilot calls play when configured but not playing ──
 
-describe('startAutopilot timerStartedAt init and nowPlaying subscription (A-06-07)', () => {
-  it('A-06-07a: startAutopilot with no audio playing sets timerStartedAt to 0 immediately', () => {
-    // When nowPlaying.label is null (no audio), timerStartedAt must stay 0.
-    setStopped(); // nowPlaying.label = null
-    setAutopilot({ enabled: true, timerStartedAt: Date.now() }); // pre-set non-zero
-
-    startAutopilot();
-
-    // Must be 0 — bar stays empty until audio begins
-    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
-  });
-
-  it('A-06-07b: startAutopilot with audio already playing sets timerStartedAt immediately (non-zero)', () => {
-    // When nowPlaying.label is non-null (audio playing), bar should start filling right away.
-    setPlaying(); // nowPlaying.label = 'session.playing.rhythm'
-    setAutopilot({ enabled: true });
-
-    const before = Date.now();
-    startAutopilot();
-    const after = Date.now();
-
-    const ts = get(sessionStore).autopilot.timerStartedAt;
-    expect(ts).toBeGreaterThan(0);
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(after);
-  });
-
-  it('A-06-07c: subscription starts bar when nowPlaying.label becomes non-null after start', () => {
-    // Autopilot started with no audio — bar is at 0.
-    setStopped(); // nowPlaying.label = null
-    setAutopilot({ enabled: true });
-    startAutopilot();
-
-    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0); // bar at 0
-
-    // Simulate audio starting (e.g., user presses play)
-    const before = Date.now();
-    setPlaying(); // nowPlaying.label becomes 'session.playing.rhythm'
-    const after = Date.now();
-
-    // Subscription should have fired and set timerStartedAt to non-zero
-    const ts = get(sessionStore).autopilot.timerStartedAt;
-    expect(ts).toBeGreaterThan(0);
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(after);
-  });
-
-  it('A-06-07d: stopAutopilot cleans up subscription — nowPlaying change after stop does NOT update timerStartedAt', () => {
-    // Start with no audio
-    setStopped(); // nowPlaying.label = null
-    setAutopilot({ enabled: true });
-    startAutopilot();
-
-    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
-
-    // Stop autopilot — subscription must be unsubscribed
-    stopAutopilot();
-    setAutopilot({ enabled: false });
-
-    // Now simulate audio starting
-    setPlaying();
-
-    // timerStartedAt must remain 0 — subscription was cleaned up by stopAutopilot()
-    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
-  });
-
-  it('A-06-07e: subscription does not fire when autopilot is disabled (enabled=false guard)', () => {
-    // If autopilot.enabled is false but subscription still exists somehow,
-    // the enabled guard in the subscription callback prevents the bar from starting.
+describe('Auto-play heuristics in startAutopilot', () => {
+  it('startAutopilot with nowPlaying.label=null and rhythm+harmony → playSession called', () => {
     setStopped();
-    setAutopilot({ enabled: false }); // disabled
+    addRhythmLayer();
+    addHarmonyChord();
+    setAutopilot({ enabled: true });
 
     startAutopilot();
-    // startAutopilot() sets timerStartedAt=0 because nowPlaying.label=null
-    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
 
-    // Simulate audio starting while autopilot is disabled
-    setPlaying();
+    expect(playSession).toHaveBeenCalledTimes(1);
+    expect(playGroove).not.toHaveBeenCalled();
+    expect(playProgression).not.toHaveBeenCalled();
+  });
 
-    // Subscription condition checks s.autopilot.enabled — false → no update
-    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
+  it('startAutopilot with nowPlaying.label=null and rhythm only → playGroove called', () => {
+    setStopped();
+    addRhythmLayer();
+    // No harmony
+    setAutopilot({ enabled: true });
+
+    startAutopilot();
+
+    expect(playGroove).toHaveBeenCalledTimes(1);
+    expect(playSession).not.toHaveBeenCalled();
+    expect(playProgression).not.toHaveBeenCalled();
+  });
+
+  it('startAutopilot with nowPlaying.label=null and harmony only → playProgression called', () => {
+    setStopped();
+    // No rhythm
+    addHarmonyChord();
+    setAutopilot({ enabled: true });
+
+    startAutopilot();
+
+    expect(playProgression).toHaveBeenCalledTimes(1);
+    expect(playSession).not.toHaveBeenCalled();
+    expect(playGroove).not.toHaveBeenCalled();
+  });
+
+  it('startAutopilot with nowPlaying.label=null and no rhythm/harmony → no auto-play called', () => {
+    setStopped();
+    // No layers, no progression
+    setAutopilot({ enabled: true });
+
+    startAutopilot();
+
+    expect(playSession).not.toHaveBeenCalled();
+    expect(playGroove).not.toHaveBeenCalled();
+    expect(playProgression).not.toHaveBeenCalled();
+  });
+
+  it('startAutopilot with audio already playing → no auto-play called', () => {
+    setPlaying(); // nowPlaying.label = 'session.playing.rhythm'
+    addRhythmLayer();
+    addHarmonyChord();
+    setAutopilot({ enabled: true });
+
+    startAutopilot();
+
+    expect(playSession).not.toHaveBeenCalled();
+    expect(playGroove).not.toHaveBeenCalled();
+    expect(playProgression).not.toHaveBeenCalled();
+  });
+});
+
+// ── Lag warning: tick sets lagWarning when _isEvolving is true ───────────
+
+describe('Lag warning (Phase 06 heuristic fix)', () => {
+  it('tick() with _isEvolving=true sets lagWarning=true, sendEvolution NOT called a second time', async () => {
+    // Make sendEvolution hang so _isEvolving stays true across intervals.
+    let resolveEvolution!: () => void;
+    const hangingPromise = new Promise<void>((resolve) => {
+      resolveEvolution = resolve;
+    });
+    vi.mocked(sendEvolution).mockReturnValueOnce(hangingPromise);
+
+    const intervalMs = defaultIntervalMs();
+
+    setAutopilot({ enabled: true });
+    startAutopilot();
+
+    // First tick: sendEvolution called, _isEvolving = true
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(sendEvolution).toHaveBeenCalledTimes(1);
+    expect(get(sessionStore).autopilot.lagWarning).toBe(false); // not yet lagging
+
+    // Second tick fires while _isEvolving is still true → lagWarning set
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(sendEvolution).toHaveBeenCalledTimes(1); // not called again
+    expect(get(sessionStore).autopilot.lagWarning).toBe(true);
+
+    // Clean up
+    resolveEvolution();
+  });
+
+  it('stopAutopilot resets lagWarning to false', () => {
+    setAutopilot({ enabled: true, lagWarning: true });
+    startAutopilot();
+    stopAutopilot();
+    expect(get(sessionStore).autopilot.lagWarning).toBe(false);
+  });
+
+  it('startAutopilot clears lagWarning on restart', () => {
+    setAutopilot({ enabled: true, lagWarning: true });
+    startAutopilot();
+    expect(get(sessionStore).autopilot.lagWarning).toBe(false);
+  });
+});
+
+// ── llmError reset by stopAutopilot and startAutopilot ───────────────────
+
+describe('llmError state management', () => {
+  it('stopAutopilot resets llmError to null', () => {
+    setAutopilot({ enabled: true, llmError: 'HTTP 401' });
+    startAutopilot();
+    stopAutopilot();
+    expect(get(sessionStore).autopilot.llmError).toBeNull();
+  });
+
+  it('startAutopilot clears llmError', () => {
+    setAutopilot({ enabled: true, llmError: 'Prior error' });
+    startAutopilot();
+    expect(get(sessionStore).autopilot.llmError).toBeNull();
   });
 });

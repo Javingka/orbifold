@@ -224,6 +224,8 @@ const en: Dictionary = {
       stopLabel: '■ Stop',
       progressTitle: 'Evolution cycle progress',
       noKeyWarning: 'Set up the AI service, model, and API key before starting autopilot.',
+      lagWarning: 'Cycle skipped: the AI service took longer than the configured interval.',
+      errorLlm: 'AI service error: {error}',
     },
     recipeCard: {
       title: 'Applied recipe',

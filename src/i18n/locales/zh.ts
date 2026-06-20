@@ -218,6 +218,8 @@ const zh: Dictionary = {
       stopLabel: '■ 停止', // i18n-draft
       progressTitle: '进化周期进度', // i18n-draft
       noKeyWarning: '在启动自动驾驶前，请配置 AI 服务、模型和 API 密钥。', // i18n-draft
+      lagWarning: '跳过周期：AI 响应超过配置间隔。', // i18n-draft
+      errorLlm: 'AI 服务错误：{error}', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

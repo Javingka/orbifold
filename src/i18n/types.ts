@@ -268,6 +268,10 @@ export interface Dictionary {
       progressTitle: string;
       /** Warning shown when startAutopilot is attempted without an API key configured (Phase 06 browser-test fix A-06-06) */
       noKeyWarning: string;
+      /** Warning shown when the LLM took longer than the interval (Phase 06 heuristic fix) */
+      lagWarning: string;
+      /** Error message from the LLM provider — {error} is the interpolated error string (Phase 06 heuristic fix) */
+      errorLlm: string;
     };
     /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
     recipeCard: {

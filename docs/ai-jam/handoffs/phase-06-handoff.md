@@ -368,3 +368,86 @@ Three coordinated changes:
 | A-06-07c: subscription fires when `nowPlaying.label` becomes non-null after start | COVERED | Unit test A-06-07c; `sessionStore.subscribe` callback |
 | A-06-07d: `stopAutopilot` cleans up subscription | COVERED | Unit test A-06-07d; `_playbackUnsub()` in `stopAutopilot()` |
 | A-06-07e: subscription respects `enabled=false` guard | COVERED | Unit test A-06-07e; subscription condition checks `s.autopilot.enabled` |
+
+---
+
+## Fix: Autopilot heuristics, lag warning, LLM error surface (Phase 06 heuristic fix)
+
+**Status:** COMPLETE
+**Date:** 2026-06-20
+**Branch:** `ai-jam/phase-06`
+**Commit:** `fix(agent): Phase 06 — autopilot heuristics, lag warning, LLM error surface`
+
+### What was done
+
+Five coordinated fixes across state, agent, autopilot, i18n, and UI layers.
+
+**Fix A — Autopilot heuristics (`src/agent/autopilot.ts` — full rewrite of timer logic)**
+
+- Removed `_playbackUnsub` subscription entirely; bar now fills immediately on `startAutopilot()` via `setAutopilot({ timerStartedAt: Date.now() })` — no nowPlaying guard on the bar.
+- `startAutopilot()` auto-plays rhythm/harmony when configured but `nowPlaying.label === null`: `playSession()` if both configured, `playGroove()` if rhythm only, `playProgression()` if harmony only. Fire-and-forget (sync function, no await).
+- `tick()` simplified: `_isEvolving=true` → sets `lagWarning: true` and returns (no call); otherwise resets bar + clears warnings and fires `sendEvolution()`.
+- `stopAutopilot()` now also calls `setAutopilot({ lagWarning: false, llmError: null })`.
+- Removed dynamic import of `isPlaying()` from `strudel.js` — autopilot.ts no longer imports audio layer.
+- Added imports of `playGroove`, `playProgression`, `playSession` from `../state/session.js`.
+
+**Fix B — New state fields (`src/state/session.ts`)**
+
+- Added `lagWarning: boolean` and `llmError: string | null` to `AutopilotState` interface.
+- Added defaults `lagWarning: false, llmError: null` to `DEFAULT_SESSION_STATE.autopilot`.
+- Both fields are ephemeral — automatically excluded from `SavedSessionSchema` (entire `autopilot` key absent).
+
+**Fix C — HTTP error handling in `sendEvolution` (`src/agent/agent.ts`)**
+
+- Added `!res.ok` branch: extracts `error.message` or falls back to `HTTP ${res.status}`, calls `setAutopilot({ llmError: errMsg })`, returns.
+- Updated existing `dataObj.error` branch to also call `setAutopilot({ llmError: errMsg })`.
+- Added auto-play at the end: reads `postState.nowPlaying.label`; if null, calls appropriate play function.
+- Calls `setAutopilot({ llmError: null })` on success.
+- Added `setAutopilot`, `playGroove`, `playProgression`, `playSession` to the existing session.js import.
+
+**Fix D — i18n keys**
+
+- Added `lagWarning` and `errorLlm` to `Dictionary.agent.autopilot` in `src/i18n/types.ts`.
+- Added values in all 4 locales (es authoritative; pt/zh marked `// i18n-draft`).
+
+**Fix E — AgentPanel UI**
+
+- Added `{#if autopilot.lagWarning}` and `{#if autopilot.llmError}` blocks inside `.autopilot-config`, below the progress timeline.
+- Extended `.autopilot-key-warning` CSS rule to also cover `.autopilot-warning` (alias, same styles).
+
+**Test updates (`tests/autopilot.test.ts`)**
+
+- Rewrote entirely: removed all A-06-07a–e subscription tests, removed D6 `isPlaying()` guard tests.
+- Added vi.mock for session.js play functions (so auto-play heuristics are testable in Node).
+- Removed `vi.mock('../src/audio/strudel.js')` (autopilot.ts no longer imports strudel.js).
+- Added new tests: `timerStartedAt` non-zero immediately on `startAutopilot()`; auto-play heuristics (5 cases); lag warning (3 cases); `llmError` reset (2 cases). 30 tests total.
+- Updated `tests/agent-recipe-wiring.test.ts`: added `vi.mock('../src/state/session.js', importOriginal)` mock for play functions to keep it Node-safe after `sendEvolution` gained auto-play logic.
+
+### Quality gate
+
+| Check | Result |
+|-------|--------|
+| `pnpm exec tsc --noEmit` | clean (no output) |
+| `pnpm lint` | clean — All matched files use Prettier code style! |
+| `pnpm test` | 1553 passed (28 test files) — +6 net vs prior (1547) |
+| `pnpm build` | dist/assets/index-*.js 1,184 kB — built in 1.62s |
+
+### Acceptance Coverage Table
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| Bar fills immediately on startAutopilot() | COVERED | `timerStartedAt: Date.now()` in `startAutopilot()`; 2 unit tests |
+| Auto-play on start (rhythm+harmony → session) | COVERED | Unit test: `playSession` called when both configured and not playing |
+| Auto-play on start (rhythm only → groove) | COVERED | Unit test: `playGroove` called |
+| Auto-play on start (harmony only → progression) | COVERED | Unit test: `playProgression` called |
+| No auto-play when audio already playing | COVERED | Unit test: no play function called when `nowPlaying.label` non-null |
+| No auto-play when nothing configured | COVERED | Unit test: no play function called when both layers/progression empty |
+| lagWarning set on second tick while evolving | COVERED | Unit test: `lagWarning: true` after 2nd tick with hanging sendEvolution |
+| lagWarning cleared on stopAutopilot | COVERED | Unit test |
+| lagWarning cleared on startAutopilot | COVERED | Unit test |
+| llmError set on HTTP error (sendEvolution) | PROXY | Static analysis: `!res.ok` branch calls `setAutopilot({ llmError })` |
+| llmError cleared on success (sendEvolution) | PROXY | Static analysis: `setAutopilot({ llmError: null })` at end |
+| llmError cleared on stopAutopilot | COVERED | Unit test |
+| lagWarning i18n shown in UI | PROXY | `{#if autopilot.lagWarning}` block in AgentPanel; key-parity test passes |
+| llmError i18n shown in UI | PROXY | `{#if autopilot.llmError}` block in AgentPanel; key-parity test passes |
+| Quality gate (tsc/lint/test/build) | COVERED | All four pass; see table above |
