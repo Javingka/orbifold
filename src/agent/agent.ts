@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — agent: SYSTEM_PROMPT, send, requestAutofix, tryParseSkill, extractLastStrudelCode.
 //
-// Phase 06 step 06.3.
+// Phase 06 step 06.3; updated in Phase 07 step 07.3 (sendEvolution plan mode + input trim).
 //
 // Prototype parity:
 //   SYSTEM_PROMPT:              reference/orbifold.html lines 1541–1585
@@ -22,26 +22,19 @@ import { get } from 'svelte/store';
 
 import {
   sessionStore,
-  requeueLive,
-  setLastRecipeApplied,
   setAutopilot,
-  playGroove,
-  playProgression,
-  playSession,
+  rhythmCode,
+  harmonyCode,
+  sessionCode,
 } from '../state/session.js';
-import type { LastRecipeDisplay } from '../state/session.js';
-import { rhythmCode, harmonyCode, sessionCode } from '../state/session.js';
 import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { PROVIDERS, loadApiKey, type ProviderKey, type ChatMessage } from './providers.js';
-import { AgentOutputSchema, type AgentOutput } from './schema.js';
+import { AgentOutputSchema, EvolutionPlanSchema, type AgentOutput } from './schema.js';
 import { applyRhythmSpec, applyHarmonySpec, applyBlockSave } from './apply.js';
 import { lang, t_raw } from '../i18n/index.js';
 import type { LangCode } from '../i18n/index.js';
-import {
-  recipeToAgentOutput,
-  getExpressibleRecipes,
-} from '../core/music-knowledge/recipe-engine.js';
-import { getRecipeById, getRhythmById } from '../core/music-knowledge/query.js';
+import { getExpressibleRecipes } from '../core/music-knowledge/recipe-engine.js';
+import { getRhythmById } from '../core/music-knowledge/query.js';
 
 // ── ADR 0017 D7: language directive ──────────────────────────────────────────
 // Maps LangCode → user-facing language name used in the directive injected into
@@ -230,120 +223,105 @@ Ejemplo — usuario pide "algo que suene a kpanlogo ghanés":
 // ── SYSTEM_PROMPT_EVOLUTION ───────────────────────────────────────────────
 
 /**
- * System prompt for autopilot evolution calls.
+ * System prompt for autopilot evolution calls (plan mode — ADR 0024 D1).
  *
  * Governs autonomous LLM calls fired by the autopilot timer in
  * src/agent/autopilot.ts. Entirely distinct from SYSTEM_PROMPT (which
  * governs user-initiated send() calls).
  *
+ * Phase 07 step 07.3: Updated to instruct the LLM to return a multi-step
+ * evolution plan `{ "plan": [...] }` instead of a single step. The number of
+ * steps is injected as `horizon` in the user message (static system prompt).
+ *
  * Invariants (ADR 0022 D4):
  * - Does NOT cause chatHistory mutation — sendEvolution() never pushes to
  *   chatHistory; the history is not passed to the API request at all.
- * - Instructs the LLM to produce a musical variant of the supplied state,
- *   NOT to create from scratch.
+ * - Instructs the LLM to produce a coherent arc of musical variants,
+ *   NOT unrelated patterns.
  * - Explicit no-saveAsBlock instruction (saveAsBlock forbidden in evolution).
  * - Spanish prompt per ADR 0017 D7.
- * - Uses same AgentOutputSchema v5 (D7 — no schema bump).
+ * - Uses EvolutionPlanSchema wrapper (ADR 0024 D1); AgentOutputSchema v6
+ *   shape per step (D7 — no SCHEMA_VERSION bump).
  */
 export const SYSTEM_PROMPT_EVOLUTION = `Eres el motor de evolución autónoma de Orbifold.
-Recibes un snapshot JSON del estado musical en vivo. Devuelve UNA variación coherente y pequeña — no un patrón nuevo sin relación.
+Recibes un snapshot JSON del estado musical en vivo y un campo "horizon" (número de pasos).
+Devuelve exactamente "horizon" variaciones coherentes y pequeñas que formen un arco musical progresivo.
 
-SALIDA: un único bloque \`\`\`json\`\`\` con los campos que cambian.
+SALIDA: un único bloque json con el plan completo.
 
-SCHEMA DE SALIDA (? = opcional):
+SCHEMA DE SALIDA:
 \`\`\`
 {
-  "rhythm?": {
-    "layers": [{
-      "sound": "bd|sd|hh|oh|cp|rim|lt|mt|ht",
-      // 4/4: usa steps
-      "steps": [exactamente 16 enteros 0|1],
-      // otros metros: usa euclid (nunca ambos)
-      "euclid": { "k": 1-16, "n": 2-16, "rot": 0..n-1 },
-      "gain?": 0.0-1.0
-    }]
-  },
-  "harmony?": {
-    "root": "C|C#|D|D#|E|F|F#|G|G#|A|A#|B",
-    "mode?": "major|minor|dorian|phrygian|lydian|mixolydian|locrian",
-    "octave?": 0-8,
-    "progression": [{
-      "root": "C|C#|...",
-      "quality": "maj|min|dim|aug",
-      "bars?": 0.25-múltiplo,
-      "gain?": 0.0-1.0
-    }]
-  },
-  "musicalIntent?": {
-    "recipeId?": "<id de availableRecipeSummaries>",
-    "style?": "etiqueta libre",
-    "complexity?": "simple|medium|dense",
-    "explanation?": "≤300 chars"
-  }
+  "plan": [
+    {
+      "rhythm?": {
+        "layers": [{
+          "sound": "bd|sd|hh|oh|cp|rim|lt|mt|ht",
+          "steps": [exactamente 16 enteros 0|1],
+          "euclid": { "k": 1-16, "n": 2-16, "rot": 0..n-1 },
+          "gain?": 0.0-1.0
+        }]
+      },
+      "harmony?": {
+        "root": "C|C#|D|D#|E|F|F#|G|G#|A|A#|B",
+        "mode?": "major|minor|dorian|phrygian|lydian|mixolydian|locrian",
+        "octave?": 0-8,
+        "progression": [{ "root": "C|C#|...", "quality": "maj|min|dim|aug", "bars?": 0.25-múltiplo, "gain?": 0.0-1.0 }]
+      },
+      "musicalIntent?": {
+        "recipeId?": "<id de availableRecipeSummaries>",
+        "style?": "etiqueta libre",
+        "complexity?": "simple|medium|dense",
+        "explanation?": "≤300 chars"
+      }
+    }
+  ]
 }
 \`\`\`
 
 REGLAS:
-1. EVOLUCIÓN MÍNIMA: cambia 1–3 pasos de ritmo o 1 acorde de armonía por llamada.
-2. VARIACIÓN OBLIGATORIA: el resultado DEBE diferir del estado actual (≥2 onsets distintos o ≥1 acorde distinto).
+1. EVOLUCIÓN MÍNIMA: cada paso cambia 1–3 pasos de ritmo o 1 acorde de armonía respecto al paso anterior.
+2. VARIACIÓN OBLIGATORIA: cada paso DEBE diferir del anterior (≥2 onsets distintos o ≥1 acorde distinto); el arco debe ser progresivo y coherente.
 3. Si hay "rhythmHint" o "rhythmHintFreeText": orienta la evolución hacia ese estilo cultural; usa tu conocimiento del género para elegir patrones auténticos.
 4. Si usas "musicalIntent.recipeId": debe ser un id de la lista "availableRecipeSummaries" del mensaje.
 5. Cuando solo envías "musicalIntent.recipeId" (sin rhythm/harmony), Orbifold aplica la receta completa automáticamente.
-6. NUNCA "saveAsBlock". NUNCA texto fuera del bloque json.
+6. JSON COMPACTO: cada array en UNA sola línea, p.ej. "steps":[1,0,0,1,1,0,1,0,1,0,0,1,0,1,0,0]. NO uses pretty-print con un número por línea (desperdicia tokens y trunca la respuesta).
+7. NUNCA "saveAsBlock". NUNCA texto fuera del bloque json.
 
-Ejemplo 1 — solo musicalIntent.recipeId (motor aplica la receta):
+Ejemplo con horizon=2:
 \`\`\`json
 {
-  "musicalIntent": {
-    "recipeId": "bossa-nova-groove",
-    "style": "bossa nova",
-    "complexity": "medium",
-    "explanation": "Receta encaja con el carácter suave del estado actual."
-  }
-}
-\`\`\`
-
-Ejemplo 2 — rhythm/harmony explícitos + musicalIntent como anotación:
-\`\`\`json
-{
-  "rhythm": {
-    "layers": [
-      { "sound": "bd", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] },
-      { "sound": "hh", "euclid": { "k": 3, "n": 8, "rot": 0 } }
-    ]
-  },
-  "harmony": {
-    "root": "D",
-    "mode": "minor",
-    "octave": 3,
-    "progression": [
-      { "root": "D", "quality": "min", "gain": 0.7 },
-      { "root": "A", "quality": "maj", "gain": 0.65 }
-    ]
-  },
-  "musicalIntent": {
-    "recipeId": "dorian-ritual-sparse",
-    "style": "dorian modal",
-    "complexity": "simple",
-    "explanation": "Evolución con sabor dorian; receta como referencia de intención."
-  }
+  "plan": [
+    {
+      "rhythm": { "layers": [{ "sound": "bd", "steps": [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] }, { "sound": "hh", "euclid": { "k": 3, "n": 8, "rot": 0 } }] },
+      "musicalIntent": { "style": "afro-latin", "complexity": "simple", "explanation": "Paso 1: groove base con tresillo." }
+    },
+    {
+      "rhythm": { "layers": [{ "sound": "bd", "steps": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0] }, { "sound": "hh", "euclid": { "k": 5, "n": 8, "rot": 1 } }] },
+      "harmony": { "root": "D", "mode": "minor", "octave": 3, "progression": [{ "root": "D", "quality": "min" }, { "root": "A", "quality": "maj" }] },
+      "musicalIntent": { "style": "afro-latin", "complexity": "medium", "explanation": "Paso 2: más síncopa en BD + tensión armónica." }
+    }
+  ]
 }
 \`\`\``;
 
 // ── sendEvolution ─────────────────────────────────────────────────────────
 
 /**
- * Fire a single autopilot evolution LLM call.
- * Reads current rhythm + harmony from sessionStore, builds a one-shot
- * LLM request using SYSTEM_PROMPT_EVOLUTION, and applies the result
- * via applyRhythmSpec / applyHarmonySpec.
+ * Fire an autopilot evolution LLM call that returns a multi-step plan.
+ *
+ * Phase 07 step 07.3 — plan mode (ADR 0024 D1/D3/D5/D6):
+ * - Computes `horizon` from `intervalCycles` (D6, clamped formula).
+ * - Applies input-trim rule: omit `availableRecipeSummaries` when a rhythm
+ *   hint is present (D5); always compact `steps` arrays to binary strings.
+ * - Parses the LLM response with `EvolutionPlanSchema.safeParse` (D1).
+ * - Stores the plan in `AutopilotState.currentPlan` via `setAutopilot` (D2).
+ * - Does NOT apply any plan step here — that is `tick()`'s responsibility (D3).
  *
  * Invariants (ADR 0022 D4):
- * - NEVER pushes to chatHistory (OQ-3 / ADR 0022 D4).
- * - NEVER calls applyBlockSave (saveAsBlock is forbidden in evolution output).
+ * - NEVER pushes to chatHistory.
+ * - NEVER calls applyBlockSave.
  * - Returns void — the caller (tick()) uses .finally() to reset _isEvolving.
- *
- * Per ADR 0022 D4.
  */
 export async function sendEvolution(): Promise<void> {
   const provider = PROVIDERS[agentProvider];
@@ -352,11 +330,32 @@ export async function sendEvolution(): Promise<void> {
 
   const model = agentModel || provider.defaultModel;
 
-  // Build the user message in AgentOutputSchema format (NOT session-store format).
-  // Session Chord uses rootPc (number) + qual; AgentOutputSchema uses root (note name) + quality.
+  // Read live state.
   const state = get(sessionStore);
+
+  // ── D6: Horizon formula (clamped — ADR 0024 D6 amendment) ─────────────────
+  // horizon = Math.min(8, Math.max(2, Math.round(intervalCycles / 2)))
+  // At default intervalCycles=8: horizon=4. At min=2: horizon=2. At max=32: horizon=8.
+  const horizon = Math.min(8, Math.max(2, Math.round(state.autopilot.intervalCycles / 2)));
+
+  // ── Build stateSnapshot in AgentOutputSchema format ────────────────────────
+  // Session Chord uses rootPc (number) + qual; AgentOutputSchema uses root (note name) + quality.
+  //
+  // D5 (compact step encoding — LLM-payload-only):
+  // steps: number[] stored in the session model are encoded as compact binary strings
+  // (e.g., [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0] → "1000100010001000") in the payload.
+  // The stored model in sessionStore is UNCHANGED.
   const stateSnapshot = {
-    rhythm: { layers: state.rhythm.layers },
+    rhythm: {
+      layers: state.rhythm.layers.map((layer) => {
+        if ('euclid' in layer && layer.euclid) {
+          // Euclid layer — pass through as-is (no steps array to compact)
+          return { sound: layer.sound, euclid: layer.euclid };
+        }
+        // Steps layer — compact binary string (LLM-payload-only per ADR 0024 D5)
+        return { sound: layer.sound, steps: layer.steps.join('') };
+      }),
+    },
     harmony: {
       root: NOTE_NAMES[state.harmony.root],
       mode: state.harmony.mode,
@@ -375,21 +374,10 @@ export async function sendEvolution(): Promise<void> {
       }),
     },
   };
-  // Inject available recipe summaries so the LLM knows which ids are valid at call time.
-  // Only send the minimal fields the LLM needs to reference a recipe:
-  // id (to use in musicalIntent.recipeId), name (human-readable), density, meter.
-  // Full agentInstruction / userIntents / rhythmIds are not needed for recipe selection.
-  // Saves ~1000-1500 input tokens vs sending full MusicalRecipe objects.
-  const availableRecipeSummaries = getExpressibleRecipes().map(({ id, name, density, meter }) => ({
-    id,
-    name,
-    density,
-    meter,
-  }));
 
-  // Inject rhythm hint when the user has selected a style preference (Phase 06 step 06.2).
+  // ── Rhythm hint payload (Phase 06 step 06.2, preserved) ───────────────────
   // Uses human-readable name for catalog ids (getRhythmById fallback to id string).
-  // 'otro' with free text injects rhythmHintFreeText; empty hint omits both fields (ADR 0022 D3).
+  // 'otro' with free text injects rhythmHintFreeText; empty hint omits both fields.
   const { rhythmHint, rhythmHintText } = state.autopilot;
   const rhythmHintPayload: Record<string, string> = {};
   if (rhythmHint && rhythmHint !== 'otro') {
@@ -398,21 +386,41 @@ export async function sendEvolution(): Promise<void> {
     rhythmHintPayload['rhythmHintFreeText'] = rhythmHintText.trim();
   }
 
+  // ── D5: Input-trim rule (ADR 0024 D5) ─────────────────────────────────────
+  // Omit `availableRecipeSummaries` when a rhythm hint is present.
+  // When a style name is given, the LLM uses its cultural knowledge — the catalog
+  // is unnecessary and costs ~740 tokens.
+  // When no hint is present, include the catalog so the LLM can pick a recipe id.
+  const hintPresent = Boolean(
+    rhythmHintPayload['rhythmHint'] ?? rhythmHintPayload['rhythmHintFreeText']
+  );
+  const recipePart: Record<string, unknown> = {};
+  if (!hintPresent) {
+    // Only send the minimal fields the LLM needs: id, name, density, meter.
+    recipePart['availableRecipeSummaries'] = getExpressibleRecipes().map(
+      ({ id, name, density, meter }) => ({ id, name, density, meter })
+    );
+  }
+
+  // User message: horizon first, then stateSnapshot, then optional recipes and hint.
   const userMessage = JSON.stringify(
-    { ...stateSnapshot, availableRecipeSummaries, ...rhythmHintPayload },
+    { horizon, stateSnapshot, ...recipePart, ...rhythmHintPayload },
     null,
     2
   );
 
-  // Fetch using SYSTEM_PROMPT_EVOLUTION (NOT SYSTEM_PROMPT).
-  // No chatHistory used — this is a clean-slate one-shot call (ADR 0022 D3/D4).
+  // ── Fetch using SYSTEM_PROMPT_EVOLUTION (NOT SYSTEM_PROMPT) ───────────────
+  // No chatHistory used — clean-slate one-shot call (ADR 0022 D3/D4).
   let txt: string;
   try {
     const res = await fetch(provider.url, {
       method: 'POST',
       headers: provider.headers(key),
+      // max_tokens 600: headroom so a multi-step plan with rhythm + harmony + intent
+      // never truncates mid-JSON. (400 truncated real gpt-4o-mini responses when the
+      // model pretty-printed arrays — see SYSTEM_PROMPT_EVOLUTION rule 6.)
       body: JSON.stringify(
-        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }], 400)
+        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }], 600)
       ),
     });
     const data: unknown = await res.json();
@@ -438,78 +446,63 @@ export async function sendEvolution(): Promise<void> {
     }
 
     txt = provider.parse(data);
-    if (!txt) return; // Empty response — skip silently
-  } catch {
+    if (!txt) {
+      // Empty response — surface it instead of failing silently (Phase 06 error-surfacing).
+      // eslint-disable-next-line no-console
+      console.warn('[autopilot] provider returned an empty response', data);
+      setAutopilot({ llmError: '__emptyResponse__' });
+      return;
+    }
+  } catch (e) {
+    // Network / JSON-parse exception — surface it instead of failing silently (Phase 06).
+    // eslint-disable-next-line no-console
+    console.error('[autopilot] evolution request failed', e);
+    setAutopilot({ llmError: e instanceof Error ? e.message : String(e) });
     return;
   }
 
-  // Parse with AgentOutputSchema.safeParse (same schema v5, ADR 0022 D7).
-  const skill = tryParseSkill(txt);
-  if (!skill) return; // Non-JSON or schema-invalid response — skip silently
-
-  // Apply results — ONLY rhythm and harmony (never applyBlockSave per ADR 0022 D4).
-  // Explicit skill.rhythm / skill.harmony take precedence over the recipe engine path.
-  if (skill.rhythm) applyRhythmSpec(skill.rhythm);
-  if (skill.harmony) applyHarmonySpec(skill.harmony);
-  // skill.saveAsBlock is intentionally ignored even if the LLM disobeyed the instruction.
-
-  // ── musicalIntent.recipeId — recipe engine path (Phase 03 step 03.4) ───────
-  // If the LLM returned a recipeId (with or without explicit rhythm/harmony),
-  // resolve the recipe and apply whichever fields were NOT already applied by
-  // explicit skill fields. Explicit fields always take precedence.
-  let recipeApplied = false;
-  if (skill.musicalIntent?.recipeId) {
-    const recipe = getRecipeById(skill.musicalIntent.recipeId);
-    if (recipe !== undefined) {
-      const engineOutput = recipeToAgentOutput(recipe);
-      if (engineOutput !== null) {
-        // Apply recipe rhythm only if the LLM did NOT supply explicit rhythm
-        if (!skill.rhythm && engineOutput.rhythm) {
-          applyRhythmSpec(engineOutput.rhythm);
-          recipeApplied = true;
-        }
-        // Apply recipe harmony only if the LLM did NOT supply explicit harmony
-        if (!skill.harmony && engineOutput.harmony) {
-          applyHarmonySpec(engineOutput.harmony);
-          recipeApplied = true;
-        }
-      }
-      // If engineOutput is null: silent no-op (recipe is non-expressible or catalog failure)
-
-      // Update the recipe card display state (ai-jam Phase 04 step 04.2).
-      // Fires regardless of recipeApplied — even a non-expressible recipe should
-      // show the LLM's intent. NEVER pushes to chatHistory (ADR 0022 D3/D4).
-      const display: LastRecipeDisplay = {
-        recipeId: recipe.id,
-        recipeName: recipe.name,
-        rhythmIds: recipe.rhythmIds,
-        harmonyId: recipe.harmonyId,
-        density: recipe.density,
-        ...(skill.musicalIntent?.explanation
-          ? { explanation: skill.musicalIntent.explanation }
-          : {}),
-      };
-      setLastRecipeApplied(display);
+  // ── Parse the plan envelope with EvolutionPlanSchema ─────────────────────
+  // The LLM returns { "plan": [ <step1>, … ] } — a wrapper object.
+  // Extract the JSON object the same way tryParseSkill does (fence → brace fallback).
+  let rawParsed: unknown;
+  try {
+    // Step 1: try ```json fence
+    let jsonStr: string | null = null;
+    const fence = /```json\s*([\s\S]*?)```/i.exec(txt);
+    if (fence) {
+      jsonStr = fence[1];
+    } else {
+      // Step 2: outermost { … } span
+      const a = txt.indexOf('{');
+      const b = txt.lastIndexOf('}');
+      if (a >= 0 && b > a) jsonStr = txt.slice(a, b + 1);
     }
-    // If recipe not found: silent no-op (unknown recipeId)
+    if (!jsonStr) throw new SyntaxError('no JSON object found in response');
+    rawParsed = JSON.parse(jsonStr);
+  } catch {
+    // Response was not valid JSON — surface the bad-format sentinel (Phase 06).
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[autopilot] response was not valid evolution JSON:',
+      txt.length > 500 ? txt.slice(0, 500) + '…' : txt
+    );
+    setAutopilot({ llmError: '__badFormat__' });
+    return;
   }
 
-  // Trigger audio re-evaluation at the next cycle boundary.
-  // applyRhythmSpec / applyHarmonySpec update the store (visual) but do NOT call
-  // requeueLive() — the audio re-queue must be triggered explicitly here.
-  if (skill.rhythm || skill.harmony || recipeApplied) requeueLive();
-
-  // If nothing was playing before evolution, auto-start playback so the user hears the result.
-  const postState = get(sessionStore);
-  if (postState.nowPlaying.label === null) {
-    const hasRhythm = postState.rhythm.layers.length > 0;
-    const hasHarmony = postState.harmony.progression.length > 0;
-    if (hasRhythm && hasHarmony) await playSession();
-    else if (hasRhythm) await playGroove();
-    else if (hasHarmony) await playProgression();
+  // ── Validate with EvolutionPlanSchema.safeParse (ADR 0024 D1/D4) ─────────
+  const planResult = EvolutionPlanSchema.safeParse(rawParsed);
+  if (!planResult.success) {
+    // Invalid or empty plan — D4 sentinel (plan parse failure is __emptyPlan__).
+    // eslint-disable-next-line no-console
+    console.warn('[autopilot] plan parse failed:', planResult.error.issues);
+    setAutopilot({ llmError: '__emptyPlan__', currentPlan: [], planIndex: 0 });
+    return;
   }
-  // Clear any prior error on success
-  setAutopilot({ llmError: null });
+
+  // ── Store the plan — tick() will consume one step at a time (ADR 0024 D3) ─
+  // NEVER apply any plan step here. NEVER push to chatHistory. NEVER call applyBlockSave.
+  setAutopilot({ llmError: null, currentPlan: planResult.data.plan, planIndex: 0 });
 }
 
 // ── normalizeEuclidStrings ────────────────────────────────────────────────

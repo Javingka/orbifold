@@ -177,3 +177,107 @@ approves or directs revisions. The phase spec identifies this step as a Pilot Ch
 ### Next action (from phase spec)
 
 **STOP for Pilot ADR review (Checkpoint #2).** Step 07.3 begins after Pilot approves ADR 0024.
+
+---
+
+## Step 07.3 — `sendEvolution()`: plan generation + input trim
+
+**Status:** COMPLETE — awaiting Planner review at Checkpoint #3  
+**Date:** 2026-06-22  
+**Branch:** `ai-jam/phase-07` (originally `ai-jam/phase-06`; rebased with Phase 07 work)  
+**Commit:** `fix(agent): Phase 07 step 07.3 — sendEvolution plan mode + input trim`
+
+### What was done
+
+Implemented all three deliverables required by step 07.3.
+
+**D1 — `src/agent/agent.ts` — `sendEvolution()` rewritten to plan mode:**
+
+The function now:
+1. Computes `horizon = Math.min(8, Math.max(2, Math.round(state.autopilot.intervalCycles / 2)))` (D6 clamped formula — ADR 0024 D6 amendment). At default `intervalCycles = 8`: horizon = 4. At max `intervalCycles = 32`: horizon = 8 (clamped from 16).
+2. Builds compact `stateSnapshot.rhythm.layers`: `steps: number[]` are encoded as binary strings (`"1000100010001000"`) in the LLM payload only — the session store model is unchanged (LLM-payload-only JSDoc note added per D5).
+3. Applies D5 input-trim rule: when `rhythmHint` or `rhythmHintText` is present, `availableRecipeSummaries` is omitted from the user message (~740 token saving). When no hint, the catalog is included.
+4. User message shape: `{ horizon, stateSnapshot, availableRecipeSummaries?, rhythmHint?, rhythmHintFreeText? }`.
+5. After response: extracts JSON using fence → brace fallback (same as `tryParseSkill`), then calls `EvolutionPlanSchema.safeParse` (NOT `tryParseSkill` which uses `AgentOutputSchema`).
+6. On valid parse: `setAutopilot({ llmError: null, currentPlan: result.data.plan, planIndex: 0 })`. Does NOT apply any step — that is `tick()`'s responsibility (ADR 0024 D3).
+7. On parse failure: `setAutopilot({ llmError: '__emptyPlan__', currentPlan: [], planIndex: 0 })` (ADR 0024 D4 sentinel).
+
+All four Phase 06 error-surfacing paths preserved:
+- Empty provider response → `__emptyResponse__`
+- Network/HTTP catch → error message
+- JSON parse failure → `__badFormat__`
+- Plan schema failure → `__emptyPlan__` (new in Phase 07)
+
+`max_tokens: 600` preserved (not 400).
+
+`tryParseSkill` is unchanged — still used by `send()` for interactive chat.
+
+**D2 — `src/agent/agent.ts` — `SYSTEM_PROMPT_EVOLUTION` updated:**
+
+Updated to instruct the LLM to return `{ "plan": [ <step1>, … ] }` with exactly `horizon` steps. Changes:
+- Output format changed from single-step to plan wrapper.
+- Schema example now shows `{ "plan": [...] }` structure.
+- Added VARIACIÓN OBLIGATORIA rule for sequential steps (coherent arc).
+- Horizon reference added: `"horizon" (número de pasos)` in the intro; LLM must produce exactly `horizon` steps.
+- Rules 6 and 7 (compact JSON and NUNCA saveAsBlock) preserved from Phase 06.
+- Single example ("Ejemplo con horizon=2") replaces the two single-step examples. Token estimate: prompt ≈ 800 tokens (2,400 chars ÷ 3.0 chars/token).
+
+**D3 — Test files updated:**
+
+Three test files updated:
+
+`tests/sendEvolution-hint.test.ts` (extended — 22 tests total, 16 new for Phase 07):
+- `fakePlanResponse()` helper added for plan-format mock responses.
+- Existing A-06 tests updated to use `fakePlanResponse` (compatible with new `EvolutionPlanSchema.safeParse`).
+- A-07-02 (4 tests): `horizon` appears in user message, correct clamped values.
+- A-07-03 (3 tests): `availableRecipeSummaries` absent when hint present, present when no hint.
+- A-07-04 (3 tests): valid plan response → `currentPlan` stored in `sessionStore`, `planIndex = 0`, `llmError = null`.
+- A-07-05 (4 tests): compact step encoding (`"1000100010001000"`), euclid pass-through, `__emptyPlan__` sentinel on bad parse.
+
+`tests/agent-recipe-wiring.test.ts` (updated to plan mode — 22 tests, same count):
+- A-03-06: Updated to match new plan-format prompt structure (plan wrapper assertion, ≥1 json fence, musicalIntent/rhythm in plan steps).
+- A-03-07: Rewritten from "apply function call count" to "store-state" assertions. Responses use `fakePlanResponse`; assertions check `currentPlan` contents.
+- A-03-08: chatHistory invariant preserved; responses updated to plan format.
+- `tryParseSkill` direct tests unchanged.
+
+**Imports cleaned up in `agent.ts`:** Removed unused imports: `recipeToAgentOutput`, `getRecipeById`, `requeueLive`, `setLastRecipeApplied`, `playGroove`, `playProgression`, `playSession`, `LastRecipeDisplay`. These were only used in the old direct-apply `sendEvolution()`. `getExpressibleRecipes` and `getRhythmById` are still used in the new plan-mode `sendEvolution()`.
+
+### Validation
+
+All five validations pass:
+
+1. `pnpm exec tsc --noEmit` → clean (no output)
+2. `pnpm lint` → clean (ESLint + Prettier)
+3. `pnpm exec vitest run sendEvolution-hint` → 22/22 pass
+4. `pnpm exec vitest run evolution-plan` → 7/7 pass (no regression)
+5. `pnpm test` → 1576/1576 pass (1560 prior + 16 new), 29 test files, no regressions
+
+### Pre-existing Phase 06 uncommitted changes
+
+At the time of this commit, the working tree contains pre-existing Phase 06 uncommitted changes to:
+- `src/agent/providers.ts` (OpenAI provider, `sanitizeKey`, defaultModel change)
+- `src/i18n/` (errorEmpty, errorBadFormat sentinels)
+- `src/ui/AgentPanel.svelte` (error sentinel decoding)
+
+These remain staged for the final batch commit at step 07.5 per Pilot instruction.
+
+This commit stages only: `src/agent/agent.ts`, `tests/sendEvolution-hint.test.ts`, `tests/agent-recipe-wiring.test.ts`, `docs/ai-jam/handoffs/phase-07-handoff.md`.
+
+### Acceptance Coverage Table
+
+| Acceptance Criterion | Coverage | Notes |
+|---------------------|----------|-------|
+| A-07-01 (EvolutionPlanSchema safeParse) | COVERED (step 07.2) | `tests/evolution-plan.test.ts` — 7 cases |
+| A-07-02 (sendEvolution includes horizon in user message) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-02a/b/c/d (4 tests): intervalCycles=2→horizon=2, =8→horizon=4, =32→horizon=8 (clamped) |
+| A-07-03 (availableRecipeSummaries absent when hint present) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-03a/b/c (3 tests): no-hint→included, catalog-id→absent, otro-text→absent |
+| A-07-04 (valid plan → setAutopilot with currentPlan) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-04a/b/c (3 tests): 2-step plan, 1-step plan, chatHistory unchanged |
+| A-07-05 (compact step encoding AND __emptyPlan__ sentinel) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-05a/b/c/d (4 tests): binary string, euclid pass-through, all-zeros, __emptyPlan__ on bad parse |
+| A-07-06 (one tick applies one plan step) | NOT YET | Implemented in step 07.4 |
+| A-07-07 (currentPlan/planIndex in AutopilotState; reset on start/stop) | PARTIAL (step 07.2 fields) | Reset behavior in step 07.4 |
+| A-07-08 (exhausted plan triggers sendEvolution) | NOT YET | Implemented in step 07.4 |
+| A-07-09 (full quality gate) | PARTIAL | tsc clean + lint clean + test 1576 pass; build at step 07.5 |
+| A-07-10 (errorEmptyPlan i18n sentinel) | NOT YET | Implemented in step 07.5 |
+
+### Next action (from phase spec)
+
+**STOP for Planner review (Checkpoint #3 — step 07.3 review).** Step 07.4 begins after APPROVE.
