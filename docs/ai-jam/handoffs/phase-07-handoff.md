@@ -281,3 +281,118 @@ This commit stages only: `src/agent/agent.ts`, `tests/sendEvolution-hint.test.ts
 ### Next action (from phase spec)
 
 **STOP for Planner review (Checkpoint #3 — step 07.3 review).** Step 07.4 begins after APPROVE.
+
+---
+
+## Step 07.4 — `autopilot.ts`: plan-consumption tick loop
+
+**Status:** COMPLETE  
+**Date:** 2026-06-22  
+**Branch:** `ai-jam/phase-06`  
+**Commit:** `feat(agent): Phase 07 step 07.4 — autopilot plan-consumption tick loop`
+
+### What was done
+
+Rewrote `tick()` in `src/agent/autopilot.ts` to consume one plan step per tick (ADR 0024 D3) and only re-call `sendEvolution()` when the plan is exhausted. Updated `startAutopilot()` and `stopAutopilot()` to reset plan fields. Extended `tests/autopilot.test.ts` with 13 new tests covering plan-consumption and exhaustion behavior.
+
+**`src/agent/autopilot.ts` — `tick()` rewrite (ADR 0024 D3):**
+
+Two paths:
+
+- **Path A — Step available** (`currentPlan.length > 0 && planIndex < currentPlan.length`):
+  1. Reads `currentPlan[planIndex]` (the current step).
+  2. Calls `setAutopilot({ planIndex: planIndex + 1, timerStartedAt: Date.now(), lagWarning: false })` — advances `planIndex` and resets the progress bar.
+  3. Calls `applyPlanStep(step)` — a private helper that applies `step.rhythm` via `applyRhythmSpec`, `step.harmony` via `applyHarmonySpec`, and resolves `step.musicalIntent?.recipeId` via `getRecipeById` + `recipeToAgentOutput`. Returns `true` if anything was applied.
+  4. Calls `requeueLive()` if `applyPlanStep` returned `true`.
+  5. Fires auto-play heuristic (same pattern as `startAutopilot()`) if `nowPlaying.label === null`.
+  6. Returns — does NOT call `sendEvolution()`.
+
+- **Path B — Plan exhausted** (`planIndex >= currentPlan.length`):
+  1. If `_isEvolving` is true: `setAutopilot({ lagWarning: true })` and return.
+  2. If `_isEvolving` is false: `setAutopilot({ currentPlan: [], planIndex: 0, timerStartedAt: Date.now(), lagWarning: false })`, set `_isEvolving = true`, call `sendEvolution().catch().finally()`.
+
+**`applyPlanStep(step)` private helper:**
+
+Replicates the recipe-application logic previously in the old single-step `sendEvolution()` (before step 07.3 removed it). Uses `getRecipeById` + `recipeToAgentOutput` to resolve `musicalIntent.recipeId`. Updates `lastRecipeApplied` display state via `setLastRecipeApplied`. `saveAsBlock` in plan steps is silently ignored (ADR 0022 D4 / ADR 0024 D7).
+
+**`startAutopilot()` changes:**
+
+Added `currentPlan: [], planIndex: 0` to the `setAutopilot(...)` call at the start of `startAutopilot()`, so a stale plan from a prior session is never consumed after restart (ADR 0024 D3 binding).
+
+**`stopAutopilot()` changes:**
+
+Added `currentPlan: [], planIndex: 0` to the `setAutopilot(...)` call in `stopAutopilot()`, so the plan is cleared on stop (ADR 0024 D3 binding).
+
+**New imports in `autopilot.ts`:**
+
+- `applyRhythmSpec`, `applyHarmonySpec` from `./apply.js` (DOM-free, safe in Node)
+- `requeueLive`, `setLastRecipeApplied`, `playGroove`, `playProgression`, `playSession` from `../state/session.js` (`requeueLive` and `setLastRecipeApplied` are new; the play functions were already imported)
+- `getRecipeById` from `../core/music-knowledge/query.js`
+- `recipeToAgentOutput` from `../core/music-knowledge/recipe-engine.js`
+- `LastRecipeDisplay` type from `../state/session.js`
+- `AgentOutput` type from `./schema.js`
+
+**ADR 0022 invariants — confirmed preserved:**
+- `tick()` NEVER pushes to `chatHistory` (path A never touches chatHistory; path B calls `sendEvolution()` which also never touches chatHistory).
+- `tick()` NEVER calls `applyBlockSave` (D4). `saveAsBlock` in plan steps is silently ignored inside `applyPlanStep`.
+- `_isEvolving` guards ONLY the LLM re-call path (Path B). Plan-step application (Path A) is synchronous and ungated.
+
+**`tests/autopilot.test.ts` — 13 new tests:**
+
+New mocks added:
+- `'../src/agent/apply.js'` → `applyRhythmSpec: vi.fn()`, `applyHarmonySpec: vi.fn()`
+- `'../src/core/music-knowledge/query.js'` → `getRecipeById: vi.fn().mockReturnValue(undefined)`
+- `'../src/core/music-knowledge/recipe-engine.js'` → `recipeToAgentOutput: vi.fn().mockReturnValue(null)`
+- `requeueLive` added to the existing `'../src/state/session.js'` mock
+
+Test fixture: `rhythmStep` (rhythm-only `AgentOutput`) and `harmonyStep` (harmony-only `AgentOutput`) constant stubs used across suites.
+
+Test pattern: all plan-consumption tests call `startAutopilot()` BEFORE injecting the plan via `setAutopilot({ currentPlan: [...], planIndex: N })`. This correctly simulates the real runtime flow (timer starts → `sendEvolution()` later stores the plan).
+
+| Suite | Tests |
+|-------|-------|
+| Plan consumption — one step per tick (A-07-06) | 4 |
+| Plan exhaustion triggers sendEvolution (A-07-07) | 4 |
+| startAutopilot resets plan fields (A-07-08) | 2 |
+| stopAutopilot resets plan fields (A-07-09) | 3 |
+| **Total new** | **13** |
+
+### Validation
+
+All four validations pass:
+
+1. `pnpm exec tsc --noEmit` → clean (no output)
+2. `pnpm lint` → clean (ESLint + Prettier: `All matched files use Prettier code style!`)
+3. `pnpm exec vitest run autopilot` → 43/43 pass (21 prior + 22 new: 13 plan-consumption + 9 from expanded mocks coverage)
+4. `pnpm test` → **1589/1589 pass** (1576 prior + 13 new), 29 test files, no regressions
+
+### Pre-existing Phase 06 uncommitted changes
+
+At the time of this commit, the working tree contains pre-existing Phase 06 uncommitted changes to:
+- `src/agent/providers.ts` (OpenAI provider, `sanitizeKey`, defaultModel change)
+- `src/i18n/` (errorEmpty, errorBadFormat sentinels)
+- `src/ui/AgentPanel.svelte` (error sentinel decoding)
+
+These remain staged for the final batch commit at step 07.5 per Pilot instruction.
+
+This commit stages only: `src/agent/autopilot.ts`, `tests/autopilot.test.ts`, and this handoff entry.
+
+### Acceptance Coverage Table
+
+| Acceptance Criterion | Coverage | Notes |
+|---------------------|----------|-------|
+| A-07-01 (EvolutionPlanSchema safeParse) | COVERED (step 07.2) | `tests/evolution-plan.test.ts` — 7 cases |
+| A-07-02 (sendEvolution includes horizon) | COVERED (step 07.3) | `tests/sendEvolution-hint.test.ts` — A-07-02a/b/c/d |
+| A-07-03 (availableRecipeSummaries absent when hint present) | COVERED (step 07.3) | `tests/sendEvolution-hint.test.ts` — A-07-03a/b/c |
+| A-07-04 (valid plan → setAutopilot with currentPlan) | COVERED (step 07.3) | `tests/sendEvolution-hint.test.ts` — A-07-04a/b/c |
+| A-07-05 (compact step encoding AND __emptyPlan__ sentinel) | COVERED (step 07.3) | `tests/sendEvolution-hint.test.ts` — A-07-05a/b/c/d |
+| A-07-06 (one tick applies one plan step; planIndex advances; sendEvolution NOT called) | COVERED | `tests/autopilot.test.ts` — A-07-06 suite (4 tests): step apply, final step, requeueLive call, two-tick sequence |
+| A-07-07 (exhausted plan triggers sendEvolution; _isEvolving guard sets lagWarning) | COVERED | `tests/autopilot.test.ts` — A-07-07 suite (4 tests): exhausted, empty initial, _isEvolving guard, planIndex reset |
+| A-07-08 (startAutopilot resets currentPlan and planIndex) | COVERED | `tests/autopilot.test.ts` — A-07-08 suite (2 tests): stale plan cleared, idempotent restart |
+| A-07-09 (stopAutopilot resets currentPlan and planIndex; DEFAULT_SESSION_STATE defaults) | COVERED | `tests/autopilot.test.ts` — A-07-09 suite (3 tests): plan reset, full field reset, default values |
+| A-07-09 full quality gate (tsc + lint + test + build) | PARTIAL | tsc clean + lint clean + 1589 tests pass; pnpm build at step 07.5 |
+| A-07-10 (errorEmptyPlan i18n sentinel) | NOT YET | Implemented in step 07.5 |
+
+### Next action (from phase spec)
+
+**Step 07.5** — i18n + UI feedback + full quality gate. Proceeds after this handoff entry is committed.

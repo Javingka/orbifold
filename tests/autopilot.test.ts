@@ -1,11 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — unit tests for autopilot.ts and AutopilotState in session.ts.
 //
-// ai-jam Phase 01 step 01.3; revised Phase 06 heuristic fix.
+// ai-jam Phase 01 step 01.3; revised Phase 06 heuristic fix; Phase 07 step 07.4
+// (plan-consumption tick loop — ADR 0024 D3).
 //
-// Covers acceptance IDs A-01-01 through A-01-05 and the chatHistory invariant.
+// Covers acceptance IDs A-01-01 through A-01-05, A-06 heuristic tests, and
+// A-07-06/07/08/09 plan-consumption tests.
+//
 // Phase 06 heuristic fix: removed isPlaying() guard (D6) and nowPlaying
 // subscription (A-06-07a–e). Added lag warning and auto-play heuristic tests.
+//
+// Phase 07 plan-consumption (A-07-06/07/08/09):
+//   - tick() applies one plan step per interval if plan is non-exhausted.
+//   - tick() calls sendEvolution() when plan is exhausted or never set.
+//   - startAutopilot() resets currentPlan and planIndex (stale-plan guard).
+//   - stopAutopilot() resets currentPlan and planIndex.
 //
 // ADR 0022 binding:
 //   - D1: setAutopilot patches SessionState.autopilot; excluded from SavedSession (tested via store).
@@ -13,6 +22,7 @@
 //   - D3: _isEvolving concurrency guard prevents overlapping calls; lagWarning set on second tick.
 //   - D4: sendEvolution does NOT push to chatHistory.
 //   - D5: BPM from get(sessionStore).bpm.
+// ADR 0024 D3: plan-consumption loop; _isEvolving guards only LLM re-call path.
 //
 // Runs in Node (Vitest default env) — no AudioContext, no DOM required.
 // Fake timers via vi.useFakeTimers() / vi.useRealTimers().
@@ -31,7 +41,7 @@ vi.mock('../src/agent/agent.js', async (importOriginal) => {
 });
 
 // Mock session.js: preserve the real store/actions, mock the play functions
-// that autopilot.ts calls for auto-play heuristics.
+// and requeueLive that autopilot.ts calls for auto-play heuristics and audio re-queue.
 vi.mock('../src/state/session.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/state/session.js')>();
   return {
@@ -39,13 +49,40 @@ vi.mock('../src/state/session.js', async (importOriginal) => {
     playGroove: vi.fn().mockResolvedValue(undefined),
     playProgression: vi.fn().mockResolvedValue(undefined),
     playSession: vi.fn().mockResolvedValue(undefined),
+    requeueLive: vi.fn().mockReturnValue(null),
+  };
+});
+
+// Mock apply.js: applyRhythmSpec and applyHarmonySpec are tested in apply.test.ts.
+// For autopilot plan-consumption tests, we only need to verify they are called.
+vi.mock('../src/agent/apply.js', () => ({
+  applyRhythmSpec: vi.fn(),
+  applyHarmonySpec: vi.fn(),
+}));
+
+// Mock recipe engine: getRecipeById and recipeToAgentOutput — prevent catalog access in tests.
+vi.mock('../src/core/music-knowledge/query.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/core/music-knowledge/query.js')>();
+  return {
+    ...actual,
+    getRecipeById: vi.fn().mockReturnValue(undefined),
+  };
+});
+
+vi.mock('../src/core/music-knowledge/recipe-engine.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../src/core/music-knowledge/recipe-engine.js')>();
+  return {
+    ...actual,
+    recipeToAgentOutput: vi.fn().mockReturnValue(null),
   };
 });
 
 import { sessionStore, DEFAULT_SESSION_STATE, setAutopilot } from '../src/state/session';
-import { playGroove, playProgression, playSession } from '../src/state/session';
+import { playGroove, playProgression, playSession, requeueLive } from '../src/state/session';
 import { chatHistory } from '../src/agent/agent';
 import { sendEvolution } from '../src/agent/agent.js';
+import { applyRhythmSpec, applyHarmonySpec } from '../src/agent/apply.js';
 import { startAutopilot, stopAutopilot } from '../src/agent/autopilot';
 
 // ── Setup / teardown ──────────────────────────────────────────────────────
@@ -62,6 +99,10 @@ beforeEach(() => {
   vi.mocked(playProgression).mockResolvedValue(undefined);
   vi.mocked(playSession).mockClear();
   vi.mocked(playSession).mockResolvedValue(undefined);
+  vi.mocked(requeueLive).mockClear();
+  vi.mocked(requeueLive).mockReturnValue(null);
+  vi.mocked(applyRhythmSpec).mockClear();
+  vi.mocked(applyHarmonySpec).mockClear();
   // Stop any running timer from previous test
   stopAutopilot();
   // Use fake timers for timer-based tests
@@ -479,5 +520,255 @@ describe('llmError state management', () => {
     setAutopilot({ enabled: true, llmError: 'Prior error' });
     startAutopilot();
     expect(get(sessionStore).autopilot.llmError).toBeNull();
+  });
+});
+
+// ── A-07-06: Plan consumption — one step per tick ─────────────────────────
+
+/** Minimal rhythm-only AgentOutput step for use in plan tests. */
+const rhythmStep = {
+  rhythm: {
+    layers: [{ sound: 'bd' as const, steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] }],
+  },
+};
+
+/** Minimal harmony-only AgentOutput step for use in plan tests. */
+const harmonyStep = {
+  harmony: {
+    root: 'C' as const,
+    mode: 'minor' as const,
+    octave: 3,
+    progression: [{ root: 'C' as const, quality: 'min' as const }],
+  },
+};
+
+describe('Plan consumption — one step per tick (A-07-06)', () => {
+  it('A-07-06: tick() with a non-exhausted plan applies the current step, advances planIndex, does NOT call sendEvolution', async () => {
+    const intervalMs = defaultIntervalMs();
+
+    // Start the timer first, then inject the plan (simulates sendEvolution storing it)
+    setAutopilot({ enabled: true });
+    startAutopilot();
+
+    // Inject a 2-step plan (as sendEvolution would do after an LLM call)
+    setAutopilot({ currentPlan: [rhythmStep, harmonyStep], planIndex: 0 });
+
+    // Advance one interval — tick() runs
+    await vi.advanceTimersByTimeAsync(intervalMs);
+
+    // applyRhythmSpec should have been called with the first step's rhythm
+    expect(applyRhythmSpec).toHaveBeenCalledTimes(1);
+    expect(applyRhythmSpec).toHaveBeenCalledWith(rhythmStep.rhythm);
+
+    // sendEvolution should NOT have been called (plan had steps)
+    expect(sendEvolution).not.toHaveBeenCalled();
+
+    // planIndex should have advanced to 1
+    expect(get(sessionStore).autopilot.planIndex).toBe(1);
+  });
+
+  it('A-07-06: tick() with plan at final step applies it and advances planIndex to length', async () => {
+    const intervalMs = defaultIntervalMs();
+
+    // Start timer, then inject plan with planIndex=1 (only second step remains)
+    setAutopilot({ enabled: true });
+    startAutopilot();
+    setAutopilot({ currentPlan: [rhythmStep, harmonyStep], planIndex: 1 });
+
+    await vi.advanceTimersByTimeAsync(intervalMs);
+
+    // applyHarmonySpec called with second step's harmony
+    expect(applyHarmonySpec).toHaveBeenCalledTimes(1);
+    expect(applyHarmonySpec).toHaveBeenCalledWith(harmonyStep.harmony);
+
+    // sendEvolution NOT called
+    expect(sendEvolution).not.toHaveBeenCalled();
+
+    // planIndex advances to 2 (= length)
+    expect(get(sessionStore).autopilot.planIndex).toBe(2);
+  });
+
+  it('A-07-06: tick() calls requeueLive() when a step is applied', async () => {
+    const intervalMs = defaultIntervalMs();
+
+    setAutopilot({ enabled: true });
+    startAutopilot();
+    setAutopilot({ currentPlan: [rhythmStep], planIndex: 0 });
+
+    await vi.advanceTimersByTimeAsync(intervalMs);
+
+    expect(requeueLive).toHaveBeenCalledTimes(1);
+  });
+
+  it('A-07-06: two consecutive ticks consume two steps in order', async () => {
+    const intervalMs = defaultIntervalMs();
+
+    setAutopilot({ enabled: true });
+    startAutopilot();
+    setAutopilot({ currentPlan: [rhythmStep, harmonyStep], planIndex: 0 });
+
+    // First tick — consumes rhythmStep
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(applyRhythmSpec).toHaveBeenCalledTimes(1);
+    expect(applyHarmonySpec).not.toHaveBeenCalled();
+    expect(get(sessionStore).autopilot.planIndex).toBe(1);
+
+    // Second tick — consumes harmonyStep
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(applyHarmonySpec).toHaveBeenCalledTimes(1);
+    expect(get(sessionStore).autopilot.planIndex).toBe(2);
+
+    // sendEvolution still not called (plan not yet exhausted until 3rd tick)
+    expect(sendEvolution).not.toHaveBeenCalled();
+  });
+});
+
+// ── A-07-07: Plan exhaustion triggers sendEvolution ──────────────────────
+
+describe('Plan exhaustion triggers sendEvolution (A-07-07)', () => {
+  it('A-07-07: tick() with exhausted plan (planIndex = currentPlan.length) calls sendEvolution', async () => {
+    const intervalMs = defaultIntervalMs();
+
+    // Start timer, then inject an already-exhausted plan (planIndex equals length)
+    setAutopilot({ enabled: true });
+    startAutopilot();
+    setAutopilot({ currentPlan: [rhythmStep, harmonyStep], planIndex: 2 });
+
+    await vi.advanceTimersByTimeAsync(intervalMs);
+
+    // sendEvolution called, no apply functions
+    expect(sendEvolution).toHaveBeenCalledTimes(1);
+    expect(applyRhythmSpec).not.toHaveBeenCalled();
+    expect(applyHarmonySpec).not.toHaveBeenCalled();
+  });
+
+  it('A-07-07: tick() with empty plan (initial state) calls sendEvolution', async () => {
+    const intervalMs = defaultIntervalMs();
+
+    // Default state: currentPlan = [], planIndex = 0 (startAutopilot preserves empty plan)
+    setAutopilot({ enabled: true });
+    startAutopilot();
+    // currentPlan is already [] after startAutopilot — no plan injection needed
+
+    await vi.advanceTimersByTimeAsync(intervalMs);
+
+    expect(sendEvolution).toHaveBeenCalledTimes(1);
+    expect(applyRhythmSpec).not.toHaveBeenCalled();
+  });
+
+  it('A-07-07: tick() with _isEvolving=true (sendEvolution in flight) sets lagWarning and does NOT call sendEvolution again', async () => {
+    // Make sendEvolution hang so _isEvolving stays true
+    let resolveEvolution!: () => void;
+    const hangingPromise = new Promise<void>((resolve) => {
+      resolveEvolution = resolve;
+    });
+    vi.mocked(sendEvolution).mockReturnValueOnce(hangingPromise);
+
+    const intervalMs = defaultIntervalMs();
+
+    // Empty plan → first tick fires sendEvolution (hanging)
+    setAutopilot({ enabled: true });
+    startAutopilot();
+
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(sendEvolution).toHaveBeenCalledTimes(1);
+
+    // Second tick fires while sendEvolution is still in flight
+    await vi.advanceTimersByTimeAsync(intervalMs);
+    expect(sendEvolution).toHaveBeenCalledTimes(1); // still 1, not 2
+    expect(get(sessionStore).autopilot.lagWarning).toBe(true);
+
+    // Clean up
+    resolveEvolution();
+  });
+
+  it('A-07-07: planIndex resets to 0 when plan exhausted and sendEvolution is called', async () => {
+    const intervalMs = defaultIntervalMs();
+
+    // Start timer, inject a pre-exhausted plan
+    setAutopilot({ enabled: true });
+    startAutopilot();
+    setAutopilot({ currentPlan: [rhythmStep], planIndex: 1 });
+
+    await vi.advanceTimersByTimeAsync(intervalMs);
+
+    // planIndex reset to 0 on exhaustion
+    expect(get(sessionStore).autopilot.planIndex).toBe(0);
+    expect(get(sessionStore).autopilot.currentPlan).toHaveLength(0);
+    expect(sendEvolution).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── A-07-08: startAutopilot resets plan fields ────────────────────────────
+
+describe('startAutopilot resets plan fields (A-07-08)', () => {
+  it('A-07-08: startAutopilot() resets currentPlan to [] regardless of prior stale plan', () => {
+    // Seed a stale plan from a prior session
+    setAutopilot({
+      enabled: true,
+      currentPlan: [rhythmStep, harmonyStep],
+      planIndex: 1,
+    });
+
+    startAutopilot();
+
+    const state = get(sessionStore).autopilot;
+    expect(state.currentPlan).toHaveLength(0);
+    expect(state.planIndex).toBe(0);
+  });
+
+  it('A-07-08: startAutopilot() called twice (idempotent restart) still resets plan each time', () => {
+    setAutopilot({
+      enabled: true,
+      currentPlan: [rhythmStep],
+      planIndex: 1,
+    });
+
+    startAutopilot(); // first call — resets plan
+    // Inject a stale plan again
+    setAutopilot({ currentPlan: [harmonyStep], planIndex: 1 });
+
+    startAutopilot(); // second call — should reset again
+    const state = get(sessionStore).autopilot;
+    expect(state.currentPlan).toHaveLength(0);
+    expect(state.planIndex).toBe(0);
+  });
+});
+
+// ── A-07-09: stopAutopilot resets plan fields ─────────────────────────────
+
+describe('stopAutopilot resets plan fields (A-07-09)', () => {
+  it('A-07-09: stopAutopilot() resets currentPlan to [] and planIndex to 0', () => {
+    setAutopilot({
+      enabled: true,
+      currentPlan: [rhythmStep, harmonyStep],
+      planIndex: 2,
+    });
+    startAutopilot();
+
+    stopAutopilot();
+
+    const state = get(sessionStore).autopilot;
+    expect(state.currentPlan).toHaveLength(0);
+    expect(state.planIndex).toBe(0);
+  });
+
+  it('A-07-09: stopAutopilot() also resets lagWarning, llmError, and timerStartedAt', () => {
+    setAutopilot({ enabled: true, lagWarning: true, llmError: 'err', timerStartedAt: 99999 });
+    startAutopilot();
+    stopAutopilot();
+
+    const state = get(sessionStore).autopilot;
+    expect(state.lagWarning).toBe(false);
+    expect(state.llmError).toBeNull();
+    expect(state.timerStartedAt).toBe(0);
+    expect(state.currentPlan).toHaveLength(0);
+    expect(state.planIndex).toBe(0);
+  });
+
+  it('A-07-09: DEFAULT_SESSION_STATE.autopilot includes currentPlan: [] and planIndex: 0', () => {
+    const state = get(sessionStore).autopilot;
+    expect(state.currentPlan).toHaveLength(0);
+    expect(state.planIndex).toBe(0);
   });
 });
