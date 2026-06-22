@@ -28,6 +28,7 @@
 import { writable, get } from 'svelte/store';
 
 import type { SavedSession } from '../lib/persistence.js';
+import type { AgentOutput } from '../agent/schema.js';
 import type { Quality } from '../core/theory/chords.js';
 import type { RegisterMode } from '../core/harmony/voice-tracks.js';
 
@@ -347,6 +348,14 @@ export interface NowPlaying {
  * - `llmError`        Human-readable error from the LLM provider, or null when
  *                     the last evolution call succeeded. Cleared on success.
  *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
+ * - `currentPlan`     The current evolution plan returned by the LLM. Applied one
+ *                     step per tick (ADR 0024 D3). Empty until the first successful
+ *                     LLM call.
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
+ * - `planIndex`       Index of the next unapplied step in `currentPlan`. Advances
+ *                     by 1 on each tick that applies a plan step. Reset to 0 when a
+ *                     new plan arrives or when the autopilot restarts/stops.
+ *                     EPHEMERAL — not persisted (ADR 0022 D1/D7).
  */
 export interface AutopilotState {
   enabled: boolean;
@@ -357,6 +366,10 @@ export interface AutopilotState {
   timerStartedAt: number;
   lagWarning: boolean;
   llmError: string | null;
+  /** EPHEMERAL — not persisted (ADR 0022 D1/D7). Per ADR 0024 D2. */
+  currentPlan: AgentOutput[];
+  /** EPHEMERAL — not persisted (ADR 0022 D1/D7). Per ADR 0024 D2. */
+  planIndex: number;
 }
 
 // ── LastRecipeDisplay ────────────────────────────────────────────────────────
@@ -448,6 +461,7 @@ export const DEFAULT_SESSION_STATE: SessionState = {
   // autopilot: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7)
   // Four new fields (Phase 06 step 06.2) are also ephemeral — automatically excluded
   // because the entire `autopilot` key is absent from SavedSessionSchema (see persistence.ts).
+  // Two new plan fields (Phase 07 step 07.2, ADR 0024 D2) are likewise ephemeral.
   autopilot: {
     enabled: false,
     intervalCycles: 8,
@@ -457,6 +471,8 @@ export const DEFAULT_SESSION_STATE: SessionState = {
     timerStartedAt: 0,
     lagWarning: false,
     llmError: null,
+    currentPlan: [], // EPHEMERAL — not persisted (ADR 0022 D1/D7); ADR 0024 D2
+    planIndex: 0, // EPHEMERAL — not persisted (ADR 0022 D1/D7); ADR 0024 D2
   },
   // lastRecipeApplied: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7 pattern)
   lastRecipeApplied: undefined,
