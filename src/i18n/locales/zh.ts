@@ -221,6 +221,10 @@ const zh: Dictionary = {
       lagWarning: '跳过周期：AI 响应超过配置间隔。', // i18n-draft
       errorLlm: 'AI 服务错误：{error}', // i18n-draft
       errorRateLimit: '达到速率限制。自动驾驶将在下一个周期重试。', // i18n-draft
+      errorEmpty: 'AI 服务返回空响应。请尝试其他模型或重试。', // i18n-draft
+      errorBadFormat: '模型未返回有效的演化 JSON（代码模型常见）。请尝试其他模型。', // i18n-draft
+      errorEmptyPlan:
+        'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

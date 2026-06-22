@@ -274,6 +274,12 @@ export interface Dictionary {
       errorLlm: string;
       /** Rate-limit (429) specific error message — autopilot will retry next cycle (Phase 06 fix) */
       errorRateLimit: string;
+      /** Provider returned an empty response — nothing to apply (Phase 06 silent-path fix) */
+      errorEmpty: string;
+      /** Provider returned text that wasn't valid evolution JSON — often a model that emits prose (Phase 06 silent-path fix) */
+      errorBadFormat: string;
+      /** LLM returned an empty or structurally invalid evolution plan — autopilot will retry next cycle (Phase 07 step 07.5 / ADR 0024 D4) */
+      errorEmptyPlan: string;
     };
     /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
     recipeCard: {

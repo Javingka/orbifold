@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # ADR 0024 — Evolution Plan: multi-cycle batched autopilot evolution
 
-- **Status:** Draft — awaiting Pilot ratification at Checkpoint #2
+- **Status:** Accepted — ratified by Pilot 2026-06-22 (D6 amended: horizon clamped to `Math.min(8, …)` — see D6)
 - **Date:** 2026-06-22
 - **Initiative / Phase:** ai-jam / Phase 07 (step 07.2)
 - **Deciders:** Pilot (Javier)
@@ -252,18 +252,22 @@ message. A JSDoc comment must note this is LLM-payload-only.
 `intervalCycles` using the formula:
 
 ```typescript
-const horizon = Math.max(2, Math.round(state.autopilot.intervalCycles / 2));
+const horizon = Math.min(8, Math.max(2, Math.round(state.autopilot.intervalCycles / 2)));
 ```
 
 **Rationale:**
 - No new state field (`horizonCycles`) is introduced — `intervalCycles` is already
   user-tunable (range 2–32, default 8).
-- At default `intervalCycles = 8`: `horizon = Math.max(2, Math.round(4)) = 4`.
-- At minimum `intervalCycles = 2`: `horizon = Math.max(2, Math.round(1)) = 2`.
-- At maximum `intervalCycles = 32`: `horizon = Math.max(2, Math.round(16)) = 16`.
-  Note: `EvolutionPlanSchema.max(8)` caps what the LLM can return; if `horizon > 8`,
-  the user message still asks for `horizon` steps but the schema rejects responses over 8.
-  In practice, `intervalCycles <= 16` is the most common setting, yielding `horizon <= 8`.
+- At default `intervalCycles = 8`: `horizon = Math.min(8, Math.max(2, 4)) = 4`.
+- At minimum `intervalCycles = 2`: `horizon = Math.min(8, Math.max(2, 1)) = 2`.
+- At maximum `intervalCycles = 32`: `horizon = Math.min(8, Math.max(2, 16)) = 8`.
+- **D6 amendment (Pilot, 2026-06-22):** The original formula was unclamped
+  (`Math.max(2, …)` only), which meant that at `intervalCycles > 16`, the user message
+  asked the LLM for more than 8 steps — but `EvolutionPlanSchema.max(8)` rejects
+  responses with more than 8 steps. A compliant LLM returning 16 steps would have failed
+  `safeParse` → D4 `__emptyPlan__` → autopilot stuck on every cycle for high-interval
+  users. The clamp (`Math.min(8, …)`) aligns the request with the schema ceiling and
+  eliminates the failure mode. `intervalCycles ≤ 16` (the common range) is unaffected.
 
 **Injection:** `horizon` is injected into the user message JSON (not hardcoded in
 `SYSTEM_PROMPT_EVOLUTION`), so the system prompt remains static and does not need dynamic

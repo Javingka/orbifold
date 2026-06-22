@@ -231,6 +231,11 @@ const es: Dictionary = {
       errorLlm: 'Error del servicio de IA: {error}',
       errorRateLimit:
         'Límite de velocidad alcanzado. El autopilot reintentará en el próximo ciclo.',
+      errorEmpty: 'El servicio de IA devolvió una respuesta vacía. Probá otro modelo o reintentá.',
+      errorBadFormat:
+        'El modelo no devolvió JSON de evolución válido (suele pasar con modelos de código). Probá otro modelo.',
+      errorEmptyPlan:
+        'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.',
     },
     recipeCard: {
       title: 'Receta aplicada',

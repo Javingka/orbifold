@@ -18,7 +18,7 @@
     - Chat messages held in local Svelte reactive array (mirrors chatHistory in agent.ts).
     - Code blocks rendered via Svelte {#each} (not innerHTML/DOM manipulation).
     - nowPlaying.source read from $sessionStore (not prototype global currentCode / setNowPlaying).
-    - Provider select iterates Object.entries(PROVIDERS) — shows Anthropic, OpenRouter, Google Gemini (no OpenAI — Pilot decision).
+    - Provider select iterates Object.entries(PROVIDERS) — shows Anthropic, OpenRouter, Google Gemini, OpenAI.
     - autofix retry indicator uses Svelte reactive variable, not prototype DOM load element.
 -->
 <script lang="ts">
@@ -722,7 +722,13 @@
           <p class="autopilot-warning">
             {autopilot.llmError === '__rateLimit__'
               ? $t('agent.autopilot.errorRateLimit')
-              : $t('agent.autopilot.errorLlm').replace('{error}', autopilot.llmError)}
+              : autopilot.llmError === '__emptyResponse__'
+                ? $t('agent.autopilot.errorEmpty')
+                : autopilot.llmError === '__badFormat__'
+                  ? $t('agent.autopilot.errorBadFormat')
+                  : autopilot.llmError === '__emptyPlan__'
+                    ? $t('agent.autopilot.errorEmptyPlan')
+                    : $t('agent.autopilot.errorLlm').replace('{error}', autopilot.llmError)}
           </p>
         {/if}
       </div>

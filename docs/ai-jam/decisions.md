@@ -46,7 +46,23 @@ From ai-jam Phase 02 (inventory OD-1/OD-2 — Pilot-resolved 2026-06-19):
   that validates every `euclid`-strategy entry. Reconciliation of non-16 / `struct` grids to
   the agent schema is deferred to the future recipe→state phase under its own ADR.
 
+From ai-jam Phase 07 (inventory OD-1/2/3 — Pilot-resolved 2026-06-22):
+
+- **Evolution Plan length derives from intervalCycles** (OD-1): the LLM returns a
+  multi-step plan; autopilot applies one step per tick and re-calls only when the
+  plan is exhausted — reducing call frequency (Gemini 429 / free daily ceilings).
+- **Plan schema is a wrapper `{ plan: AgentOutput[] }`, 1–8 steps** (OD-2):
+  `EvolutionPlanSchema`; plan-layer only — does NOT bump SCHEMA_VERSION (6) or
+  SESSION_SCHEMA_VERSION (5).
+- **Per-call input trim = recipes summary + compact JSON schema** (OD-3): slim the
+  snapshot/recipe payload so the with-hint path stays under the free prompt cap.
 
 ## Superseded decisions
+
+- **ADR 0022 D6 (isPlaying() audio-awareness guard) — SUPERSEDED by Phase 06.**
+  The dynamic-import `isPlaying()` tick guard was removed; replaced by auto-play
+  heuristics in `startAutopilot()` (bar fills immediately; auto-play when
+  rhythm/harmony configured but nothing playing). `autopilot.ts` no longer imports
+  from `strudel.ts`.
 
 _(none)_

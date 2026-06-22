@@ -229,6 +229,11 @@ const pt: Dictionary = {
       errorLlm: 'Erro do serviço de IA: {error}', // i18n-draft
       errorRateLimit:
         'Limite de velocidade atingido. O autopilot tentará novamente no próximo ciclo.', // i18n-draft
+      errorEmpty: 'O serviço de IA retornou uma resposta vazia. Tente outro modelo ou repita.', // i18n-draft
+      errorBadFormat:
+        'O modelo não retornou JSON de evolução válido (comum em modelos de código). Tente outro modelo.', // i18n-draft
+      errorEmptyPlan:
+        'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

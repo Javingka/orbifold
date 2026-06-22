@@ -396,3 +396,116 @@ This commit stages only: `src/agent/autopilot.ts`, `tests/autopilot.test.ts`, an
 ### Next action (from phase spec)
 
 **Step 07.5** — i18n + UI feedback + full quality gate. Proceeds after this handoff entry is committed.
+
+---
+
+## Step 07.5 — i18n + UI feedback + full quality gate (combined Phase 06+07 batch commit)
+
+**Status:** COMPLETE  
+**Date:** 2026-06-22  
+**Branch:** `ai-jam/phase-07`  
+**Commit:** `fix(agent): Phase 06+07 — error surfacing, OpenAI provider, i18n errorEmpty/errorBadFormat/errorEmptyPlan, AgentPanel decode`
+
+### What was done
+
+Completed Part A (Phase 07 step 07.5 deliverables) and Part B (Phase 06 uncommitted batch), committed together as one coherent commit per Pilot direction ("merge 06+07 juntos al final").
+
+**Part A — Phase 07 step 07.5 deliverables:**
+
+**A1 — `src/i18n/types.ts` — `errorEmptyPlan` key added:**
+
+Added `errorEmptyPlan: string` to `Dictionary.agent.autopilot` immediately after `errorBadFormat`, with JSDoc comment referencing Phase 07 step 07.5 and ADR 0024 D4.
+
+**A2 — All four locale files — `errorEmptyPlan` strings added:**
+
+| Locale | String | Notes |
+|--------|--------|-------|
+| `es` (authoritative) | `'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.'` | Per phase spec |
+| `en` | `'The evolution plan returned is empty or has an invalid format. Autopilot will retry on the next cycle.'` | Per phase spec |
+| `pt` | Copy of Spanish string | `// i18n-draft` comment per convention |
+| `zh` | Copy of Spanish string | `// i18n-draft` comment per convention |
+
+Key-parity test passes: all 4 locales now have the same `errorEmptyPlan` key (confirmed by `tests/i18n/key-parity.test.ts` — 8 tests pass).
+
+**A3 — `src/ui/AgentPanel.svelte` — `__emptyPlan__` arm added to llmError ternary:**
+
+Extended the existing decode ternary in the `{#if autopilot.llmError}` block to add the `__emptyPlan__` case before the generic fallback:
+
+```svelte
+{autopilot.llmError === '__rateLimit__'
+  ? $t('agent.autopilot.errorRateLimit')
+  : autopilot.llmError === '__emptyResponse__'
+    ? $t('agent.autopilot.errorEmpty')
+    : autopilot.llmError === '__badFormat__'
+      ? $t('agent.autopilot.errorBadFormat')
+      : autopilot.llmError === '__emptyPlan__'
+        ? $t('agent.autopilot.errorEmptyPlan')
+        : $t('agent.autopilot.errorLlm').replace('{error}', autopilot.llmError)}
+```
+
+**Part B — Phase 06 uncommitted changes (batch):**
+
+The following Phase 06 changes were in the working tree uncommitted since Phase 06:
+
+- `src/agent/providers.ts` — OpenAI provider added, `sanitizeKey` helper, OpenRouter defaultModel changed to `:free` suffix.
+- `src/i18n/types.ts` — `errorEmpty` and `errorBadFormat` keys already present (added in Phase 06 work); `errorEmptyPlan` added in Part A above.
+- `src/i18n/locales/es.ts`, `en.ts`, `pt.ts`, `zh.ts` — `errorEmpty` and `errorBadFormat` strings already present (Phase 06); `errorEmptyPlan` added in Part A above.
+- `src/ui/AgentPanel.svelte` — `__emptyResponse__` and `__badFormat__` decode arms already present (Phase 06); `__emptyPlan__` arm added in Part A above.
+- `docs/adr/0024-evolution-plan.md` — Accepted status with D6 amendment (horizon clamped).
+- `docs/ai-jam/decisions.md` — OD-1/2/3 resolutions for Phase 07.
+
+**Reversibility / flag-off (CLAUDE.md required):**
+
+The autopilot toggle (`autopilot.enabled`, default `false`) gates all plan behavior. With the toggle off:
+- `tick()` returns immediately on the first line check.
+- `sendEvolution()` is never called.
+- `currentPlan` and `planIndex` remain at defaults (`[]`, `0`).
+- `AgentPanel.svelte` `{#if autopilot.llmError}` block never renders (no error set).
+- Behavior is byte-identical to pre-phase `main` for any session where the user has not enabled autopilot.
+
+### Validation — Full quality gate (A-07-09)
+
+All four checks recorded:
+
+1. **`pnpm exec tsc --noEmit`** → clean (no output)
+2. **`pnpm lint`** → `All matched files use Prettier code style!` (ESLint + Prettier both clean)
+3. **`pnpm test`** → **1589/1589 tests pass**, 29 test files, no regressions
+   - `tests/i18n/key-parity.test.ts` (8 tests): confirms `errorEmptyPlan` present in all 4 locales
+   - `tests/evolution-plan.test.ts` (7 tests): `EvolutionPlanSchema.safeParse` (step 07.2 coverage)
+   - `tests/sendEvolution-hint.test.ts` (22 tests): A-07-02/03/04/05 (step 07.3 coverage)
+   - `tests/autopilot.test.ts` (43 tests): A-07-06/07/08/09 plan-consumption (step 07.4 coverage)
+4. **`pnpm build`** → `✓ built in 1.66s` — production bundle produced successfully
+   - Pre-existing chunk-size warning (~1184 kB unminified) is NOT introduced by this step.
+   - Pre-existing dynamic-import warning (stage.ts, strudel.ts) is NOT introduced by this step.
+
+### Acceptance Coverage Table
+
+| Acceptance Criterion | Coverage | Notes |
+|---------------------|----------|-------|
+| A-07-01 (EvolutionPlanSchema safeParse — valid 1-step, 3-step, empty, 9-step, no-fields, saveAsBlock-only) | COVERED | `tests/evolution-plan.test.ts` — 7 cases |
+| A-07-02 (sendEvolution includes horizon in user message) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-02a/b/c/d (4 tests) |
+| A-07-03 (availableRecipeSummaries absent when hint present) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-03a/b/c (3 tests) |
+| A-07-04 (valid plan → setAutopilot with currentPlan) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-04a/b/c (3 tests) |
+| A-07-05 (compact step encoding AND __emptyPlan__ sentinel on bad parse) | COVERED | `tests/sendEvolution-hint.test.ts` — A-07-05a/b/c/d (4 tests) |
+| A-07-06 (one tick applies one plan step; planIndex advances; sendEvolution NOT called) | COVERED | `tests/autopilot.test.ts` — A-07-06 suite (4 tests) |
+| A-07-07 (exhausted plan triggers sendEvolution; _isEvolving guard sets lagWarning) | COVERED | `tests/autopilot.test.ts` — A-07-07 suite (4 tests) |
+| A-07-08 (startAutopilot resets currentPlan and planIndex) | COVERED | `tests/autopilot.test.ts` — A-07-08 suite (2 tests) |
+| A-07-09 (stopAutopilot resets currentPlan and planIndex; DEFAULT_SESSION_STATE defaults) | COVERED | `tests/autopilot.test.ts` — A-07-09 suite (3 tests) |
+| A-07-09 full quality gate (tsc clean + lint clean + 1589 tests + build succeeds) | COVERED | All four recorded above |
+| A-07-10 (__emptyPlan__ sentinel renders errorEmptyPlan i18n string; key-parity passes for all 4 locales) | COVERED | `tests/i18n/key-parity.test.ts` (8 tests); AgentPanel.svelte ternary extended |
+
+### Phase 07 completion summary
+
+All 10 acceptance criteria (A-07-01 through A-07-10) are fully covered. ADR 0024 is Accepted (ratified by Pilot 2026-06-22, D6 amended). The full phase delivers:
+
+- **Multi-cycle batched autopilot**: LLM called once per plan (not once per cycle); one plan step applied per tick; plan exhaustion triggers re-call.
+- **Reduced LLM call frequency**: at `intervalCycles = 8`, `horizon = 4` means 4 cycles between LLM calls instead of every cycle — a 4x reduction in API calls for the default configuration.
+- **Input token budget**: hint path (6-layer) → ~1,164 tokens (down from ~1,770); compact binary step encoding saves ~19 tokens/layer.
+- **Horizon clamped** to `Math.min(8, …)` — eliminates D6 edge case where `intervalCycles > 16` requested more steps than the schema allows.
+- **`__emptyPlan__` sentinel**: full path from `EvolutionPlanSchema.safeParse` failure → `setAutopilot({ llmError: '__emptyPlan__' })` → `AgentPanel.svelte` decode → localized user message.
+- **Phase 06 batch**: OpenAI provider, `sanitizeKey`, `errorEmpty`/`errorBadFormat` sentinels committed alongside Phase 07 deliverables.
+- **ADR 0022 invariants**: fully preserved — no `chatHistory` push, no `applyBlockSave`, `saveAsBlock` in plan steps silently ignored.
+
+### Next action
+
+**STOP.** Pilot reviews at Checkpoint #5 (phase complete handoff). Do not merge or push.

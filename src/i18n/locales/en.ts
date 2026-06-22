@@ -227,6 +227,11 @@ const en: Dictionary = {
       lagWarning: 'Cycle skipped: the AI service took longer than the configured interval.',
       errorLlm: 'AI service error: {error}',
       errorRateLimit: 'Rate limit reached. Autopilot will retry on the next cycle.',
+      errorEmpty: 'The AI service returned an empty response. Try another model or retry.',
+      errorBadFormat:
+        "The model didn't return valid evolution JSON (common with code models). Try another model.",
+      errorEmptyPlan:
+        'The evolution plan returned is empty or has an invalid format. Autopilot will retry on the next cycle.',
     },
     recipeCard: {
       title: 'Applied recipe',
