@@ -244,6 +244,36 @@ export function applyBlockSave(spec: SaveAsBlockSpec): void {
   }
 }
 
+// ── applySampleMap ─────────────────────────────────────────────────────────
+
+/**
+ * Overlay strudelSample onto session rhythm layers using a recipe sampleMap
+ * (ADR 0025 D3/D4). Genre-agnostic: receives a map of Sound→sampleName and
+ * applies it by updating the session store.
+ *
+ * Called after applyRhythmSpec from the recipe-application path in autopilot.ts.
+ * The genre→sample mapping is handed in as a parameter — this function contains
+ * zero genre knowledge and no hardcoded sample map of its own.
+ *
+ * Layers whose Sound slot is absent from the map are returned unchanged
+ * (strudelSample stays undefined). A recipe with no sampleMap (empty map)
+ * leaves every layer untouched.
+ *
+ * @param map - Partial map from Sound slot → concrete Strudel sample name.
+ */
+export function applySampleMap(map: Partial<Record<string, string>>): void {
+  sessionStore.update((state) => ({
+    ...state,
+    rhythm: {
+      ...state.rhythm,
+      layers: state.rhythm.layers.map((layer) => {
+        const override = map[layer.sound];
+        return override !== undefined ? { ...layer, strudelSample: override } : layer;
+      }),
+    },
+  }));
+}
+
 // ── Re-export ──────────────────────────────────────────────────────────────
 
 /** Convenience accessor for reading store state in apply functions (pure). */

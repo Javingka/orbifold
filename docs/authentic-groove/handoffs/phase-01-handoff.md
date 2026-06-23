@@ -258,3 +258,105 @@ All changes in this step are confined to `src/core/music-knowledge/rhythm-harmon
 
 - **Terminal commit:** `feat(music-knowledge): Phase 01 step 01.3 — per-genre sampleMap catalog (ADR 0025)`
   - Hash: self-referential — not recorded.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-23. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 01.4.
+
+---
+
+## Step 01.4 — Propagation (knowledge / private side)
+
+**Date:** 2026-06-23
+**Commit(s):** (see terminal commit note below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required sources in order: ADR 0025 (D3, D4), inventory §1/§3, `recipe-engine.ts`, `apply.ts`, `agent.ts`, `autopilot.ts`, `sample-map.test.ts`.
+- Confirmed the actual recipe-application path is in `src/agent/autopilot.ts` (`applyPlanStep()`), not `agent.ts`. `recipeToAgentOutput` is called at `autopilot.ts` line 130 followed by `applyRhythmSpec(engineOutput.rhythm)`. The step prompt referenced `agent.ts` but the inventory §1.4 and codebase confirm the path is in `autopilot.ts`.
+- Added `applySampleMap(map: Partial<Record<string, string>>): void` to `src/agent/apply.ts` after `applyRhythmSpec`. The function calls `sessionStore.update` to overlay `strudelSample` on each layer whose `sound` key appears in `map`. The helper carries zero genre knowledge — it is handed the map as a parameter (AG-D1 / ADR 0025 D3).
+- Added import of `applySampleMap` to `src/agent/autopilot.ts` from `./apply.js`.
+- Wired `applySampleMap(recipe.sampleMap ?? {})` immediately after `applyRhythmSpec(engineOutput.rhythm)` in `applyPlanStep()` in `autopilot.ts` (ADR 0025 D4 call site).
+- Created `tests/authentic-groove/propagation.test.ts` (AGPL-3.0 header) with 15 tests covering A-01-01, A-01-02, A-01-04:
+  - `applySampleMap({})` — no layer mutated (edge case).
+  - `applySampleMap` sets strudelSample on matching layer, leaves absent slots unchanged.
+  - Cumbia recipe: layers carry `strudelSample: 'perc'` on bd-slot; `rhythmLayerToStrudelLine` emits 'perc' tokens (A-01-01 full).
+  - Cueca recipe: no sampleMap → all layers have no strudelSample; generic sound emitted (A-01-02 full).
+  - Samba recipe: hh-slot layer carries `strudelSample: 'sd'`; codegen emits 'sd' (A-01-04).
+  - Slot absent from map → `strudelSample` undefined (A-01-04).
+  - Recipes with no sampleMap → no layer carries strudelSample (dorian-ritual-sparse, pop-rock-backbeat) (A-01-04 no-regression).
+- Verified seam invariant: no genre name or sample-name literal in plumbing files. The `applySampleMap` function contains zero genre names. `autopilot.ts` references `recipe.sampleMap` (a data property on `MusicalRecipe`) — not a genre name, not a hardcoded map.
+
+### Files touched
+
+- `src/agent/apply.ts` — new `applySampleMap` function
+- `src/agent/autopilot.ts` — import `applySampleMap`; wire call after `applyRhythmSpec(engineOutput.rhythm)` in `applyPlanStep`
+- `tests/authentic-groove/propagation.test.ts` — new, 15 tests
+- `docs/authentic-groove/handoffs/phase-01-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+**A-01-01 (full):**
+- `pnpm exec vitest run propagation` → test "cumbia recipe → strudelSample propagation" (2 tests): bd-slot layer carries `strudelSample: 'perc'`; `rhythmLayerToStrudelLine` emits 'perc', not 'bd'.
+
+**A-01-02 (full):**
+- `pnpm exec vitest run propagation` → test "cueca recipe → no sampleMap → generic sound emitted" (3 tests): cueca has `sampleMap === undefined`; all layers have no strudelSample; codegen emits generic sound.
+
+**A-01-04 (full):**
+- `pnpm exec vitest run propagation` → 6 tests covering absent slots, multi-slot maps, map-less recipes (no-regression).
+
+**A-01-05 (partial — tsc + tests):**
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm test` → 1673 tests pass (1658 prior + 15 new). No regressions.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm exec vitest run propagation` → 15 new tests pass.
+- `pnpm exec vitest run autopilot` → 43 autopilot tests still pass unchanged.
+- `pnpm test` → 1673 total, 0 failures.
+- Seam invariant check (AG-D1):
+  ```
+  git grep -n -e "'cumbia'" -e '"cumbia"' -e "'cueca'" -e '"cueca"' ... -- 'src/' ':(exclude)src/core/music-knowledge/' ':(exclude)tests/'
+  ```
+  Result: empty output (zero matches). Seam intact.
+- `git status` → only `src/agent/apply.ts` (modified), `src/agent/autopilot.ts` (modified), `tests/authentic-groove/propagation.test.ts` (new), `docs/authentic-groove/handoffs/phase-01-handoff.md` (modified).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Status in this step | Evidence |
+|---|---|---|
+| A-01-01 | **Full** | `propagation.test.ts` 2 tests: cumbia bd-slot has `strudelSample: 'perc'`; codegen emits 'perc' not 'bd'. |
+| A-01-02 | **Full** | `propagation.test.ts` 3 tests: cueca has no sampleMap; all layers undefined strudelSample; codegen emits generic sound. |
+| A-01-03 | Full (from 01.2) | No regressions — 1673/1673 tests pass. |
+| A-01-04 | **Full** | `propagation.test.ts` 6 tests: absent slots keep undefined; map-less recipes produce no strudelSample. |
+| A-01-05 | **Partial** (tsc + tests) | `tsc --noEmit` clean; `pnpm test` 1673/1673; `pnpm lint` and `pnpm build` deferred to 01.5. |
+| A-01-06 | Not started | Deferred to step 01.5 (seam fitness check + full quality gate). |
+
+### Decisions made
+
+None. All decisions governed by ADR 0025 (from step 01.2). The call site in `autopilot.ts` (not `agent.ts`) was the correct implementation choice — confirmed by inventory §1.4 consumer trace.
+
+### Proposed Decisions Register entries
+
+None proposed.
+
+### Seam invariant check (AG-D1)
+
+The `applySampleMap` function in `apply.ts` contains zero genre names, zero hardcoded sample maps, and zero sample-name literals. It receives the map as a parameter (`Partial<Record<string, string>>`). The call site in `autopilot.ts` passes `recipe.sampleMap ?? {}` — which is a data accessor on `MusicalRecipe`, not a genre-knowledge expression. No sample-name literal (`'perc'`, `'cb'`, `'sd'`) was introduced in any plumbing file. The seam grep returns empty output.
+
+### Prototype parity note
+
+This step introduces new functionality (not a port from the prototype). No prototype citation is required. The `applySampleMap` helper is original infrastructure for the authentic-groove initiative.
+
+### Environment state after this step
+
+- `@strudel/web@1.0.3` confirmed. `SCHEMA_VERSION = 6`, `SESSION_SCHEMA_VERSION = 5` (both unchanged).
+- 1673 tests passing (1658 prior + 15 new).
+
+### Terminal commit note
+
+- **Terminal commit:** `feat(music-knowledge): Phase 01 step 01.4 — sampleMap → strudelSample propagation (ADR 0025)`
+  - Hash: self-referential — not recorded.

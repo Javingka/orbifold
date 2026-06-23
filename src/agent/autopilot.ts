@@ -46,7 +46,7 @@ import {
 } from '../state/session.js';
 import type { LastRecipeDisplay } from '../state/session.js';
 import { sendEvolution } from './agent.js';
-import { applyRhythmSpec, applyHarmonySpec } from './apply.js';
+import { applyRhythmSpec, applyHarmonySpec, applySampleMap } from './apply.js';
 import { getRecipeById } from '../core/music-knowledge/query.js';
 import { recipeToAgentOutput } from '../core/music-knowledge/recipe-engine.js';
 import type { AgentOutput } from './schema.js';
@@ -132,6 +132,10 @@ function applyPlanStep(step: AgentOutput): boolean {
         // Apply recipe rhythm only if the step did NOT supply explicit rhythm
         if (!step.rhythm && engineOutput.rhythm) {
           applyRhythmSpec(engineOutput.rhythm);
+          // ADR 0025 D4: overlay strudelSample from the recipe's sampleMap.
+          // Called immediately after applyRhythmSpec so layers are in the store.
+          // applySampleMap carries zero genre knowledge — it is handed the map.
+          applySampleMap(recipe.sampleMap ?? {});
           applied = true;
         }
         // Apply recipe harmony only if the step did NOT supply explicit harmony
