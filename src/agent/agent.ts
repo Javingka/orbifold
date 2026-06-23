@@ -416,11 +416,12 @@ export async function sendEvolution(): Promise<void> {
     const res = await fetch(provider.url, {
       method: 'POST',
       headers: provider.headers(key),
-      // max_tokens 600: headroom so a multi-step plan with rhythm + harmony + intent
-      // never truncates mid-JSON. (400 truncated real gpt-4o-mini responses when the
-      // model pretty-printed arrays — see SYSTEM_PROMPT_EVOLUTION rule 6.)
+      // max_tokens 2000: Phase 07 requests a horizon-step plan (default horizon=4,
+      // max=8). Each compact step is ~150–250 tokens; 8 steps ≈ 1200–2000 tokens.
+      // 600 was sufficient for a single AgentOutput (Phase 06) but truncates
+      // multi-step plans mid-JSON, causing JSON.parse → __badFormat__.
       body: JSON.stringify(
-        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }], 600)
+        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }], 2000)
       ),
     });
     const data: unknown = await res.json();
