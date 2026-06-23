@@ -20,18 +20,15 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 ## Current initiative
 
-**Name:** `ai-jam` — **IN PROGRESS**
-**Goal:** The AI Agent evolves rhythm and/or harmony autonomously over time (every N Strudel cycles) while the user plays along, enabling an AI jam / autopilot mode. The user enables a toggle; the agent fires the LLM on a BPM-derived timer and applies evolved patterns to the live session without explicit user prompting.
-**Started:** 2026-06-18
-**Docs:** `docs/ai-jam/` · Decisions Register: `docs/ai-jam/decisions.md` · ADRs: 0022.
-
-- **Phase 01 (complete, merged `main` 2026-06-19)** — Autopilot core: `AutopilotState` in session, BPM-derived timer, `sendEvolution()` + `SYSTEM_PROMPT_EVOLUTION`, `src/agent/autopilot.ts`, minimal UI toggle in AgentPanel; 750 tests.
+**Name:** `authentic-groove` — **NEXT** (to be scoped)
+**Goal:** Make rhythms and harmonies sound authentic — correct polyrhythmic layering per genre, culturally accurate sound palette (Strudel samples beyond the drum machine set), per-hit accent/velocity variation, and swing feel where appropriate. Targets genres in the existing catalog (cumbia, cueca, rumba, etc.) that currently sound correct mathematically but not culturally.
+**Docs:** `docs/authentic-groove/` · Decisions Register: `docs/authentic-groove/decisions.md`
 
 **Deferred items carried forward:**
 - Note-level free placement on the Pentagrama (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note) — deferred from orbifold-v2 Phase 10.
 - Per-chord `lpf`/`lpq` direct user slider (D-3) — deferred from harmonic-rhythm-improvements Phase 01 triage.
 
-**Previous initiatives:** `ai-composition-authoring` (Phase 01, complete, merged `main` 2026-06-18) — agent `saveAsBlock` skill; ADR 0021; 732 tests. (test count superseded by ai-jam Phase 01 → 750) `editable-composition` (Phase 01, complete, merged `main` 2026-06-18) — Block-as-State foundation; ADR 0020; 682 tests. `harmonic-rhythm-improvements` (Phases 01–03, complete, merged `main` 2026-06-18) — oscillator/presets/chord sound; ADRs 0018–0019. Prior: `orbifold-v2` (Phases 01–11) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
+**Previous initiatives:** `ai-jam` (Phases 01 + 06–07, complete, merged `main` 2026-06-22) — autopilot LLM evolution loop, batched plan consumption (ADR 0024), harmony preset chips, waiting message; ADRs 0022–0024; 1589 tests. `ai-composition-authoring` (Phase 01, complete, merged `main` 2026-06-18) — agent `saveAsBlock` skill; ADR 0021; 732 tests. `editable-composition` (Phase 01, complete, merged `main` 2026-06-18) — Block-as-State foundation; ADR 0020; 682 tests. `harmonic-rhythm-improvements` (Phases 01–03, complete, merged `main` 2026-06-18) — oscillator/presets/chord sound; ADRs 0018–0019. Prior: `orbifold-v2` (Phases 01–11) in `docs/orbifold-v2/`; `orbifold-v1` (Phases 0–8) in `docs/orbifold-v1/`.
 
 ## Project-specific conventions
 
@@ -51,13 +48,13 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 ### Branch and commit
 
 - Main branch: `main`
-- Initiative branch pattern: `ai-jam/phase-NN` (current initiative; prior: `ai-composition-authoring/phase-NN`, `editable-composition/phase-NN`, `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`)
+- Initiative branch pattern: `authentic-groove/phase-NN` (current initiative; prior: `ai-jam/phase-NN`, `ai-composition-authoring/phase-NN`, `editable-composition/phase-NN`, `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`)
 - Commit format: `<type>(<scope>): Phase NN step NN.N — <description>` (types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`)
 - PR convention: one PR (or one merge commit) per phase, with its acceptance criteria verified, without breaking prior phases.
 
 ### Spec location
 
-Specs are the phase files in `docs/ai-jam/phases/phase-NN.md` (current initiative). The master brief is `ORBIFOLD_KICKOFF.md` (architecture, domain model, invariants). Prior initiative specs: `docs/ai-composition-authoring/phases/`, `docs/harmonic-rhythm-improvements/phases/`, `docs/orbifold-v2/phases/`, and `docs/orbifold-v1/phases/`.
+Specs are the phase files in `docs/authentic-groove/phases/phase-NN.md` (current initiative). The master brief is `ORBIFOLD_KICKOFF.md` (architecture, domain model, invariants). Prior initiative specs: `docs/ai-jam/phases/`, `docs/ai-composition-authoring/phases/`, `docs/harmonic-rhythm-improvements/phases/`, `docs/orbifold-v2/phases/`, and `docs/orbifold-v1/phases/`.
 
 ### Test commands
 
