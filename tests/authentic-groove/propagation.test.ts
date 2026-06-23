@@ -297,9 +297,7 @@ describe('A-01-04: slot absent from sampleMap → strudelSample undefined', () =
       ...s,
       rhythm: {
         ...s.rhythm,
-        layers: [
-          { sound: 'sd' as const, steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
-        ],
+        layers: [{ sound: 'sd' as const, steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] }],
       },
     }));
 
@@ -308,10 +306,12 @@ describe('A-01-04: slot absent from sampleMap → strudelSample undefined', () =
 
     const layers = get(sessionStore).rhythm.layers;
     const sdLayer = layers.find((l) => l.sound === 'sd');
+    expect(sdLayer).toBeDefined();
     expect(sdLayer?.strudelSample).toBeUndefined();
 
     // codegen falls back to 'sd'.
-    const line = rhythmLayerToStrudelLine(sdLayer!);
+    if (!sdLayer) return;
+    const line = rhythmLayerToStrudelLine(sdLayer);
     expect(line).toContain('sd');
   });
 });

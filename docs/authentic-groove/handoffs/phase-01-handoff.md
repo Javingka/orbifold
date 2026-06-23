@@ -360,3 +360,188 @@ This step introduces new functionality (not a port from the prototype). No proto
 
 - **Terminal commit:** `feat(music-knowledge): Phase 01 step 01.4 — sampleMap → strudelSample propagation (ADR 0025)`
   - Hash: self-referential — not recorded.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-23. Iteration: 1 of 5.
+**Note:** Phase file said `agent.ts` but Dev correctly redirected to `autopilot.ts` based on inventory §1.4 consumer trace — the actual and only call site of `recipeToAgentOutput` in production. All 8 checklist items pass.
+**Next action:** Dev proceeds to step 01.5.
+
+---
+
+## Step 01.5 — Seam Fitness Check + Full Quality Gate
+
+**Date:** 2026-06-23
+**Commit(s):** (see terminal commit note below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Confirmed steps 01.2–01.4 are all APPROVED (from handoff above).
+- Read inventory §5 for the exact A-01-06 grep command.
+- Ran the seam fitness check (A-01-06). See verbatim output below.
+- Fixed one lint error from step 01.4 (`@typescript-eslint/no-non-null-assertion` at `propagation.test.ts` line 314 — replaced `sdLayer!` with an explicit `if (!sdLayer) return` guard). This is a transient quality issue carried from 01.4; the fix is within the test file authored by 01.4 and does not change test semantics or coverage.
+- Ran Prettier auto-format on `propagation.test.ts` after the guard fix.
+- Ran and recorded full quality gate: `tsc --noEmit`, `pnpm lint`, `pnpm test`, `pnpm build`.
+
+### Seam Fitness Check Output (A-01-06)
+
+Command run:
+
+```bash
+git grep -n \
+  -e "'cumbia'" \
+  -e '"cumbia"' \
+  -e "'cueca'" \
+  -e '"cueca"' \
+  -e "'candombe'" \
+  -e '"candombe"' \
+  -e "'samba'" \
+  -e '"samba"' \
+  -e "'flamenco'" \
+  -e '"flamenco"' \
+  -e "'milonga'" \
+  -e '"milonga"' \
+  -e "'maqsum'" \
+  -e '"maqsum"' \
+  -e "'baladi'" \
+  -e '"baladi"' \
+  -- 'src/' \
+  ':(exclude)src/core/music-knowledge/' \
+  ':(exclude)tests/'
+```
+
+Output: (empty — zero matches)
+Exit code: 1 (git grep returns 1 when no matches found — expected result)
+
+**Seam is intact.** No genre name or genre token appears in `src/` outside `src/core/music-knowledge/` or `tests/`.
+
+### Quality Gate Output (verbatim)
+
+**`pnpm exec tsc --noEmit`**
+```
+(no output — clean)
+```
+
+**`pnpm lint`**
+```
+> orbifold@0.0.1 lint /Users/virtualmachine/Development/personal/Orbifold
+> eslint . && prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+```
+(exit 0 — clean after propagation.test.ts guard fix + Prettier auto-format)
+
+**`pnpm test`**
+```
+ RUN  v2.1.8 /Users/virtualmachine/Development/personal/Orbifold
+
+ ✓ tests/harmony/staff-map.test.ts (73 tests) 7ms
+ ✓ tests/harmony/voice-tracks-register.test.ts (24 tests) 5ms
+ ✓ tests/harmony/staff-layout.test.ts (32 tests) 7ms
+ ✓ tests/codegen.test.ts (83 tests) 9ms
+ ✓ tests/snapshot.test.ts (29 tests) 9ms
+ ✓ tests/persistence.test.ts (65 tests) 19ms
+ ✓ tests/session.test.ts (58 tests) 13ms
+ ✓ tests/schema.test.ts (102 tests) 18ms
+ ✓ tests/harmony/voice-tracks.test.ts (18 tests) 4ms
+ ✓ tests/agent-recipe-wiring.test.ts (22 tests) 20ms
+ ✓ tests/music-knowledge/query.test.ts (47 tests) 8ms
+ ✓ tests/sendEvolution-hint.test.ts (22 tests) 30ms
+ ✓ tests/music-knowledge/recipe-engine.test.ts (24 tests) 22ms
+ ✓ tests/agent-block-persistence.test.ts (12 tests) 6ms
+ ✓ tests/autopilot.test.ts (43 tests) 36ms
+ ✓ tests/presets.test.ts (63 tests) 12ms
+ ✓ tests/harmony/staff-hit.test.ts (42 tests) 7ms
+ ✓ tests/apply-block.test.ts (20 tests) 13ms
+ ✓ tests/authentic-groove/propagation.test.ts (15 tests) 12ms
+ ✓ tests/i18n/runtime.test.ts (45 tests) 8ms
+ ✓ tests/music-knowledge/harmony-catalog.test.ts (177 tests) 16ms
+ ✓ tests/tonnetz.test.ts (31 tests) 8ms
+ ✓ tests/music-knowledge/recipes.test.ts (172 tests) 21ms
+ ✓ tests/music-knowledge/rhythm-catalog.test.ts (320 tests) 37ms
+ ✓ tests/i18n/key-parity.test.ts (8 tests) 6ms
+ ✓ tests/authentic-groove/sample-map.test.ts (60 tests) 39ms
+ ✓ tests/euclid.test.ts (25 tests) 5ms
+ ✓ tests/authentic-groove/codegen-sample.test.ts (9 tests) 12ms
+ ✓ tests/evolution-plan.test.ts (7 tests) 5ms
+ ✓ tests/harmony/time-map.test.ts (13 tests) 3ms
+ ✓ tests/phase-anchor.test.ts (4 tests) 3ms
+ ✓ tests/voice-leading.test.ts (8 tests) 7ms
+
+ Test Files  32 passed (32)
+      Tests  1673 passed (1673)
+   Start at  20:06:55
+   Duration  1.20s (transform 1.68s, setup 0ms, collect 3.66s, tests 426ms, environment 3ms, prepare 2.40s)
+```
+
+**`pnpm build`**
+```
+> orbifold@0.0.1 build /Users/virtualmachine/Development/personal/Orbifold
+> vite build
+
+vite v5.4.11 building for production...
+transforming...
+✓ 566 modules transformed.
+[plugin:vite:reporter] [plugin vite:reporter]
+(!) /Users/.../src/render/stage.ts is dynamically imported by .../src/state/session.ts but also statically imported by .../src/app/App.svelte, ... dynamic import will not move module into another chunk.
+
+[plugin:vite:reporter] [plugin vite:reporter]
+(!) /Users/.../src/audio/strudel.ts is dynamically imported by .../src/state/session.ts but also statically imported by .../src/ui/AgentPanel.svelte, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+dist/index.html                     2.32 kB │ gzip:   1.25 kB
+dist/assets/index-D8S0myt2.css     36.20 kB │ gzip:   7.10 kB
+dist/assets/index-hSu0kgRC.js   1,187.60 kB │ gzip: 372.93 kB
+
+(!) Some chunks are larger than 500 kB after minification. ...
+✓ built in 1.97s
+```
+
+(exit 0 — build succeeds; chunk-size and dynamic-import warnings are pre-existing, not introduced by Phase 01)
+
+### Files touched
+
+- `tests/authentic-groove/propagation.test.ts` — replaced `sdLayer!` non-null assertion with `if (!sdLayer) return` guard; Prettier auto-formatted (no semantic change)
+- `docs/authentic-groove/handoffs/phase-01-handoff.md` — this entry
+
+### Reversibility / Flag-off Note (required per CLAUDE.md — verbatim)
+
+- With no recipe applied, every `RhythmLayer.strudelSample` is undefined; codegen falls back to `sound` — identical to pre-phase `main`.
+- Sessions saved before Phase 01 have no `strudelSample`; deserialization yields undefined; codegen falls back to `sound` — no regression.
+- Reverting the propagation wiring (step 01.4) restores prior behavior with no other change; the `strudelSample` field on `RhythmLayer` and in the persistence schema is inert when unset.
+
+### Validation evidence (per Acceptance ID)
+
+**A-01-05 (full):**
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm lint` → clean (all files pass ESLint + Prettier after guard fix).
+- `pnpm test` → 1673/1673 tests pass (32 test files). No regressions.
+- `pnpm build` → exit 0; `dist/assets/index-*.js` produced; pre-existing warnings only.
+
+**A-01-06 (full):**
+- Seam grep returns zero matches (exit code 1 from git grep). No genre name or genre token appears in `src/` outside `src/core/music-knowledge/` or `tests/`.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-01 | Cumbia recipe yields layers with authentic `strudelSample`; codegen emits authentic names | `tests/authentic-groove/propagation.test.ts` | unit | covered (full — from step 01.4) |
+| A-01-02 | Cueca recipe (no sampleMap) → generic sound emitted | `tests/authentic-groove/propagation.test.ts` | unit | covered (full — from step 01.4) |
+| A-01-03 | Layers without `strudelSample` emit their `sound` field value | `tests/authentic-groove/codegen-sample.test.ts` | unit | covered (full — from step 01.2) |
+| A-01-04 | `sampleMap` propagation sets `strudelSample` only on matching slots; absent slots and map-less recipes leave it undefined | `tests/authentic-groove/propagation.test.ts` | unit | covered (full — from step 01.4) |
+| A-01-05 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` ≥ 1589 + new tests; `pnpm build` succeeds | (all commands, recorded above) | live-system | covered (full) |
+| A-01-06 | No genre name or sample-name literal appears in `src/` outside `src/core/music-knowledge/` | (git grep, recorded above) | proxy:static-analysis | covered (full) |
+
+### Environment state after this step
+
+- `@strudel/web@1.0.3` confirmed. `SCHEMA_VERSION = 6`, `SESSION_SCHEMA_VERSION = 5` (both unchanged).
+- 1673 tests passing (84 new vs baseline of 1589 at phase open).
+- Build: `dist/` produced cleanly.
+
+### Terminal commit note
+
+- **Terminal commit:** `chore(authentic-groove): Phase 01 step 01.5 — seam fitness check + quality gate`
+  - Hash: self-referential — not recorded.
