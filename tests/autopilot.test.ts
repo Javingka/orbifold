@@ -354,41 +354,29 @@ describe('chatHistory invariant (ADR 0022 D4)', () => {
   });
 });
 
-// ── startAutopilot timerStartedAt — bar fills immediately ─────────────────
+// ── startAutopilot timerStartedAt — bar stays flat until first step applied ──
+// Progress bar gates on timerStartedAt > 0. startAutopilot() intentionally
+// sets timerStartedAt = 0 so the bar stays flat while the initial LLM call is
+// in flight. timerStartedAt is set to Date.now() only in tick() Path A (step
+// application), i.e. when the first audio step actually plays.
 
-describe('startAutopilot timerStartedAt (bar fills immediately)', () => {
-  it('startAutopilot sets timerStartedAt to a non-zero value regardless of audio state', () => {
+describe('startAutopilot timerStartedAt (bar stays flat until first step)', () => {
+  it('startAutopilot sets timerStartedAt to 0 regardless of audio state', () => {
     setStopped(); // nowPlaying.label = null
     setAutopilot({ enabled: true });
-
-    const before = Date.now();
     startAutopilot();
-    const after = Date.now();
-
-    const ts = get(sessionStore).autopilot.timerStartedAt;
-    expect(ts).toBeGreaterThan(0);
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(after);
+    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
   });
 
-  it('startAutopilot sets timerStartedAt to a non-zero value when audio is already playing', () => {
+  it('startAutopilot sets timerStartedAt to 0 even when audio is already playing', () => {
     setPlaying();
     setAutopilot({ enabled: true });
-
-    const before = Date.now();
     startAutopilot();
-    const after = Date.now();
-
-    const ts = get(sessionStore).autopilot.timerStartedAt;
-    expect(ts).toBeGreaterThan(0);
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(after);
+    expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
   });
 
   it('stopAutopilot resets timerStartedAt to 0', () => {
-    setAutopilot({ enabled: true });
-    startAutopilot();
-    expect(get(sessionStore).autopilot.timerStartedAt).toBeGreaterThan(0);
+    setAutopilot({ enabled: true, timerStartedAt: Date.now() }); // simulate mid-run state
     stopAutopilot();
     expect(get(sessionStore).autopilot.timerStartedAt).toBe(0);
   });

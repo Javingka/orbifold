@@ -192,8 +192,12 @@ async function tick(): Promise<void> {
     return;
   }
 
-  // Reset plan fields and start fresh (ADR 0024 D3 §2)
-  setAutopilot({ currentPlan: [], planIndex: 0, timerStartedAt: Date.now(), lagWarning: false });
+  // Reset plan fields and start fresh (ADR 0024 D3 §2).
+  // Do NOT reset timerStartedAt here: on the very first call timerStartedAt is 0
+  // and the bar should stay flat while waiting for the LLM. On subsequent calls
+  // timerStartedAt retains the value from the last applied step, so the bar
+  // continues counting (and may hit 100% + lagWarning) until the next step arrives.
+  setAutopilot({ currentPlan: [], planIndex: 0, lagWarning: false });
 
   _isEvolving = true;
   sendEvolution()
@@ -233,10 +237,12 @@ export function startAutopilot(): void {
   const { bpm, autopilot } = session;
   const intervalMs = Math.round(((60000 * 4) / bpm) * autopilot.intervalCycles);
 
-  // Bar fills immediately regardless of audio state.
+  // timerStartedAt stays 0 until the first plan step is applied (Path A in tick()).
+  // The progress bar gates on timerStartedAt > 0, so it stays flat while the
+  // initial LLM call is in flight (before any audio is actually playing).
   // Reset plan fields so a stale plan is never consumed (ADR 0024 D3).
   setAutopilot({
-    timerStartedAt: Date.now(),
+    timerStartedAt: 0,
     lagWarning: false,
     llmError: null,
     currentPlan: [],
