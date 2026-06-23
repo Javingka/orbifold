@@ -22,6 +22,12 @@ export interface RhythmLayer {
   /** Compact euclidean string, e.g. `"5,8"` or `"3,8,2"`. Present only
    *  when the layer is in euclidean mode. */
   euclid?: string;
+  /**
+   * Concrete Strudel sample name realizing this layer's abstract `sound` role
+   * (ADR 0025 D1). When present, codegen emits it instead of `sound`.
+   * Genre-agnostic — set only by the knowledge-side propagation path.
+   */
+  strudelSample?: string;
   /** When true, this layer is suppressed. */
   muted?: boolean;
   /** When true, only soloed layers play (at least one in the array). */
@@ -55,9 +61,11 @@ export function layerAudible(layer: RhythmLayer, allLayers: RhythmLayer[]): bool
  */
 export function rhythmLayerToStrudelLine(layer: RhythmLayer): string {
   const { sound, euclid, steps } = layer;
+  // ADR 0025 D1: strudelSample overrides sound when set
+  const sampleName = layer.strudelSample ?? sound;
   if (steps.length === 0 && euclid) {
-    return `  s("${sound}(${euclid})")`;
+    return `  s("${sampleName}(${euclid})")`;
   }
-  const tokens = steps.map((v) => (v ? sound : '~'));
+  const tokens = steps.map((v) => (v ? sampleName : '~'));
   return `  s("${tokens.join(' ')}")`;
 }

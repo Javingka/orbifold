@@ -73,10 +73,101 @@ Commit pattern note:
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
+**Planner Review:** APPROVED on 2026-06-23. Iteration: 1 of 5.
+**Next action:** Pilot approval required before step 01.2 — OD-1/2/3 must be resolved.
 
-**Decision:**
-**Reviewed on:**
-**Iteration:**
-**Reason:**
-**Next action:**
+---
+
+## Checkpoint #1 — Pilot OD Resolutions (2026-06-23)
+
+Pilot resolved all three open decisions:
+
+- **OD-1 → Option B:** Keep `AgentOutputSchema` pure. Add generic `applySampleMap(layers, map)` helper in `apply.ts`; call it after `applyRhythmSpec` from the recipe-application path. `SCHEMA_VERSION` stays 6. The LLM cannot emit sample names.
+- **OD-2 → Option A:** Persist `strudelSample` — add `strudelSample: z.string().optional()` to `SavedRhythmLayerSchema` in `persistence.ts`. `SESSION_SCHEMA_VERSION` stays 5 (additive optional field; old sessions load cleanly with `undefined` → codegen falls back to `sound`).
+- **OD-3 → Option A:** Use nearest documented fallback where perceptibly closer (`perc` for struck-idiophone patterns, `sd` for snare roles, `cb` for metal bell/shell). Omit slots where no meaningful improvement exists. Document fallbacks with inline comments in the catalog.
+
+---
+
+## Step 01.2 — Model + Codegen (plumbing / public side) + ADR 0025
+
+**Date:** 2026-06-23
+**Commit(s):** (see terminal commit note below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required sources: inventory §1–§5, Checkpoint #1 OD resolutions, `layers.ts`, `persistence.ts`, ADR 0024 (format precedent).
+- Drafted `docs/adr/0025-authentic-sample-palette.md` covering all seven decisions (D1–D7) before editing any source file.
+- Added `strudelSample?: string` to `RhythmLayer` interface in `src/core/rhythm/layers.ts` with JSDoc per ADR 0025 D1, positioned after `euclid?`.
+- Updated `rhythmLayerToStrudelLine` to compute `const sampleName = layer.strudelSample ?? sound` and use it in **both** the euclid fallback path and the steps path. Comment: `// ADR 0025 D1: strudelSample overrides sound when set`. Function signature unchanged.
+- Added `strudelSample: z.string().optional()` to `SavedRhythmLayerSchema` in `persistence.ts` (OD-2 = persist; ADR 0025 D5/D7). JSDoc on the field notes it is absent in pre-Phase-01 sessions and falls back to `sound` in codegen.
+- Updated `serializeSession` to include `strudelSample` when present.
+- Updated `deserializeSession` inline type annotation and carry-through logic for `strudelSample` (with comment referencing ADR 0025 D5/D7 and backward compat).
+- Created `tests/authentic-groove/codegen-sample.test.ts` (AGPL-3.0 header) with 9 tests covering: euclid path with `strudelSample`, steps path with `strudelSample`, and backward-compat cases.
+- Verified no genre name or hardcoded sample map appears in any source file touched (seam invariant AG-D1 / ADR 0025 D3).
+- `SCHEMA_VERSION` stays 6; `SESSION_SCHEMA_VERSION` stays 5 (confirmed).
+
+### Files touched
+
+- `docs/adr/0025-authentic-sample-palette.md` — new, ADR
+- `src/core/rhythm/layers.ts` — `strudelSample?: string` field + codegen update
+- `src/lib/persistence.ts` — `strudelSample: z.string().optional()` in schema + serialize/deserialize
+- `tests/authentic-groove/codegen-sample.test.ts` — new, 9 tests
+- `docs/authentic-groove/handoffs/phase-01-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+**A-01-03 (full):**
+- `pnpm exec vitest run codegen-sample` → 9 tests pass (euclid path + steps path with override; backward compat with no `strudelSample`).
+- `pnpm exec vitest run codegen` → 83 pre-existing codegen tests still pass unchanged.
+
+**A-01-05 (partial — tsc + tests):**
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm test` → 1598 tests pass (1589 pre-existing + 9 new). No regressions.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm exec vitest run codegen-sample` → 9 new tests pass.
+- `pnpm exec vitest run codegen` → 83 existing tests pass unchanged.
+- `pnpm test` → 1598 total, 0 failures.
+- `git status` → `docs/adr/0025-authentic-sample-palette.md` (new), `src/core/rhythm/layers.ts` (modified), `src/lib/persistence.ts` (modified), `tests/authentic-groove/codegen-sample.test.ts` (new), `docs/authentic-groove/handoffs/phase-01-handoff.md` (modified). No other source files touched.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Status in this step | Evidence |
+|---|---|---|
+| A-01-01 | Not started | Requires step 01.4 (propagation) |
+| A-01-02 | Not started | Requires step 01.4 (propagation) |
+| A-01-03 | **Full** | `codegen-sample.test.ts` 9 tests: euclid + steps path with override; backward compat without `strudelSample` |
+| A-01-04 | Not started | Requires step 01.4 (propagation) |
+| A-01-05 | **Partial** (tsc + tests) | `tsc --noEmit` clean; `pnpm test` 1598/1598; `pnpm lint` and `pnpm build` deferred to 01.5 |
+| A-01-06 | Not started | Deferred to step 01.5 (seam fitness check) |
+
+### Decisions made
+
+- ADR 0025 drafted and committed. Governs `strudelSample` plumbing contract, seam invariant, OD-1/2/3 resolutions, and backward compat (D1–D7).
+
+### Proposed Decisions Register entries
+
+None proposed (ADR 0025 is the governing record; no new Register entries needed beyond what AG-D1 already covers).
+
+### Backward compatibility / flag-off note (CLAUDE.md required)
+
+- With no recipe applied, every `RhythmLayer.strudelSample` is `undefined`; `rhythmLayerToStrudelLine` falls back to `sound` — output is byte-identical to pre-Phase-01 `main`.
+- Sessions saved before Phase 01 have no `strudelSample`; `SavedRhythmLayerSchema` treats the absent key as `undefined` (Zod strip mode); `deserializeSession` produces a layer without `strudelSample`; codegen falls back to `sound`. No regression.
+- Reverting step 01.4 (propagation) alone restores prior behavior; the `strudelSample` field on `RhythmLayer` and in the persistence schema is inert when unset.
+
+### Environment state after this step
+
+- `@strudel/web@1.0.3` confirmed. `SCHEMA_VERSION = 6`, `SESSION_SCHEMA_VERSION = 5` (both unchanged).
+- 1598 tests passing (1589 pre-existing + 9 new).
+
+### Terminal commit note
+
+- **Terminal commit:** `feat(core): Phase 01 step 01.2 — strudelSample plumbing + codegen fallback (ADR 0025)`
+  - Hash: self-referential — not recorded.
+
+### Next-step context
+
+Step 01.3: Add `sampleMap?: Partial<Record<Sound, string>>` to `MusicalRecipe` interface and populate for all genre recipes using inventory §2 verified names. Confined to `src/core/music-knowledge/rhythm-harmony-recipes.ts` and a new `tests/authentic-groove/sample-map.test.ts`.

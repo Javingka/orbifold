@@ -90,6 +90,8 @@ const SavedRhythmLayerSchema = z.object({
   sound: z.enum(SK_SOUNDS),
   steps: z.array(z.number().int().min(0).max(1)).length(16),
   euclid: z.string().optional(),
+  /** ADR 0025 D5/D7 — optional; absent in pre-Phase-01 sessions; falls back to `sound` in codegen. */
+  strudelSample: z.string().optional(),
   muted: z.boolean().optional(),
   solo: z.boolean().optional(),
 });
@@ -297,6 +299,8 @@ export function serializeSession(state: SessionState): SavedSession {
           steps: l.steps.slice(0, 16),
         };
         if (l.euclid !== undefined) layer.euclid = l.euclid;
+        // ADR 0025 D5: persist strudelSample when present so reloaded sessions retain authentic samples.
+        if (l.strudelSample !== undefined) layer.strudelSample = l.strudelSample;
         if (l.muted !== undefined) layer.muted = l.muted;
         if (l.solo !== undefined) layer.solo = l.solo;
         return layer;
@@ -390,6 +394,7 @@ export function deserializeSession(
           sound: (typeof SK_SOUNDS)[number];
           steps: number[];
           euclid?: string;
+          strudelSample?: string;
           muted?: boolean;
           solo?: boolean;
         } = {
@@ -397,6 +402,8 @@ export function deserializeSession(
           steps: [...l.steps],
         };
         if (l.euclid !== undefined) layer.euclid = l.euclid;
+        // ADR 0025 D5/D7: carry through strudelSample; absent in pre-Phase-01 sessions → undefined → codegen falls back to sound.
+        if (l.strudelSample !== undefined) layer.strudelSample = l.strudelSample;
         if (l.muted !== undefined) layer.muted = l.muted;
         if (l.solo !== undefined) layer.solo = l.solo;
         return layer;
