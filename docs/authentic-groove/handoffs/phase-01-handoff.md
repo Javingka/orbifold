@@ -171,3 +171,90 @@ None proposed (ADR 0025 is the governing record; no new Register entries needed 
 ### Next-step context
 
 Step 01.3: Add `sampleMap?: Partial<Record<Sound, string>>` to `MusicalRecipe` interface and populate for all genre recipes using inventory §2 verified names. Confined to `src/core/music-knowledge/rhythm-harmony-recipes.ts` and a new `tests/authentic-groove/sample-map.test.ts`.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-23. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 01.3.
+
+---
+
+## Step 01.3 — Catalog `sampleMap` (knowledge / private side)
+
+**Date:** 2026-06-23
+**Commit(s):** (see terminal commit note below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read all required sources in order: inventory §2 (verified sample list + per-genre maps), ADR 0025 (D2, D3, D6), `rhythm-harmony-recipes.ts` (full), `layers.ts` (confirmed `Sound` type and `strudelSample` field from step 01.2).
+- Added `import type { Sound } from '../rhythm/layers.js'` to `rhythm-harmony-recipes.ts`.
+- Added `sampleMap?: Partial<Record<Sound, string>>` to `MusicalRecipe` interface with full JSDoc referencing ADR 0025 D2 and noting values must be inventory-verified.
+- Populated `sampleMap` for all 9 in-scope genre-specific recipes using only inventory §2 verified names:
+  - `west-african-bell-modal`: `{ bd: 'cb', hh: 'perc' }` — fallback comments for both.
+  - `west-african-triplet-groove`: `{ bd: 'cb', hh: 'perc' }` — fallback comments for both.
+  - `latin-jazz-clave-swing`: `{ bd: 'bd', hh: 'cb' }` — fallback comment for cascara/timbale.
+  - `rumba-blues-minor`: `{ bd: 'perc' }` — fallback comment for clave.
+  - `samba-afro-brasileiro`: `{ bd: 'bd', hh: 'sd' }` — fallback comment for surdo/caixa.
+  - `bossa-nova-groove`: `{ bd: 'bd', hh: 'sd' }` — fallback comment for pandeiro/tamborim.
+  - `cumbia-latina-groove`: `{ bd: 'perc' }` — fallback comment for caja/guacharaca.
+  - `candombe-dorian-groove`: `{ bd: 'perc' }` — fallback comment for candombe drum names.
+  - `buleria-flamenco-phrygian`: `{ bd: 'perc' }` — fallback comment for cajon.
+- Left `sampleMap` undefined (omitted) for 6 generic/no-improvement recipes: `afro-cuban-clave-minor`, `dorian-ritual-sparse`, `pop-rock-backbeat`, `aksak-dorian-odd`, `gospel-soul-euclid`, `cueca-chilena-folk`.
+- Created `tests/authentic-groove/sample-map.test.ts` (AGPL-3.0 header) with 60 tests covering: sampleMap defined + non-empty values, keys are valid Sound values, values in verified fixture, per-genre value assertions, and generic recipes have `sampleMap === undefined`.
+- Verified seam invariant: no genre name or sample-name outside `src/core/music-knowledge/` — changes confined exclusively to `rhythm-harmony-recipes.ts` and `tests/`.
+
+### Files touched
+
+- `src/core/music-knowledge/rhythm-harmony-recipes.ts` — `sampleMap` field on `MusicalRecipe` + genre recipe population
+- `tests/authentic-groove/sample-map.test.ts` — new, 60 tests
+- `docs/authentic-groove/handoffs/phase-01-handoff.md` — this entry
+
+### Validation evidence (per Acceptance ID)
+
+**A-01-01 (partial — catalog data):**
+- `pnpm exec vitest run sample-map` → 60 tests pass. Per-genre value assertions confirm cumbia (`cumbia-latina-groove`) maps `bd → 'perc'`; cueca (`cueca-chilena-folk`) correctly has `sampleMap === undefined` (no meaningful improvement available at 1.0.3).
+
+**A-01-05 (partial — tsc + tests):**
+- `pnpm exec tsc --noEmit` → clean (no output).
+- `pnpm test` → 1658 tests pass (1598 prior + 60 new). No regressions.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → clean.
+- `pnpm exec vitest run sample-map` → 60 new tests pass.
+- `pnpm test` → 1658 total, 0 failures.
+- `git status` → only `src/core/music-knowledge/rhythm-harmony-recipes.ts` (modified), `tests/authentic-groove/sample-map.test.ts` (new), `docs/authentic-groove/handoffs/phase-01-handoff.md` (modified). No other source files touched.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Status in this step | Evidence |
+|---|---|---|
+| A-01-01 | **Partial** (catalog data) | `sample-map.test.ts` 60 tests: per-genre sampleMap defined with correct values; generic recipes undefined. Full A-01-01 requires step 01.4 propagation. |
+| A-01-02 | Not started | Requires step 01.4 (propagation + codegen output). |
+| A-01-03 | Full (from 01.2) | No regressions — 1658/1658 tests pass. |
+| A-01-04 | Not started | Requires step 01.4 (propagation). |
+| A-01-05 | **Partial** (tsc + tests) | `tsc --noEmit` clean; `pnpm test` 1658/1658; `pnpm lint` and `pnpm build` deferred to 01.5. |
+| A-01-06 | Not started | Deferred to step 01.5 (seam fitness check). |
+
+### Decisions made
+
+None. All decisions governed by ADR 0025 (from step 01.2).
+
+### Proposed Decisions Register entries
+
+None proposed.
+
+### Environment state after this step
+
+- `@strudel/web@1.0.3` confirmed. `SCHEMA_VERSION = 6`, `SESSION_SCHEMA_VERSION = 5` (both unchanged).
+- 1658 tests passing (1598 prior + 60 new).
+
+### Seam invariant check (AG-D1)
+
+All changes in this step are confined to `src/core/music-knowledge/rhythm-harmony-recipes.ts` and `tests/authentic-groove/sample-map.test.ts`. No genre name, no hardcoded sample map literal, and no `strudelSample` assignment appears in any plumbing file (`layers.ts`, `codegen/`, `persistence.ts`, `apply.ts`, `agent.ts`). Seam invariant holds.
+
+### Terminal commit note
+
+- **Terminal commit:** `feat(music-knowledge): Phase 01 step 01.3 — per-genre sampleMap catalog (ADR 0025)`
+  - Hash: self-referential — not recorded.

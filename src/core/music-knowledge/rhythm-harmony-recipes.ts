@@ -10,6 +10,8 @@
 // The meter field must equal the meter of every referenced RHYTHM_CATALOG entry.
 // Reconciliation to AgentOutputSchema is deferred to the future recipe→state phase.
 
+import type { Sound } from '../rhythm/layers.js';
+
 /**
  * A recipe mapping a user intent to a combination of rhythm pattern(s) and
  * a harmony entry, with musical metadata for downstream use.
@@ -60,6 +62,14 @@ export interface MusicalRecipe {
    * Pure data — not an API call.
    */
   agentInstruction: string;
+  /**
+   * Optional map from abstract Sound slot → concrete Strudel sample name (ADR 0025 D2).
+   * Present only on genre-specific recipes. Values must be verified against
+   * the inventory §2 (live tidalcycles/Dirt-Samples strudel.json, 2026-06-23).
+   * Generic / pop recipes leave this undefined.
+   * Keys must be valid Sound values; values must appear in the verified sample list.
+   */
+  sampleMap?: Partial<Record<Sound, string>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +146,10 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'over a suspended-chord modal drone (Fsus2–Csus4). ' +
       'Let the bell pattern drive forward motion while the harmony remains open and static. ' +
       'Suggested tempo: 70–100 BPM.',
+    sampleMap: {
+      bd: 'cb', // fallback: no native bell/agogo in @strudel/web@1.0.3
+      hh: 'perc', // fallback: no native bell/agogo in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -162,6 +176,10 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'Play the bossa nova clave pattern over a Gmaj7–Em7–Am7–D7 arpeggio loop. ' +
       'Keep the harmony arpeggiated and light; the clave provides rhythmic forward motion. ' +
       'Suggested tempo: 120–140 BPM.',
+    sampleMap: {
+      bd: 'bd',
+      hh: 'sd', // fallback: no native pandeiro/tamborim in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -217,6 +235,10 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'as a higher-register shell pattern, over a jazz ii-V-I progression (Dm7–G7–Cmaj7). ' +
       'The clave grounds the groove while cascara provides energy and forward motion. ' +
       'Suggested tempo: 140–180 BPM.',
+    sampleMap: {
+      bd: 'bd',
+      hh: 'cb', // fallback: no native cascara/timbale shell in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -301,6 +323,10 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       '(E(3,12)) in 12/8, over a suspended modal drone (Fsus2–Csus4). ' +
       'The two patterns create interlocking polyrhythm within the compound meter. ' +
       'Suggested tempo: 75–95 BPM.',
+    sampleMap: {
+      bd: 'cb', // fallback: no native bell/agogo in @strudel/web@1.0.3
+      hh: 'perc', // fallback: no native bell/agogo in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -327,6 +353,9 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       '(Am7–Dm7–E7–G#dim7–Am7). The rumba clave sits back slightly relative to ' +
       'son clave; let the blues harmony provide emotional depth. ' +
       'Suggested tempo: 90–120 BPM.',
+    sampleMap: {
+      bd: 'perc', // fallback: no native clave in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -410,6 +439,10 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       '(syncopated 16th off-beats at steps 2, 6, 10, 14) over a Latin minor-dominant ' +
       'loop (Dm7–G7–Cmaj7–A7). The surdo/caixa interlock creates the authentic ' +
       'samba batucada feel. Suggested tempo: 120–145 BPM.',
+    sampleMap: {
+      bd: 'bd',
+      hh: 'sd', // fallback: no native surdo/caixa in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -438,6 +471,9 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'the characteristic asymmetric flamenco accent) over a Phrygian descent ' +
       '(Am–G–F–E). The off-center accents evoke the rasgueado feel of flamenco compás. ' +
       'Suggested tempo: 100–140 BPM.',
+    sampleMap: {
+      bd: 'perc', // fallback: no native cajon in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -466,6 +502,9 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'syncopated mid-section) over a Latin minor-dominant loop. The pattern ' +
       'evokes the driving bass drum feel of Colombian cumbia processions. ' +
       'Suggested tempo: 95–115 BPM.',
+    sampleMap: {
+      bd: 'perc', // fallback: no native caja/guacharaca in @strudel/web@1.0.3
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -494,5 +533,8 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'by the chico drum in Afro-Uruguayan candombe) over a Dorian modal drone ' +
       '(Dm–F–Gsus4). The driving syncopation contrasts with the open modal harmony. ' +
       'Suggested tempo: 85–110 BPM.',
+    sampleMap: {
+      bd: 'perc', // fallback: no native candombe drum names in @strudel/web@1.0.3
+    },
   },
 ];
