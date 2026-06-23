@@ -208,6 +208,23 @@ const zh: Dictionary = {
       titleOn: '自动演奏运行中 — 点击停止',
       cyclesLabel: '循环',
       infoTooltip: '自动演奏：音频播放时，AI每N个循环自动演化节奏和和声。激活前请先设置N。',
+      // Phase 06 step 06.3 — autopilot panel redesign keys // i18n-draft
+      panelToggleLabel: '自动驾驶', // i18n-draft
+      rhythmHintLabel: '节奏风格', // i18n-draft
+      rhythmHintOther: '其他…', // i18n-draft
+      rhythmHintPlaceholder: '— 无 —', // i18n-draft
+      rhythmHintOtherPlaceholder: '描述节奏风格，例如：cueca chilena、bossa nova…', // i18n-draft
+      playLabel: '▶ 开始', // i18n-draft
+      stopLabel: '■ 停止', // i18n-draft
+      progressTitle: '进化周期进度', // i18n-draft
+      noKeyWarning: '在启动自动驾驶前，请配置 AI 服务、模型和 API 密钥。', // i18n-draft
+      lagWarning: '跳过周期：AI 响应超过配置间隔。', // i18n-draft
+      errorLlm: 'AI 服务错误：{error}', // i18n-draft
+      errorRateLimit: '达到速率限制。自动驾驶将在下一个周期重试。', // i18n-draft
+      errorEmpty: 'AI 服务返回空响应。请尝试其他模型或重试。', // i18n-draft
+      errorBadFormat: '模型未返回有效的演化 JSON（代码模型常见）。请尝试其他模型。', // i18n-draft
+      errorEmptyPlan:
+        'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

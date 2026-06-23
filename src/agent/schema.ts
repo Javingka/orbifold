@@ -320,6 +320,24 @@ export const AgentOutputSchema = z
     }
   });
 
+// ── EvolutionPlan ──────────────────────────────────────────────────────────
+// Added in ai-jam Phase 07 (ADR 0024 D1).
+// Plan-layer only — does NOT affect AgentOutputSchema or SCHEMA_VERSION.
+
+/**
+ * Schema for the LLM response to a multi-step evolution request.
+ * The LLM returns `{ "plan": [ <AgentOutput>, … ] }` — a wrapper object
+ * containing 1–8 evolution steps. Each step is an `AgentOutput`
+ * (rhythm / harmony / musicalIntent).
+ *
+ * Plan-layer only — does NOT affect `AgentOutputSchema` or `SCHEMA_VERSION`
+ * (stays 6). `EvolutionPlanSchema` is used only in `sendEvolution()` and
+ * is never persisted. Per ADR 0024 D1.
+ */
+export const EvolutionPlanSchema = z.object({
+  plan: z.array(AgentOutputSchema).min(1).max(8),
+});
+
 // ── Inferred TypeScript types ──────────────────────────────────────────────
 
 export type RhythmLayer = z.infer<typeof RhythmLayerSchema>;
@@ -327,3 +345,4 @@ export type RhythmSpec = z.infer<typeof RhythmSpecSchema>;
 export type HarmonyChord = z.infer<typeof HarmonyChordSchema>;
 export type HarmonySpec = z.infer<typeof HarmonySpecSchema>;
 export type AgentOutput = z.infer<typeof AgentOutputSchema>;
+export type EvolutionPlan = z.infer<typeof EvolutionPlanSchema>;

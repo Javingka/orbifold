@@ -15,6 +15,16 @@
 //   - Unknown recipeId: no apply calls from recipe path.
 //   - chatHistory is never mutated when musicalIntent path fires.
 //
+// Phase 07 step 07.3 update:
+//   sendEvolution() now operates in PLAN MODE (ADR 0024 D1/D3).
+//   It stores the received plan in AutopilotState; tick() applies individual
+//   steps. Direct apply calls (applyRhythmSpec/applyHarmonySpec) now happen in
+//   tick() (Phase 07.4). Tests updated accordingly:
+//   - A-03-07: responses must use { "plan": [...] } format; assertions check
+//     AutopilotState.currentPlan contents instead of direct apply call counts.
+//   - A-03-06: SYSTEM_PROMPT_EVOLUTION prompt content assertions updated for
+//     the plan-wrapper format (horizon-based example replaces single-step examples).
+//
 // Runs in Node (Vitest default env) — no AudioContext, no DOM required.
 // fetch is mocked globally.
 
@@ -38,6 +48,11 @@ vi.mock('../src/audio/strudel.js', () => ({
   queueForNextCycle: vi.fn().mockResolvedValue(undefined),
   setTempo: vi.fn(),
 }));
+
+// Phase 07: sendEvolution() no longer calls playGroove/playProgression/playSession
+// (plan is stored; tick() applies steps and triggers playback). The session.js mock
+// from Phase 03 is retained but simplified — the actual session store functions are
+// used as-is (the real module); only strudel.js audio stubs are needed.
 
 // Mock providers.js: loadApiKey returns a valid key so sendEvolution does not
 // early-exit. The provider adapter is set up to work with our fetch mock.
@@ -77,6 +92,7 @@ vi.mock('../src/i18n/index.js', () => ({
 }));
 
 // ── Import after mocks ─────────────────────────────────────────────────────
+import { get } from 'svelte/store';
 import {
   sendEvolution,
   chatHistory,
@@ -85,11 +101,7 @@ import {
 } from '../src/agent/agent.js';
 import { applyRhythmSpec, applyHarmonySpec, applyBlockSave } from '../src/agent/apply.js';
 import { sessionStore, DEFAULT_SESSION_STATE } from '../src/state/session.js';
-import { getRecipeById } from '../src/core/music-knowledge/query.js';
-import {
-  recipeToAgentOutput,
-  getExpressibleRecipes,
-} from '../src/core/music-knowledge/recipe-engine.js';
+import { getExpressibleRecipes } from '../src/core/music-knowledge/recipe-engine.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -107,6 +119,14 @@ function fakeApiResponse(text: string): Response {
 /** Wrap agent JSON in a json fence, as an LLM would return. */
 function jsonFence(obj: unknown): string {
   return '```json\n' + JSON.stringify(obj, null, 2) + '\n```';
+}
+
+/**
+ * Build a plan-format response (Phase 07 plan mode).
+ * sendEvolution() now expects { "plan": [...] } — a wrapper object per ADR 0024 D1.
+ */
+function fakePlanResponse(steps: unknown[]): Response {
+  return fakeApiResponse(jsonFence({ plan: steps }));
 }
 
 // ── Stub fetch globally ────────────────────────────────────────────────────
@@ -152,6 +172,10 @@ afterEach(() => {
 });
 
 // ── A-03-06: SYSTEM_PROMPT_EVOLUTION contains musicalIntent section ─────────
+//
+// Phase 07 update: the prompt now uses plan-mode format ({ "plan": [...] }).
+// The example shows a 2-step plan (horizon=2) with both musicalIntent-only and
+// rhythm+harmony+musicalIntent steps. Structural assertions updated accordingly.
 
 describe('A-03-06: SYSTEM_PROMPT_EVOLUTION musicalIntent capability section', () => {
   it('A-03-06: prompt contains the musicalIntent field name', () => {
@@ -167,115 +191,141 @@ describe('A-03-06: SYSTEM_PROMPT_EVOLUTION musicalIntent capability section', ()
     expect(SYSTEM_PROMPT_EVOLUTION).toContain('NUNCA');
   });
 
-  it('A-03-06: prompt contains at least three json fences (two new examples + one pre-existing)', () => {
-    // The prompt must have two musicalIntent examples (ADR 0021 D5 requirement).
-    // The pre-existing before→after example adds one more, for at least 3 total.
+  it('A-03-06: prompt contains at least one json fence (plan example)', () => {
+    // Phase 07: prompt uses a compact plan example with at least one ```json fence.
+    // (Phase 03 required ≥3 fences for single-step examples; plan mode condenses to
+    // one multi-step example block to save tokens per ADR 0024 D5.)
     const fenceMatches = SYSTEM_PROMPT_EVOLUTION.match(/```json/g) ?? [];
-    expect(fenceMatches.length).toBeGreaterThanOrEqual(3);
+    expect(fenceMatches.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('A-03-06: Ejemplo 1 is a musicalIntent-only response (no rhythm/harmony sibling keys)', () => {
-    const example1Match = SYSTEM_PROMPT_EVOLUTION.match(/Ejemplo 1[\s\S]*?```json\s*([\s\S]*?)```/);
-    expect(example1Match).not.toBeNull();
-    if (!example1Match) return; // type guard — already asserted above
-    const example1 = example1Match[1];
-    const parsed = JSON.parse(example1) as Record<string, unknown>;
-    expect(parsed).toHaveProperty('musicalIntent');
-    expect(parsed).not.toHaveProperty('rhythm');
-    expect(parsed).not.toHaveProperty('harmony');
+  it('A-03-06: plan example contains a "plan" array wrapper (ADR 0024 D1)', () => {
+    // The example must show the { "plan": [...] } wrapper so the LLM learns the format.
+    const exampleMatch = SYSTEM_PROMPT_EVOLUTION.match(/```json\s*([\s\S]*?)```/);
+    expect(exampleMatch).not.toBeNull();
+    if (!exampleMatch) return;
+    const parsed = JSON.parse(exampleMatch[1]) as Record<string, unknown>;
+    expect(parsed).toHaveProperty('plan');
+    expect(Array.isArray(parsed.plan)).toBe(true);
   });
 
-  it('A-03-06: Ejemplo 2 contains both rhythm/harmony and musicalIntent', () => {
-    const example2Match = SYSTEM_PROMPT_EVOLUTION.match(/Ejemplo 2[\s\S]*?```json\s*([\s\S]*?)```/);
-    expect(example2Match).not.toBeNull();
-    if (!example2Match) return; // type guard — already asserted above
-    const example2 = example2Match[1];
-    const parsed = JSON.parse(example2) as Record<string, unknown>;
-    expect(parsed).toHaveProperty('musicalIntent');
-    expect(parsed).toHaveProperty('rhythm');
-    expect(parsed).toHaveProperty('harmony');
+  it('A-03-06: plan example steps contain musicalIntent in at least one step', () => {
+    const exampleMatch = SYSTEM_PROMPT_EVOLUTION.match(/```json\s*([\s\S]*?)```/);
+    expect(exampleMatch).not.toBeNull();
+    if (!exampleMatch) return;
+    const parsed = JSON.parse(exampleMatch[1]) as { plan: Array<Record<string, unknown>> };
+    const hasMusicalIntent = parsed.plan.some((step) => 'musicalIntent' in step);
+    expect(hasMusicalIntent).toBe(true);
+  });
+
+  it('A-03-06: plan example contains a step with rhythm (multi-field evolution)', () => {
+    const exampleMatch = SYSTEM_PROMPT_EVOLUTION.match(/```json\s*([\s\S]*?)```/);
+    expect(exampleMatch).not.toBeNull();
+    if (!exampleMatch) return;
+    const parsed = JSON.parse(exampleMatch[1]) as { plan: Array<Record<string, unknown>> };
+    const hasRhythm = parsed.plan.some((step) => 'rhythm' in step);
+    expect(hasRhythm).toBe(true);
   });
 
   it('A-03-06: prompt instructions include complexity and explanation sub-fields', () => {
     expect(SYSTEM_PROMPT_EVOLUTION).toContain('complexity');
     expect(SYSTEM_PROMPT_EVOLUTION).toContain('explanation');
   });
+
+  it('A-03-06: prompt mentions "horizon" field so LLM knows how many steps to return', () => {
+    expect(SYSTEM_PROMPT_EVOLUTION).toContain('horizon');
+  });
 });
 
-// ── A-03-07: sendEvolution() recipe wiring ────────────────────────────────
+// ── A-03-07: sendEvolution() recipe wiring (plan-mode, Phase 07) ────────────
+//
+// Phase 07 update: sendEvolution() stores the plan in AutopilotState;
+// tick() applies individual steps (Phase 07.4). Recipe wiring (applyRhythmSpec /
+// applyHarmonySpec) now happens in tick(), not in sendEvolution().
+//
+// These tests verify that recipe-containing plan steps are stored correctly in
+// AutopilotState.currentPlan so that tick() can apply them. The apply function
+// call assertions are replaced with store-state assertions.
 
-describe('A-03-07: sendEvolution recipe wiring', () => {
-  it('A-03-07a: musicalIntent.recipeId only — applyRhythmSpec and applyHarmonySpec called with engine output', async () => {
-    const responseText = jsonFence({
+describe('A-03-07: sendEvolution plan storage — recipe steps stored in currentPlan', () => {
+  it('A-03-07a: musicalIntent.recipeId plan step stored in currentPlan (tick() will apply it)', async () => {
+    const recipeStep = {
       musicalIntent: {
         recipeId: 'bossa-nova-groove',
         style: 'bossa nova',
         complexity: 'medium',
         explanation: 'Fitting the current groove.',
       },
-    });
+    };
 
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
+    fetchMock.mockResolvedValueOnce(fakePlanResponse([recipeStep]));
 
     await sendEvolution();
 
-    // Both apply functions should be called exactly once (from the recipe engine).
-    expect(applyRhythmSpec).toHaveBeenCalledTimes(1);
-    expect(applyHarmonySpec).toHaveBeenCalledTimes(1);
+    // Plan stored in AutopilotState — tick() will resolve and apply the recipe.
+    const { currentPlan, planIndex, llmError } = get(sessionStore).autopilot;
+    expect(currentPlan).toHaveLength(1);
+    expect(planIndex).toBe(0);
+    expect(llmError).toBeNull();
+    expect(currentPlan[0].musicalIntent?.recipeId).toBe('bossa-nova-groove');
 
-    // The arguments should match what the recipe engine produces.
-    const recipe = getRecipeById('bossa-nova-groove');
-    expect(recipe).not.toBeUndefined();
-    if (!recipe) return; // type guard — already asserted above
-    const engineOutput = recipeToAgentOutput(recipe);
-    expect(engineOutput).not.toBeNull();
-    if (!engineOutput) return; // type guard — already asserted above
-    expect(applyRhythmSpec).toHaveBeenCalledWith(engineOutput.rhythm);
-    expect(applyHarmonySpec).toHaveBeenCalledWith(engineOutput.harmony);
+    // sendEvolution() does NOT call apply functions — tick() does (Phase 07.4).
+    expect(applyRhythmSpec).not.toHaveBeenCalled();
+    expect(applyHarmonySpec).not.toHaveBeenCalled();
   });
 
-  it('A-03-07b: explicit rhythm + musicalIntent.recipeId — explicit rhythm applied; recipe rhythm NOT applied', async () => {
+  it('A-03-07b: explicit rhythm + musicalIntent.recipeId plan step — both stored in currentPlan', async () => {
     const explicitRhythm = {
       layers: [{ sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] }],
     };
-    const responseText = jsonFence({
+    const mixedStep = {
       rhythm: explicitRhythm,
       musicalIntent: {
         recipeId: 'bossa-nova-groove',
         explanation: 'Explicit rhythm takes precedence.',
       },
-    });
+    };
 
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
-
-    await sendEvolution();
-
-    // applyRhythmSpec called exactly once (explicit rhythm).
-    // Recipe rhythm should NOT be applied (explicit takes precedence).
-    expect(applyRhythmSpec).toHaveBeenCalledTimes(1);
-
-    // applyHarmonySpec called once from the recipe engine (no explicit harmony supplied).
-    expect(applyHarmonySpec).toHaveBeenCalledTimes(1);
-  });
-
-  it('A-03-07c: nonexistent recipeId — no apply calls from recipe path (graceful no-op)', async () => {
-    const responseText = jsonFence({
-      musicalIntent: {
-        recipeId: 'nonexistent-recipe-xyz',
-        explanation: 'Unknown id.',
-      },
-    });
-
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
+    fetchMock.mockResolvedValueOnce(fakePlanResponse([mixedStep]));
 
     await sendEvolution();
 
-    // Neither apply function should be called — recipe path silently no-ops.
+    const { currentPlan, llmError } = get(sessionStore).autopilot;
+    expect(currentPlan).toHaveLength(1);
+    expect(llmError).toBeNull();
+    // Both rhythm and musicalIntent stored — tick() will apply explicit rhythm first,
+    // then skip recipe rhythm (ADR 0024 D7 / Phase 07.4 precedence logic).
+    expect(currentPlan[0].rhythm).toBeDefined();
+    expect(currentPlan[0].musicalIntent?.recipeId).toBe('bossa-nova-groove');
+
+    // sendEvolution() does NOT call apply functions.
     expect(applyRhythmSpec).not.toHaveBeenCalled();
     expect(applyHarmonySpec).not.toHaveBeenCalled();
   });
 
-  it('A-03-07d: explicit harmony + musicalIntent.recipeId — explicit harmony takes precedence; recipe harmony NOT applied', async () => {
+  it('A-03-07c: nonexistent recipeId plan step — stored in currentPlan (tick() handles no-op gracefully)', async () => {
+    const unknownStep = {
+      musicalIntent: {
+        recipeId: 'nonexistent-recipe-xyz',
+        explanation: 'Unknown id — tick() will silently no-op.',
+      },
+    };
+
+    fetchMock.mockResolvedValueOnce(fakePlanResponse([unknownStep]));
+
+    await sendEvolution();
+
+    const { currentPlan, llmError } = get(sessionStore).autopilot;
+    expect(currentPlan).toHaveLength(1);
+    expect(llmError).toBeNull();
+    expect(currentPlan[0].musicalIntent?.recipeId).toBe('nonexistent-recipe-xyz');
+
+    // sendEvolution() does NOT call apply functions.
+    expect(applyRhythmSpec).not.toHaveBeenCalled();
+    expect(applyHarmonySpec).not.toHaveBeenCalled();
+  });
+
+  it('A-03-07d: explicit harmony + musicalIntent plan step — stored in currentPlan', async () => {
     const explicitHarmony = {
       root: 'G',
       mode: 'minor',
@@ -285,86 +335,80 @@ describe('A-03-07: sendEvolution recipe wiring', () => {
         { root: 'D', quality: 'maj', gain: 0.7 },
       ],
     };
-    const responseText = jsonFence({
+    const harmonyStep = {
       harmony: explicitHarmony,
       musicalIntent: {
         recipeId: 'bossa-nova-groove',
         explanation: 'Explicit harmony takes precedence.',
       },
-    });
+    };
 
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
+    fetchMock.mockResolvedValueOnce(fakePlanResponse([harmonyStep]));
 
     await sendEvolution();
 
-    // applyHarmonySpec called once (explicit only).
-    expect(applyHarmonySpec).toHaveBeenCalledTimes(1);
+    const { currentPlan, llmError } = get(sessionStore).autopilot;
+    expect(currentPlan).toHaveLength(1);
+    expect(llmError).toBeNull();
+    expect(currentPlan[0].harmony).toBeDefined();
+    expect(currentPlan[0].musicalIntent?.recipeId).toBe('bossa-nova-groove');
 
-    // applyRhythmSpec called once from recipe engine (no explicit rhythm).
-    expect(applyRhythmSpec).toHaveBeenCalledTimes(1);
+    // sendEvolution() does NOT call apply functions.
+    expect(applyHarmonySpec).not.toHaveBeenCalled();
+    expect(applyRhythmSpec).not.toHaveBeenCalled();
   });
 });
 
 // ── A-03-08: chatHistory never mutated by sendEvolution ───────────────────
 
 describe('A-03-08: chatHistory invariant — sendEvolution never pushes to chatHistory', () => {
-  it('A-03-08a: chatHistory.length unchanged after sendEvolution with musicalIntent path', async () => {
-    const responseText = jsonFence({
-      musicalIntent: {
-        recipeId: 'bossa-nova-groove',
-        explanation: 'Autopilot recipe path.',
-      },
-    });
-
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
+  it('A-03-08a: chatHistory.length unchanged after sendEvolution with musicalIntent plan step', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakePlanResponse([{ musicalIntent: { recipeId: 'bossa-nova-groove', explanation: 'test' } }])
+    );
 
     const lengthBefore = chatHistory.length;
     await sendEvolution();
     expect(chatHistory.length).toBe(lengthBefore);
   });
 
-  it('A-03-08b: chatHistory.length unchanged after sendEvolution with explicit rhythm/harmony', async () => {
-    const responseText = jsonFence({
-      rhythm: {
-        layers: [{ sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] }],
-      },
-    });
-
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
-
-    const lengthBefore = chatHistory.length;
-    await sendEvolution();
-    expect(chatHistory.length).toBe(lengthBefore);
-  });
-
-  it('A-03-08c: chatHistory.length unchanged with nonexistent recipeId (graceful no-op)', async () => {
-    const responseText = jsonFence({
-      musicalIntent: {
-        recipeId: 'nonexistent-recipe-xyz',
-      },
-    });
-
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
+  it('A-03-08b: chatHistory.length unchanged after sendEvolution with explicit rhythm/harmony plan step', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakePlanResponse([
+        {
+          rhythm: {
+            layers: [{ sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] }],
+          },
+        },
+      ])
+    );
 
     const lengthBefore = chatHistory.length;
     await sendEvolution();
     expect(chatHistory.length).toBe(lengthBefore);
   });
 
-  it('A-03-08d: applyBlockSave NEVER called, even when musicalIntent is present', async () => {
-    // Include saveAsBlock alongside musicalIntent so the schema does not reject the
-    // response — sendEvolution must still ignore saveAsBlock (ADR 0022 D4).
-    const responseText = jsonFence({
-      musicalIntent: {
-        recipeId: 'bossa-nova-groove',
-      },
-      saveAsBlock: {
-        name: 'Sneaky Block',
-        type: 'sesion',
-      },
-    });
+  it('A-03-08c: chatHistory.length unchanged with nonexistent recipeId plan step', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakePlanResponse([{ musicalIntent: { recipeId: 'nonexistent-recipe-xyz' } }])
+    );
 
-    fetchMock.mockResolvedValueOnce(fakeApiResponse(responseText));
+    const lengthBefore = chatHistory.length;
+    await sendEvolution();
+    expect(chatHistory.length).toBe(lengthBefore);
+  });
+
+  it('A-03-08d: applyBlockSave NEVER called by sendEvolution — plan-mode stores, tick() applies (ADR 0022 D4)', async () => {
+    // sendEvolution() stores the plan; it never calls applyBlockSave.
+    // tick() also ignores saveAsBlock in plan steps (ADR 0024 D7).
+    fetchMock.mockResolvedValueOnce(
+      fakePlanResponse([
+        {
+          musicalIntent: { recipeId: 'bossa-nova-groove' },
+          saveAsBlock: { name: 'Sneaky Block', type: 'sesion' },
+        },
+      ])
+    );
 
     await sendEvolution();
 

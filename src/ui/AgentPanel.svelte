@@ -18,18 +18,21 @@
     - Chat messages held in local Svelte reactive array (mirrors chatHistory in agent.ts).
     - Code blocks rendered via Svelte {#each} (not innerHTML/DOM manipulation).
     - nowPlaying.source read from $sessionStore (not prototype global currentCode / setNowPlaying).
-    - Provider select shows only 'Anthropic' and 'OpenRouter' (no OpenAI — Pilot decision).
+    - Provider select iterates Object.entries(PROVIDERS) — shows Anthropic, OpenRouter, Google Gemini, OpenAI.
     - autofix retry indicator uses Svelte reactive variable, not prototype DOM load element.
 -->
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     sessionStore,
     setNowPlaying,
     setAutopilot,
+    setAutopilotPanel,
+    setRhythmHint,
     setLastRecipeApplied,
   } from '../state/session.js';
   import { startAutopilot, stopAutopilot } from '../agent/autopilot.js';
+  import { RHYTHM_CATALOG } from '../core/music-knowledge/rhythm-catalog.js';
   import { agentCtx } from '../state/agentCtx.js';
   import {
     send,
@@ -104,20 +107,75 @@
   // ADR 0022 D1: AutopilotState lives in SessionState for Svelte reactivity.
   $: autopilot = $sessionStore.autopilot;
 
+  // Warning shown when the user tries to start autopilot without an API key configured.
+  // Cleared on success and when autopilot is stopped (A-06-06 browser-test fix).
+  let showKeyWarning = false;
+
+  // Group RHYTHM_CATALOG by family (static — computed once at module load).
+  // Map insertion order preserves catalog order, so families appear in source order.
+  const families = new Map<string, typeof RHYTHM_CATALOG>();
+  for (const entry of RHYTHM_CATALOG) {
+    const group = families.get(entry.family) ?? [];
+    group.push(entry);
+    families.set(entry.family, group);
+  }
+
   /**
-   * Toggle autopilot on or off.
+   * Toggle the config panel open/closed.
+   * Does NOT start or stop the timer (decoupled per phase spec).
+   */
+  function togglePanel(): void {
+    setAutopilotPanel(!autopilot.panelOpen);
+  }
+
+  /**
+   * Play or stop the autopilot timer.
    * setAutopilot must be called BEFORE startAutopilot so the timer reads
    * the latest intervalCycles (ADR 0022 D2).
+   * Guards against starting without an API key (A-06-06 browser-test fix).
    */
-  function toggleAutopilot(): void {
+  function handlePlayStop(): void {
     if (autopilot.enabled) {
       stopAutopilot();
       setAutopilot({ enabled: false });
+      showKeyWarning = false;
     } else {
+      if (!loadApiKey(agentProvider) || !agentModel) {
+        showKeyWarning = true;
+        return;
+      }
+      showKeyWarning = false;
       setAutopilot({ enabled: true });
       startAutopilot();
     }
   }
+
+  // ── Progress bar (requestAnimationFrame poll) ─────────────────────────────
+  // Polls Date.now() at ~60 fps to compute progressPct from timerStartedAt.
+  // Only active when autopilot.enabled is true; interval cleared on destroy.
+  let now = Date.now();
+  let _rafId: number | null = null;
+
+  function _rafTick(): void {
+    now = Date.now();
+    _rafId = requestAnimationFrame(_rafTick);
+  }
+
+  onMount(() => {
+    _rafId = requestAnimationFrame(_rafTick);
+  });
+
+  onDestroy(() => {
+    if (_rafId !== null) cancelAnimationFrame(_rafId);
+  });
+
+  $: timerStart = autopilot.timerStartedAt;
+  $: intervalMs = Math.round(((60000 * 4) / $sessionStore.bpm) * autopilot.intervalCycles);
+  $: progressPct =
+    autopilot.enabled && timerStart > 0
+      ? Math.min(100, ((now - timerStart) / intervalMs) * 100)
+      : 0;
+  $: progressPhase = progressPct < 60 ? 'accent' : progressPct < 85 ? 'tonic' : 'dom';
 
   // ── Chat state ────────────────────────────────────────────────────────────
   // Local Svelte reactive array mirrors agent.ts chatHistory.
@@ -458,8 +516,9 @@
       title={$t('agent.providerTitle')}
       on:change={(e) => handleProviderChange(/** @type {HTMLSelectElement} */ (e.target).value)}
     >
-      <option value="anthropic">Anthropic</option>
-      <option value="openrouter">OpenRouter</option>
+      {#each Object.entries(PROVIDERS) as [key, cfg]}
+        <option value={key}>{cfg.label}</option>
+      {/each}
     </select>
     <input
       id="agentModel"
@@ -545,38 +604,135 @@
   </div>
 
   <!--
-    Autopilot controls: toggle button + interval selector.
-    ai-jam Phase 01 step 01.4 (ADR 0022 D1/D2).
-    Button label changes when enabled; intervalCycles input disabled while running.
+    Autopilot section: expand/collapse chevron + config panel + play button + progress bar.
+    Phase 06 step 06.4.
+    Panel toggle and play/stop are decoupled: collapsing does NOT stop the timer (A-06-01).
+    ADR 0022 D1/D2: setAutopilot called before startAutopilot for intervalCycles read order.
   -->
-  <div class="toggles autopilot-row">
-    <button
-      class="autopilot-btn"
-      class:active={autopilot.enabled}
-      on:click={toggleAutopilot}
-      title={autopilot.enabled ? $t('agent.autopilot.titleOn') : $t('agent.autopilot.titleOff')}
-    >
-      {autopilot.enabled ? $t('agent.autopilot.btnOn') : $t('agent.autopilot.btnOff')}
-    </button>
-    <label class="interval-label">
-      {$t('agent.autopilot.cyclesLabel')}:
-      <input
-        type="number"
-        class="interval-input"
-        min="2"
-        max="32"
-        step="2"
-        value={autopilot.intervalCycles}
-        disabled={autopilot.enabled}
-        on:change={(e) =>
-          setAutopilot({ intervalCycles: +(/** @type {HTMLInputElement} */ (e.target).value) })}
-      />
-    </label>
-    <span
-      class="autopilot-info"
-      data-tip={$t('agent.autopilot.infoTooltip')}
-      aria-label={$t('agent.autopilot.infoTooltip')}>ⓘ</span
-    >
+  <div class="autopilot-section">
+    <!-- Header row: always visible -->
+    <div class="autopilot-header">
+      <!-- Chevron / expand toggle -->
+      <button
+        class="autopilot-toggle"
+        class:open={autopilot.panelOpen}
+        title={$t('agent.autopilot.panelToggleLabel')}
+        aria-expanded={autopilot.panelOpen}
+        on:click={togglePanel}
+      >
+        {autopilot.panelOpen ? '▼' : '▶'}
+        {$t('agent.autopilot.panelToggleLabel')}
+        <!-- Minimal "playing" indicator: visible when playing AND panel is collapsed -->
+        {#if autopilot.enabled && !autopilot.panelOpen}
+          <span class="autopilot-live-dot" aria-label={$t('agent.autopilot.btnOn')}></span>
+        {/if}
+      </button>
+    </div>
+
+    <!-- Expandable config panel -->
+    {#if autopilot.panelOpen}
+      <div class="autopilot-config">
+        <!-- Cycles input (moved from old autopilot-row) -->
+        <label class="interval-label">
+          {$t('agent.autopilot.cyclesLabel')}:
+          <input
+            type="number"
+            class="interval-input"
+            min="2"
+            max="32"
+            step="2"
+            value={autopilot.intervalCycles}
+            disabled={autopilot.enabled}
+            on:change={(e) =>
+              setAutopilot({ intervalCycles: +(/** @type {HTMLInputElement} */ (e.target).value) })}
+          />
+        </label>
+
+        <!-- Rhythm hint dropdown -->
+        <label class="rhythm-hint-label">
+          {$t('agent.autopilot.rhythmHintLabel')}:
+          <select
+            class="rhythm-hint-select"
+            value={autopilot.rhythmHint}
+            disabled={autopilot.enabled}
+            on:change={(e) => setRhythmHint(/** @type {HTMLSelectElement} */ (e.target).value)}
+          >
+            <option value="">{$t('agent.autopilot.rhythmHintPlaceholder')}</option>
+            {#each [...families.entries()] as [family, entries]}
+              <optgroup label={family}>
+                {#each entries as entry}
+                  <option value={entry.id}>{entry.name}</option>
+                {/each}
+              </optgroup>
+            {/each}
+            <option value="otro">{$t('agent.autopilot.rhythmHintOther')}</option>
+          </select>
+        </label>
+
+        <!-- Free-text input: only when "otro" is selected -->
+        {#if autopilot.rhythmHint === 'otro'}
+          <input
+            type="text"
+            class="rhythm-hint-text"
+            placeholder={$t('agent.autopilot.rhythmHintOtherPlaceholder')}
+            value={autopilot.rhythmHintText}
+            disabled={autopilot.enabled}
+            on:input={(e) =>
+              setRhythmHint('otro', /** @type {HTMLInputElement} */ (e.target).value)}
+          />
+        {/if}
+
+        <!-- Play / Stop button -->
+        <button
+          class="autopilot-play-btn"
+          class:active={autopilot.enabled}
+          on:click={handlePlayStop}
+        >
+          {autopilot.enabled ? $t('agent.autopilot.stopLabel') : $t('agent.autopilot.playLabel')}
+        </button>
+
+        <!-- API key warning (A-06-06) -->
+        {#if showKeyWarning}
+          <p class="autopilot-key-warning">{$t('agent.autopilot.noKeyWarning')}</p>
+        {/if}
+
+        <!-- Progress timeline -->
+        <div
+          class="autopilot-progress-track"
+          title={$t('agent.autopilot.progressTitle')}
+          aria-label={$t('agent.autopilot.progressTitle')}
+          role="progressbar"
+          aria-valuenow={Math.round(progressPct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            class="autopilot-progress-fill phase-{progressPhase}"
+            style="width: {progressPct}%"
+          ></div>
+        </div>
+
+        <!-- Lag warning: shown when LLM took longer than the interval -->
+        {#if autopilot.lagWarning}
+          <p class="autopilot-warning">{$t('agent.autopilot.lagWarning')}</p>
+        {/if}
+
+        <!-- LLM error: shown when the provider returned an error -->
+        {#if autopilot.llmError}
+          <p class="autopilot-warning">
+            {autopilot.llmError === '__rateLimit__'
+              ? $t('agent.autopilot.errorRateLimit')
+              : autopilot.llmError === '__emptyResponse__'
+                ? $t('agent.autopilot.errorEmpty')
+                : autopilot.llmError === '__badFormat__'
+                  ? $t('agent.autopilot.errorBadFormat')
+                  : autopilot.llmError === '__emptyPlan__'
+                    ? $t('agent.autopilot.errorEmptyPlan')
+                    : $t('agent.autopilot.errorLlm').replace('{error}', autopilot.llmError)}
+          </p>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <!--

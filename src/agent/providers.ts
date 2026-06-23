@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Orbifold — AI provider adapters: Anthropic and OpenRouter.
+// Orbifold — AI provider adapters: Anthropic, OpenRouter, and Google Gemini.
 //
 // Phase 06 step 06.3.
 //
 // Prototype parity: reference/orbifold.html lines 1587–1603 (PROVIDERS object).
-// Known deviation: OpenAI provider omitted — Pilot decision (phase-06.md spec).
+// OpenAI provider re-added by Pilot decision 2026-06-22 (reverses the phase-06 omission).
 // Anthropic model updated: 'claude-sonnet-4-6' (not prototype's 'claude-sonnet-4-20250514').
+// Google Gemini added via OpenAI-compatible endpoint (generativelanguage.googleapis.com/v1beta/openai).
 //
 // No DOM imports.
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /** Provider keys supported by this version of Orbifold. */
-export type ProviderKey = 'anthropic' | 'openrouter';
+export type ProviderKey = 'anthropic' | 'openrouter' | 'gemini' | 'openai';
 
 /**
  * A single message in the conversation history.
@@ -40,7 +41,7 @@ export interface ProviderConfig {
   defaultModel: string;
   keyHint: string;
   headers(key: string): Record<string, string>;
-  body(model: string, system: string, msgs: ChatMessage[]): unknown;
+  body(model: string, system: string, msgs: ChatMessage[], maxTokens?: number): unknown;
   parse(data: unknown): string;
 }
 
@@ -49,16 +50,20 @@ export interface ProviderConfig {
 /**
  * Provider adapter registry.
  *
- * Two entries: 'anthropic' and 'openrouter'.
- * OpenAI is intentionally absent — Pilot decision (phase-06.md §step 06.3 spec).
+ * Four entries: 'anthropic', 'openrouter', 'gemini', and 'openai'.
  *
  * Prototype parity: reference/orbifold.html lines 1587–1603 (PROVIDERS object).
  * Deviations:
  *   - Anthropic model: 'claude-sonnet-4-6' (prototype used 'claude-sonnet-4-20250514').
- *   - OpenAI entry omitted.
- *   - OpenRouter defaultModel changed from 'openrouter/owl-alpha' to 'openrouter/auto'
- *     per phase-06.md spec.
+ *   - OpenAI re-added 2026-06-22 (Pilot decision) after a phase-06 omission.
+ *   - OpenRouter defaultModel: 'cohere/north-mini-code:free' — a ':free' model so
+ *     zero-credit accounts work out of the box. (Was 'openrouter/auto' per phase-06.md
+ *     spec, but 'auto' routes to PAID models → HTTP 402 "never purchased credits" on
+ *     free accounts. ':free' models cost nothing but carry a per-account daily request
+ *     ceiling (~20/day with no credits purchased) and the free-tier prompt cap. Verified
+ *     present on the live /v1/models API 2026-06-22. Users may type any model in the UI.)
  *   - 'Content-Type' header included in all entries for clarity; prototype had it inline.
+ *   - Google Gemini added via OpenAI-compatible endpoint (not in prototype).
  */
 export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
   anthropic: {
@@ -77,9 +82,9 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     }),
 
     // Prototype line 1601: Anthropic uses top-level `system:` + `messages:` format.
-    body: (model: string, system: string, msgs: ChatMessage[]): unknown => ({
+    body: (model: string, system: string, msgs: ChatMessage[], maxTokens = 1000): unknown => ({
       model,
-      max_tokens: 1000,
+      max_tokens: maxTokens,
       system,
       messages: msgs,
     }),
@@ -94,8 +99,8 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
   openrouter: {
     label: 'OpenRouter',
     url: 'https://openrouter.ai/api/v1/chat/completions',
-    defaultModel: 'openrouter/auto',
-    keyHint: 'sk-or-…  (gratis en openrouter.ai/keys)',
+    defaultModel: 'cohere/north-mini-code:free',
+    keyHint: 'sk-or-…  (key gratis en openrouter.ai/keys · usa un modelo «:free»)',
 
     // Prototype line 1590: OpenRouter uses OpenAI-compatible API with
     // HTTP-Referer and X-Title headers.
@@ -107,13 +112,71 @@ export const PROVIDERS: Record<ProviderKey, ProviderConfig> = {
     }),
 
     // Prototype line 1591: OpenAI-compatible body — system message prepended to messages.
-    body: (model: string, system: string, msgs: ChatMessage[]): unknown => ({
+    body: (model: string, system: string, msgs: ChatMessage[], maxTokens = 1000): unknown => ({
       model,
-      max_tokens: 1000,
+      max_tokens: maxTokens,
       messages: [{ role: 'system', content: system }, ...msgs],
     }),
 
     // Prototype line 1592: parse reads choices[0].message.content.
+    parse: (data: unknown): string => {
+      const d = data as { choices?: Array<{ message?: { content?: string } }> };
+      return d.choices?.[0]?.message?.content ?? '';
+    },
+  },
+
+  gemini: {
+    label: 'Google Gemini',
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    defaultModel: 'gemini-2.0-flash-lite',
+    keyHint: 'AIza…  (aistudio.google.com/apikey)',
+
+    // Google's OpenAI-compatible endpoint uses Bearer token auth (no special headers needed).
+    headers: (key: string): Record<string, string> => ({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + key,
+    }),
+
+    // OpenAI-compatible body — same shape as openrouter.
+    body: (model: string, system: string, msgs: ChatMessage[], maxTokens = 1000): unknown => ({
+      model,
+      max_tokens: maxTokens,
+      messages: [{ role: 'system', content: system }, ...msgs],
+    }),
+
+    // OpenAI-compatible parse — same as openrouter.
+    parse: (data: unknown): string => {
+      const d = data as { choices?: Array<{ message?: { content?: string } }> };
+      return d.choices?.[0]?.message?.content ?? '';
+    },
+  },
+
+  openai: {
+    // Re-added by Pilot decision 2026-06-22 (reverses the phase-06 omission): the
+    // Pilot has an OpenAI key to test. Uses the native chat-completions endpoint.
+    // Default 'gpt-4o-mini' is cheap, reliable, and supports `max_tokens` on chat
+    // completions; the user may type a newer model in the UI. Note: reasoning
+    // models (o-series) reject `max_tokens`/custom temperature — pick a 4o/4.1
+    // chat model. Browser-direct calls expose the key (same trade-off as all
+    // providers here — keys live only in the user's localStorage, never the repo).
+    label: 'OpenAI',
+    url: 'https://api.openai.com/v1/chat/completions',
+    defaultModel: 'gpt-4o-mini',
+    keyHint: 'sk-…  (platform.openai.com/api-keys)',
+
+    headers: (key: string): Record<string, string> => ({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + key,
+    }),
+
+    // OpenAI-compatible body — same shape as openrouter/gemini.
+    body: (model: string, system: string, msgs: ChatMessage[], maxTokens = 1000): unknown => ({
+      model,
+      max_tokens: maxTokens,
+      messages: [{ role: 'system', content: system }, ...msgs],
+    }),
+
+    // OpenAI-compatible parse — same as openrouter/gemini.
     parse: (data: unknown): string => {
       const d = data as { choices?: Array<{ message?: { content?: string } }> };
       return d.choices?.[0]?.message?.content ?? '';
@@ -140,12 +203,23 @@ function apiKeyStorageKey(provider: ProviderKey): string {
 }
 
 /**
+ * Sanitize a pasted API key: strip zero-width / BOM characters (U+200B–U+200D,
+ * U+FEFF) and surrounding whitespace. Real provider keys are ASCII; a non-Latin-1
+ * code point in the key would otherwise crash `fetch` when building the
+ * `Authorization` header ("String contains non ISO-8859-1 code point"). These
+ * invisible characters are common copy-paste artifacts.
+ */
+function sanitizeKey(raw: string): string {
+  return raw.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+}
+
+/**
  * Load the stored API key for the given provider from localStorage.
  * Returns '' if no key is stored or if localStorage is unavailable (e.g. in tests).
  */
 export function loadApiKey(provider: ProviderKey): string {
   try {
-    return localStorage.getItem(apiKeyStorageKey(provider)) ?? '';
+    return sanitizeKey(localStorage.getItem(apiKeyStorageKey(provider)) ?? '');
   } catch {
     return '';
   }

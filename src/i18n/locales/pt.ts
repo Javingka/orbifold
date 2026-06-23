@@ -214,6 +214,26 @@ const pt: Dictionary = {
       cyclesLabel: 'Ciclos',
       infoTooltip:
         'Piloto automático: o agente evolui ritmo e harmonia automaticamente a cada N ciclos enquanto o áudio toca. Configure N antes de ativar.',
+      // Phase 06 step 06.3 — autopilot panel redesign keys // i18n-draft
+      panelToggleLabel: 'Piloto automático', // i18n-draft
+      rhythmHintLabel: 'Estilo rítmico', // i18n-draft
+      rhythmHintOther: 'Outro…', // i18n-draft
+      rhythmHintPlaceholder: '— nenhum —', // i18n-draft
+      rhythmHintOtherPlaceholder: 'Descreva o estilo, ex.: cueca chilena, bossa nova…', // i18n-draft
+      playLabel: '▶ Iniciar', // i18n-draft
+      stopLabel: '■ Parar', // i18n-draft
+      progressTitle: 'Progresso do ciclo de evolução', // i18n-draft
+      noKeyWarning:
+        'Configure o serviço de IA, o modelo e a chave API antes de iniciar o autopilot.', // i18n-draft
+      lagWarning: 'Ciclo ignorado: o serviço de IA demorou mais que o intervalo.', // i18n-draft
+      errorLlm: 'Erro do serviço de IA: {error}', // i18n-draft
+      errorRateLimit:
+        'Limite de velocidade atingido. O autopilot tentará novamente no próximo ciclo.', // i18n-draft
+      errorEmpty: 'O serviço de IA retornou uma resposta vazia. Tente outro modelo ou repita.', // i18n-draft
+      errorBadFormat:
+        'O modelo não retornou JSON de evolução válido (comum em modelos de código). Tente outro modelo.', // i18n-draft
+      errorEmptyPlan:
+        'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

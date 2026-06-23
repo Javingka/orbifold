@@ -215,6 +215,27 @@ const es: Dictionary = {
       cyclesLabel: 'Ciclos',
       infoTooltip:
         'Piloto automático: el agente evoluciona ritmo y armonía automáticamente cada N ciclos mientras suena audio. Configura N antes de activarlo.',
+      // Phase 06 step 06.3 — autopilot panel redesign keys
+      panelToggleLabel: 'Piloto automático',
+      rhythmHintLabel: 'Estilo rítmico',
+      rhythmHintOther: 'Otro…',
+      rhythmHintPlaceholder: '— ninguno —',
+      rhythmHintOtherPlaceholder: 'Describe el estilo, p.ej. cueca chilena, bossa nova…',
+      playLabel: '▶ Iniciar',
+      stopLabel: '■ Detener',
+      progressTitle: 'Progreso del ciclo de evolución',
+      noKeyWarning:
+        'Configura el servicio de IA, el modelo y la clave API antes de iniciar el autopilot.',
+      lagWarning:
+        'El ciclo no pudo atenderse: la respuesta del servicio de IA tardó más que el intervalo configurado.',
+      errorLlm: 'Error del servicio de IA: {error}',
+      errorRateLimit:
+        'Límite de velocidad alcanzado. El autopilot reintentará en el próximo ciclo.',
+      errorEmpty: 'El servicio de IA devolvió una respuesta vacía. Probá otro modelo o reintentá.',
+      errorBadFormat:
+        'El modelo no devolvió JSON de evolución válido (suele pasar con modelos de código). Probá otro modelo.',
+      errorEmptyPlan:
+        'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.',
     },
     recipeCard: {
       title: 'Receta aplicada',

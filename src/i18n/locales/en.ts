@@ -214,6 +214,24 @@ const en: Dictionary = {
       cyclesLabel: 'Cycles',
       infoTooltip:
         'Autopilot: the agent automatically evolves rhythm and harmony every N cycles while audio is playing. Set N before enabling.',
+      // Phase 06 step 06.3 — autopilot panel redesign keys
+      panelToggleLabel: 'Autopilot',
+      rhythmHintLabel: 'Rhythm style',
+      rhythmHintOther: 'Other…',
+      rhythmHintPlaceholder: '— none —',
+      rhythmHintOtherPlaceholder: 'Describe the style, e.g. cueca chilena, bossa nova…',
+      playLabel: '▶ Start',
+      stopLabel: '■ Stop',
+      progressTitle: 'Evolution cycle progress',
+      noKeyWarning: 'Set up the AI service, model, and API key before starting autopilot.',
+      lagWarning: 'Cycle skipped: the AI service took longer than the configured interval.',
+      errorLlm: 'AI service error: {error}',
+      errorRateLimit: 'Rate limit reached. Autopilot will retry on the next cycle.',
+      errorEmpty: 'The AI service returned an empty response. Try another model or retry.',
+      errorBadFormat:
+        "The model didn't return valid evolution JSON (common with code models). Try another model.",
+      errorEmptyPlan:
+        'The evolution plan returned is empty or has an invalid format. Autopilot will retry on the next cycle.',
     },
     recipeCard: {
       title: 'Applied recipe',

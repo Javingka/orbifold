@@ -250,6 +250,36 @@ export interface Dictionary {
       cyclesLabel: string;
       /** ⓘ info icon tooltip explaining how autopilot works */
       infoTooltip: string;
+      /** aria/title for the expand/collapse chevron button (Phase 06 step 06.3) */
+      panelToggleLabel: string;
+      /** Label displayed before the rhythm hint dropdown (Phase 06 step 06.3) */
+      rhythmHintLabel: string;
+      /** Text shown in the "Otro…" option in the rhythm hint dropdown (Phase 06 step 06.3) */
+      rhythmHintOther: string;
+      /** Placeholder for the rhythm hint select default option and free-text input (Phase 06 step 06.3) */
+      rhythmHintPlaceholder: string;
+      /** Placeholder for the free-text input shown when "Otro…" is selected (Phase 06 browser-test fix A-06-05) */
+      rhythmHintOtherPlaceholder: string;
+      /** Label for the play/start autopilot button (Phase 06 step 06.3) */
+      playLabel: string;
+      /** Label for the stop autopilot button (Phase 06 step 06.3) */
+      stopLabel: string;
+      /** title/aria-label on the progress bar container (Phase 06 step 06.3) */
+      progressTitle: string;
+      /** Warning shown when startAutopilot is attempted without an API key configured (Phase 06 browser-test fix A-06-06) */
+      noKeyWarning: string;
+      /** Warning shown when the LLM took longer than the interval (Phase 06 heuristic fix) */
+      lagWarning: string;
+      /** Error message from the LLM provider — {error} is the interpolated error string (Phase 06 heuristic fix) */
+      errorLlm: string;
+      /** Rate-limit (429) specific error message — autopilot will retry next cycle (Phase 06 fix) */
+      errorRateLimit: string;
+      /** Provider returned an empty response — nothing to apply (Phase 06 silent-path fix) */
+      errorEmpty: string;
+      /** Provider returned text that wasn't valid evolution JSON — often a model that emits prose (Phase 06 silent-path fix) */
+      errorBadFormat: string;
+      /** LLM returned an empty or structurally invalid evolution plan — autopilot will retry next cycle (Phase 07 step 07.5 / ADR 0024 D4) */
+      errorEmptyPlan: string;
     };
     /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
     recipeCard: {
