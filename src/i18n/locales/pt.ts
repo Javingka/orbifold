@@ -234,6 +234,8 @@ const pt: Dictionary = {
         'O modelo não retornou JSON de evolução válido (comum em modelos de código). Tente outro modelo.', // i18n-draft
       errorEmptyPlan:
         'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.', // i18n-draft
+      waitingFirstPlan: 'Aguardando o primeiro ritmo do agente…', // i18n-draft
+      harmonyPresetsLabel: 'Timbre dos acordes', // i18n-draft
     },
     recipeCard: {
       // i18n-draft

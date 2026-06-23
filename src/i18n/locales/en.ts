@@ -232,6 +232,8 @@ const en: Dictionary = {
         "The model didn't return valid evolution JSON (common with code models). Try another model.",
       errorEmptyPlan:
         'The evolution plan returned is empty or has an invalid format. Autopilot will retry on the next cycle.',
+      waitingFirstPlan: 'Waiting for the first agent rhythm…',
+      harmonyPresetsLabel: 'Chord timbre',
     },
     recipeCard: {
       title: 'Applied recipe',

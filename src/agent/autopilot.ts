@@ -80,6 +80,33 @@ let _timerId: ReturnType<typeof setInterval> | null = null;
  * @param step - A single AgentOutput step from the current plan.
  * @returns true if anything was applied (triggers requeueLive); false otherwise.
  */
+const ALL_PRESETS = ['piano', 'guitar', 'synth-bass'] as const;
+type HarmonyPreset = (typeof ALL_PRESETS)[number];
+
+/**
+ * After applyHarmonySpec() updates the store, stamp a preset on every chord
+ * slot according to autopilot.harmonyPresets:
+ *   [] → random pick from all 3 presets per chord
+ *   [one] → all chords use that preset
+ *   [two+] → each chord picks randomly from the subset
+ */
+function applyHarmonyPresetOverride(): void {
+  const { autopilot, harmony } = get(sessionStore);
+  const pool: readonly HarmonyPreset[] =
+    autopilot.harmonyPresets.length > 0 ? autopilot.harmonyPresets : ALL_PRESETS;
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: {
+      ...s.harmony,
+      progression: harmony.progression.map((slot) => {
+        if ('isRest' in slot) return slot;
+        const preset = pool[Math.floor(Math.random() * pool.length)];
+        return { ...slot, preset };
+      }),
+    },
+  }));
+}
+
 function applyPlanStep(step: AgentOutput): boolean {
   let applied = false;
 
@@ -89,9 +116,10 @@ function applyPlanStep(step: AgentOutput): boolean {
     applied = true;
   }
 
-  // Apply explicit harmony (ADR 0024 D3)
+  // Apply explicit harmony (ADR 0024 D3), then stamp preset on every chord.
   if (step.harmony) {
     applyHarmonySpec(step.harmony);
+    applyHarmonyPresetOverride();
     applied = true;
   }
 
@@ -109,6 +137,7 @@ function applyPlanStep(step: AgentOutput): boolean {
         // Apply recipe harmony only if the step did NOT supply explicit harmony
         if (!step.harmony && engineOutput.harmony) {
           applyHarmonySpec(engineOutput.harmony);
+          applyHarmonyPresetOverride();
           applied = true;
         }
       }

@@ -370,6 +370,14 @@ export interface AutopilotState {
   currentPlan: AgentOutput[];
   /** EPHEMERAL — not persisted (ADR 0022 D1/D7). Per ADR 0024 D2. */
   planIndex: number;
+  /**
+   * Sound presets to apply to harmony chords after each plan step.
+   * [] = random pick from all 3 presets each chord.
+   * 1 entry = all chords use that preset.
+   * 2+ entries = each chord picks randomly from this subset.
+   * EPHEMERAL — not persisted (same mechanism as currentPlan).
+   */
+  harmonyPresets: ('piano' | 'guitar' | 'synth-bass')[];
 }
 
 // ── LastRecipeDisplay ────────────────────────────────────────────────────────
@@ -473,6 +481,7 @@ export const DEFAULT_SESSION_STATE: SessionState = {
     llmError: null,
     currentPlan: [], // EPHEMERAL — not persisted (ADR 0022 D1/D7); ADR 0024 D2
     planIndex: 0, // EPHEMERAL — not persisted (ADR 0022 D1/D7); ADR 0024 D2
+    harmonyPresets: [], // EPHEMERAL — [] = random from all 3 presets
   },
   // lastRecipeApplied: intentionally excluded from SavedSessionSchema (ephemeral; ADR 0022 D1/D7 pattern)
   lastRecipeApplied: undefined,

@@ -682,6 +682,23 @@
           />
         {/if}
 
+        <!-- Harmony preset chips -->
+        <div class="harmony-presets-row">
+          <span class="harmony-presets-label">{$t('agent.autopilot.harmonyPresetsLabel')}:</span>
+          {#each [['piano', $t('header.harmony.presetPiano')], ['guitar', $t('header.harmony.presetGuitar')], ['synth-bass', $t('header.harmony.presetSynthBass')]] as [val, label]}
+            <button
+              class="preset-chip"
+              class:active={autopilot.harmonyPresets.includes(val)}
+              disabled={autopilot.enabled}
+              on:click={() => {
+                const cur = autopilot.harmonyPresets;
+                const next = cur.includes(val) ? cur.filter((p) => p !== val) : [...cur, val];
+                setAutopilot({ harmonyPresets: next });
+              }}>{label}</button
+            >
+          {/each}
+        </div>
+
         <!-- Play / Stop button -->
         <button
           class="autopilot-play-btn"
@@ -694,6 +711,11 @@
         <!-- API key warning (A-06-06) -->
         {#if showKeyWarning}
           <p class="autopilot-key-warning">{$t('agent.autopilot.noKeyWarning')}</p>
+        {/if}
+
+        <!-- Waiting message: shown only before the first plan step is applied (timerStartedAt=0) -->
+        {#if autopilot.enabled && autopilot.timerStartedAt === 0 && !autopilot.llmError}
+          <p class="autopilot-waiting">{$t('agent.autopilot.waitingFirstPlan')}</p>
         {/if}
 
         <!-- Progress timeline -->

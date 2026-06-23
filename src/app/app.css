@@ -1063,6 +1063,61 @@ textarea {
   line-height: 1.4;
 }
 
+/* Waiting message — shown before the first plan step arrives (timerStartedAt === 0) */
+.autopilot-waiting {
+  font-size: 10px;
+  color: var(--faint);
+  margin: 0;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* Harmony preset chips row */
+.harmony-presets-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.harmony-presets-label {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.preset-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+  white-space: nowrap;
+}
+
+.preset-chip:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--stroke-2);
+}
+
+.preset-chip.active {
+  color: var(--accent);
+  border-color: rgba(138, 160, 255, 0.5);
+  background: rgba(138, 160, 255, 0.12);
+}
+
+.preset-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* Recipe card — last autopilot recipe applied (ai-jam Phase 04 step 04.4) */
 .recipe-card {
   margin: 4px 12px 2px;

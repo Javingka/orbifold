@@ -280,6 +280,10 @@ export interface Dictionary {
       errorBadFormat: string;
       /** LLM returned an empty or structurally invalid evolution plan — autopilot will retry next cycle (Phase 07 step 07.5 / ADR 0024 D4) */
       errorEmptyPlan: string;
+      /** Shown while enabled but timerStartedAt===0 (waiting for first LLM response, no audio yet) */
+      waitingFirstPlan: string;
+      /** Label for the harmony preset chips in the autopilot config panel */
+      harmonyPresetsLabel: string;
     };
     /** Recipe intent card display strings (ai-jam Phase 04 step 04.3) */
     recipeCard: {

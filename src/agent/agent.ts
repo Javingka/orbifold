@@ -421,7 +421,12 @@ export async function sendEvolution(): Promise<void> {
       // 600 was sufficient for a single AgentOutput (Phase 06) but truncates
       // multi-step plans mid-JSON, causing JSON.parse → __badFormat__.
       body: JSON.stringify(
-        provider.body(model, SYSTEM_PROMPT_EVOLUTION, [{ role: 'user', content: userMessage }], 2000)
+        provider.body(
+          model,
+          SYSTEM_PROMPT_EVOLUTION,
+          [{ role: 'user', content: userMessage }],
+          2000
+        )
       ),
     });
     const data: unknown = await res.json();

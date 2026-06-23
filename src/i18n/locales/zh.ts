@@ -225,6 +225,8 @@ const zh: Dictionary = {
       errorBadFormat: '模型未返回有效的演化 JSON（代码模型常见）。请尝试其他模型。', // i18n-draft
       errorEmptyPlan:
         'El plan de evolución devuelto está vacío o tiene un formato inválido. El autopilot reintentará en el próximo ciclo.', // i18n-draft
+      waitingFirstPlan: '正在等待智能体的第一个节奏…', // i18n-draft
+      harmonyPresetsLabel: '和弦音色', // i18n-draft
     },
     recipeCard: {
       // i18n-draft
