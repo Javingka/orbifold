@@ -449,7 +449,7 @@ All matched files use Prettier code style!
  ✓ tests/agent-recipe-wiring.test.ts (22 tests) 20ms
  ✓ tests/music-knowledge/query.test.ts (47 tests) 8ms
  ✓ tests/sendEvolution-hint.test.ts (22 tests) 30ms
- ✓ tests/music-knowledge/recipe-engine.test.ts (24 tests) 22ms
+ ✓ tests/music-knowledge/recipe-engine.test.ts (24 tests) 24ms
  ✓ tests/agent-block-persistence.test.ts (12 tests) 6ms
  ✓ tests/autopilot.test.ts (43 tests) 36ms
  ✓ tests/presets.test.ts (63 tests) 12ms
@@ -545,3 +545,76 @@ dist/assets/index-hSu0kgRC.js   1,187.60 kB │ gzip: 372.93 kB
 
 - **Terminal commit:** `chore(authentic-groove): Phase 01 step 01.5 — seam fitness check + quality gate`
   - Hash: self-referential — not recorded.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-23. Iteration: 1 of 5.
+All 8 checklist items pass. Commit scope, message format, Coverage Table, test relevance, live-system evidence, Register compliance, reversibility note, and no new dependencies all clear. The bug fix in `propagation.test.ts` (non-null assertion → explicit guard) is minimal, disclosed, and semantically inert — acceptable carry-forward from 01.4. Phase 01 is complete.
+**Next action:** Pilot approval required before any next phase begins — phase complete (Checkpoint #5).
+
+---
+
+## Handoff — Phase 01 (Genre-Authentic Strudel Sample Palette)
+
+**Phase completed:** 2026-06-23
+
+### Completed
+
+- Added `strudelSample?: string` to `RhythmLayer`; codegen emits it over `sound` when set (ADR 0025 D1).
+- Added `strudelSample: z.string().optional()` to `SavedRhythmLayerSchema` in `persistence.ts`; pre-Phase-01 sessions load cleanly (ADR 0025 D5/D7).
+- Added `sampleMap?: Partial<Record<Sound, string>>` to `MusicalRecipe`; 9 genre recipes populated with inventory-verified names + fallback comments (ADR 0025 D2/D6).
+- Added `applySampleMap(map)` generic helper in `apply.ts`; wired in `autopilot.ts` after `applyRhythmSpec` (ADR 0025 D4).
+- Seam invariant (AG-D1 / ADR 0025 D3) mechanically verified: zero genre names or sample literals outside `src/core/music-knowledge/` in `src/`.
+- Full quality gate clean: `tsc --noEmit`, `pnpm lint`, `pnpm test` 1673/1673, `pnpm build`.
+
+### Acceptance Coverage Summary
+
+| Acceptance ID | Required behavior | Covered in step | Status |
+|---|---|---|---|
+| A-01-01 | Cumbia recipe yields layers with authentic `strudelSample`; codegen emits authentic names | 01.4 | covered |
+| A-01-02 | Cueca recipe (no sampleMap) → generic sound emitted | 01.4 | covered |
+| A-01-03 | Layers without `strudelSample` emit their `sound` field value | 01.2 | covered |
+| A-01-04 | `sampleMap` propagation sets `strudelSample` only on matching slots; absent slots and map-less recipes leave it undefined | 01.4 | covered |
+| A-01-05 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` ≥ 1589 + new tests; `pnpm build` succeeds | 01.5 | covered |
+| A-01-06 | No genre name or sample-name literal appears in `src/` outside `src/core/music-knowledge/` | 01.5 | covered |
+
+### Test delta
+
+Baseline (phase open): 1589. Final: 1673. Net new: +84 (9 from 01.2 + 60 from 01.3 + 15 from 01.4).
+
+### Decisions made
+
+- ADR 0025 — Authentic Sample Palette + music-knowledge seam. Governs `strudelSample` plumbing contract (D1), `sampleMap` on `MusicalRecipe` (D2), seam invariant (D3), propagation mechanism OD-1 → Option B (D4), persistence OD-2 → Option A (D5), fallback policy OD-3 → Option A (D6), backward compatibility (D7).
+
+### ADRs committed
+
+- ADR 0025: Authentic Strudel Sample Palette + music-knowledge seam
+
+### Register entries added
+
+- AG-D1 (seam invariant) — already in register at phase open; mechanically verified by A-01-06 in this phase.
+
+### Pending Register proposals resolved at phase approval
+
+None — all governance covered by ADR 0025 and the pre-existing AG-D1 entry.
+
+### Deferred
+
+- Dimension 2 (per-hit accent/velocity variation) — out of scope for Phase 01; future authentic-groove phase.
+- Dimension 3 (swing/groove feel) — out of scope for Phase 01; future authentic-groove phase.
+- Dimension 4 (role-based polyrhythmic layering) — out of scope for Phase 01; future authentic-groove phase.
+- Pentagrama `NoteSlot` free placement — carried from orbifold-v2 Ph10; not scoped here.
+- Per-chord `lpf`/`lpq` slider D-3 — carried from harmonic-rhythm-improvements; not scoped here.
+
+### Blockers and review escalations
+
+None. All steps approved on first iteration.
+
+### Iteration counts
+
+All steps approved on iteration 1.
+
+### Next focus
+
+- Phase 02 of `authentic-groove` (suggested): dimension 2 — per-hit accent/velocity variation for genre recipes, or dimension 3 swing/groove feel.
+- Pilot to confirm which dimension to tackle next and whether a new phase should be scoped immediately.

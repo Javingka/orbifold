@@ -390,3 +390,73 @@ None.
 ### Environment state after this step
 
 All four quality gate commands pass clean. 1693 tests. Phase 02 is complete. All seven acceptance criteria covered.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-23. Iteration: 1 of 5.
+All 8 checklist items pass: commit scope is exactly Prettier-only reformatting of two files (no logic changes); commit message matches `chore(authentic-groove): Phase 02 step 02.4 — seam fitness check + quality gate`; Acceptance Coverage Table is complete and non-hand-waved with all 7 criteria accounted for; A-02-05 and A-02-06 (this step's deliverables) have verbatim command output recorded; live-system evidence present for all live-system entries; Register respected (AG-D1 verified, zero violations); reversibility note present verbatim per spec; no new dependencies or CI changes. The `bd`/`sd` pre-existing hits in `Header.svelte` are correctly analyzed as abstract Sound role values, not sampleMap literals — not a seam violation.
+Next action: Pilot approval required before any next step, reason: phase complete (Checkpoint #5).
+
+---
+
+## Handoff — Phase 02 (Recipe Chip Affordance)
+
+**Phase completed:** 2026-06-23
+
+### Completed
+
+- Added exported `applyRecipeById(id: string): boolean` to `src/agent/autopilot.ts` — thin wrapper through the same recipe-lookup + apply path as the autopilot plan steps.
+- Added badge invalidation (`setLastRecipeApplied(null)`) at the top of `applyRhythmSpec` and `applyHarmonySpec` in `src/agent/apply.ts`.
+- Added recipe chip row and active-recipe badge to `src/ui/AgentPanel.svelte`, outside the autopilot panel gate, iterating 14 expressible recipes.
+- Added CSS for `.recipe-chips-row`, `.recipe-chip`, `.recipe-badge` to `src/app/app.css`.
+- Added 20 unit tests in `tests/authentic-groove/apply-recipe-by-id.test.ts`.
+- Ran full quality gate (tsc, lint, test, build) and seam fitness grep — all clean.
+
+### Acceptance Coverage Summary
+
+| Acceptance ID | Required behavior | Covered in step | Status |
+|---|---|---|---|
+| A-02-01 | Recipe chip row visible in Agent panel; one chip per expressible recipe (14) | 02.3 | covered |
+| A-02-02 | Tapping a chip calls `applyRecipeById` with the correct recipe ID | 02.3 | covered |
+| A-02-03 | Applying cumbia recipe results in bd-slot carrying `strudelSample: 'perc'` | 02.2 | covered |
+| A-02-04 | `applyRecipeById` returns false for unknown or non-expressible IDs; store unchanged | 02.2 | covered |
+| A-02-05 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` 1693/1693; `pnpm build` succeeds | 02.4 | covered |
+| A-02-06 | No genre name or sample-name literal outside `src/core/music-knowledge/` (seam invariant AG-D1) | 02.4 | covered |
+| A-02-07 | Badge renders "Recipe: [name]" when set; `applyRhythmSpec`/`applyHarmonySpec` clears it | 02.2 + 02.3 | covered |
+
+### Decisions made
+
+- OD-1 resolved (Pilot, Option A): expressible recipe count accepted as 14 (not 15); `buleria-flamenco-phrygian` excluded because its 12-step struct pattern does not pass the expressibility filter. Phase file updated accordingly.
+
+### ADRs committed
+
+None — no new ADRs in this phase. Phase 02 is a straightforward extension of ADR 0025 D4.
+
+### Register entries added
+
+None.
+
+### Pending Register proposals resolved at phase approval
+
+None pending.
+
+### Deferred
+
+- Per-hit velocity / accent variation, swing feel, polyrhythmic layering — deferred per initiative scope (authentic-groove Phases 03+).
+
+### Blockers and review escalations
+
+None.
+
+### Iteration counts (only for steps that took multiple iterations)
+
+All steps approved on iteration 1.
+
+### Test delta
+
+1673 → 1693 (+20 new unit tests in `tests/authentic-groove/apply-recipe-by-id.test.ts`).
+
+### Next focus
+
+- Phase 03, step 03.1 (inventory) — suggested next focus: per-hit accent/velocity variation, or swing feel for applicable genres (cumbia, bossa nova).
+- Pilot to confirm initiative priority order before scoping Phase 03.

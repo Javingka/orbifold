@@ -354,3 +354,79 @@ None — the single-layer recipe behavior for bossa-nova-groove (no hh layer in 
 - `tests/authentic-groove/propagation.test.ts`: 20 tests (15 original + 5 new)
 - `pnpm test` passes at 1698 — 5 new tests, zero regressions
 - `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` all clean
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-24. Iteration: 1 of 5.
+All 8 checklist items pass: commit scope clean (only propagation test + handoff); commit message format correct; Acceptance Coverage Table complete with all 5 IDs at FULL and proxy use disclosed; tests exercise real apply-path behavior (direct `applySampleMap` + codegen, not helpers); live-system evidence recorded for A-03-04 and A-03-05; AG-D1 seam invariant confirmed by two recorded greps with empty output; reversibility note present verbatim; no new dependencies or CI changes.
+**Next action:** Pilot approval required — phase complete (Checkpoint #5).
+
+---
+
+## Handoff — Phase 03 (Authentic Sample Registration)
+
+**Phase completed:** 2026-06-24
+
+### Completed
+
+- Inventoried the `tidalcycles/Dirt-Samples` manifest live; confirmed `conga` and `wood` are entirely absent from the repository (not just strudel.json).
+- Pilot selected Option C: no new `samples()` call; proceed with upgrades achievable via the existing manifest.
+- Applied the one genuine upgrade: `bossa-nova-groove` `hh` slot upgraded from `'sd'` to `'hand'` (pandeiro approximation; `hand` confirmed in strudel.json with 17 files).
+- Extended `propagation.test.ts` with 5 tests confirming `'hand'` flows end-to-end through `applySampleMap` to codegen output, and confirming bossa-nova single-layer behavior.
+- Full quality gate: 1698/1698 tests; tsc, lint, build all clean. Seam grep: zero genre tokens outside `src/core/music-knowledge/`.
+
+### Acceptance Coverage Summary
+
+| Acceptance ID | Required behavior | Covered in step | Status |
+|---|---|---|---|
+| A-03-01 | `initAudio()` registers additional authentic sample folders; `'hand'` flows to codegen | 03.4 (proxy: existing manifest + propagation test) | covered |
+| A-03-02 | Genre recipes carry authentic sample names; recipe emits authentic name | 03.3 + 03.4 | covered |
+| A-03-03 | Recipes without available authentic name retain Phase 01 fallbacks | 03.3 + 03.4 | covered |
+| A-03-04 | Full quality gate: tsc, lint, test ≥ 1693 + new, build | 03.4 | covered |
+| A-03-05 | Seam grep clean | 03.4 | covered |
+
+### Key finding note
+
+`conga` and `wood` are absent from `tidalcycles/Dirt-Samples` entirely (HTTP 404 on all branches — not a strudel.json omission, the folders do not exist). Pilot chose Option C. One genuine upgrade delivered: `bossa-nova` `hh: sd → hand`. Ten other fallback entries remain as Phase 01 fallbacks — no authentic dirt-samples alternative exists for those slots.
+
+### Test delta
+
+1693 → 1698 (+5 propagation tests in `tests/authentic-groove/propagation.test.ts`)
+
+### Decisions made
+
+- Pilot Option C selected at step 03.1: no new `samples()` call; use existing manifest registration for `'hand'`. Documented in step 03.2 rationale.
+
+### ADRs committed
+
+None — sample palette extension covered under existing ADR 0025. No new governance decision required.
+
+### Register entries added
+
+None.
+
+### Pending Register proposals resolved at phase approval
+
+None — no Register proposals surfaced across steps 03.1–03.4.
+
+### Deferred
+
+- Dimension 2 (per-hit accent/velocity variation) — out of Phase 03 scope.
+- Dimension 3 (swing/groove feel) — out of Phase 03 scope.
+- Dimension 4 (role-based polyrhythmic layering) — out of Phase 03 scope.
+- 12-step grid support (cueca 12/8, buleria 12/8) — out of phase scope boundary.
+- Pentagrama `NoteSlot` free placement — carried from orbifold-v2 Ph10.
+- Per-chord `lpf`/`lpq` slider D-3 — carried from harmonic-rhythm-improvements.
+- Remaining 10 sampleMap fallbacks (cumbia conga, cueca timbales, etc.) — no authentic Dirt-Samples alternative; would require custom sample hosting (future initiative).
+
+### Blockers and review escalations
+
+None across all four steps.
+
+### Iteration counts
+
+All steps approved on iteration 1.
+
+### Next focus
+
+- Phase 04 (or next initiative step) — Pilot to decide scope. Candidates: Dimension 2 (per-hit velocity/accent variation), Dimension 3 (swing), or custom sample hosting to unlock the remaining 10 fallbacks. The deferred items list above is the input for the next Planner scoping invocation.
