@@ -178,7 +178,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'Suggested tempo: 120–140 BPM.',
     sampleMap: {
       bd: 'bd',
-      hh: 'sd', // fallback: no native pandeiro/tamborim in @strudel/web@1.0.3
+      hh: 'hand', // hand percussion approximates pandeiro — no native pandeiro in Dirt-Samples
     },
   },
 

@@ -147,3 +147,68 @@ None.
 ### Environment state after this step
 
 No source files changed. `pnpm test` baseline at 1693 is unchanged.
+
+---
+
+## Step 03.3 — sampleMap Upgrade: bossa-nova-groove hh → hand
+
+**Date:** 2026-06-24
+**Iteration:** 1 of 5
+
+### Completed
+
+- Applied the single upgrade from inventory §3: `bossa-nova-groove` `hh` slot changed from `'sd'` to `'hand'`.
+- Updated the fallback comment in `rhythm-harmony-recipes.ts`: `// hand percussion approximates pandeiro — no native pandeiro in Dirt-Samples`.
+- Updated `tests/authentic-groove/sample-map.test.ts`: the per-genre assertion for `bossa-nova-groove` now asserts `{ bd: 'bd', hh: 'hand' }` (upgraded from `'sd'`). Added a comment noting this is a Phase 03 upgrade. The fixture comment in the `GENRE_RECIPE_IDS_WITH_SAMPLE_MAP` section also updated.
+- All other 10 fallback entries unchanged (per inventory §3: no authentic sample available for those slots).
+- Did NOT touch `recipe-engine.ts`, `apply.ts`, `autopilot.ts`, or any plumbing file.
+
+### Source prototype citation
+
+This step upgrades data in `rhythm-harmony-recipes.ts` — a pure data file introduced in orbifold-v2 (no prototype source in `reference/orbifold.html`). The `hand` folder is verified present in `tidalcycles/Dirt-Samples` strudel.json manifest (confirmed in Phase 03 inventory §1, 2026-06-24).
+
+### Files touched
+
+- `src/core/music-knowledge/rhythm-harmony-recipes.ts` (modified — `bossa-nova-groove` `sampleMap.hh` changed from `'sd'` to `'hand'`)
+- `tests/authentic-groove/sample-map.test.ts` (modified — per-genre assertion and fixture comment updated for `bossa-nova-groove`)
+- `docs/authentic-groove/handoffs/phase-03-handoff.md` (this file, new step entry)
+
+### Validation evidence (per Acceptance ID)
+
+- A-03-02 (partial): `bossa-nova-groove` `sampleMap.hh` = `'hand'` — confirmed by `vitest run sample-map` → 60 tests pass, including updated assertion.
+- A-03-03 (partial): all other 10 fallback entries unchanged — confirmed by existing assertions still passing.
+- A-03-04 (partial): `tsc --noEmit` clean; `pnpm test` → 1693 tests pass.
+
+### Routine validations
+
+- `pnpm exec tsc --noEmit` → clean (no output)
+- `pnpm exec vitest run sample-map` → 60 tests pass
+- `pnpm test` → 1693 tests pass, 33 test files pass, zero regressions
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-03-01 | `initAudio()` registers additional authentic sample folders | — (no new call; hand already in manifest) | proxy: manifest confirmed in inventory | partial — propagation confirmed in step 03.4 |
+| A-03-02 | Genre recipes carry authentic sample names in sampleMap | `tests/authentic-groove/sample-map.test.ts` | unit: fixture assertion | partial — propagation test in step 03.4 confirms codegen output |
+| A-03-03 | Recipes without available authentic name retain Phase 01 fallbacks | `tests/authentic-groove/sample-map.test.ts` | unit: fixture assertions (unchanged) | partial — step 03.4 propagation confirms |
+| A-03-04 | Full quality gate passes | pnpm test (1693) + tsc clean | live-system | partial — lint + build in step 03.4 |
+| A-03-05 | Seam grep clean | — | — | not yet covered (step 03.4) |
+
+### Decisions made (if any)
+
+None — change follows inventory §3 upgrade plan exactly.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `src/core/music-knowledge/rhythm-harmony-recipes.ts`: `bossa-nova-groove.sampleMap.hh = 'hand'`
+- `tests/authentic-groove/sample-map.test.ts`: 60 tests (1 updated assertion for bossa-nova)
+- `pnpm test` passes at 1693 — no regressions introduced.

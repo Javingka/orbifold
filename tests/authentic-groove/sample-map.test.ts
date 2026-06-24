@@ -51,7 +51,7 @@ const VERIFIED_SAMPLE_NAMES: readonly string[] = [
 //   latin-jazz-clave-swing           → { bd: 'bd', hh: 'cb' }
 //   rumba-blues-minor                → { bd: 'perc' }
 //   samba-afro-brasileiro            → { bd: 'bd', hh: 'sd' }
-//   bossa-nova-groove                → { bd: 'bd', hh: 'sd' }
+//   bossa-nova-groove                → { bd: 'bd', hh: 'hand' }  // Phase 03 upgrade: sd → hand
 //   cumbia-latina-groove             → { bd: 'perc' }
 //   candombe-dorian-groove           → { bd: 'perc' }
 //   buleria-flamenco-phrygian        → { bd: 'perc' }
@@ -172,9 +172,9 @@ describe('sampleMap — per-genre value assertions', () => {
     expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'sd' });
   });
 
-  it('bossa-nova-groove: bd → bd, hh → sd (sd for rhythmic character)', () => {
+  it('bossa-nova-groove: bd → bd, hh → hand (hand percussion approximates pandeiro — Phase 03 upgrade)', () => {
     const recipe = findRecipe('bossa-nova-groove');
-    expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'sd' });
+    expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'hand' });
   });
 
   it('cumbia-latina-groove: bd → perc (struck-membrane character)', () => {
