@@ -31,7 +31,8 @@
     setRhythmHint,
     setLastRecipeApplied,
   } from '../state/session.js';
-  import { startAutopilot, stopAutopilot } from '../agent/autopilot.js';
+  import { startAutopilot, stopAutopilot, applyRecipeById } from '../agent/autopilot.js';
+  import { getExpressibleRecipes } from '../core/music-knowledge/recipe-engine.js';
   import { RHYTHM_CATALOG } from '../core/music-knowledge/rhythm-catalog.js';
   import { agentCtx } from '../state/agentCtx.js';
   import {
@@ -119,6 +120,12 @@
     group.push(entry);
     families.set(entry.family, group);
   }
+
+  // Expressible recipes — static, computed once at module load (same pattern as families Map).
+  // getExpressibleRecipes() filters RHYTHM_HARMONY_RECIPES to entries whose every rhythmId
+  // passes the expressibility filter (euclid n≤16 or struct steps=16).
+  // Result: 14 of 15 catalog entries (buleria-flamenco-phrygian excluded — 12-step struct).
+  const expressibleRecipes = getExpressibleRecipes();
 
   /**
    * Toggle the config panel open/closed.
@@ -602,6 +609,24 @@
       {$t('agent.autofix')}
     </label>
   </div>
+
+  <!--
+    Recipe chip row — authentic-groove Phase 02 step 02.3.
+    Always visible (outside autopilot-section / autopilot.panelOpen gate).
+    One chip per expressible recipe; tapping applies rhythm + sampleMap + harmony
+    through applyRecipeById (ADR 0025 D4). No genre name or sample literal here.
+  -->
+  <div class="recipe-chips-row">
+    <span class="recipe-chips-label">Recipes:</span>
+    {#each expressibleRecipes as recipe (recipe.id)}
+      <button class="recipe-chip" on:click={() => applyRecipeById(recipe.id)}
+        >{recipe.name}</button
+      >
+    {/each}
+  </div>
+  {#if $sessionStore.lastRecipeApplied}
+    <span class="recipe-badge">Recipe: {$sessionStore.lastRecipeApplied.recipeName}</span>
+  {/if}
 
   <!--
     Autopilot section: expand/collapse chevron + config panel + play button + progress bar.
