@@ -163,6 +163,80 @@ function applyPlanStep(step: AgentOutput): boolean {
   return applied;
 }
 
+// ── applyRecipeById (public) ────────────────────────────────────────────────────
+
+/**
+ * Apply a recipe by ID through the same path as autopilot plan steps (ADR 0025 D4).
+ *
+ * Looks up the recipe via getRecipeById, converts it to an AgentOutput via
+ * recipeToAgentOutput, then calls applyRhythmSpec + applySampleMap +
+ * applyHarmonySpec + setLastRecipeApplied, and finally requeueLive().
+ *
+ * Returns true if the recipe was found and applied; false if the ID is unknown
+ * or the recipe is not expressible (recipeToAgentOutput returns null).
+ *
+ * No LLM call is made. Called from the UI recipe chip row.
+ *
+ * Call order:
+ *   1. applyRhythmSpec(engineOutput.rhythm)  — clears lastRecipeApplied (apply.ts)
+ *   2. applySampleMap(recipe.sampleMap ?? {}) — ADR 0025 D4
+ *   3. applyHarmonySpec(engineOutput.harmony) — clears lastRecipeApplied (apply.ts)
+ *   4. setLastRecipeApplied(display)          — re-sets badge (last write wins)
+ *   5. requeueLive()                          — re-evaluate at next cycle boundary
+ *   6. auto-play heuristic (same as tick() Path A)
+ */
+export function applyRecipeById(id: string): boolean {
+  // Step 1: look up recipe.
+  const recipe = getRecipeById(id);
+  if (recipe === undefined) return false;
+
+  // Step 2: convert to AgentOutput. Returns null for non-expressible recipes.
+  const engineOutput = recipeToAgentOutput(recipe);
+  if (engineOutput === null) return false;
+
+  // recipeToAgentOutput always populates both rhythm and harmony when non-null;
+  // the undefined guard keeps TypeScript strict-mode satisfied.
+  if (!engineOutput.rhythm || !engineOutput.harmony) return false;
+
+  // Step 3: apply rhythm (clears lastRecipeApplied badge).
+  applyRhythmSpec(engineOutput.rhythm);
+
+  // Step 4: overlay strudelSample from the recipe's sampleMap (ADR 0025 D4).
+  applySampleMap(recipe.sampleMap ?? {});
+
+  // Step 5: apply harmony (clears lastRecipeApplied badge again).
+  applyHarmonySpec(engineOutput.harmony);
+
+  // Step 6: re-set the badge — last write wins over the clears in steps 3 + 5.
+  const display: LastRecipeDisplay = {
+    recipeId: recipe.id,
+    recipeName: recipe.name,
+    rhythmIds: recipe.rhythmIds,
+    harmonyId: recipe.harmonyId,
+    density: recipe.density,
+  };
+  setLastRecipeApplied(display);
+
+  // Step 7: re-queue audio at next cycle boundary.
+  requeueLive();
+
+  // Step 8: auto-play if nothing is currently playing (same heuristic as tick() Path A).
+  const postState = get(sessionStore);
+  if (postState.nowPlaying.label === null) {
+    const hasRhythm = postState.rhythm.layers.length > 0;
+    const hasHarmony = postState.harmony.progression.length > 0;
+    if (hasRhythm && hasHarmony) {
+      playSession().catch(() => {});
+    } else if (hasRhythm) {
+      playGroove().catch(() => {});
+    } else if (hasHarmony) {
+      playProgression().catch(() => {});
+    }
+  }
+
+  return true;
+}
+
 // ── tick ───────────────────────────────────────────────────────────────────────
 
 /**

@@ -25,6 +25,7 @@ import {
   addBlock,
   renameBlock,
   addBlockAsNewTrack,
+  setLastRecipeApplied,
 } from '../state/session.js';
 import type { RhythmSpec, HarmonySpec, SaveAsBlockSpec } from './schema.js';
 
@@ -63,6 +64,10 @@ const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug'];
  * @param spec - Validated RhythmSpec (from AgentOutputSchema).
  */
 export function applyRhythmSpec(spec: RhythmSpec): void {
+  // Any manual or agent-driven rhythm change invalidates the active recipe badge.
+  // applyRecipeById re-sets it after calling this function (last write wins).
+  setLastRecipeApplied(null);
+
   const layers: RhythmLayer[] = [];
 
   for (const L of spec.layers) {
@@ -124,6 +129,10 @@ export function applyRhythmSpec(spec: RhythmSpec): void {
  * @param spec - Validated HarmonySpec (from AgentOutputSchema).
  */
 export function applyHarmonySpec(spec: HarmonySpec): void {
+  // Any manual or agent-driven harmony change invalidates the active recipe badge.
+  // applyRecipeById re-sets it after calling this function (last write wins).
+  setLastRecipeApplied(null);
+
   sessionStore.update((s) => {
     let { root: harmRoot, mode, octave, progression } = s.harmony;
 
