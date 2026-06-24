@@ -316,6 +316,146 @@ describe('A-01-04: slot absent from sampleMap → strudelSample undefined', () =
   });
 });
 
+// ── A-03-02: bossa-nova-groove recipe → sampleMap propagation ─────────────────
+//
+// bossa-nova-groove has rhythmIds: ['bossa-nova-clave'] — a single rhythm.
+// recipeToAgentOutput assigns sound: 'bd' (index 0) to the single layer.
+// The sampleMap is { bd: 'bd', hh: 'hand' }.
+//   - The 'bd' entry propagates: bd-slot layer gets strudelSample: 'bd'.
+//   - The 'hh' entry does NOT propagate: there is no hh layer in the output
+//     (single-layer recipe). applySampleMap carries no hh layer — it is
+//     inert for this recipe. The 'hh: hand' entry is held in the catalog for
+//     future use if an hh layer is added.
+//
+// This test confirms the applySampleMap propagation path is correct and that
+// the catalog value 'hand' flows to codegen for any hh slot if one exists.
+// The sample-map.test.ts test (step 03.3) already confirmed the catalog entry
+// bossa-nova-groove.sampleMap.hh === 'hand'. This test confirms:
+//   (a) the bd-slot propagation path is functional for bossa-nova-groove, and
+//   (b) applySampleMap handles a sampleMap with an entry for a missing layer
+//       gracefully (no error, no spurious layer created).
+//
+// Additionally: direct applySampleMap test with { hh: 'hand' } confirms 'hand'
+// flows to codegen output when an hh layer is present (A-03-01 full coverage).
+
+describe('A-03-02: bossa-nova-groove recipe → sampleMap propagation', () => {
+  it('applying bossa-nova-groove recipe → bd-slot layer carries strudelSample "bd"', () => {
+    const recipe = findRecipe('bossa-nova-groove');
+    // Single-layer recipe (bossa-nova-clave); sound index 0 = 'bd'.
+    // sampleMap: { bd: 'bd', hh: 'hand' } — bd entry applies; hh entry is inert (no hh layer).
+
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+
+    // Confirm exactly one layer with sound 'bd' (single-layer recipe).
+    const layersBefore = get(sessionStore).rhythm.layers;
+    expect(layersBefore.length).toBe(1);
+    expect(layersBefore[0].sound).toBe('bd');
+    expect(layersBefore[0].strudelSample).toBeUndefined();
+
+    applySampleMap(recipe.sampleMap ?? {});
+
+    // bd-slot carries strudelSample: 'bd' (identity mapping).
+    const layers = get(sessionStore).rhythm.layers;
+    expect(layers[0].sound).toBe('bd');
+    expect(layers[0].strudelSample).toBe('bd');
+  });
+
+  it('bossa-nova-groove has no hh layer — hh sampleMap entry is inert (A-03-02)', () => {
+    const recipe = findRecipe('bossa-nova-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+    applySampleMap(recipe.sampleMap ?? {});
+
+    // No hh layer exists — applySampleMap handles this gracefully (no error, no spurious layer).
+    const layers = get(sessionStore).rhythm.layers;
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeUndefined();
+  });
+
+  it('rhythmLayerToStrudelLine emits "bd" (via strudelSample) for bossa-nova bd-slot (A-03-02 codegen)', () => {
+    const recipe = findRecipe('bossa-nova-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    if (!bdLayer) return;
+
+    const line = rhythmLayerToStrudelLine(bdLayer);
+    // strudelSample: 'bd' emits 'bd' in the pattern (identity mapping confirmed via codegen).
+    expect(line).toContain('bd');
+  });
+});
+
+// ── A-03-01 (full): 'hand' value flows through applySampleMap + codegen ──────
+//
+// Confirms that the 'hand' value (upgraded from 'sd' in Phase 03) flows correctly
+// through the entire plumbing stack when an hh layer is present.
+// Uses a direct applySampleMap call (not recipe-based) to construct the scenario
+// where an hh layer exists with strudelSample: 'hand'.
+
+describe('A-03-01 (full): "hand" value flows from sampleMap through applySampleMap to codegen', () => {
+  it('applySampleMap({ hh: "hand" }) sets strudelSample "hand" on hh layer (A-03-01)', () => {
+    sessionStore.update((s) => ({
+      ...s,
+      rhythm: {
+        ...s.rhythm,
+        layers: [
+          { sound: 'bd' as const, steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+          { sound: 'hh' as const, steps: [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0] },
+        ],
+      },
+    }));
+
+    applySampleMap({ hh: 'hand' });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.strudelSample).toBe('hand');
+    // bd-slot unaffected (not in sampleMap).
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer?.strudelSample).toBeUndefined();
+  });
+
+  it('rhythmLayerToStrudelLine emits "hand" for hh layer with strudelSample "hand" (A-03-01 codegen)', () => {
+    sessionStore.update((s) => ({
+      ...s,
+      rhythm: {
+        ...s.rhythm,
+        layers: [{ sound: 'hh' as const, steps: [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0] }],
+      },
+    }));
+
+    applySampleMap({ hh: 'hand' });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.strudelSample).toBe('hand');
+    if (!hhLayer) return;
+
+    const line = rhythmLayerToStrudelLine(hhLayer);
+    // 'hand' is emitted, not generic 'hh'.
+    expect(line).toContain('hand');
+    expect(line).not.toMatch(/s\("hh/);
+    // Old fallback 'sd' is not emitted.
+    expect(line).not.toMatch(/s\("sd/);
+  });
+});
+
 // ── A-01-04: recipe with no sampleMap → no layer carries strudelSample ────────
 
 describe('A-01-04: no-regression — recipe with no sampleMap yields no strudelSample', () => {
