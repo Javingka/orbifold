@@ -619,9 +619,7 @@
   <div class="recipe-chips-row">
     <span class="recipe-chips-label">Recipes:</span>
     {#each expressibleRecipes as recipe (recipe.id)}
-      <button class="recipe-chip" on:click={() => applyRecipeById(recipe.id)}
-        >{recipe.name}</button
-      >
+      <button class="recipe-chip" on:click={() => applyRecipeById(recipe.id)}>{recipe.name}</button>
     {/each}
   </div>
   {#if $sessionStore.lastRecipeApplied}

@@ -255,3 +255,138 @@ None.
 ### Environment state after this step
 
 `src/ui/AgentPanel.svelte` and `src/app/app.css` modified. `tsc --noEmit` clean. `pnpm test` 1693/1693. `pnpm build` succeeds. Step 02.4 (seam fitness check + full quality gate) is next.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-23. Iteration: 1 of 5.
+A-02-01: chip row present at lines 619–626, outside `{#if autopilot.panelOpen}`, iterating `expressibleRecipes` (14 entries). A-02-02: `on:click={() => applyRecipeById(recipe.id)}` wiring confirmed at line 622. A-02-07: badge template confirmed at lines 627–629, correctly gated on `$sessionStore.lastRecipeApplied` and rendering `.recipeName`. CSS deviation (app.css instead of style block) is consistent with the project's established pattern — `AgentPanel.svelte` has no `<style>` block at all; `.preset-chip`, `.autopilot-section`, and `.recipe-card` all live in app.css. Seam holds: no genre name or sample literal in template or script; `recipe.id` is passed only as a function argument and not rendered. No new i18n keys. `tsc --noEmit` clean; `pnpm test` 1693/1693; `pnpm build` succeeds. Acceptance Coverage Table complete and non-hand-waved.
+Next action: Dev proceeds to step 02.4
+
+---
+
+## Step 02.4 — Seam fitness check + full quality gate
+
+**Date:** 2026-06-23
+**Commit(s):** `chore(authentic-groove): Phase 02 step 02.4 — seam fitness check + quality gate`
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read inventory §4 (extended seam grep); confirmed no change to grep command is needed — `--include="*.svelte"` already covers AgentPanel.svelte.
+- Confirmed steps 02.2 and 02.3 are APPROVED in this handoff file.
+- Read ADR 0025 D3 for the seam invariant definition.
+- Fixed Prettier formatting issues in `src/ui/AgentPanel.svelte` and `tests/authentic-groove/apply-recipe-by-id.test.ts` (2 files reformatted; lint now clean).
+- Ran all four quality gate commands; all pass.
+
+### Seam fitness check (AG-D1 / ADR 0025 D3)
+
+**Command 1 — Genre name seam grep (ADR 0025 D3 verbatim, extended to `.svelte` files):**
+
+```bash
+git grep -n \
+  -e "'cumbia'" -e '"cumbia"' \
+  -e "'cueca'" -e '"cueca"' \
+  -e "'candombe'" -e '"candombe"' \
+  -e "'samba'" -e '"samba"' \
+  -e "'flamenco'" -e '"flamenco"' \
+  -e "'milonga'" -e '"milonga"' \
+  -e "'maqsum'" -e '"maqsum"' \
+  -e "'baladi'" -e '"baladi"' \
+  -- 'src/' \
+  ':(exclude)src/core/music-knowledge/' \
+  ':(exclude)tests/'
+```
+
+Output: (empty — zero matches) ✓
+
+**Command 2 — Sample-name literals scoped to `src/ui/` (Phase 01 phase spec requirement):**
+
+```bash
+git grep -n -E "'(perc|cb|bd|sd|tabla|east|hand)'|\"(perc|cb|bd|sd|tabla|east|hand)\"" -- src/ui/AgentPanel.svelte
+```
+
+Output (AgentPanel.svelte only): (empty — zero matches) ✓
+
+Note: A broader grep over all `src/ui/` files returns two pre-existing hits in `Header.svelte` (lines 440–441: `<option value="bd">bd</option>` and `<option value="sd">sd</option>`). These are abstract `Sound` role selector values (`bd`, `sd` are `Sound` union members from the drum-function vocabulary), not genre-specific Strudel sample-name literals from Phase 01's sampleMap catalog. They pre-date Phase 01 and Phase 02 and do not constitute a seam violation — the seam invariant (ADR 0025 D3) prohibits genre-specific sample mapping knowledge in the UI, not use of `Sound` role values in UI selectors. The new AgentPanel.svelte changes introduced zero genre names and zero sample literals.
+
+### Full quality gate
+
+**`pnpm exec tsc --noEmit`:**
+
+```
+(no output — exit code 0)
+```
+✓ Clean
+
+**`pnpm lint`:**
+
+```
+> orbifold@0.0.1 lint
+> eslint . && prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+```
+✓ Clean (after Prettier auto-format of 2 files)
+
+**`pnpm test`:**
+
+```
+ Test Files  33 passed (33)
+      Tests  1693 passed (1693)
+   Start at  22:44:00
+   Duration  1.22s
+```
+✓ 1693 tests, no regressions. Breakdown: 1673 prior baseline + 20 new from step 02.2.
+
+**`pnpm build`:**
+
+```
+dist/index.html                     2.32 kB │ gzip:   1.25 kB
+dist/assets/index-DbPFXRvC.css     36.96 kB │ gzip:   7.19 kB
+dist/assets/index-D8uO8lLn.js   1,189.42 kB │ gzip: 373.33 kB
+✓ built in 2.25s
+```
+✓ Succeeds. Chunk-size and dynamic-import warnings are pre-existing; unrelated to this phase.
+
+### Reversibility / flag-off note
+
+- Removing the recipe chip row and badge (reverting `AgentPanel.svelte`) restores prior behavior with no other change; `applyRecipeById` in `autopilot.ts` is inert without a caller.
+- Reverting the `applyRhythmSpec`/`applyHarmonySpec` invalidation calls in `apply.ts` restores the prior badge non-clearing behavior; `lastRecipeApplied` was already ephemeral before this phase.
+- `applyRecipeById` with an unrecognized ID is a silent no-op (returns false, no store mutation).
+- Pre-Phase-02 sessions have no recipe-chip state; loading them is unchanged (no new persisted field added in this phase).
+- The autopilot `applyPlanStep` path is unchanged — the autopilot continues to work identically whether or not the recipe chips are used.
+
+### Files touched
+
+- `src/ui/AgentPanel.svelte` (Prettier auto-format)
+- `tests/authentic-groove/apply-recipe-by-id.test.ts` (Prettier auto-format)
+- `docs/authentic-groove/handoffs/phase-02-handoff.md` (this file)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Validation method | Coverage status |
+|---|---|---|---|
+| A-02-05 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` ≥ 1673 + new tests; `pnpm build` succeeds | operability — recorded above | **covered** (full) |
+| A-02-06 | No genre name or sample-name literal outside `src/core/music-knowledge/`, including the new UI changes | seam grep recorded above | **covered** (full) |
+| A-02-01 | Recipe chip row visible; one chip per expressible recipe (14) | pnpm build success + code review (step 02.3) | covered (prior step) |
+| A-02-02 | Tapping a chip calls `applyRecipeById` with correct recipe ID | code review (step 02.3) | covered (prior step) |
+| A-02-03 | cumbia bd-slot carries `strudelSample: 'perc'`; codegen emits authentic sample names | unit tests (step 02.2) | covered (prior step) |
+| A-02-04 | `applyRecipeById` returns false for unknown/non-expressible IDs | unit tests (step 02.2) | covered (prior step) |
+| A-02-07 | Badge renders recipeName when set; `applyRhythmSpec`/`applyHarmonySpec` clears it | unit tests (step 02.2) + code review (step 02.3) | covered (prior steps) |
+
+### Decisions made (if any)
+
+Prettier auto-format of `AgentPanel.svelte` and `apply-recipe-by-id.test.ts` — no logic changes, whitespace/style normalization only. Treated as a transient environment fix (lint gate), not a structural decision.
+
+### Proposed Decisions Register entries (if any)
+
+None.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+All four quality gate commands pass clean. 1693 tests. Phase 02 is complete. All seven acceptance criteria covered.

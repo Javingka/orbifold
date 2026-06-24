@@ -179,9 +179,7 @@ describe('badge invalidation — direct applyRhythmSpec clears lastRecipeApplied
     // Now simulate a manual rhythm change via applyRhythmSpec directly.
     // This represents a user or agent changing rhythm without going through applyRecipeById.
     applyRhythmSpec({
-      layers: [
-        { sound: 'sd', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
-      ],
+      layers: [{ sound: 'sd', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] }],
     });
 
     // Badge must be cleared — session has diverged from the recipe.
