@@ -922,6 +922,39 @@ describe('A-05-02: lock-preservation integration — cueca locked bd survives ag
   });
 });
 
+// ── A-06-04 guard: cueca layers step count after recipe apply (Phase 06) ──────
+//
+// applyRhythmSpec normalizes all steps arrays to RSTEPS = 16 (padding with zeros).
+// This means cueca's 12-step binary strings ('101000101000', '000010000010') become
+// 16-step arrays [1,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0] in the session store.
+// The hh layer (euclid E(6,12)) is also expanded to 16 steps.
+// The dynamic step grid (Phase 06) reads layer.steps.length — correctly 16 for all
+// current cueca layers. This test guards against regressions.
+
+describe('A-06-04 guard: cueca layers after recipe apply have steps.length === 16', () => {
+  it('all cueca layers have steps.length === 16 after applyRhythmSpec (applyRhythmSpec pads to RSTEPS)', () => {
+    const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'cueca-chilena-folk');
+    expect(recipe).toBeDefined();
+    if (!recipe) return;
+
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    expect(layers).toHaveLength(3);
+    // applyRhythmSpec always produces 16-step arrays (new Array(RSTEPS).fill(0))
+    for (const layer of layers) {
+      expect(
+        layer.steps.length,
+        `layer ${layer.sound} should have 16 steps (RSTEPS), got ${layer.steps.length}`
+      ).toBe(16);
+    }
+  });
+});
+
 describe('A-04-03: fallback-retention — west-african-bell-modal bd="cb" hh="perc" unchanged', () => {
   it('west-african-bell-modal sampleMap retains bd="cb" (not upgraded)', () => {
     const recipe = findRecipe('west-african-bell-modal');

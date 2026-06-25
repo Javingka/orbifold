@@ -37,8 +37,10 @@ vi.mock('../../src/state/session.js', async (importOriginal) => {
 });
 
 import { sessionStore, DEFAULT_SESSION_STATE } from '../../src/state/session.js';
+import { applyRhythmSpec, applyLockedFlags } from '../../src/agent/apply.js';
 import { applyRecipeById } from '../../src/agent/autopilot.js';
 import { RHYTHM_HARMONY_RECIPES } from '../../src/core/music-knowledge/rhythm-harmony-recipes.js';
+import { recipeToAgentOutput } from '../../src/core/music-knowledge/recipe-engine.js';
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -176,5 +178,87 @@ describe('A-06-02: applyRecipeById — recipe without defaultCpm leaves bpm unch
     sessionStore.update((s) => ({ ...s, bpm: 100 }));
     applyRecipeById('pop-rock-backbeat');
     expect(get(sessionStore).bpm).toBe(100);
+  });
+});
+
+// ── Integration tests (A-06-02 full, step 06.4) ──────────────────────────────
+
+describe('A-06-02 integration: cumbia on store with cueca locked layers', () => {
+  it('applying cumbia over prior cueca state: BPM = 120, locked layers replaced (force: true)', () => {
+    // Step 1: set up cueca locked layers in the store (simulates prior recipe application)
+    const cuecaRecipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'cueca-chilena-folk');
+    expect(cuecaRecipe).toBeDefined();
+    if (!cuecaRecipe) return;
+
+    const cuecaOutput = recipeToAgentOutput(cuecaRecipe);
+    expect(cuecaOutput).not.toBeNull();
+    if (!cuecaOutput) return;
+
+    applyRhythmSpec(cuecaOutput.rhythm, { force: true });
+    const cuecaLockedSounds = (cuecaRecipe.layers ?? [])
+      .filter((l) => l.locked === true)
+      .map((l) => l.sound);
+    applyLockedFlags(cuecaLockedSounds);
+
+    // Confirm cueca bd layer is locked
+    const layersAfterCueca = get(sessionStore).rhythm.layers;
+    const cuecaBd = layersAfterCueca.find((l) => l.sound === 'bd');
+    expect(cuecaBd?.locked).toBe(true);
+
+    // Set a non-default BPM to confirm cumbia overrides it
+    sessionStore.update((s) => ({ ...s, bpm: 160 }));
+    expect(get(sessionStore).bpm).toBe(160);
+
+    // Step 2: apply cumbia (force: true replaces ALL layers including cueca's locked bd)
+    const result = applyRecipeById('cumbia-latina-groove');
+    expect(result).toBe(true);
+
+    // BPM updated to 120 (cumbia defaultCpm: 30 → 30 * 4 = 120)
+    expect(get(sessionStore).bpm).toBe(120);
+
+    // Cueca locked bd was replaced — cumbia bd is now present (locked)
+    const layersAfterCumbia = get(sessionStore).rhythm.layers;
+    const cumbiaBd = layersAfterCumbia.find((l) => l.sound === 'bd');
+    expect(cumbiaBd).toBeDefined();
+    expect(cumbiaBd?.locked).toBe(true);
+    // Cumbia layers are 16-step (applyRhythmSpec pads all to RSTEPS = 16)
+    expect(layersAfterCumbia.every((l) => l.steps.length === 16)).toBe(true);
+  });
+});
+
+describe('A-06-02 integration: cueca recipe apply — BPM 160, layers confirmed', () => {
+  it('applying cueca: BPM = 160, 3 layers present with steps.length === 16', () => {
+    // applyRhythmSpec pads all steps arrays to RSTEPS = 16.
+    // Cueca recipe has 3 layers (bd: 12-step binary, cp: 12-step binary, hh: euclid E(6,12)).
+    // After applyRhythmSpec, all 3 layers have steps.length === 16 (padded with zeros).
+    const result = applyRecipeById('cueca-chilena-folk');
+    expect(result).toBe(true);
+
+    // BPM set to 160 (defaultCpm: 40 → 40 * 4 = 160)
+    expect(get(sessionStore).bpm).toBe(160);
+
+    const layers = get(sessionStore).rhythm.layers;
+    expect(layers).toHaveLength(3);
+
+    // All layers have steps.length === 16 (applyRhythmSpec normalizes to RSTEPS)
+    expect(layers.every((l) => l.steps.length === 16)).toBe(true);
+
+    // bd layer is locked (cultural signature)
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer?.locked).toBe(true);
+
+    // cp and hh are NOT locked
+    const cpLayer = layers.find((l) => l.sound === 'cp');
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(cpLayer?.locked).toBeUndefined();
+    expect(hhLayer?.locked).toBeUndefined();
+  });
+});
+
+describe('A-06-02 integration: no-tempo recipe leaves bpm unchanged', () => {
+  it('applying dorian-ritual-sparse (no defaultCpm) leaves bpm at 90', () => {
+    sessionStore.update((s) => ({ ...s, bpm: 90 }));
+    applyRecipeById('dorian-ritual-sparse');
+    expect(get(sessionStore).bpm).toBe(90);
   });
 });

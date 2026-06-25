@@ -25,12 +25,9 @@ import { COL, FONT_SERIF, FONT_MONO } from './theme.js';
 
 // ── Module-level geometry / dynamic state ────────────────────────────────────
 
-/**
- * Base step count for geometry and playhead fallback.
- * Per-layer rendering uses `layer.steps.length` instead (Phase 06).
- * Prototype: RSTEPS = 16.
- */
-const RSTEPS = 16;
+// Phase 06: RSTEPS = 16 was removed — per-layer rendering uses `layer.steps.length`.
+// The constant RSTEPS in src/core/rhythm/euclid.ts still governs applyRhythmSpec
+// normalization (all stored step arrays remain 16 elements). Prototype: RSTEPS = 16.
 
 /**
  * Per-layer geometry: polar and linear positions per step, label anchors.
