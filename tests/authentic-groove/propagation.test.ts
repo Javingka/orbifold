@@ -26,7 +26,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 
 import { sessionStore, DEFAULT_SESSION_STATE } from '../../src/state/session.js';
-import { applyRhythmSpec, applySampleMap } from '../../src/agent/apply.js';
+import { applyRhythmSpec, applySampleMap, applyLockedFlags } from '../../src/agent/apply.js';
 import { recipeToAgentOutput } from '../../src/core/music-knowledge/recipe-engine.js';
 import { RHYTHM_HARMONY_RECIPES } from '../../src/core/music-knowledge/rhythm-harmony-recipes.js';
 import { rhythmLayerToStrudelLine } from '../../src/core/rhythm/layers.js';
@@ -674,6 +674,253 @@ describe('A-04-02: rumba recipe → strudelSample "wood" propagation', () => {
 // original fallback values unchanged. The west-african bell patterns use 'cb'
 // for bd (metal bell → cowbell is closer than clave) and 'perc' for hh
 // (generic percussion is the best available approximation for agogo/gankogui).
+
+// ── A-05-07 / A-05-05: cueca multi-layer recipe (Phase 05) ───────────────────
+//
+// cueca-chilena-folk now declares 3 layers via recipe.layers[]:
+//   bd (locked), cp (free, 12-step palmas), hh (free, E(6,12)).
+// recipeToAgentOutput uses layers[i].sound — NOT index-based soundForIndex().
+// After applyRhythmSpec + applyLockedFlags, the session has:
+//   bd with locked: true, cp with locked: undefined, hh with locked: undefined.
+
+describe('A-05-07: cueca multi-layer recipe — 3 layers with correct sounds', () => {
+  it('recipeToAgentOutput for cueca produces 3 rhythm layers (A-05-05)', () => {
+    const recipe = findRecipe('cueca-chilena-folk');
+    expect(recipe.layers).toBeDefined();
+    expect(recipe.layers?.length).toBe(3);
+
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    expect(output.rhythm.layers).toHaveLength(3);
+  });
+
+  it('cueca output layers have sounds bd, cp, hh per recipe.layers[i].sound (A-05-05)', () => {
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    const sounds = output.rhythm.layers.map((l) => l.sound);
+    expect(sounds).toContain('bd');
+    expect(sounds).toContain('cp');
+    expect(sounds).toContain('hh');
+  });
+
+  it('cueca bd layer is locked after applyRhythmSpec + applyLockedFlags (A-05-03 full)', () => {
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    // Simulate recipe application path (force: true + lockedFlags).
+    applyRhythmSpec(output.rhythm, { force: true });
+    const lockedSounds = (recipe.layers ?? []).filter((l) => l.locked === true).map((l) => l.sound);
+    applyLockedFlags(lockedSounds);
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer?.locked).toBe(true);
+
+    // cp and hh are NOT locked (Pilot-confirmed: only bd is locked in cueca)
+    const cpLayer = layers.find((l) => l.sound === 'cp');
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(cpLayer?.locked).toBeUndefined();
+    expect(hhLayer?.locked).toBeUndefined();
+  });
+
+  it('cueca codegen: each layer emits its generic sound (no sampleMap, A-05-07)', () => {
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    expect(layers).toHaveLength(3);
+
+    for (const layer of layers) {
+      const line = rhythmLayerToStrudelLine(layer);
+      // No sampleMap → emits generic sound.
+      expect(line).toContain(layer.sound);
+      expect(layer.strudelSample).toBeUndefined();
+    }
+  });
+});
+
+// ── A-05-07 / A-05-05: cumbia multi-layer recipe (Phase 05) ──────────────────
+//
+// cumbia-latina-groove now declares 2 layers via recipe.layers[]:
+//   bd (locked, conga caja), hh (locked, shaker/guacharaca).
+// Both layers carry strudelSample (conga, shaker) in the recipe declaration.
+// After applyRhythmSpec + applySampleMap + applyLockedFlags:
+//   bd.strudelSample = 'conga', hh.strudelSample = 'shaker', both locked.
+
+describe('A-05-07: cumbia multi-layer recipe — 2 locked layers with shaker (A-05-05 full)', () => {
+  it('recipeToAgentOutput for cumbia produces 2 rhythm layers', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    expect(recipe.layers).toBeDefined();
+    expect(recipe.layers?.length).toBe(2);
+
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    expect(output.rhythm.layers).toHaveLength(2);
+  });
+
+  it('cumbia output layers have sounds bd and hh per recipe.layers[i].sound (A-05-05)', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    const sounds = output.rhythm.layers.map((l) => l.sound);
+    expect(sounds).toContain('bd');
+    expect(sounds).toContain('hh');
+  });
+
+  it('cumbia bd and hh both locked after applyRhythmSpec + applyLockedFlags (A-05-07 full)', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    const lockedSounds = (recipe.layers ?? []).filter((l) => l.locked === true).map((l) => l.sound);
+    applyLockedFlags(lockedSounds);
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+
+    expect(bdLayer?.locked).toBe(true);
+    expect(hhLayer?.locked).toBe(true);
+  });
+
+  it('cumbia bd layer gets strudelSample "conga" after applySampleMap (A-05-07 sampleMap)', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer?.strudelSample).toBe('conga');
+  });
+
+  it('cumbia hh layer gets strudelSample "shaker" after applySampleMap (A-05-08 shaker)', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(hhLayer?.strudelSample).toBe('shaker');
+  });
+
+  it('cumbia codegen: "conga" emitted for bd, "shaker" emitted for hh (A-05-07 codegen)', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(bdLayer).toBeDefined();
+    expect(hhLayer).toBeDefined();
+    if (!bdLayer || !hhLayer) return;
+
+    const bdLine = rhythmLayerToStrudelLine(bdLayer);
+    const hhLine = rhythmLayerToStrudelLine(hhLayer);
+
+    expect(bdLine).toContain('conga');
+    expect(hhLine).toContain('shaker');
+  });
+});
+
+// ── A-05-02: lock-preservation integration (Phase 05) ────────────────────────
+//
+// After a cueca recipe is applied (bd locked), calling applyRhythmSpec directly
+// with a new bd spec must NOT replace the locked bd layer.
+// The locked bd remains; the unlocked cp and hh are dropped (replaced by the
+// spec's proposed layers if any, but here we only propose bd — which is blocked).
+
+describe('A-05-02: lock-preservation integration — cueca locked bd survives agent call', () => {
+  it('locked bd survives a direct applyRhythmSpec targeting bd (A-05-02 full)', () => {
+    // Step 1: Apply cueca recipe (sets bd as locked).
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    const lockedSounds = (recipe.layers ?? []).filter((l) => l.locked === true).map((l) => l.sound);
+    applyLockedFlags(lockedSounds);
+
+    // Confirm bd is locked.
+    const layersAfterRecipe = get(sessionStore).rhythm.layers;
+    const bdAfterRecipe = layersAfterRecipe.find((l) => l.sound === 'bd');
+    expect(bdAfterRecipe?.locked).toBe(true);
+
+    // Step 2: Agent proposes a new bd pattern (all-ones — different from cueca kick).
+    applyRhythmSpec({
+      layers: [{ sound: 'bd', steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }],
+    });
+
+    // Step 3: Confirm bd still has the original cueca kick (steps[1] should be 0 in cueca E(4,12)).
+    const layersAfterAgent = get(sessionStore).rhythm.layers;
+    const bdAfterAgent = layersAfterAgent.find((l) => l.sound === 'bd');
+    expect(bdAfterAgent?.locked).toBe(true);
+    // The all-ones proposal was blocked — cueca kick has some zero steps.
+    // In cueca E(4,12) mapped to 16 steps, step[1] = 0 (onset at 0 only among first 4 steps).
+    if (bdAfterAgent?.steps) {
+      // The cueca base has 4 onsets in 16 steps; at least one of steps 1,2,3 should be 0.
+      const firstFour = bdAfterAgent.steps.slice(0, 4);
+      expect(firstFour.some((v) => v === 0)).toBe(true);
+    }
+  });
+
+  it('agent can add a NEW unlocked layer even when locked layers exist (A-05-02 full)', () => {
+    // Apply cueca recipe (bd locked).
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    const lockedSounds = (recipe.layers ?? []).filter((l) => l.locked === true).map((l) => l.sound);
+    applyLockedFlags(lockedSounds);
+
+    // Agent proposes an sd layer (new sound, not locked).
+    applyRhythmSpec({
+      layers: [{ sound: 'sd', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] }],
+    });
+
+    const layers = get(sessionStore).rhythm.layers;
+    // bd (locked) still present.
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer?.locked).toBe(true);
+    // sd (new unlocked) is present.
+    const sdLayer = layers.find((l) => l.sound === 'sd');
+    expect(sdLayer).toBeDefined();
+    expect(sdLayer?.locked).toBeUndefined();
+  });
+});
 
 describe('A-04-03: fallback-retention — west-african-bell-modal bd="cb" hh="perc" unchanged', () => {
   it('west-african-bell-modal sampleMap retains bd="cb" (not upgraded)', () => {

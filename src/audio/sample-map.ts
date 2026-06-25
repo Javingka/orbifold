@@ -26,7 +26,7 @@ export function buildSampleMap(base: string): Record<string, string[]> {
     cajon: ['cajon_0', 'cajon_1', 'cajon_2', 'cajon_3'].map((f) => `${b}samples/${f}.ogg`),
     wood: ['wood_0', 'wood_1', 'wood_2', 'wood_3'].map((f) => `${b}samples/${f}.ogg`),
     // Phase 05: FreePats EggShaker (CC0) — 4 fast-attack samples for round-robin variety.
-    // Used as the guacharaca/shaker layer in the cumbia recipe (hh slot).
+    // Palette name only; genre assignment lives in src/core/music-knowledge/ (AG-D1).
     shaker: ['shaker_0', 'shaker_1', 'shaker_2', 'shaker_3'].map((f) => `${b}samples/${f}.ogg`),
   };
 }
