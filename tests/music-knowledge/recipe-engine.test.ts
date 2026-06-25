@@ -267,17 +267,21 @@ describe('recipeToAgentOutput — OD-2 steps16 path (A-03-05)', () => {
     }
   });
 
-  // 'rumba-blues-minor' uses 'rumba-clave-3-2' (struct, steps=16)
-  it('rumba-blues-minor: layer 0 has steps of length 16 matching binary', () => {
+  // 'rumba-blues-minor' (Phase 08: now has recipe.layers — bd binary '1001000100101000')
+  it('rumba-blues-minor: layer 0 has steps of length 16 matching recipe.layers[0].binary (Phase 08)', () => {
     const recipe = requireRecipe('rumba-blues-minor');
-    const rhythmEntry = requireRhythmEntry('rumba-clave-3-2');
-    expect(rhythmEntry.steps).toBe(16);
+    // Phase 08: recipe.layers added; recipeToAgentOutput uses layers path.
+    // The recipe.layers[0].binary ('1001000100101000') differs from
+    // the catalog entry rumba-clave-3-2.binary — the recipe binary is authoritative (A-08-02).
+    expect(recipe.layers).toBeDefined();
+    expect(recipe.layers?.[0].binary).toBe('1001000100101000');
 
     const layers = requireLayers(recipe);
     const layer0 = layers[0];
     expect('steps' in layer0).toBe(true);
     if ('steps' in layer0) {
-      expect(layer0.steps).toEqual(rhythmEntry.binary.split('').map(Number));
+      expect(layer0.steps.length).toBe(16);
+      expect(layer0.steps).toEqual('1001000100101000'.split('').map(Number));
     }
   });
 });
@@ -287,27 +291,30 @@ describe('recipeToAgentOutput — OD-2 steps16 path (A-03-05)', () => {
 // ---------------------------------------------------------------------------
 
 describe('recipeToAgentOutput — multi-layer recipes', () => {
-  // 'latin-jazz-clave-swing' has rhythmIds: ['son-clave-2-3', 'cascara-euclid']
-  // son-clave-2-3 → steps16, cascara-euclid → euclid
-  it('latin-jazz-clave-swing: 2 layers, layer 0 steps16 (son-clave-2-3), layer 1 euclid (cascara-euclid)', () => {
+  // 'latin-jazz-clave-swing' (Phase 08: now has recipe.layers — bd and hh binary patterns)
+  it('latin-jazz-clave-swing: 2 layers, both steps16 from recipe.layers binaries (Phase 08)', () => {
     const recipe = requireRecipe('latin-jazz-clave-swing');
     expect(recipe.rhythmIds).toEqual(['son-clave-2-3', 'cascara-euclid']);
+    // Phase 08: recipe.layers added; recipeToAgentOutput uses layers path (not catalog).
+    expect(recipe.layers).toBeDefined();
+    expect(recipe.layers?.length).toBe(2);
 
     const layers = requireLayers(recipe);
     expect(layers.length).toBe(2);
 
-    // Layer 0 (son-clave-2-3): steps16
+    // Layer 0 (bd — son clave 2-3): steps16 from recipe.layers[0].binary
     expect('steps' in layers[0]).toBe(true);
     if ('steps' in layers[0]) {
       expect(layers[0].steps.length).toBe(16);
+      expect(layers[0].steps).toEqual('1000101001001000'.split('').map(Number));
     }
 
-    // Layer 1 (cascara-euclid): euclid E(10,16,0)
-    expect('euclid' in layers[1]).toBe(true);
-    if ('euclid' in layers[1]) {
-      expect(layers[1].euclid.k).toBe(10);
-      expect(layers[1].euclid.n).toBe(16);
-      expect(layers[1].euclid.rot).toBe(0);
+    // Layer 1 (hh — cascara 2-3): steps16 from recipe.layers[1].binary
+    // (Phase 08: no euclid params on this layer — emits as steps, not euclid)
+    expect('steps' in layers[1]).toBe(true);
+    if ('steps' in layers[1]) {
+      expect(layers[1].steps.length).toBe(16);
+      expect(layers[1].steps).toEqual('0110101010101101'.split('').map(Number));
     }
   });
 

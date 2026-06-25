@@ -324,17 +324,19 @@ describe('recipeToAgentOutput — A-05-05 (partial)', () => {
     expect(output.rhythm.layers[0].sound).toBe('bd');
   });
 
-  it('recipe without layers: index-based sound assignment works (backward-compat)', () => {
+  it('recipe with layers uses layers[i].sound (Phase 08: latin-jazz-clave-swing now has layers)', () => {
+    // Phase 08: latin-jazz-clave-swing now has self-contained layers (bd clave + hh cascara).
+    // recipeToAgentOutput uses the layers path; both layers emit via binary.
     const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'latin-jazz-clave-swing');
     expect(recipe).toBeDefined();
     if (!recipe) return;
-    expect(recipe.layers).toBeUndefined();
+    expect(recipe.layers).toBeDefined(); // Phase 08: layers added
 
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
     if (!output) return;
 
-    // latin-jazz-clave-swing: 2 rhythmIds → sounds bd (index 0), hh (index 1).
+    // Phase 08: latin-jazz-clave-swing has 2 layers with sounds from recipe.layers[i].sound.
     expect(output.rhythm.layers).toHaveLength(2);
     expect(output.rhythm.layers[0].sound).toBe('bd');
     expect(output.rhythm.layers[1].sound).toBe('hh');

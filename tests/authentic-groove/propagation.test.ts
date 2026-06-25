@@ -1158,6 +1158,73 @@ describe('A-07-05 e2e: agent backward-compat — 16-step agent output → steps.
   });
 });
 
+// ── Step 08.1: Afro-Cuban clave family binary assertions ──────────────────────
+
+describe('Step 08.1: Afro-Cuban clave family binary assertions', () => {
+  it('A-08-01: afro-cuban-clave-minor bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('afro-cuban-clave-minor');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1001001000101000');
+    expect(bdLayer?.steps).toBe(16);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-01: afro-cuban-clave-minor hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('afro-cuban-clave-minor');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('0101010110101010');
+    expect(hhLayer?.steps).toBe(16);
+    expect(hhLayer?.locked).toBe(false);
+  });
+
+  it('A-08-02: rumba-blues-minor bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('rumba-blues-minor');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1001000100101000');
+    expect(bdLayer?.steps).toBe(16);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-03: latin-jazz-clave-swing bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('latin-jazz-clave-swing');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1000101001001000');
+    expect(bdLayer?.steps).toBe(16);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-03: latin-jazz-clave-swing hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('latin-jazz-clave-swing');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('0110101010101101');
+    expect(hhLayer?.steps).toBe(16);
+    expect(hhLayer?.locked).toBe(true);
+  });
+
+  it('A-08-16: afro-cuban-clave-minor defaultCpm === 25', () => {
+    const recipe = findRecipe('afro-cuban-clave-minor');
+    expect(recipe.defaultCpm).toBe(25);
+  });
+
+  it('A-08-16: rumba-blues-minor defaultCpm === 25', () => {
+    const recipe = findRecipe('rumba-blues-minor');
+    expect(recipe.defaultCpm).toBe(25);
+  });
+
+  it('A-08-16: latin-jazz-clave-swing defaultCpm === 42', () => {
+    const recipe = findRecipe('latin-jazz-clave-swing');
+    expect(recipe.defaultCpm).toBe(42);
+  });
+});
+
 describe('A-04-03: fallback-retention — west-african-bell-modal bd="cb" hh="perc" unchanged', () => {
   it('west-african-bell-modal sampleMap retains bd="cb" (not upgraded)', () => {
     const recipe = findRecipe('west-african-bell-modal');

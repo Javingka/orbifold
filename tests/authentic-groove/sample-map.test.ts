@@ -72,6 +72,7 @@ const GENRE_RECIPE_IDS_WITH_SAMPLE_MAP = [
   'cumbia-latina-groove',
   'candombe-dorian-groove',
   'buleria-flamenco-phrygian',
+  'afro-cuban-clave-minor', // Phase 08: sampleMap added { bd: 'wood', hh: 'conga' }
 ] as const;
 
 // ── Generic recipes that must NOT have a sampleMap ───────────────────────────
@@ -82,7 +83,6 @@ const GENERIC_RECIPE_IDS_WITHOUT_SAMPLE_MAP = [
   'aksak-dorian-odd',
   'gospel-soul-euclid',
   'cueca-chilena-folk',
-  'afro-cuban-clave-minor',
 ] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -196,6 +196,17 @@ describe('sampleMap — per-genre value assertions', () => {
   it('buleria-flamenco-phrygian: bd → cajon (FreePats CajonFlamenco — canonical flamenco percussion, Phase 04 upgrade)', () => {
     const recipe = findRecipe('buleria-flamenco-phrygian');
     expect(recipe.sampleMap).toEqual({ bd: 'cajon' });
+  });
+
+  // Phase 08 additions:
+  it('afro-cuban-clave-minor: bd → wood (FreePats Claves), hh → conga (FreePats Conga)', () => {
+    const recipe = findRecipe('afro-cuban-clave-minor');
+    expect(recipe.sampleMap).toEqual({ bd: 'wood', hh: 'conga' });
+  });
+
+  it('rumba-blues-minor: bd → wood (FreePats Claves — retained from Phase 04)', () => {
+    const recipe = findRecipe('rumba-blues-minor');
+    expect(recipe.sampleMap).toEqual({ bd: 'wood' });
   });
 });
 

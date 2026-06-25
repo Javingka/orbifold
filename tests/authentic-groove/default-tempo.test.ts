@@ -89,24 +89,27 @@ describe('A-06-01: MusicalRecipe.defaultCpm field — catalog spot-checks', () =
     expect(recipe?.defaultCpm).toBe(40);
   });
 
-  it('bossa-nova-groove has no defaultCpm (tempo unchanged on apply)', () => {
+  it('bossa-nova-groove has no defaultCpm pre-Phase-08 (gets defaultCpm: 32 in Phase 08 step 08.2)', () => {
+    // This assertion will be updated in step 08.2 when defaultCpm is added.
     const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'bossa-nova-groove');
     expect(recipe).toBeDefined();
     expect(recipe?.defaultCpm).toBeUndefined();
   });
 
-  it('pop-rock-backbeat has no defaultCpm', () => {
+  it('pop-rock-backbeat has no defaultCpm pre-Phase-08 (gets defaultCpm: 27 in Phase 08 step 08.4)', () => {
+    // This assertion will be updated in step 08.4 when defaultCpm is added.
     const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'pop-rock-backbeat');
     expect(recipe).toBeDefined();
     expect(recipe?.defaultCpm).toBeUndefined();
   });
 
-  it('all 13 non-tempo recipes have no defaultCpm', () => {
-    const tempoRecipeIds = new Set(['cumbia-latina-groove', 'cueca-chilena-folk']);
-    const nonTempoRecipes = RHYTHM_HARMONY_RECIPES.filter((r) => !tempoRecipeIds.has(r.id));
-    for (const recipe of nonTempoRecipes) {
-      expect(recipe.defaultCpm, `${recipe.id} should not have defaultCpm`).toBeUndefined();
-    }
+  it('all 2 pre-Phase-08 tempo recipes have their original defaultCpm values', () => {
+    // Phase 08 adds defaultCpm to 12 more recipes. This test only checks the
+    // pre-Phase-08 recipes (cumbia, cueca) retain their original values.
+    const recipe_cumbia = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'cumbia-latina-groove');
+    const recipe_cueca = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'cueca-chilena-folk');
+    expect(recipe_cumbia?.defaultCpm).toBe(30);
+    expect(recipe_cueca?.defaultCpm).toBe(40);
   });
 });
 

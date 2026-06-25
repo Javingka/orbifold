@@ -190,10 +190,35 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [90, 140],
     meter: '4/4',
     density: 'medium',
+    defaultCpm: 25, // 25 cpm × 4 = 100 BPM — within bpmRange [90, 140]
     agentInstruction:
       'Apply a son clave 3-2 timeline over a Latin minor-dominant chord loop ' +
       '(Dm7–G7–Cmaj7–A7). Keep the clave pattern as the anchor timeline; ' +
       'layer melodic fills against it. Suggested tempo: 100–130 BPM.',
+    sampleMap: {
+      bd: 'wood', // wood: FreePats Claves (CC0) — authentic clave idiophone
+      hh: 'conga', // conga: FreePats Conga (CC0) — approximates tumbao membrane sound
+    },
+    // Phase 08: self-contained multi-layer declaration.
+    // bd (son clave 3-2) LOCKED — the anchor timeline of Afro-Cuban music.
+    // hh (conga tumbao) FREE — agent may vary for fills and variation.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1001001000101000', // son clave 3-2 — hits at 1,4,7,11,13 (1-indexed)
+        steps: 16,
+        locked: true, // son clave anchor — LOCKED
+        rhythmId: 'son-clave-3-2',
+        strudelSample: 'wood', // FreePats Claves (CC0)
+      },
+      {
+        sound: 'hh',
+        binary: '0101010110101010', // conga tumbao — open tones on 2,4,6,8,11,13,15 (1-indexed)
+        steps: 16,
+        locked: false, // tumbao fills — FREE
+        strudelSample: 'conga', // FreePats Conga (CC0)
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -305,6 +330,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [120, 200],
     meter: '4/4',
     density: 'dense',
+    defaultCpm: 42, // 42 cpm × 4 = 168 BPM — within bpmRange [120, 200]
     agentInstruction:
       'Layer son clave 2-3 as the anchor timeline with cascara (E(10,16)) ' +
       'as a higher-register shell pattern, over a jazz ii-V-I progression (Dm7–G7–Cmaj7). ' +
@@ -314,6 +340,24 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       bd: 'bd',
       hh: 'cb', // fallback: no native cascara/timbale shell in @strudel/web@1.0.3
     },
+    // Phase 08: both layers LOCKED — clave and cascara interlock as a unit.
+    // son clave 2-3: two-side first. Cascara 2-3 orientation with halves swapped.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1000101001001000', // son clave 2-3 — two-side first
+        steps: 16,
+        locked: true, // clave anchor — LOCKED (interlocks with cascara)
+        rhythmId: 'son-clave-2-3',
+      },
+      {
+        sound: 'hh',
+        binary: '0110101010101101', // cascara 2-3 — 3-2 cascara halves swapped to match 2-3 orientation
+        steps: 16,
+        locked: true, // cascara — LOCKED (interlocks with clave)
+        rhythmId: 'cascara-euclid',
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -423,6 +467,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [80, 140],
     meter: '4/4',
     density: 'medium',
+    defaultCpm: 25, // 25 cpm × 4 = 100 BPM — within bpmRange [80, 140]
     agentInstruction:
       'Apply the rumba clave 3-2 timeline over a minor blues turnaround ' +
       '(Am7–Dm7–E7–G#dim7–Am7). The rumba clave sits back slightly relative to ' +
@@ -431,6 +476,19 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     sampleMap: {
       bd: 'wood', // wood: FreePats Claves (CC0) — authentic clave idiophone for the rumba clave pattern
     },
+    // Phase 08: single locked layer.
+    // KEY DIFFERENCE from son clave: step 7→8 (the 'drag' — third note delayed one 16th;
+    // the defining rumba characteristic).
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1001000100101000', // rumba clave 3-2 — hits 1,4,8,11,13 (KEY: step 7→8 = the 'drag')
+        steps: 16,
+        locked: true, // rumba clave anchor — LOCKED
+        rhythmId: 'rumba-clave-3-2',
+        strudelSample: 'wood', // FreePats Claves (CC0)
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------

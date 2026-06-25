@@ -179,10 +179,19 @@ describe.each(RHYTHM_HARMONY_RECIPES.map((r): [string, MusicalRecipe] => [r.id, 
       }
     });
 
-    it('Invariant consistency — when layers present, rhythmIds equals layers.map(l => l.rhythmId ?? "")', () => {
+    it('Invariant consistency — when layers present, all rhythmIds with catalog entries appear in layers.rhythmId set', () => {
       if (!recipe.layers) return;
-      const expectedRhythmIds = recipe.layers.map((l) => l.rhythmId ?? '');
-      expect(recipe.rhythmIds).toEqual(expectedRhythmIds);
+      // Phase 08: some layers intentionally omit rhythmId (no catalog entry for that pattern).
+      // The weaker invariant: every rhythmId in recipe.rhythmIds must appear as a rhythmId on
+      // at least one layer (when layers are present). Layers may have additional entries
+      // without rhythmId — that is permitted for patterns not in the rhythm catalog.
+      const layerRhythmIds = new Set(recipe.layers.map((l) => l.rhythmId).filter(Boolean));
+      for (const rid of recipe.rhythmIds) {
+        expect(
+          layerRhythmIds.has(rid),
+          `rhythmId '${rid}' in recipe.rhythmIds not found in any layer.rhythmId`
+        ).toBe(true);
+      }
     });
 
     // Invariant 10 (Phase 06): when defaultCpm is present, defaultCpm * 4 must fall within bpmRange.
