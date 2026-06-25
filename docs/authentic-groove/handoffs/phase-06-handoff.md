@@ -89,19 +89,28 @@ Not applicable for inventory step.
 
 ### Completed
 
-<!-- filled in after step 06.3 implementation -->
+- Updated `LayerGeo` interface JSDoc: `polar` and `lin` arrays are now "N positions" (N = layer.steps.length) rather than "16 positions".
+- Updated `RSTEPS` constant JSDoc: now documented as "Base step count for geometry and playhead fallback. Per-layer rendering uses `layer.steps.length` instead (Phase 06)."
+- `rebuildRhythmGeo`: added `const N = layer.steps.length` at top of `forEach` callback; replaced all 4 inner-loop RSTEPS references with `N` (polar angle formula, linear x formula, loop bound). For 16-step layers N === RSTEPS — identical output.
+- `tickRhythm` ring outline: declared `const N = g.layer.steps.length` at top of forEach; replaced `RSTEPS` with `N` in radial polygon loop (`<= N`), index wrap (`% N`), and linear polyline loop (`< N`).
+- `tickRhythm` dot loop: changed `for (let s = 0; s < RSTEPS; s++)` to `for (let s = 0; s < N; s++)`. `g.polar[s]` and `g.lin[s]` are bounds-safe (geometry built with exactly N positions). `liveLayer.steps[s]` access is bounds-safe (loop runs exactly N times).
+- `tickRhythm` playhead step-highlighting: removed global `const curStep = Math.floor(phase * RSTEPS) % RSTEPS` from outside the forEach; moved per-layer calculation inside the `_rGeo.forEach`: `const layerN = liveLayer.steps.length; const curStep = Math.floor(phase * layerN) % layerN`. `_stepPos[li][curStep]` access is bounds-safe (N positions collected in step-dot loop). Global playhead beam (`_rCenter.xL + phase * _rCenter.Wlin`) unchanged — phase-based, not step-count-based.
+- AG-D1: zero genre names in `rhythm-scene.ts`; step count reads from `layer.steps.length` (data), not from any knowledge-layer constant.
+- No import from `src/core/music-knowledge/` added to `rhythm-scene.ts`.
 
 ### Files touched
 
-<!-- filled in after step 06.3 implementation -->
+- `src/render/rhythm-scene.ts` (RSTEPS JSDoc; LayerGeo interface JSDoc; rebuildRhythmGeo N-loop; tickRhythm N-loop; per-layer curStep)
+- `docs/authentic-groove/handoffs/phase-06-handoff.md` (this file)
 
 ### Validation evidence (per Acceptance ID)
 
-<!-- filled in after step 06.3 implementation -->
+- **A-06-04 (partial):** PIXI canvas renders N dots per layer matching `layer.steps.length`. Click-to-toggle `onStagePointerDown` iterates `_stepPos[li]` (N positions) and writes `layer.steps[s]` by index — already correct for any N. No code change needed there. Seam grep confirms no RSTEPS in per-layer loops (`grep -n "RSTEPS" rhythm-scene.ts` → only constant declaration and comments).
 
 ### Routine validations
 
-<!-- filled in after step 06.3 implementation -->
+- `pnpm exec tsc --noEmit` → clean (no output)
+- `pnpm test` → 1859 tests pass, no regressions
 
 ---
 

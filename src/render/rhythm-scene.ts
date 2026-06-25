@@ -25,7 +25,11 @@ import { COL, FONT_SERIF, FONT_MONO } from './theme.js';
 
 // ── Module-level geometry / dynamic state ────────────────────────────────────
 
-/** Number of steps per layer. Prototype: RSTEPS = 16. */
+/**
+ * Base step count for geometry and playhead fallback.
+ * Per-layer rendering uses `layer.steps.length` instead (Phase 06).
+ * Prototype: RSTEPS = 16.
+ */
 const RSTEPS = 16;
 
 /**
@@ -36,9 +40,9 @@ interface LayerGeo {
   li: number;
   layer: RhythmLayer;
   R: number;
-  /** Polar (radial) positions for each of the 16 steps. */
+  /** Polar (radial) positions for each of the N steps (N = layer.steps.length). */
   polar: { x: number; y: number }[];
-  /** Linear positions for each of the 16 steps. */
+  /** Linear positions for each of the N steps (N = layer.steps.length). */
   lin: { x: number; y: number }[];
   yBase: number;
   /** Polar label anchor (right of outermost ring). */
@@ -133,12 +137,15 @@ function rebuildRhythmGeo(state: SessionState): void {
     const polar: { x: number; y: number }[] = [];
     const lin: { x: number; y: number }[] = [];
 
-    for (let s = 0; s < RSTEPS; s++) {
-      // Prototype line 1046: ang = -PI/2 + s/RSTEPS*PI*2
-      const ang = -Math.PI / 2 + (s / RSTEPS) * Math.PI * 2;
+    // Phase 06: use N = layer.steps.length so geometry adapts to any step count.
+    // For 16-step layers N === RSTEPS — output is identical to pre-Phase-06.
+    const N = layer.steps.length;
+    for (let s = 0; s < N; s++) {
+      // Prototype line 1046: ang = -PI/2 + s/RSTEPS*PI*2 — now per-layer N
+      const ang = -Math.PI / 2 + (s / N) * Math.PI * 2;
       polar.push({ x: cx + Math.cos(ang) * R, y: cy + Math.sin(ang) * R });
-      // Prototype line 1048: lin x uses (s+0.5)/RSTEPS (centers step in its slot)
-      lin.push({ x: xL + ((s + 0.5) / RSTEPS) * Wlin, y: yBase });
+      // Prototype line 1048: lin x uses (s+0.5)/N (centers step in its slot)
+      lin.push({ x: xL + ((s + 0.5) / N) * Wlin, y: yBase });
     }
 
     // Prototype line 1050–1051: labelPolar right of ring, labelLin left of row
@@ -332,14 +339,16 @@ export function tickRhythm(_delta: number): void {
     const liveLayer = _layers[li] ?? g.layer;
     const dim = layerAudible(liveLayer, _layers) ? 1 : 0.28;
 
-    // Guide ring: 16-gon lerped between polar and linear — prototype lines 1159–1163
+    // Guide ring: N-gon lerped between polar and linear — prototype lines 1159–1163
     // Defect 5 fix: in linear mode (m > 0.5), skip the closing segment back to step 0
     // so we don't draw a diagonal line across the full width.
+    // Phase 06: N = g.layer.steps.length; geometry arrays have exactly N entries.
+    const N = g.layer.steps.length;
     rRings.lineStyle(1.2, COL.line, 0.5 * dim);
     if (m <= 0.5) {
       // Radial mode (or morph toward radial): close the polygon back to step 0.
-      for (let s = 0; s <= RSTEPS; s++) {
-        const idx = s % RSTEPS;
+      for (let s = 0; s <= N; s++) {
+        const idx = s % N;
         const x = lerp(g.polar[idx].x, g.lin[idx].x, m);
         const y = lerp(g.polar[idx].y, g.lin[idx].y, m);
         if (s === 0) rRings.moveTo(x, y);
@@ -347,7 +356,7 @@ export function tickRhythm(_delta: number): void {
       }
     } else {
       // Linear mode (or morph toward linear): open polyline — no closing segment.
-      for (let s = 0; s < RSTEPS; s++) {
+      for (let s = 0; s < N; s++) {
         const x = lerp(g.polar[s].x, g.lin[s].x, m);
         const y = lerp(g.polar[s].y, g.lin[s].y, m);
         if (s === 0) rRings.moveTo(x, y);
@@ -356,8 +365,9 @@ export function tickRhythm(_delta: number): void {
     }
 
     // Step dots — prototype lines 1166–1177
+    // Phase 06: loop N times; g.polar[s] and g.lin[s] are bounds-safe (N positions).
     const pos: { x: number; y: number }[] = [];
-    for (let s = 0; s < RSTEPS; s++) {
+    for (let s = 0; s < N; s++) {
       const x = lerp(g.polar[s].x, g.lin[s].x, m);
       const y = lerp(g.polar[s].y, g.lin[s].y, m);
       pos.push({ x, y });
@@ -399,7 +409,6 @@ export function tickRhythm(_delta: number): void {
 
   // ── Playhead — prototype lines 1192–1214 ─────────────────────────────────
   if (playing) {
-    const curStep = Math.floor(phase * RSTEPS) % RSTEPS;
     const ang = -Math.PI / 2 + phase * Math.PI * 2;
 
     // Radial spoke endpoints
@@ -408,7 +417,7 @@ export function tickRhythm(_delta: number): void {
     const radP1 = { x: cx + Math.cos(ang) * rin, y: cy + Math.sin(ang) * rin };
     const radP2 = { x: cx + Math.cos(ang) * rout, y: cy + Math.sin(ang) * rout };
 
-    // Linear bar endpoints
+    // Linear bar endpoints — phase-based (not step-count-based); correct for any N.
     const xPlay = _rCenter.xL + phase * _rCenter.Wlin;
     const linP1 = { x: xPlay, y: _rCenter.yTop };
     const linP2 = { x: xPlay, y: _rCenter.yBot };
@@ -423,10 +432,15 @@ export function tickRhythm(_delta: number): void {
     rDyn.lineTo(p2.x, p2.y);
 
     // Highlight current step dot in white + accent — prototype lines 1203–1210
+    // Phase 06: curStep is computed per-layer using layerN = liveLayer.steps.length.
+    // This ensures a 12-step layer highlights step 0..11 correctly (not 0..15).
+    // For 16-step layers: layerN === RSTEPS, behavior identical to pre-Phase-06.
     _rGeo.forEach((g, li) => {
       // Defect 2 fix: use _layers[li] for live step data (same as guide-ring draw above).
       const liveLayer = _layers[li] ?? g.layer;
       if (!layerAudible(liveLayer, _layers)) return;
+      const layerN = liveLayer.steps.length;
+      const curStep = Math.floor(phase * layerN) % layerN;
       if (liveLayer.steps[curStep] === 1) {
         const p = _stepPos[li] !== undefined ? _stepPos[li][curStep] : null;
         if (p != null) {
