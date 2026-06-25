@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 ## Step 07.1 — Fix `apply.ts` + update `layers.ts` comment + fix persistence schema + fix/add tests
 
 **Date:** 2026-06-25
-**Commit(s):** see below
+**Commit(s):** 6b160d5
 **Iteration:** 1 of 5
 
 ### Completed
@@ -97,7 +97,7 @@ None.
 ## Step 07.2 — End-to-end propagation tests for cueca 3 layers + backward-compat assertions
 
 **Date:** 2026-06-25
-**Commit(s):** see below
+**Commit(s):** c9936bd
 **Iteration:** 1 of 5
 
 ### Completed
