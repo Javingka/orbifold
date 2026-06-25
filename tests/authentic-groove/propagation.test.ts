@@ -882,14 +882,14 @@ describe('A-05-02: lock-preservation integration — cueca locked bd survives ag
       layers: [{ sound: 'bd', steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] }],
     });
 
-    // Step 3: Confirm bd still has the original cueca kick (steps[1] should be 0 in cueca E(4,12)).
+    // Step 3: Confirm bd still has the original cueca kick (steps[1] should be 0 in cueca binary '101000101000').
     const layersAfterAgent = get(sessionStore).rhythm.layers;
     const bdAfterAgent = layersAfterAgent.find((l) => l.sound === 'bd');
     expect(bdAfterAgent?.locked).toBe(true);
     // The all-ones proposal was blocked — cueca kick has some zero steps.
-    // In cueca E(4,12) mapped to 16 steps, step[1] = 0 (onset at 0 only among first 4 steps).
+    // Cueca bd binary '101000101000' (12 steps native): onsets at 0,2,6,8; step[1] = 0.
     if (bdAfterAgent?.steps) {
-      // The cueca base has 4 onsets in 16 steps; at least one of steps 1,2,3 should be 0.
+      // The cueca base has 4 onsets in 12 native steps; at least one of steps 1,2,3 should be 0.
       const firstFour = bdAfterAgent.steps.slice(0, 4);
       expect(firstFour.some((v) => v === 0)).toBe(true);
     }
@@ -922,17 +922,16 @@ describe('A-05-02: lock-preservation integration — cueca locked bd survives ag
   });
 });
 
-// ── A-06-04 guard: cueca layers step count after recipe apply (Phase 06) ──────
+// ── A-07-01/A-07-02/A-07-03 guard: cueca layers native step count after recipe apply (Phase 07) ──
 //
-// applyRhythmSpec normalizes all steps arrays to RSTEPS = 16 (padding with zeros).
+// Phase 07 fix: applyRhythmSpec now emits step arrays at their native length.
 // This means cueca's 12-step binary strings ('101000101000', '000010000010') become
-// 16-step arrays [1,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0] in the session store.
-// The hh layer (euclid E(6,12)) is also expanded to 16 steps.
-// The dynamic step grid (Phase 06) reads layer.steps.length — correctly 16 for all
-// current cueca layers. This test guards against regressions.
+// 12-element arrays in the session store — no RSTEPS padding.
+// The hh layer (euclid E(6,12)) also produces a 12-element array (bjorklund(6,12) length = 12).
+// The dynamic step grid (Phase 06) reads layer.steps.length — correctly 12 for cueca layers.
 
-describe('A-06-04 guard: cueca layers after recipe apply have steps.length === 16', () => {
-  it('all cueca layers have steps.length === 16 after applyRhythmSpec (applyRhythmSpec pads to RSTEPS)', () => {
+describe('A-07-01/A-07-02/A-07-03 guard: cueca layers after recipe apply have native step counts', () => {
+  it('all cueca layers have steps.length === 12 after applyRhythmSpec (native length, no RSTEPS padding)', () => {
     const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'cueca-chilena-folk');
     expect(recipe).toBeDefined();
     if (!recipe) return;
@@ -945,11 +944,215 @@ describe('A-06-04 guard: cueca layers after recipe apply have steps.length === 1
 
     const layers = get(sessionStore).rhythm.layers;
     expect(layers).toHaveLength(3);
-    // applyRhythmSpec always produces 16-step arrays (new Array(RSTEPS).fill(0))
+    // Phase 07: applyRhythmSpec produces native-length arrays (12 for cueca patterns)
     for (const layer of layers) {
       expect(
         layer.steps.length,
-        `layer ${layer.sound} should have 16 steps (RSTEPS), got ${layer.steps.length}`
+        `layer ${layer.sound} should have 12 steps (native 6/8 grid), got ${layer.steps.length}`
+      ).toBe(12);
+    }
+  });
+});
+
+// ── A-07-01/02/03/04/05: cueca + cumbia e2e Strudel token output (Phase 07 step 07.2) ──
+//
+// Full end-to-end tests: recipe → applyRhythmSpec → rhythmLayerToStrudelLine.
+// Each test verifies the exact Strudel token string emitted for a layer after
+// applyRecipeById, confirming that 12-step cueca layers emit exactly 12 tokens
+// and 16-step cumbia layers continue to emit exactly 16 tokens.
+//
+// These tests depend on the Phase 07 fix in applyRhythmSpec (apply.ts) being in
+// place. They are integration tests — not unit tests — because they exercise the
+// full recipe → store → codegen round-trip.
+
+describe('A-07-01 e2e: cueca bd layer → steps.length===12, exact 12-token Strudel string', () => {
+  it('cueca-chilena-folk bd layer: steps.length === 12 after recipe apply (A-07-01 e2e)', () => {
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    if (!bdLayer) return;
+    expect(bdLayer.steps.length).toBe(12);
+  });
+
+  it('cueca-chilena-folk bd layer: rhythmLayerToStrudelLine emits exact 12-token string (A-07-01 e2e)', () => {
+    // cueca bd binary: '101000101000' → [1,0,1,0,0,0,1,0,1,0,0,0]
+    // Expected codegen: '  s("bd ~ bd ~ ~ ~ bd ~ bd ~ ~ ~")'
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    if (!bdLayer) return;
+
+    const line = rhythmLayerToStrudelLine(bdLayer);
+    expect(line).toBe('  s("bd ~ bd ~ ~ ~ bd ~ bd ~ ~ ~")');
+  });
+});
+
+describe('A-07-02 e2e: cueca hh layer E(6,12,0) → steps.length===12, exact 12-token Strudel string', () => {
+  it('cueca-chilena-folk hh layer: steps.length === 12 after recipe apply (A-07-02 e2e)', () => {
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    if (!hhLayer) return;
+    expect(hhLayer.steps.length).toBe(12);
+  });
+
+  it('cueca-chilena-folk hh layer: rhythmLayerToStrudelLine emits exact 12-token string (A-07-02 e2e)', () => {
+    // cueca hh: euclid E(6,12,0) → bjorklund(6,12) = [1,0,1,0,1,0,1,0,1,0,1,0]
+    // Expected codegen: '  s("hh ~ hh ~ hh ~ hh ~ hh ~ hh ~")'
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const hhLayer = layers.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    if (!hhLayer) return;
+
+    const line = rhythmLayerToStrudelLine(hhLayer);
+    expect(line).toBe('  s("hh ~ hh ~ hh ~ hh ~ hh ~ hh ~")');
+  });
+});
+
+describe('A-07-03 e2e: cueca cp layer → steps.length===12, exact 12-token Strudel string', () => {
+  it('cueca-chilena-folk cp layer: steps.length === 12 after recipe apply (A-07-03 e2e)', () => {
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const cpLayer = layers.find((l) => l.sound === 'cp');
+    expect(cpLayer).toBeDefined();
+    if (!cpLayer) return;
+    expect(cpLayer.steps.length).toBe(12);
+  });
+
+  it('cueca-chilena-folk cp layer: rhythmLayerToStrudelLine emits exact 12-token string (A-07-03 e2e)', () => {
+    // cueca cp binary: '000010000010' → [0,0,0,0,1,0,0,0,0,0,1,0]
+    // Expected codegen: '  s("~ ~ ~ ~ cp ~ ~ ~ ~ ~ cp ~")'
+    const recipe = findRecipe('cueca-chilena-folk');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const cpLayer = layers.find((l) => l.sound === 'cp');
+    expect(cpLayer).toBeDefined();
+    if (!cpLayer) return;
+
+    const line = rhythmLayerToStrudelLine(cpLayer);
+    expect(line).toBe('  s("~ ~ ~ ~ cp ~ ~ ~ ~ ~ cp ~")');
+  });
+});
+
+describe('A-07-04 e2e: cumbia backward-compat — all layers steps.length===16, 16-token codegen', () => {
+  it('cumbia-latina-groove: all layers steps.length === 16 (A-07-04 e2e)', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+
+    const layers = get(sessionStore).rhythm.layers;
+    expect(layers.length).toBeGreaterThan(0);
+    for (const layer of layers) {
+      expect(
+        layer.steps.length,
+        `cumbia layer ${layer.sound} should have 16 steps, got ${layer.steps.length}`
+      ).toBe(16);
+    }
+  });
+
+  it('cumbia-latina-groove: rhythmLayerToStrudelLine emits 16-token strings for all layers (A-07-04 e2e)', () => {
+    const recipe = findRecipe('cumbia-latina-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm, { force: true });
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    expect(layers.length).toBeGreaterThan(0);
+    for (const layer of layers) {
+      const line = rhythmLayerToStrudelLine(layer);
+      // Count space-separated tokens inside s("...") — must be 16.
+      const match = line.match(/s\("(.+?)"\)/);
+      expect(match).not.toBeNull();
+      if (!match) continue;
+      const tokens = match[1].split(' ');
+      expect(
+        tokens.length,
+        `cumbia layer ${layer.sound} codegen should emit 16 tokens, got ${tokens.length}: "${line}"`
+      ).toBe(16);
+    }
+  });
+});
+
+describe('A-07-05 e2e: agent backward-compat — 16-step agent output → steps.length===16, 16-token codegen', () => {
+  it('agent spec with euclid k=4,n=16 and steps[16] → both layers steps.length===16 (A-07-05 e2e)', () => {
+    // Simulates a typical LLM-generated agent output: euclid n=16 + 16-element steps array.
+    applyRhythmSpec({
+      layers: [
+        { sound: 'hh', euclid: { k: 4, n: 16, rot: 0 } },
+        { sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+      ],
+    });
+
+    const layers = get(sessionStore).rhythm.layers;
+    expect(layers.length).toBe(2);
+    for (const layer of layers) {
+      expect(layer.steps.length).toBe(16);
+    }
+  });
+
+  it('agent spec: rhythmLayerToStrudelLine emits 16-token strings for both agent layers (A-07-05 e2e)', () => {
+    applyRhythmSpec({
+      layers: [
+        { sound: 'hh', euclid: { k: 4, n: 16, rot: 0 } },
+        { sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+      ],
+    });
+
+    const layers = get(sessionStore).rhythm.layers;
+    for (const layer of layers) {
+      const line = rhythmLayerToStrudelLine(layer);
+      const match = line.match(/s\("(.+?)"\)/);
+      expect(match).not.toBeNull();
+      if (!match) continue;
+      const tokens = match[1].split(' ');
+      expect(
+        tokens.length,
+        `agent layer ${layer.sound} codegen should emit 16 tokens, got ${tokens.length}`
       ).toBe(16);
     }
   });
