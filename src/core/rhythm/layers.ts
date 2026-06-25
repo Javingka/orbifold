@@ -17,7 +17,7 @@ export type Sound = 'bd' | 'sd' | 'hh' | 'oh' | 'cp' | 'rim' | 'lt' | 'mt' | 'ht
  */
 export interface RhythmLayer {
   sound: Sound;
-  /** 0/1 step array (length = RSTEPS = 16 by default). */
+  /** 0/1 step array (length equals the pattern's native step count (between 1 and RSTEPS)). */
   steps: number[];
   /** Compact euclidean string, e.g. `"5,8"` or `"3,8,2"`. Present only
    *  when the layer is in euclidean mode. */
@@ -63,10 +63,10 @@ export function layerAudible(layer: RhythmLayer, allLayers: RhythmLayer[]): bool
 /**
  * Render a single layer as a Strudel pattern line.
  *
- * Runtime layers always carry the 16 visible `steps`, including layers created
- * from Euclidean controls. Emitting those steps keeps Strudel audio aligned with
- * the dots the user sees and toggles. Legacy/test fixtures with no steps fall
- * back to the compact Euclidean mini-notation.
+ * Runtime layers carry `steps` at their native length (n steps for an n-step pattern),
+ * including layers created from Euclidean controls. Emitting those steps keeps Strudel
+ * audio aligned with the dots the user sees and toggles. Legacy/test fixtures with no
+ * steps fall back to the compact Euclidean mini-notation.
  *
  * The caller (e.g. `rhythmToStrudel`) is responsible for audibility
  * filtering before calling this function.

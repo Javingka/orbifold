@@ -41,9 +41,7 @@ function makeSessionState(
 
 // ── Helper: build a base SavedSession blob ────────────────────────────────────
 
-function makeBaseSavedSession(
-  extraLayerFields: Record<string, unknown> = {}
-): SavedSession {
+function makeBaseSavedSession(extraLayerFields: Record<string, unknown> = {}): SavedSession {
   return {
     version: 5,
     bpm: 120,

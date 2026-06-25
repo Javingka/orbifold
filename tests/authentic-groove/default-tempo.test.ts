@@ -221,16 +221,16 @@ describe('A-06-02 integration: cumbia on store with cueca locked layers', () => 
     const cumbiaBd = layersAfterCumbia.find((l) => l.sound === 'bd');
     expect(cumbiaBd).toBeDefined();
     expect(cumbiaBd?.locked).toBe(true);
-    // Cumbia layers are 16-step (applyRhythmSpec pads all to RSTEPS = 16)
+    // Cumbia layers are 16-step (native E(4,16,0) and E(12,16,2) — no change from Phase 07)
     expect(layersAfterCumbia.every((l) => l.steps.length === 16)).toBe(true);
   });
 });
 
 describe('A-06-02 integration: cueca recipe apply — BPM 160, layers confirmed', () => {
-  it('applying cueca: BPM = 160, 3 layers present with steps.length === 16', () => {
-    // applyRhythmSpec pads all steps arrays to RSTEPS = 16.
+  it('applying cueca: BPM = 160, 3 layers present with steps.length === 12', () => {
+    // Phase 07 fix: applyRhythmSpec now emits native-length arrays.
     // Cueca recipe has 3 layers (bd: 12-step binary, cp: 12-step binary, hh: euclid E(6,12)).
-    // After applyRhythmSpec, all 3 layers have steps.length === 16 (padded with zeros).
+    // After applyRhythmSpec, all 3 layers have steps.length === 12 (native 6/8 step count).
     const result = applyRecipeById('cueca-chilena-folk');
     expect(result).toBe(true);
 
@@ -240,8 +240,8 @@ describe('A-06-02 integration: cueca recipe apply — BPM 160, layers confirmed'
     const layers = get(sessionStore).rhythm.layers;
     expect(layers).toHaveLength(3);
 
-    // All layers have steps.length === 16 (applyRhythmSpec normalizes to RSTEPS)
-    expect(layers.every((l) => l.steps.length === 16)).toBe(true);
+    // All cueca layers have steps.length === 12 (native 6/8 grid, no RSTEPS padding)
+    expect(layers.every((l) => l.steps.length === 12)).toBe(true);
 
     // bd layer is locked (cultural signature)
     const bdLayer = layers.find((l) => l.sound === 'bd');

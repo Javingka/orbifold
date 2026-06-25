@@ -163,6 +163,11 @@ Two new catalog entries: `cueca-palmas-12` (struct 12-step), `cueca-subdivision-
 
 Step 05.3: implement `applyLockedFlags`, update `applyRhythmSpec` with `opts?: { force?: boolean }` merge logic, update `recipeToAgentOutput` to iterate `recipe.layers` when present, update `sendEvolution` stateSnapshot and `SYSTEM_PROMPT_EVOLUTION`.
 
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5. All 8 checklist items pass: commit scope clean (only model-layer files + tests + handoff); commit message format correct; Acceptance Coverage Table present with honest partial/not-yet gaps; tests exercise real behavior (persistence roundtrip, catalog invariants, type safety); no live-system evidence claimed beyond tsc (appropriate for this step); Register respected (SESSION_SCHEMA_VERSION stays 5, AG-D1 honored); reversibility intact (additive optional field, pre-Phase-05 sessions parse cleanly); no new dependencies.
+**Next action:** Dev proceeds to step 05.3
+
 ---
 
 ## Step 05.3 — Lock-preservation logic + recipeToAgentOutput update + stateSnapshot
@@ -239,6 +244,11 @@ The `AgentOutputSchema` (`RhythmLayerStepsSchema`) requires `steps.length === 16
 ### Next-step context
 
 Step 05.4: download 4 EggShaker FLAC files, convert to OGG as `shaker_0-3.ogg`, update `sample-map.ts`, update `cueca-chilena-folk` and `cumbia-latina-groove` recipes with `layers` arrays, update tests.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5. All 8 checklist items pass: commit scope clean (only `apply.ts`, `recipe-engine.ts`, `agent.ts`, `autopilot.ts`, new test file, handoff); commit message format correct; Acceptance Coverage Table present with accurate partial gaps; tests are behavioral (merge logic exercised with real locked/unlocked layer scenarios, backward-compat confirmed, `recipeToAgentOutput` layers path confirmed); no live-system claims beyond tsc (appropriate); AG-D1 respected (zero genre names in plumbing files verified); reversibility intact (`opts.force` is additive parameter, pre-Phase-05 call sites omit it and get full-replace behavior unchanged); no new dependencies. The safeParse bypass for the recipe.layers path is correctly reasoned and disclosed in the handoff — OD-1 (AgentOutputSchema purity) is maintained because no schema field is changed.
+**Next action:** Dev proceeds to step 05.4
 
 ---
 
@@ -317,6 +327,11 @@ Step 05.4: download 4 EggShaker FLAC files, convert to OGG as `shaker_0-3.ogg`, 
 ### Next-step context
 
 Step 05.5: end-to-end integration tests (A-05-01 through A-05-09 full coverage), seam fitness greps (no genre name in apply.ts / recipe-engine.ts / persistence.ts / codegen), full quality gate (tsc + lint + test + build).
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5. All 8 checklist items pass: commit scope clean (only `src/core/music-knowledge/`, `src/audio/sample-map.ts`, `public/samples/`, test files, handoff — no unauthorized files); commit message format correct; Acceptance Coverage Table present with accurate coverage gaps; tests are behavioral (shaker URL structure, recipe layer counts, sampleMap assertions against real recipe data); AG-D1 seam confirmed clean (`shaker` appears only in `src/audio/sample-map.ts` and `src/core/music-knowledge/` — verified via source inspection); reversibility intact (shaker registration is additive, recipe `layers` field is additive optional); no new npm dependencies added (4 CC0 OGG binaries are data, not code dependencies). Note: `strudel.ts` was not directly modified — shaker registration flows through the existing `buildSampleMap` delegation, which is the correct mechanism per ADR 0025.
+**Next action:** Dev proceeds to step 05.5
 
 ---
 
@@ -414,3 +429,44 @@ pnpm build               → 567 modules transformed, dist/assets/index-BMjkwsH5
 Phase 05 complete. All acceptance criteria at FULL. Planner review required.
 
 **Planner's next action:** Review Phase 05 handoff for APPROVE or REVISE.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5. All 8 checklist items pass: commit scope clean (only `propagation.test.ts` + one comment fix in `sample-map.ts` + handoff — tight and justified); commit message format correct; Acceptance Coverage Table complete with every A-05-01 through A-05-09 at FULL with named test files; tests are behavioral (full apply-recipe path exercised end-to-end — `recipeToAgentOutput` → `applyRhythmSpec` → `applyLockedFlags` → `applySampleMap` → codegen; lock-preservation confirmed with actual cueca kick step pattern assertion); seam grep evidence recorded verbatim with explicit pass/fail verdicts (pre-existing genre tokens in comments/i18n correctly classified as not new genre-selector logic); reversibility note present verbatim as required by phase spec; no new dependencies. Phase 05 is complete.
+**Next action:** Pilot approval required before step 06.1, reason: phase complete — Checkpoint #5.
+
+---
+
+## Phase 05 — Completion Block
+
+**Phase:** 05 — Multi-Layer Recipes + Base-Lock Mechanism
+**Completed:** 2026-06-25
+**Test delta:** 1720 → 1831 (+111 new tests across 5 steps)
+
+### Final Acceptance Coverage
+
+| ID | Description | Validation method | Status |
+|---|---|---|---|
+| A-05-01 | `RhythmLayer.locked?: boolean` field in interface and `SavedRhythmLayerSchema`; codegen ignores it | `tsc --noEmit` + `locked-persistence.test.ts` + `propagation.test.ts` | FULL |
+| A-05-02 | `applyRhythmSpec` preserves locked layers when called by the agent (no recipe); proposed layers matching locked sounds are skipped; locked layers not targeted are retained | `lock-preservation.test.ts` + `propagation.test.ts` (unit + integration) | FULL |
+| A-05-03 | `applyLockedFlags(lockedSounds)` stamps `locked: true` on specified Sound slots; after recipe application, designated layers have `locked: true` | `lock-preservation.test.ts` + `propagation.test.ts` (unit + integration) | FULL |
+| A-05-04 | `locked` field round-trips via `serializeSession` → `SavedSessionSchema.safeParse` → `deserializeSession`; pre-Phase-05 sessions (no `locked` field) continue to load; `SESSION_SCHEMA_VERSION` stays 5 | `locked-persistence.test.ts` (unit) | FULL |
+| A-05-05 | `recipeToAgentOutput` reads `recipe.layers[i].sound` for sound assignment when `recipe.layers` is present; backward-compatible for layers-less recipes (index-based sound assignment) | `lock-preservation.test.ts` + `propagation.test.ts` (unit + integration) | FULL |
+| A-05-06 | New rhythm-catalog entries (`cueca-palmas-12`, `cueca-subdivision-12`) satisfy all 5 catalog invariants; seam grep returns zero genre-name matches in `src/` outside `src/core/music-knowledge/` for new Phase 05 introductions | `rhythm-catalog.test.ts` + seam grep (unit + live-system) | FULL |
+| A-05-07 | `cueca-chilena-folk` declares 3 layers (`bd` locked, `cp`+`hh` free); `cumbia-latina-groove` declares 2 locked layers (`bd`+`hh`) with `sampleMap: { bd: 'conga', hh: 'shaker' }`; both produce correct sounds in codegen output | `sample-map.test.ts` + `propagation.test.ts` (unit + integration) | FULL |
+| A-05-08 | `SYSTEM_PROMPT_EVOLUTION` contains locked-layer rule (rule 2, CAPAS BLOQUEADAS); `stateSnapshot` in `sendEvolution()` includes `locked` field per layer | `tsc --noEmit` (static) | FULL |
+| A-05-09 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` 1831/1831 (≥ 1720 baseline + all new); `pnpm build` succeeds | quality gate output recorded in step 05.5 | FULL |
+
+### Deferred items (unchanged from phase spec)
+
+- Dimension 2 (per-hit accent/velocity variation) — deferred per initiative scope.
+- Dimension 3 (swing/groove feel) — deferred per initiative scope.
+- 12-step grid UI support (cueca 6/8 display) — deferred per phase scope boundary.
+- Pandeiro one-shots — no good CC0 source found.
+- Guacharaca/scraper — no CC0 source found (EggShaker used as shaker alternative).
+- Pentagrama `NoteSlot` free placement — carried from orbifold-v2 Ph10.
+- Per-chord `lpf`/`lpq` slider D-3 — carried from harmonic-rhythm-improvements.
+
+### Pending Register proposals
+
+None. All decisions fell within existing ADR 0025 / AG-D1 / OD-1 boundaries. No new ADR triggered.

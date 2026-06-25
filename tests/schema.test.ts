@@ -256,31 +256,29 @@ describe('applyRhythmSpec — steps variant', () => {
 // ── applyRhythmSpec — euclid variant ─────────────────────────────────────
 
 describe('applyRhythmSpec — euclid variant', () => {
-  // A-06-05: E(3,8,0) produces the correct 16-step pattern via bjorklund/rotate.
-  // Golden value computed via prototype logic (lines 1687–1691):
-  //   bjorklund(3,8) = [1,0,0,1,0,0,1,0]
-  //   rotate by 0 = identity
-  //   map to 16 steps via Math.round(i/n*RSTEPS)%RSTEPS:
-  //     i=0 → s=0, i=3 → s=6, i=6 → s=12 → [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0]
-  it('E(3,8,0) produces correct 16-step pattern (prototype lines 1687–1691)', () => {
+  // A-07-05 / Phase 07 fix: E(3,8,0) produces the correct native 8-step pattern.
+  // Pre-Phase-07 behavior mapped to 16 steps via Math.round(i/n*RSTEPS)%RSTEPS.
+  // Phase 07 fix: bjorklund returns a native n-length array; no re-mapping.
+  //   bjorklund(3,8) = [1,0,0,1,0,0,1,0] (tresillo — native 8 steps)
+  it('E(3,8,0) produces correct native 8-step pattern (Phase 07 — no 16-step padding)', () => {
     applyRhythmSpec({
       layers: [{ sound: 'bd', euclid: { k: 3, n: 8, rot: 0 } }],
     });
     const state = get(sessionStore);
     const layer = state.rhythm.layers[0];
-    expect(layer.steps).toEqual([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0]);
+    expect(layer.steps).toEqual([1, 0, 0, 1, 0, 0, 1, 0]);
     expect(layer.euclid).toBe('3,8');
   });
 
-  it('E(3,8,2) rotation produces correct 16-step pattern', () => {
-    // rotate([1,0,0,1,0,0,1,0], 2) = [0,1,0,0,1,0,0,1] → no, left-rotate:
-    // [0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0] (golden from Node script)
+  it('E(3,8,2) rotation produces correct native 8-step pattern (Phase 07)', () => {
+    // rotate([1,0,0,1,0,0,1,0], 2) = [0,1,0,0,1,0,1,0] (left-rotate by 2)
+    // Phase 07 fix: native 8-step output (not mapped to 16 slots).
     applyRhythmSpec({
       layers: [{ sound: 'sd', euclid: { k: 3, n: 8, rot: 2 } }],
     });
     const state = get(sessionStore);
     const layer = state.rhythm.layers[0];
-    expect(layer.steps).toEqual([0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]);
+    expect(layer.steps).toEqual([0, 1, 0, 0, 1, 0, 1, 0]);
     expect(layer.euclid).toBe('3,8,2');
   });
 

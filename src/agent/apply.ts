@@ -54,10 +54,10 @@ const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug'];
  *   - Euclid variant (prototype lines 1687–1691):
  *       k = clampi(k,1,16), n = clampi(n,2,16), rot = clampi(rot,0,n-1)
  *       pat = rotate(bjorklund(k,n), rot)
- *       maps n-step pattern to RSTEPS (16) via Math.round(i/n*RSTEPS)%RSTEPS
+ *       maps n-step pattern to a native n-length boolean array
  *       euclid compact string: `${k},${n}${rot ? ','+rot : ''}`
  *   - Steps variant (prototype lines 1692–1696):
- *       takes first RSTEPS entries, clamps each to 0/1
+ *       takes up to RSTEPS entries, preserving native length
  *
  * ## Lock-preservation (Phase 05 §4)
  *
@@ -104,22 +104,13 @@ export function applyRhythmSpec(spec: RhythmSpec, opts?: { force?: boolean }): v
       const n = clampi(L.euclid.n ?? 8, 2, 16);
       const rot = clampi(L.euclid.rot ?? 0, 0, n - 1);
       const pat = rotate(bjorklund(k, n), rot);
-      const steps: number[] = new Array(RSTEPS).fill(0);
-      pat.forEach((v, i) => {
-        if (v) {
-          const s = Math.round((i / n) * RSTEPS) % RSTEPS;
-          steps[s] = 1;
-        }
-      });
+      const steps: number[] = pat.map((v) => (v ? 1 : 0));
       // Compact euclid string: `k,n` or `k,n,rot` (prototype line 1691)
       const euclidStr = rot ? `${k},${n},${rot}` : `${k},${n}`;
       newUnlockedLayers.push({ sound, steps, euclid: euclidStr });
     } else if ('steps' in L && Array.isArray(L.steps)) {
       // Steps variant — prototype lines 1692–1696
-      const steps: number[] = new Array(RSTEPS).fill(0);
-      L.steps.slice(0, RSTEPS).forEach((v, i) => {
-        steps[i] = v ? 1 : 0;
-      });
+      const steps: number[] = L.steps.slice(0, RSTEPS).map((v) => (v ? 1 : 0));
       newUnlockedLayers.push({ sound, steps });
     }
   }

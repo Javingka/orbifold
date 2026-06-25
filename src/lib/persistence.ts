@@ -88,7 +88,11 @@ const SavedHarmonySchema = z.object({
 
 const SavedRhythmLayerSchema = z.object({
   sound: z.enum(SK_SOUNDS),
-  steps: z.array(z.number().int().min(0).max(1)).length(16),
+  /**
+   * Relaxed from .length(16) in Phase 07 to support native-length n-step patterns;
+   * 16-step blobs continue to parse (16 satisfies min(1).max(16)).
+   */
+  steps: z.array(z.number().int().min(0).max(1)).min(1).max(16),
   euclid: z.string().optional(),
   /** ADR 0025 D5/D7 — optional; absent in pre-Phase-01 sessions; falls back to `sound` in codegen. */
   strudelSample: z.string().optional(),
@@ -113,7 +117,11 @@ const SavedRhythmSchema = z.object({
  */
 const SavedGrooveLayerSchema = z.object({
   sound: z.enum(SK_SOUNDS),
-  steps: z.array(z.number().int().min(0).max(1)).length(16),
+  /**
+   * Relaxed from .length(16) in Phase 07 to support native-length n-step patterns;
+   * 16-step blobs continue to parse (16 satisfies min(1).max(16)).
+   */
+  steps: z.array(z.number().int().min(0).max(1)).min(1).max(16),
   euclid: z.string().optional(),
   muted: z.boolean().optional(),
   solo: z.boolean().optional(),

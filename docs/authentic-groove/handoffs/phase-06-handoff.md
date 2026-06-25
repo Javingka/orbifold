@@ -40,6 +40,14 @@ No Acceptance IDs claimed in step 06.1 (inventory — read-only).
 
 Not applicable for inventory step.
 
+### Planner Review
+
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-25
+**Iteration:** 1 of 5
+**Reason:** Read-only step; all 8 inventory sections complete with live source verification; key finding (applyRhythmSpec pads to 16) pre-empts the spec error in step 06.4; no source files modified; no Register conflicts.
+**Next action:** Dev proceeds to step 06.2
+
 ---
 
 ## Step 06.2 — `defaultCpm` on `MusicalRecipe` + tempo injection in `applyRecipeById` + tests
@@ -80,6 +88,14 @@ Not applicable for inventory step.
 - `pnpm exec vitest run default-tempo` → 13 tests pass
 - `pnpm test` → 1859 tests pass, no regressions
 
+### Planner Review
+
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-25
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass: commit scope clean (5 files, all relevant); commit message format correct; A-06-01/02/03 substantively covered (field exists, store BPM verified by real store-read after call, Invariant 10 enforced); tests exercise actual `applyRecipeById` path with partial mock preserving sync store update; AG-D1 confirmed clean by grep (no genre name in autopilot.ts code); reversibility intact (`?` optional field, guarded call, schema unchanged); no new dependencies.
+**Next action:** Dev proceeds to step 06.3
+
 ---
 
 ## Step 06.3 — Dynamic step grid in PIXI rhythm canvas
@@ -111,6 +127,14 @@ Not applicable for inventory step.
 
 - `pnpm exec tsc --noEmit` → clean (no output)
 - `pnpm test` → 1859 tests pass, no regressions
+
+### Planner Review
+
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-25
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass: commit scope clean (only `rhythm-scene.ts` + handoff); commit message format correct; A-06-04 (partial) evidenced by code review of all loop replacements and seam grep (RSTEPS absent from all `for` loops); no new tests required for render layer (explicitly justified in phase spec); RSTEPS constant removal driven by real lint error (`no-unused-vars`) and correctly resolved with a reference comment; AG-D1 clean (no genre names, no music-knowledge imports added); 16-step backward-compatibility argument correct and verified; no new dependencies. Note: phase spec said "keep the declaration at line 29" but the constant was legitimately removed to satisfy lint after becoming unused — this is a correct and necessary deviation.
+**Next action:** Dev proceeds to step 06.4
 
 ---
 
@@ -193,6 +217,14 @@ No `for` loop uses `RSTEPS`. All per-layer rendering uses `N` or `layerN`. — P
 - `pnpm test` → **1863 tests pass** (1831 prior + 32 new in Phase 06)
 - `pnpm build` → succeeds (dist/assets/index-*.js built; pre-existing chunk size warning unrelated to Phase 06)
 
+### Planner Review
+
+**Decision:** APPROVED
+**Reviewed on:** 2026-06-25
+**Iteration:** 1 of 5
+**Reason:** All 8 checklist items pass: commit scope clean (2 test files + lint fix in rhythm-scene.ts + handoff); commit message format correct; all 5 Acceptance IDs at FULL with seam grep evidence recorded verbatim; 4 new tests exercise actual integration path (full `applyRecipeById` with store state verification); spec deviation (16 vs 12 steps) is correctly identified, documented with rationale, and consistent with `persistence.ts` schema — the inventory pre-identified this; reversibility note present verbatim as required; seam grep checks all three pass with zero false positives; quality gate (tsc + lint + test + build) all clean; no new dependencies.
+**Next action:** Pilot approval required — phase complete (Checkpoint #5)
+
 ---
 
 ## Phase 06 — Completion
@@ -226,3 +258,12 @@ None.
 - All other Phase 05 deferred items remain unchanged.
 
 **Pilot approval required — phase complete (Checkpoint #5)**
+
+### Planner Phase Review
+
+**Decision:** APPROVED — all steps 06.1–06.4 approved, phase complete
+**Reviewed on:** 2026-06-25
+**All Acceptance IDs:** FULL (A-06-01 through A-06-05)
+**Test delta:** 1831 → 1863 (+32)
+**Pending Register proposals:** None
+**Next action:** Pilot approval required — phase complete (Checkpoint #5)
