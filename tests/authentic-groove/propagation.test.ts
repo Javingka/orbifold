@@ -117,7 +117,7 @@ describe('applySampleMap — direct unit tests', () => {
 describe('A-01-01: cumbia recipe → strudelSample propagation', () => {
   it('applying cumbia recipe yields layers with strudelSample on bd-slot', () => {
     const recipe = findRecipe('cumbia-latina-groove');
-    // cumbia sampleMap: { bd: 'perc' } — per inventory §2.3 and ADR 0025 D6.
+    // cumbia sampleMap: { bd: 'conga' } — Phase 04 upgrade from 'perc' (FreePats Conga, CC0).
 
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
@@ -134,14 +134,14 @@ describe('A-01-01: cumbia recipe → strudelSample propagation', () => {
     // Step 2: overlay sampleMap via applySampleMap.
     applySampleMap(recipe.sampleMap ?? {});
 
-    // Confirm bd-slot layer now carries strudelSample: 'perc'.
+    // Confirm bd-slot layer now carries strudelSample: 'conga' (Phase 04 upgrade).
     const layers = get(sessionStore).rhythm.layers;
     const bdLayer = layers.find((l) => l.sound === 'bd');
     expect(bdLayer).toBeDefined();
-    expect(bdLayer?.strudelSample).toBe('perc');
+    expect(bdLayer?.strudelSample).toBe('conga');
   });
 
-  it('rhythmLayerToStrudelLine emits "perc" tokens for cumbia bd layer (A-01-01 codegen)', () => {
+  it('rhythmLayerToStrudelLine emits "conga" tokens for cumbia bd layer (A-01-01 codegen)', () => {
     const recipe = findRecipe('cumbia-latina-groove');
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
@@ -156,8 +156,8 @@ describe('A-01-01: cumbia recipe → strudelSample propagation', () => {
     if (!bdLayer) return;
 
     const line = rhythmLayerToStrudelLine(bdLayer);
-    // Should contain 'perc' tokens, not 'bd'.
-    expect(line).toContain('perc');
+    // Should contain 'conga' tokens (Phase 04 upgrade from 'perc'), not generic 'bd'.
+    expect(line).toContain('conga');
     expect(line).not.toContain('" bd');
     expect(line).not.toContain('bd ');
     // Confirm it doesn't emit the generic sound.

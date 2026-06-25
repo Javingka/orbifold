@@ -354,7 +354,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'son clave; let the blues harmony provide emotional depth. ' +
       'Suggested tempo: 90–120 BPM.',
     sampleMap: {
-      bd: 'perc', // fallback: no native clave in @strudel/web@1.0.3
+      bd: 'wood', // wood: FreePats Claves (CC0) — authentic clave idiophone for the rumba clave pattern
     },
   },
 
@@ -472,7 +472,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       '(Am–G–F–E). The off-center accents evoke the rasgueado feel of flamenco compás. ' +
       'Suggested tempo: 100–140 BPM.',
     sampleMap: {
-      bd: 'perc', // fallback: no native cajon in @strudel/web@1.0.3
+      bd: 'cajon', // cajon: FreePats CajonFlamenco (CC0) — canonical flamenco percussion instrument
     },
   },
 
@@ -503,7 +503,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'evokes the driving bass drum feel of Colombian cumbia processions. ' +
       'Suggested tempo: 95–115 BPM.',
     sampleMap: {
-      bd: 'perc', // fallback: no native caja/guacharaca in @strudel/web@1.0.3
+      bd: 'conga', // conga: FreePats Conga (CC0) — closest available membrane drum to the cumbia caja
     },
   },
 
@@ -534,7 +534,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       '(Dm–F–Gsus4). The driving syncopation contrasts with the open modal harmony. ' +
       'Suggested tempo: 85–110 BPM.',
     sampleMap: {
-      bd: 'perc', // fallback: no native candombe drum names in @strudel/web@1.0.3
+      bd: 'conga', // conga: FreePats Conga (CC0) — closest available to the Afro-Uruguayan candombe membrane drum
     },
   },
 ];

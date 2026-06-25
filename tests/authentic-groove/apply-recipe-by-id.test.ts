@@ -59,13 +59,13 @@ describe('applyRecipeById — known recipe with sampleMap (cumbia-latina-groove)
     expect(layers.length).toBeGreaterThan(0);
   });
 
-  it('bd-slot layer carries strudelSample: "perc" (cumbia sampleMap A-02-03)', () => {
-    // cumbia sampleMap: { bd: 'perc' } — per inventory §2 and ADR 0025 D4.
+  it('bd-slot layer carries strudelSample: "conga" (cumbia sampleMap A-02-03, Phase 04 upgrade)', () => {
+    // cumbia sampleMap: { bd: 'conga' } — Phase 04 upgrade from 'perc' (FreePats Conga, CC0).
     applyRecipeById('cumbia-latina-groove');
     const layers = get(sessionStore).rhythm.layers;
     const bdLayer = layers.find((l) => l.sound === 'bd');
     expect(bdLayer).toBeDefined();
-    expect(bdLayer?.strudelSample).toBe('perc');
+    expect(bdLayer?.strudelSample).toBe('conga');
   });
 
   it('lastRecipeApplied.recipeId equals "cumbia-latina-groove" after apply (A-02-07 badge set)', () => {

@@ -228,4 +228,78 @@ Result: **empty output (zero matches)**. Palette names are confined to the two p
 - `SCHEMA_VERSION` (6) and `SESSION_SCHEMA_VERSION` (5) unchanged — no schema change in this step.
 - `src/vite-env.d.ts` modification: this is a type-declaration change only, not a runtime change. The declaration now correctly reflects the actual `Bo` function signature in `@strudel/web@1.0.3`.
 
-**Next action:** Proceed to step 04.4 (sampleMap upgrades in the recipe catalog).
+**Planner Review:** APPROVED on 2026-06-24. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 04.4
+
+---
+
+## Step 04.4 — sampleMap upgrades in the recipe catalog
+
+**Date:** 2026-06-24
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read inventory §4 (exact upgrade plan), ADR 0025 (D2, D3, D6), and all four required files before editing.
+- Applied 4 sampleMap upgrades in `rhythm-harmony-recipes.ts`:
+  - `cumbia-latina-groove` `bd: 'perc'` → `bd: 'conga'` (FreePats Conga — closest membrane drum to cumbia caja)
+  - `candombe-dorian-groove` `bd: 'perc'` → `bd: 'conga'` (FreePats Conga — closest to Afro-Uruguayan candombe membrane drum)
+  - `buleria-flamenco-phrygian` `bd: 'perc'` → `bd: 'cajon'` (FreePats CajonFlamenco — canonical flamenco percussion instrument)
+  - `rumba-blues-minor` `bd: 'perc'` → `bd: 'wood'` (FreePats Claves — authentic clave idiophone for the rumba clave pattern)
+- Replaced fallback comments with authentic descriptions per spec ("Replace fallback comments with authentic descriptions").
+- Left the 6 remaining fallback entries untouched (`west-african-bell-modal` bd+hh, `west-african-triplet-groove` bd+hh, `latin-jazz-clave-swing` hh, `samba-afro-brasileiro` hh).
+- Updated `tests/authentic-groove/sample-map.test.ts`:
+  - Added `'conga'`, `'cajon'`, `'wood'` to `VERIFIED_SAMPLE_NAMES` (with inline attribution comments).
+  - Updated fixture comment block to show Phase 04 new expected values.
+  - Updated 4 per-recipe assertions to the new values (rumba → wood, cumbia → conga, candombe → conga, bulería → cajon).
+  - 60 tests still present and pass (no tests added or removed from `sample-map.test.ts`).
+- Updated stale assertions in two additional test files that also referenced the old `'perc'` value for cumbia:
+  - `tests/authentic-groove/propagation.test.ts` lines 141/160: updated cumbia bd-slot assertions from `'perc'` → `'conga'` and updated test description text to document the Phase 04 upgrade.
+  - `tests/authentic-groove/apply-recipe-by-id.test.ts` line 68: updated cumbia bd-slot assertion from `'perc'` → `'conga'` and updated test description text.
+
+**Note on additional test file updates:** The phase spec (step 04.5) explicitly states: "If any existing propagation test asserted the old fallback name for an upgraded recipe, update the assertion to the new name and document the update explicitly in the handoff." The two failing tests in `propagation.test.ts` and `apply-recipe-by-id.test.ts` were asserting the stale `'perc'` value for cumbia; updating them here in step 04.4 is consistent with that doctrine and keeps the suite green rather than carrying known-broken assertions into step 04.5.
+
+### Files touched
+
+- `src/core/music-knowledge/rhythm-harmony-recipes.ts` (modified — 4 sampleMap upgrades)
+- `tests/authentic-groove/sample-map.test.ts` (modified — VERIFIED_SAMPLE_NAMES + 4 per-recipe assertions updated)
+- `tests/authentic-groove/propagation.test.ts` (modified — 2 cumbia assertions updated from `'perc'` → `'conga'`)
+- `tests/authentic-groove/apply-recipe-by-id.test.ts` (modified — 1 cumbia assertion updated from `'perc'` → `'conga'`)
+- `docs/authentic-groove/handoffs/phase-04-handoff.md` (this file)
+
+No change to `recipe-engine.ts`, `apply.ts`, `autopilot.ts`, or any plumbing file.
+
+### Validation evidence
+
+**`pnpm exec tsc --noEmit`:** clean (exit 0, no output).
+
+**`pnpm exec vitest run sample-map`:**
+```
+Test Files  1 passed (1)
+     Tests  60 passed (60)
+```
+All 60 tests pass — original count preserved.
+
+**`pnpm test`:**
+```
+Test Files  34 passed (34)
+     Tests  1710 passed (1710)
+```
+No regressions. Total count unchanged from step 04.3 (1710) — the 3 previously-failing tests are now fixed by correcting stale assertions.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-04-02 | Genre recipes with upgradeable fallbacks carry authentic FreePats name in sampleMap; applying them emits the authentic Strudel sample name | `tests/authentic-groove/sample-map.test.ts` (4 per-recipe assertions updated); `tests/authentic-groove/propagation.test.ts` (cumbia propagation + codegen assertions updated to `'conga'`); `tests/authentic-groove/apply-recipe-by-id.test.ts` (cumbia applyRecipeById assertion updated) | unit | partial — sampleMap catalog values confirmed; propagation confirmed for cumbia; propagation for candombe/buleria/rumba deferred to 04.5 |
+| A-04-03 | Recipes without available authentic name retain Phase 01/03 fallbacks unchanged | `tests/authentic-groove/sample-map.test.ts` (unchanged assertions for west-african, latin-jazz, samba entries) | unit | partial — catalog values confirmed; propagation deferred to 04.5 |
+| A-04-05 | `tsc --noEmit` clean; `pnpm test` passes | recorded above | operability | partial — tsc clean + 1710 tests; lint and build deferred to 04.5 |
+
+### Notes
+
+- The 4 upgraded recipes now emit culturally accurate sample names: `conga` (cumbia, candombe), `cajon` (bulería flamenco), `wood` (rumba clave). These names resolve to the CC0 FreePats OGG files committed in step 04.2.
+- The 6 remaining fallback entries (west-African bell × 4, latin-jazz cascara × 1, samba caixa × 1) are deliberately unchanged — no available CC0 sample approximates those roles better than the current fallbacks (`'cb'`, `'perc'`, `'sd'`).
+- `SCHEMA_VERSION` (6) and `SESSION_SCHEMA_VERSION` (5) unchanged.
+- No new ADR triggered — this is a catalog value update within the framework established by ADR 0025 D2/D6.
+
+**Next action:** Dev proceeds to step 04.5

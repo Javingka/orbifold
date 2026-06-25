@@ -41,20 +41,24 @@ const VERIFIED_SAMPLE_NAMES: readonly string[] = [
   'tabla2',
   'east',
   'hand',
+  // Phase 04 FreePats CC0 additions (ADR 0025 D6, inventory §4):
+  'conga', // FreePats Conga — membrane drum (cumbia caja, candombe chico)
+  'cajon', // FreePats CajonFlamenco — canonical flamenco percussion
+  'wood',  // FreePats Claves — authentic clave idiophone (rumba clave pattern)
 ];
 
 // ── Genre recipes that must have a sampleMap ─────────────────────────────────
 //
-// Per Pilot OD resolutions and inventory §2.3:
+// Per Pilot OD resolutions and inventory §2.3 / §4:
 //   west-african-bell-modal          → { bd: 'cb', hh: 'perc' }
 //   west-african-triplet-groove      → { bd: 'cb', hh: 'perc' }
 //   latin-jazz-clave-swing           → { bd: 'bd', hh: 'cb' }
-//   rumba-blues-minor                → { bd: 'perc' }
+//   rumba-blues-minor                → { bd: 'wood' }   // Phase 04 upgrade: perc → wood (FreePats Claves)
 //   samba-afro-brasileiro            → { bd: 'bd', hh: 'sd' }
 //   bossa-nova-groove                → { bd: 'bd', hh: 'hand' }  // Phase 03 upgrade: sd → hand
-//   cumbia-latina-groove             → { bd: 'perc' }
-//   candombe-dorian-groove           → { bd: 'perc' }
-//   buleria-flamenco-phrygian        → { bd: 'perc' }
+//   cumbia-latina-groove             → { bd: 'conga' }  // Phase 04 upgrade: perc → conga (FreePats Conga)
+//   candombe-dorian-groove           → { bd: 'conga' }  // Phase 04 upgrade: perc → conga (FreePats Conga)
+//   buleria-flamenco-phrygian        → { bd: 'cajon' }  // Phase 04 upgrade: perc → cajon (FreePats CajonFlamenco)
 
 const GENRE_RECIPE_IDS_WITH_SAMPLE_MAP = [
   'west-african-bell-modal',
@@ -162,9 +166,9 @@ describe('sampleMap — per-genre value assertions', () => {
     expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'cb' });
   });
 
-  it('rumba-blues-minor: bd → perc (struck-idiophone character)', () => {
+  it('rumba-blues-minor: bd → wood (FreePats Claves — authentic clave idiophone, Phase 04 upgrade)', () => {
     const recipe = findRecipe('rumba-blues-minor');
-    expect(recipe.sampleMap).toEqual({ bd: 'perc' });
+    expect(recipe.sampleMap).toEqual({ bd: 'wood' });
   });
 
   it('samba-afro-brasileiro: bd → bd, hh → sd (sd for caixa snare character)', () => {
@@ -177,19 +181,19 @@ describe('sampleMap — per-genre value assertions', () => {
     expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'hand' });
   });
 
-  it('cumbia-latina-groove: bd → perc (struck-membrane character)', () => {
+  it('cumbia-latina-groove: bd → conga (FreePats Conga — closest membrane drum to cumbia caja, Phase 04 upgrade)', () => {
     const recipe = findRecipe('cumbia-latina-groove');
-    expect(recipe.sampleMap).toEqual({ bd: 'perc' });
+    expect(recipe.sampleMap).toEqual({ bd: 'conga' });
   });
 
-  it('candombe-dorian-groove: bd → perc (ethnic percussion)', () => {
+  it('candombe-dorian-groove: bd → conga (FreePats Conga — closest to candombe membrane drum, Phase 04 upgrade)', () => {
     const recipe = findRecipe('candombe-dorian-groove');
-    expect(recipe.sampleMap).toEqual({ bd: 'perc' });
+    expect(recipe.sampleMap).toEqual({ bd: 'conga' });
   });
 
-  it('buleria-flamenco-phrygian: bd → perc (perc approximates cajon)', () => {
+  it('buleria-flamenco-phrygian: bd → cajon (FreePats CajonFlamenco — canonical flamenco percussion, Phase 04 upgrade)', () => {
     const recipe = findRecipe('buleria-flamenco-phrygian');
-    expect(recipe.sampleMap).toEqual({ bd: 'perc' });
+    expect(recipe.sampleMap).toEqual({ bd: 'cajon' });
   });
 });
 
