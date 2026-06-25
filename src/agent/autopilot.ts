@@ -46,7 +46,7 @@ import {
 } from '../state/session.js';
 import type { LastRecipeDisplay } from '../state/session.js';
 import { sendEvolution } from './agent.js';
-import { applyRhythmSpec, applyHarmonySpec, applySampleMap } from './apply.js';
+import { applyRhythmSpec, applyHarmonySpec, applySampleMap, applyLockedFlags } from './apply.js';
 import { getRecipeById } from '../core/music-knowledge/query.js';
 import { recipeToAgentOutput } from '../core/music-knowledge/recipe-engine.js';
 import type { AgentOutput } from './schema.js';
@@ -131,11 +131,19 @@ function applyPlanStep(step: AgentOutput): boolean {
       if (engineOutput !== null) {
         // Apply recipe rhythm only if the step did NOT supply explicit rhythm
         if (!step.rhythm && engineOutput.rhythm) {
-          applyRhythmSpec(engineOutput.rhythm);
+          // Phase 05: force: true bypasses lock-preservation for recipe application.
+          // A fresh recipe replaces ALL layers (including locks from a prior recipe).
+          applyRhythmSpec(engineOutput.rhythm, { force: true });
           // ADR 0025 D4: overlay strudelSample from the recipe's sampleMap.
           // Called immediately after applyRhythmSpec so layers are in the store.
           // applySampleMap carries zero genre knowledge — it is handed the map.
           applySampleMap(recipe.sampleMap ?? {});
+          // Phase 05: stamp locked: true on layers declared as locked in the recipe.
+          // applyLockedFlags is genre-agnostic — it receives Sound values, not genre names.
+          const lockedSounds = (recipe.layers ?? [])
+            .filter((l) => l.locked === true)
+            .map((l) => l.sound);
+          applyLockedFlags(lockedSounds);
           applied = true;
         }
         // Apply recipe harmony only if the step did NOT supply explicit harmony
@@ -198,11 +206,19 @@ export function applyRecipeById(id: string): boolean {
   // the undefined guard keeps TypeScript strict-mode satisfied.
   if (!engineOutput.rhythm || !engineOutput.harmony) return false;
 
-  // Step 3: apply rhythm (clears lastRecipeApplied badge).
-  applyRhythmSpec(engineOutput.rhythm);
+  // Step 3: apply rhythm with force: true — full replace, bypasses lock-preservation.
+  // A fresh recipe application must replace ALL layers (including locks from a prior recipe).
+  applyRhythmSpec(engineOutput.rhythm, { force: true });
 
   // Step 4: overlay strudelSample from the recipe's sampleMap (ADR 0025 D4).
   applySampleMap(recipe.sampleMap ?? {});
+
+  // Step 4b (Phase 05): stamp locked: true on layers declared as locked in this recipe.
+  // applyLockedFlags is genre-agnostic — receives Sound values extracted from recipe.layers.
+  const lockedSounds = (recipe.layers ?? [])
+    .filter((l) => l.locked === true)
+    .map((l) => l.sound);
+  applyLockedFlags(lockedSounds);
 
   // Step 5: apply harmony (clears lastRecipeApplied badge again).
   applyHarmonySpec(engineOutput.harmony);

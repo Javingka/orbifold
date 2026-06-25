@@ -281,12 +281,13 @@ SCHEMA DE SALIDA:
 
 REGLAS:
 1. EVOLUCIÓN MÍNIMA: cada paso cambia 1–3 pasos de ritmo o 1 acorde de armonía respecto al paso anterior.
-2. VARIACIÓN OBLIGATORIA: cada paso DEBE diferir del anterior (≥2 onsets distintos o ≥1 acorde distinto); el arco debe ser progresivo y coherente.
-3. Si hay "rhythmHint" o "rhythmHintFreeText": orienta la evolución hacia ese estilo cultural; usa tu conocimiento del género para elegir patrones auténticos.
-4. Si usas "musicalIntent.recipeId": debe ser un id de la lista "availableRecipeSummaries" del mensaje.
-5. Cuando solo envías "musicalIntent.recipeId" (sin rhythm/harmony), Orbifold aplica la receta completa automáticamente.
-6. JSON COMPACTO: cada array en UNA sola línea, p.ej. "steps":[1,0,0,1,1,0,1,0,1,0,0,1,0,1,0,0]. NO uses pretty-print con un número por línea (desperdicia tokens y trunca la respuesta).
-7. NUNCA "saveAsBlock". NUNCA texto fuera del bloque json.
+2. CAPAS BLOQUEADAS: si \`locked: true\` aparece en una capa del stateSnapshot, NO la modifiques ni la omitas. Solo propón cambios en capas con \`locked: false\` o sin campo \`locked\`. Las capas bloqueadas son la firma rítmica cultural de la receta activa.
+3. VARIACIÓN OBLIGATORIA: cada paso DEBE diferir del anterior (≥2 onsets distintos o ≥1 acorde distinto); el arco debe ser progresivo y coherente.
+4. Si hay "rhythmHint" o "rhythmHintFreeText": orienta la evolución hacia ese estilo cultural; usa tu conocimiento del género para elegir patrones auténticos.
+5. Si usas "musicalIntent.recipeId": debe ser un id de la lista "availableRecipeSummaries" del mensaje.
+6. Cuando solo envías "musicalIntent.recipeId" (sin rhythm/harmony), Orbifold aplica la receta completa automáticamente.
+7. JSON COMPACTO: cada array en UNA sola línea, p.ej. "steps":[1,0,0,1,1,0,1,0,1,0,0,1,0,1,0,0]. NO uses pretty-print con un número por línea (desperdicia tokens y trunca la respuesta).
+8. NUNCA "saveAsBlock". NUNCA texto fuera del bloque json.
 
 Ejemplo con horizon=2:
 \`\`\`json
@@ -350,10 +351,12 @@ export async function sendEvolution(): Promise<void> {
       layers: state.rhythm.layers.map((layer) => {
         if ('euclid' in layer && layer.euclid) {
           // Euclid layer — pass through as-is (no steps array to compact)
-          return { sound: layer.sound, euclid: layer.euclid };
+          // Phase 05: include locked field so LLM knows which layers to preserve.
+          return { sound: layer.sound, euclid: layer.euclid, locked: layer.locked ?? false };
         }
         // Steps layer — compact binary string (LLM-payload-only per ADR 0024 D5)
-        return { sound: layer.sound, steps: layer.steps.join('') };
+        // Phase 05: include locked field so LLM knows which layers to preserve.
+        return { sound: layer.sound, steps: layer.steps.join(''), locked: layer.locked ?? false };
       }),
     },
     harmony: {

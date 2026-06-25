@@ -59,19 +59,44 @@ const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug'];
  *   - Steps variant (prototype lines 1692–1696):
  *       takes first RSTEPS entries, clamps each to 0/1
  *
- * Replaces all rhythm.layers in the store.
+ * ## Lock-preservation (Phase 05 §4)
+ *
+ * When `opts?.force` is false/absent (the default — direct agent calls):
+ *   - Reads currently locked layers from the session store before building the
+ *     new layer array.
+ *   - For each proposed layer whose sound matches a locked layer: SKIP it
+ *     (the locked layer is preserved as-is).
+ *   - After processing all proposed layers: prepend locked layers first so the
+ *     cultural signature layers come before agent-added unlocked layers.
+ *   - When no locked layers exist, behavior is identical to pre-Phase-05
+ *     (full replace — backward-compatible).
+ *
+ * When `opts?.force === true` (recipe-application path only):
+ *   - Skips the lock-preservation logic entirely; full replace of all layers.
+ *   - Used by `applyRecipeById` in autopilot.ts to ensure a fresh recipe
+ *     application replaces ALL layers (including locks from a previous recipe).
  *
  * @param spec - Validated RhythmSpec (from AgentOutputSchema).
+ * @param opts - Optional parameters. `force: true` bypasses lock-preservation.
  */
-export function applyRhythmSpec(spec: RhythmSpec): void {
+export function applyRhythmSpec(spec: RhythmSpec, opts?: { force?: boolean }): void {
   // Any manual or agent-driven rhythm change invalidates the active recipe badge.
   // applyRecipeById re-sets it after calling this function (last write wins).
   setLastRecipeApplied(null);
 
-  const layers: RhythmLayer[] = [];
+  // Phase 05: read current locked layers before replacing (unless force mode).
+  // Genre-agnostic: we only check the locked flag, not any genre name.
+  const currentLayers = get(sessionStore).rhythm.layers;
+  const lockedLayers = opts?.force ? [] : currentLayers.filter((l) => l.locked === true);
+  const lockedSounds = new Set(lockedLayers.map((l) => l.sound));
+
+  const newUnlockedLayers: RhythmLayer[] = [];
 
   for (const L of spec.layers) {
     const sound: Sound = SK_SOUNDS.includes(L.sound) ? (L.sound as Sound) : 'bd';
+
+    // Phase 05: skip proposed layers whose sound is currently locked.
+    if (lockedSounds.has(sound)) continue;
 
     if ('euclid' in L && L.euclid !== undefined) {
       // Euclid variant — prototype lines 1687–1691
@@ -88,22 +113,54 @@ export function applyRhythmSpec(spec: RhythmSpec): void {
       });
       // Compact euclid string: `k,n` or `k,n,rot` (prototype line 1691)
       const euclidStr = rot ? `${k},${n},${rot}` : `${k},${n}`;
-      layers.push({ sound, steps, euclid: euclidStr });
+      newUnlockedLayers.push({ sound, steps, euclid: euclidStr });
     } else if ('steps' in L && Array.isArray(L.steps)) {
       // Steps variant — prototype lines 1692–1696
       const steps: number[] = new Array(RSTEPS).fill(0);
       L.steps.slice(0, RSTEPS).forEach((v, i) => {
         steps[i] = v ? 1 : 0;
       });
-      layers.push({ sound, steps });
+      newUnlockedLayers.push({ sound, steps });
     }
   }
 
-  if (layers.length === 0) return;
+  // Phase 05: locked layers first (cultural signature), then unlocked agent layers.
+  // When no locked layers exist, finalLayers === newUnlockedLayers (full replace — backward-compat).
+  const finalLayers: RhythmLayer[] = [...lockedLayers, ...newUnlockedLayers];
+
+  if (finalLayers.length === 0) return;
 
   sessionStore.update((s) => ({
     ...s,
-    rhythm: { ...s.rhythm, layers },
+    rhythm: { ...s.rhythm, layers: finalLayers },
+  }));
+}
+
+// ── applyLockedFlags ───────────────────────────────────────────────────────
+
+/**
+ * Stamp `locked: true` on session rhythm layers matching `lockedSounds`.
+ *
+ * Called by the recipe-application path after `applyRhythmSpec` to mark the
+ * recipe's cultural signature layers. Genre-agnostic — receives a list of
+ * Sound values, not genre names. Per Phase 05 §5 (Option B).
+ *
+ * Layers whose `sound` is NOT in `lockedSounds` are unchanged (locked remains
+ * undefined or false). Layers already in the store with matching sounds get
+ * `locked: true` stamped.
+ *
+ * @param lockedSounds - Sound values to mark as locked.
+ */
+export function applyLockedFlags(lockedSounds: Sound[]): void {
+  const soundSet = new Set<Sound>(lockedSounds);
+  sessionStore.update((state) => ({
+    ...state,
+    rhythm: {
+      ...state.rhythm,
+      layers: state.rhythm.layers.map((layer) =>
+        soundSet.has(layer.sound) ? { ...layer, locked: true } : layer
+      ),
+    },
   }));
 }
 

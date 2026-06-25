@@ -181,35 +181,71 @@ export function recipeToAgentOutput(
     | { sound: SkSound; steps: number[] }
   > = [];
 
-  for (let i = 0; i < recipe.rhythmIds.length; i++) {
-    const rhythmId = recipe.rhythmIds[i];
-    const entry = getRhythmById(rhythmId);
+  if (recipe.layers !== undefined && recipe.layers.length > 0) {
+    // Phase 05: multi-layer recipe path — iterate recipe.layers directly.
+    // Uses layers[i].binary and layers[i].sound. No catalog lookup at runtime;
+    // rhythmId fields are for traceability only (not used here).
+    // This path makes 12-step struct patterns (e.g. cueca palmas) expressible
+    // without requiring steps===16 or any catalog change to AgentOutputSchema.
+    for (const recipeLayer of recipe.layers) {
+      const sound = recipeLayer.sound as SkSound;
+      const binarySteps = recipeLayer.binary.split('').map(Number);
 
-    if (entry === undefined) return null; // catalog integrity failure
+      if (
+        recipeLayer.euclid !== undefined &&
+        recipeLayer.euclid.n <= 16
+      ) {
+        // Prefer euclid representation when euclid params are present and n<=16.
+        layers.push({
+          sound,
+          euclid: {
+            k: recipeLayer.euclid.k,
+            n: recipeLayer.euclid.n,
+            rot: recipeLayer.euclid.rot,
+          },
+        });
+      } else {
+        // Emit as steps variant — the binary string is authoritative.
+        layers.push({ sound, steps: binarySteps });
+      }
+    }
+  } else {
+    // Legacy path: iterate recipe.rhythmIds with catalog lookup and index-based sound.
+    // Used by the 13 existing recipes without a layers declaration.
+    for (let i = 0; i < recipe.rhythmIds.length; i++) {
+      const rhythmId = recipe.rhythmIds[i];
+      const entry = getRhythmById(rhythmId);
 
-    // Determine sound: override only applies to single-layer recipes at index 0
-    const sound: SkSound =
-      recipe.rhythmIds.length === 1 && i === 0 && options?.layerSound !== undefined
-        ? (options.layerSound as SkSound)
-        : soundForIndex(i);
+      if (entry === undefined) return null; // catalog integrity failure
 
-    if (entry.strudelStrategy === 'euclid' && entry.euclid !== undefined && entry.euclid.n <= 16) {
-      // euclid-expressible path (OD-2)
-      layers.push({
-        sound,
-        euclid: {
-          k: entry.euclid.k,
-          n: entry.euclid.n,
-          rot: entry.euclid.rot,
-        },
-      });
-    } else if (entry.strudelStrategy === 'struct' && entry.steps === 16) {
-      // steps16-expressible path (OD-2)
-      const steps = entry.binary.split('').map(Number);
-      layers.push({ sound, steps });
-    } else {
-      // Non-expressible — defensive guard (OD-3 Option B: should never reach here)
-      return null;
+      // Determine sound: override only applies to single-layer recipes at index 0
+      const sound: SkSound =
+        recipe.rhythmIds.length === 1 && i === 0 && options?.layerSound !== undefined
+          ? (options.layerSound as SkSound)
+          : soundForIndex(i);
+
+      if (
+        entry.strudelStrategy === 'euclid' &&
+        entry.euclid !== undefined &&
+        entry.euclid.n <= 16
+      ) {
+        // euclid-expressible path (OD-2)
+        layers.push({
+          sound,
+          euclid: {
+            k: entry.euclid.k,
+            n: entry.euclid.n,
+            rot: entry.euclid.rot,
+          },
+        });
+      } else if (entry.strudelStrategy === 'struct' && entry.steps === 16) {
+        // steps16-expressible path (OD-2)
+        const steps = entry.binary.split('').map(Number);
+        layers.push({ sound, steps });
+      } else {
+        // Non-expressible — defensive guard (OD-3 Option B: should never reach here)
+        return null;
+      }
     }
   }
 
@@ -235,6 +271,15 @@ export function recipeToAgentOutput(
   };
 
   // ── Internal safeParse guard ──────────────────────────────────────────────
+  // When recipe.layers is present, patterns may have non-16 step counts (e.g. 12-step
+  // cueca palmas). AgentOutputSchema requires steps.length === 16 (LLM-output constraint).
+  // The layers path uses internally-trusted data from the recipe catalog — safeParse is
+  // skipped here; apply.ts accepts steps arrays of any length up to RSTEPS.
+  // For the legacy rhythmIds path, safeParse still validates the output.
+  if (recipe.layers !== undefined && recipe.layers.length > 0) {
+    return result as AgentOutput;
+  }
+
   const parsed = AgentOutputSchema.safeParse(result);
   if (!parsed.success) return null;
 
