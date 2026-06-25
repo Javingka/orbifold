@@ -39,6 +39,7 @@ import {
   sessionStore,
   setAutopilot,
   setLastRecipeApplied,
+  setBpm,
   playGroove,
   playProgression,
   playSession,
@@ -186,12 +187,14 @@ function applyPlanStep(step: AgentOutput): boolean {
  * No LLM call is made. Called from the UI recipe chip row.
  *
  * Call order:
- *   1. applyRhythmSpec(engineOutput.rhythm)  — clears lastRecipeApplied (apply.ts)
- *   2. applySampleMap(recipe.sampleMap ?? {}) — ADR 0025 D4
- *   3. applyHarmonySpec(engineOutput.harmony) — clears lastRecipeApplied (apply.ts)
- *   4. setLastRecipeApplied(display)          — re-sets badge (last write wins)
- *   5. requeueLive()                          — re-evaluate at next cycle boundary
- *   6. auto-play heuristic (same as tick() Path A)
+ *   1. applyRhythmSpec(engineOutput.rhythm)        — clears lastRecipeApplied (apply.ts)
+ *   2. applySampleMap(recipe.sampleMap ?? {})       — ADR 0025 D4
+ *   3. applyLockedFlags(lockedSounds)               — Phase 05 lock stamping
+ *   4. if (recipe.defaultCpm) setBpm(cpm * 4)       — Phase 06 tempo (AG-D1: no genre name)
+ *   5. applyHarmonySpec(engineOutput.harmony)       — clears lastRecipeApplied (apply.ts)
+ *   6. setLastRecipeApplied(display)                — re-sets badge (last write wins)
+ *   7. requeueLive()                                — re-evaluate at next cycle boundary
+ *   8. auto-play heuristic (same as tick() Path A)
  */
 export function applyRecipeById(id: string): boolean {
   // Step 1: look up recipe.
@@ -215,15 +218,20 @@ export function applyRecipeById(id: string): boolean {
 
   // Step 4b (Phase 05): stamp locked: true on layers declared as locked in this recipe.
   // applyLockedFlags is genre-agnostic — receives Sound values extracted from recipe.layers.
-  const lockedSounds = (recipe.layers ?? [])
-    .filter((l) => l.locked === true)
-    .map((l) => l.sound);
+  const lockedSounds = (recipe.layers ?? []).filter((l) => l.locked === true).map((l) => l.sound);
   applyLockedFlags(lockedSounds);
 
-  // Step 5: apply harmony (clears lastRecipeApplied badge again).
+  // Step 5 (Phase 06): apply default tempo if the recipe declares one (AG-D1: no genre name here).
+  // Reads a data field (recipe.defaultCpm — a number); the arithmetic * 4 converts cpm → BPM.
+  // setBpm updates sessionStore.bpm reactively; Transport.svelte re-renders via store subscription.
+  if (recipe.defaultCpm !== undefined) {
+    setBpm(recipe.defaultCpm * 4);
+  }
+
+  // Step 6: apply harmony (clears lastRecipeApplied badge again).
   applyHarmonySpec(engineOutput.harmony);
 
-  // Step 6: re-set the badge — last write wins over the clears in steps 3 + 5.
+  // Step 7: re-set the badge — last write wins over the clears in steps 3 + 6.
   const display: LastRecipeDisplay = {
     recipeId: recipe.id,
     recipeName: recipe.name,

@@ -118,6 +118,15 @@ export interface MusicalRecipe {
    */
   sampleMap?: Partial<Record<Sound, string>>;
   /**
+   * Default tempo in cycles per minute (bars per minute in 4/4) when this
+   * recipe is applied. Conversion to BPM: `bpm = defaultCpm * 4`.
+   * When absent, tempo is unchanged on apply.
+   * Invariant: value falls within `bpmRange` when converted
+   * (`bpmRange[0] ≤ defaultCpm * 4 ≤ bpmRange[1]`). Enforced by recipe
+   * integrity tests (Invariant 10 in recipes.test.ts).
+   */
+  defaultCpm?: number;
+  /**
    * Optional multi-layer declaration. When present, supersedes `rhythmIds` for
    * sound assignment and pattern emission. Each RecipeLayer is self-contained:
    * the step pattern (binary/steps) is embedded directly so the recipe is
@@ -474,6 +483,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [100, 170],
     meter: '6/8',
     density: 'medium',
+    defaultCpm: 40, // 40 cpm × 4 = 160 BPM — within bpmRange [100, 170]; cueca dance tempo
     agentInstruction:
       'Apply the cueca base pattern (E(4,12) in 6/8 — 4 evenly-spaced onsets) ' +
       'over a major I-V-vi-IV progression. The 6/8 compound meter gives the ' +
@@ -595,6 +605,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [80, 130],
     meter: '4/4',
     density: 'medium',
+    defaultCpm: 30, // 30 cpm × 4 = 120 BPM — within bpmRange [80, 130]; canonical Colombian cumbia tempo
     agentInstruction:
       'Apply the cumbia caja pattern (onsets at 0,3,6,8,12 — strong beat 1 with ' +
       'syncopated mid-section) over a Latin minor-dominant loop. The pattern ' +

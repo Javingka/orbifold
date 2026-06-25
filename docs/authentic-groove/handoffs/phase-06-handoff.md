@@ -49,19 +49,36 @@ Not applicable for inventory step.
 
 ### Completed
 
-<!-- filled in after step 06.2 implementation -->
+- Added `defaultCpm?: number` field to `MusicalRecipe` interface in `rhythm-harmony-recipes.ts` with full JSDoc (invariant documented: `bpmRange[0] ≤ defaultCpm * 4 ≤ bpmRange[1]`).
+- Added `defaultCpm: 30` to `cumbia-latina-groove` (120 BPM, within `bpmRange: [80, 130]`).
+- Added `defaultCpm: 40` to `cueca-chilena-folk` (160 BPM, within `bpmRange: [100, 170]`).
+- All 13 other recipes: no `defaultCpm` added — tempo unchanged on apply (backward-compatible).
+- Added `setBpm` to imports from `../state/session.js` in `autopilot.ts`.
+- Injected tempo step after `applyLockedFlags` (step 4b), before `applyHarmonySpec` (new step 6): `if (recipe.defaultCpm !== undefined) { setBpm(recipe.defaultCpm * 4); }`. AG-D1 compliant — no genre name in the inserted code.
+- Updated `applyRecipeById` JSDoc call-order comment to reflect 8 steps (3, 4b, new-5, 6, 7, 8).
+- Added Invariant 10 to `tests/music-knowledge/recipes.test.ts`: `defaultCpm * 4 in [bpmRange[0], bpmRange[1]]` enforced for all recipes with the field.
+- Created `tests/authentic-groove/default-tempo.test.ts` (AGPL-3.0 header) with 13 tests covering: formula unit tests, catalog spot-checks, and `applyRecipeById` BPM injection for cumbia (→120), cueca (→160), and no-change recipes.
+- `tsc --noEmit` clean; `pnpm test` passes 1859 tests (1831 prior + 28 new).
 
 ### Files touched
 
-<!-- filled in after step 06.2 implementation -->
+- `src/core/music-knowledge/rhythm-harmony-recipes.ts` (added `defaultCpm?` field to interface; `defaultCpm: 30` on cumbia; `defaultCpm: 40` on cueca)
+- `src/agent/autopilot.ts` (added `setBpm` import; injected tempo step in `applyRecipeById`; updated JSDoc)
+- `tests/music-knowledge/recipes.test.ts` (added Invariant 10)
+- `tests/authentic-groove/default-tempo.test.ts` (new — 13 tests)
+- `docs/authentic-groove/handoffs/phase-06-handoff.md` (this file)
 
 ### Validation evidence (per Acceptance ID)
 
-<!-- filled in after step 06.2 implementation -->
+- **A-06-01 (partial):** `MusicalRecipe.defaultCpm?` exists — confirmed by `tsc --noEmit` clean. Field type and JSDoc in `rhythm-harmony-recipes.ts`.
+- **A-06-02 (partial):** `applyRecipeById('cumbia-latina-groove')` sets `bpm = 120`; `applyRecipeById('cueca-chilena-folk')` sets `bpm = 160`; `applyRecipeById('bossa-nova-groove')` leaves `bpm` unchanged — covered by `default-tempo.test.ts` (13 tests, all pass).
+- **A-06-03 (partial):** Invariant 10 enforced by `recipes.test.ts` — 247 tests pass, including Invariant 10 for both cumbia and cueca.
 
 ### Routine validations
 
-<!-- filled in after step 06.2 implementation -->
+- `pnpm exec tsc --noEmit` → clean (no output)
+- `pnpm exec vitest run default-tempo` → 13 tests pass
+- `pnpm test` → 1859 tests pass, no regressions
 
 ---
 

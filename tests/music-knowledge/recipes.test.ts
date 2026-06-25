@@ -184,6 +184,20 @@ describe.each(RHYTHM_HARMONY_RECIPES.map((r): [string, MusicalRecipe] => [r.id, 
       const expectedRhythmIds = recipe.layers.map((l) => l.rhythmId ?? '');
       expect(recipe.rhythmIds).toEqual(expectedRhythmIds);
     });
+
+    // Invariant 10 (Phase 06): when defaultCpm is present, defaultCpm * 4 must fall within bpmRange.
+    it('Invariant 10 — when defaultCpm present, defaultCpm * 4 is within bpmRange', () => {
+      if (recipe.defaultCpm === undefined) return;
+      const bpm = recipe.defaultCpm * 4;
+      expect(
+        bpm,
+        `defaultCpm * 4 (${bpm}) must be >= bpmRange[0] (${recipe.bpmRange[0]})`
+      ).toBeGreaterThanOrEqual(recipe.bpmRange[0]);
+      expect(
+        bpm,
+        `defaultCpm * 4 (${bpm}) must be <= bpmRange[1] (${recipe.bpmRange[1]})`
+      ).toBeLessThanOrEqual(recipe.bpmRange[1]);
+    });
   }
 );
 
