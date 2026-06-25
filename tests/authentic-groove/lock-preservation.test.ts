@@ -30,7 +30,10 @@ beforeEach(() => {
 
 // ── Helper: build a 16-step all-zeros layer with given sound ──────────────────
 
-function makeLayer(sound: 'bd' | 'sd' | 'hh' | 'oh' | 'cp' | 'rim' | 'lt' | 'mt' | 'ht', extra: Record<string, unknown> = {}) {
+function makeLayer(
+  sound: 'bd' | 'sd' | 'hh' | 'oh' | 'cp' | 'rim' | 'lt' | 'mt' | 'ht',
+  extra: Record<string, unknown> = {}
+) {
   return {
     sound,
     steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] as number[],
@@ -46,11 +49,7 @@ describe('applyLockedFlags — A-05-03 (partial)', () => {
     sessionStore.update((s) => ({
       ...s,
       rhythm: {
-        layers: [
-          makeLayer('bd'),
-          makeLayer('cp'),
-          makeLayer('hh'),
-        ],
+        layers: [makeLayer('bd'), makeLayer('cp'), makeLayer('hh')],
       },
     }));
 
@@ -167,9 +166,7 @@ describe('applyRhythmSpec — lock-preservation (A-05-02 partial)', () => {
     sessionStore.update((s) => ({
       ...s,
       rhythm: {
-        layers: [
-          { ...makeLayer('bd'), locked: true as const },
-        ],
+        layers: [{ ...makeLayer('bd'), locked: true as const }],
       },
     }));
 
@@ -192,10 +189,7 @@ describe('applyRhythmSpec — lock-preservation (A-05-02 partial)', () => {
     sessionStore.update((s) => ({
       ...s,
       rhythm: {
-        layers: [
-          { ...makeLayer('bd'), locked: true as const },
-          { ...makeLayer('hh') },
-        ],
+        layers: [{ ...makeLayer('bd'), locked: true as const }, { ...makeLayer('hh') }],
       },
     }));
 
@@ -349,7 +343,6 @@ describe('recipeToAgentOutput — A-05-05 (partial)', () => {
   it('all existing recipes without layers continue to produce valid AgentOutput', () => {
     const recipesWithoutLayers = RHYTHM_HARMONY_RECIPES.filter((r) => r.layers === undefined);
     for (const recipe of recipesWithoutLayers) {
-      const output = recipeToAgentOutput(recipe);
       // Non-expressible recipes (e.g. buleria-flamenco-phrygian with struct 12-step) return null —
       // that is the correct OD-3 behavior for legacy rhythmIds path.
       // We only assert that the function doesn't throw.
@@ -370,9 +363,29 @@ describe('recipeToAgentOutput — A-05-05 (partial)', () => {
       density: 'medium' as const,
       agentInstruction: 'test',
       layers: [
-        { sound: 'bd' as const, binary: '100100100100', steps: 12, euclid: { k: 4, n: 12, rot: 0 }, locked: true, rhythmId: 'cueca-chilena-base' },
-        { sound: 'cp' as const, binary: '000010000010', steps: 12, locked: false, rhythmId: 'cueca-palmas-12' },
-        { sound: 'hh' as const, binary: '101010101010', steps: 12, euclid: { k: 6, n: 12, rot: 0 }, locked: false, rhythmId: 'cueca-subdivision-12' },
+        {
+          sound: 'bd' as const,
+          binary: '100100100100',
+          steps: 12,
+          euclid: { k: 4, n: 12, rot: 0 },
+          locked: true,
+          rhythmId: 'cueca-chilena-base',
+        },
+        {
+          sound: 'cp' as const,
+          binary: '000010000010',
+          steps: 12,
+          locked: false,
+          rhythmId: 'cueca-palmas-12',
+        },
+        {
+          sound: 'hh' as const,
+          binary: '101010101010',
+          steps: 12,
+          euclid: { k: 6, n: 12, rot: 0 },
+          locked: false,
+          rhythmId: 'cueca-subdivision-12',
+        },
       ] as const,
     };
 

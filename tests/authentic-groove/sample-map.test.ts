@@ -45,6 +45,8 @@ const VERIFIED_SAMPLE_NAMES: readonly string[] = [
   'conga', // FreePats Conga — membrane drum (cumbia caja, candombe chico)
   'cajon', // FreePats CajonFlamenco — canonical flamenco percussion
   'wood', // FreePats Claves — authentic clave idiophone (rumba clave pattern)
+  // Phase 05 FreePats CC0 addition (inventory §1):
+  'shaker', // FreePats EggShaker — guacharaca/shaker texture (cumbia hh layer)
 ];
 
 // ── Genre recipes that must have a sampleMap ─────────────────────────────────
@@ -181,9 +183,9 @@ describe('sampleMap — per-genre value assertions', () => {
     expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'hand' });
   });
 
-  it('cumbia-latina-groove: bd → conga (FreePats Conga — closest membrane drum to cumbia caja, Phase 04 upgrade)', () => {
+  it('cumbia-latina-groove: bd → conga, hh → shaker (FreePats EggShaker CC0 — Phase 05 upgrade)', () => {
     const recipe = findRecipe('cumbia-latina-groove');
-    expect(recipe.sampleMap).toEqual({ bd: 'conga' });
+    expect(recipe.sampleMap).toEqual({ bd: 'conga', hh: 'shaker' });
   });
 
   it('candombe-dorian-groove: bd → conga (FreePats Conga — closest to candombe membrane drum, Phase 04 upgrade)', () => {

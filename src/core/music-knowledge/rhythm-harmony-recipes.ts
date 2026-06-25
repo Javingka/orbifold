@@ -453,6 +453,8 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
 
   // -------------------------------------------------------------------------
   // 11. Cueca chilena folk — 6/8 compound meter, Chilean folk character
+  // Phase 05: three-layer multi-layer recipe. Only bd (zapateado kick) is
+  // LOCKED; cp (palmas) and hh (subdivision) are FREE for agent variation.
   // -------------------------------------------------------------------------
   {
     id: 'cueca-chilena-folk',
@@ -467,7 +469,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       '6/8 folk',
       'chilean dance',
     ],
-    rhythmIds: ['cueca-chilena-base'],
+    rhythmIds: ['cueca-chilena-base', 'cueca-palmas-12', 'cueca-subdivision-12'],
     harmonyId: 'pop-i-v-vi-iv',
     bpmRange: [100, 170],
     meter: '6/8',
@@ -477,6 +479,35 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'over a major I-V-vi-IV progression. The 6/8 compound meter gives the ' +
       'zapateado dance feel of Chilean cueca. ' +
       'Suggested tempo: 120–150 BPM.',
+    // Phase 05: self-contained multi-layer declaration.
+    // bd (zapateado kick) is LOCKED — defines the cueca identity.
+    // cp (palmas) and hh (subdivision) are FREE layers — agent may vary them.
+    // No sampleMap: cueca uses built-in sounds (cp = hand clap approximates palmas).
+    layers: [
+      {
+        sound: 'bd',
+        binary: '100100100100',
+        steps: 12,
+        euclid: { k: 4, n: 12, rot: 0 },
+        locked: true, // zapateado kick — cultural signature, LOCKED
+        rhythmId: 'cueca-chilena-base',
+      },
+      {
+        sound: 'cp',
+        binary: '000010000010',
+        steps: 12,
+        locked: false, // palmas — FREE (agent can vary)
+        rhythmId: 'cueca-palmas-12',
+      },
+      {
+        sound: 'hh',
+        binary: '101010101010',
+        steps: 12,
+        euclid: { k: 6, n: 12, rot: 0 },
+        locked: false, // 8th-note subdivision — FREE
+        rhythmId: 'cueca-subdivision-12',
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -543,7 +574,9 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
   },
 
   // -------------------------------------------------------------------------
-  // 14. Cumbia latina groove — Colombian-inspired caja over minor loop
+  // 14. Cumbia latina groove — Colombian-inspired caja + shaker over minor loop
+  // Phase 05: two-layer multi-layer recipe. Both layers LOCKED.
+  // bd (conga caja) + hh (shaker/guacharaca) are the cultural signatures.
   // -------------------------------------------------------------------------
   {
     id: 'cumbia-latina-groove',
@@ -558,7 +591,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'cumbia beat',
       'tropical groove',
     ],
-    rhythmIds: ['cumbia-caja'],
+    rhythmIds: ['cumbia-caja', 'eighth-notes-16'],
     harmonyId: 'latin-minor-dominant-loop',
     bpmRange: [80, 130],
     meter: '4/4',
@@ -570,7 +603,29 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'Suggested tempo: 95–115 BPM.',
     sampleMap: {
       bd: 'conga', // conga: FreePats Conga (CC0) — closest available membrane drum to the cumbia caja
+      hh: 'shaker', // shaker: FreePats EggShaker (CC0) — approximates the guacharaca scraper texture
     },
+    // Phase 05: self-contained multi-layer declaration.
+    // Both layers LOCKED — caja + guacharaca are the two cultural signatures of cumbia.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1001001010001000',
+        steps: 16,
+        locked: true, // conga caja — cultural signature, LOCKED
+        strudelSample: 'conga', // FreePats Conga (CC0)
+        rhythmId: 'cumbia-caja',
+      },
+      {
+        sound: 'hh',
+        binary: '1010101010101010',
+        steps: 16,
+        euclid: { k: 8, n: 16, rot: 0 },
+        locked: true, // guacharaca/shaker — cultural signature, LOCKED
+        strudelSample: 'shaker', // FreePats EggShaker (CC0)
+        rhythmId: 'eighth-notes-16',
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------

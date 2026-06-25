@@ -32,6 +32,11 @@ wood_1.ogg  : samples/Claves/02.flac from freepats/world-percussion
 wood_2.ogg  : samples/Claves/03.flac from freepats/world-percussion
 wood_3.ogg  : samples/Claves/04.flac from freepats/world-percussion
 
+shaker_0.ogg : samples/EggShaker/fast_01.flac from freepats/world-percussion
+shaker_1.ogg : samples/EggShaker/fast_04.flac from freepats/world-percussion
+shaker_2.ogg : samples/EggShaker/fast_07.flac from freepats/world-percussion
+shaker_3.ogg : samples/EggShaker/fast_10.flac from freepats/world-percussion
+
 Conversion: each FLAC file was converted to OGG Vorbis (libvorbis, -qscale:a 5,
 mono, 44100 Hz) using ffmpeg 8.1. No content was altered; only the container
 format and channel count (stereo -> mono) changed.

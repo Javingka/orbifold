@@ -16,7 +16,7 @@ import { buildSampleMap } from '../../src/audio/sample-map.js';
 describe('buildSampleMap', () => {
   it('returns correct keys for production base', () => {
     const map = buildSampleMap('/orbifold/');
-    expect(Object.keys(map).sort()).toEqual(['cajon', 'conga', 'wood']);
+    expect(Object.keys(map).sort()).toEqual(['cajon', 'conga', 'shaker', 'wood']);
   });
 
   it('all conga URLs start with base + samples/', () => {
@@ -88,6 +88,26 @@ describe('buildSampleMap', () => {
       '/orbifold/samples/wood_1.ogg',
       '/orbifold/samples/wood_2.ogg',
       '/orbifold/samples/wood_3.ogg',
+    ]);
+  });
+
+  it('shaker has 4 entries', () => {
+    const { shaker } = buildSampleMap('/orbifold/');
+    expect(shaker).toHaveLength(4);
+  });
+
+  it('shaker URLs start with base + samples/', () => {
+    const { shaker } = buildSampleMap('/orbifold/');
+    expect(shaker.every((u: string) => u.startsWith('/orbifold/samples/'))).toBe(true);
+  });
+
+  it('shaker files are named shaker_0 through shaker_3', () => {
+    const map = buildSampleMap('/orbifold/');
+    expect(map.shaker).toEqual([
+      '/orbifold/samples/shaker_0.ogg',
+      '/orbifold/samples/shaker_1.ogg',
+      '/orbifold/samples/shaker_2.ogg',
+      '/orbifold/samples/shaker_3.ogg',
     ]);
   });
 });

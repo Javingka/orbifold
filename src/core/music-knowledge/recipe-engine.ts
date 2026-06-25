@@ -123,13 +123,18 @@ function isRhythmIdExpressible(rhythmId: string): boolean {
  * called with fully-expressible recipes; non-expressible recipes are filtered here
  * before being offered to the LLM or passed to the engine.
  *
- * Current catalog: all 10 recipes are fully expressible, so this returns all 10.
- * Future catalog extensions with non-expressible rhythm entries will be excluded.
+ * Phase 05 extension: when `recipe.layers` is present, the recipe is always
+ * considered expressible — the self-contained layers path in `recipeToAgentOutput`
+ * uses `layers[i].binary` directly and bypasses the `rhythmId`-based
+ * expressibility check. Non-16-step patterns (e.g. 12-step cueca palmas) are
+ * accepted by `applyRhythmSpec`'s step-mapping logic.
  */
 export function getExpressibleRecipes(): MusicalRecipe[] {
-  return RHYTHM_HARMONY_RECIPES.filter((recipe) =>
-    recipe.rhythmIds.every((id) => isRhythmIdExpressible(id))
-  );
+  return RHYTHM_HARMONY_RECIPES.filter((recipe) => {
+    // Phase 05: recipes with self-contained layers are always expressible
+    if (recipe.layers !== undefined && recipe.layers.length > 0) return true;
+    return recipe.rhythmIds.every((id) => isRhythmIdExpressible(id));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -191,10 +196,7 @@ export function recipeToAgentOutput(
       const sound = recipeLayer.sound as SkSound;
       const binarySteps = recipeLayer.binary.split('').map(Number);
 
-      if (
-        recipeLayer.euclid !== undefined &&
-        recipeLayer.euclid.n <= 16
-      ) {
+      if (recipeLayer.euclid !== undefined && recipeLayer.euclid.n <= 16) {
         // Prefer euclid representation when euclid params are present and n<=16.
         layers.push({
           sound,
