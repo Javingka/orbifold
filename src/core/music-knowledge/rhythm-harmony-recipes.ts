@@ -272,6 +272,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [100, 160],
     meter: '4/4',
     density: 'medium',
+    defaultCpm: 32, // 32 cpm × 4 = 128 BPM — within bpmRange [100, 160]
     agentInstruction:
       'Play the bossa nova clave pattern over a Gmaj7–Em7–Am7–D7 arpeggio loop. ' +
       'Keep the harmony arpeggiated and light; the clave provides rhythmic forward motion. ' +
@@ -280,6 +281,24 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       bd: 'bd',
       hh: 'hand', // hand percussion approximates pandeiro — no native pandeiro in Dirt-Samples
     },
+    // Phase 08: bossa nova clave locked; kick syncopation free.
+    // Bossa nova clave: 6 onsets (vs son clave's 5); anticipation on step 9 =
+    // 'and of beat 2 bar 2' — the bossa nova signature.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1001001010010010', // bossa nova clave: 6 onsets; step 9 anticipation = bossa signature
+        steps: 16,
+        locked: true, // bossa nova clave — cultural signature, LOCKED
+        rhythmId: 'bossa-nova-clave',
+      },
+      {
+        sound: 'hh',
+        binary: '1000010010001001', // bossa kick syncopation — hits 1,6,9,13,16
+        steps: 16,
+        locked: false, // kick syncopation — FREE (agent may vary)
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -578,11 +597,11 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
   },
 
   // -------------------------------------------------------------------------
-  // 12. Samba afro-brasileiro — layered surdo + caixa, Latin minor
+  // 12. Samba afro-brasileiro — layered surdo + tamborim, Latin minor
   // -------------------------------------------------------------------------
   {
     id: 'samba-afro-brasileiro',
-    name: 'Samba Afro-Brasileiro — Surdo & Caixa',
+    name: 'Samba Afro-Brasileiro — Surdo & Tamborim',
     userIntents: [
       'samba',
       'brazilian samba',
@@ -598,6 +617,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [100, 160],
     meter: '4/4',
     density: 'dense',
+    defaultCpm: 26, // 26 cpm × 4 = 104 BPM — within bpmRange [100, 160]
     agentInstruction:
       'Layer samba surdo bass (beats 1 and 3, 16-step) with samba caixa snare ' +
       '(syncopated 16th off-beats at steps 2, 6, 10, 14) over a Latin minor-dominant ' +
@@ -605,8 +625,26 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'samba batucada feel. Suggested tempo: 120–145 BPM.',
     sampleMap: {
       bd: 'bd',
-      hh: 'sd', // fallback: no native surdo/caixa in @strudel/web@1.0.3
+      hh: 'hand', // Phase 08 upgrade: sd → hand (pandeiro/tamborim approximation; hand confirmed in strudel.json Phase 03)
     },
+    // Phase 08: both layers LOCKED — surdo + teleco-teco are the twin cultural signatures.
+    // surdo: beats 1 and 3 (the 'call'); teleco-teco: 3-1-2-1 grouping — the SIGNATURE of samba.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1000000010000000', // surdo open: beats 1 and 3 (the 'call')
+        steps: 16,
+        locked: true, // surdo — cultural signature, LOCKED
+        rhythmId: 'samba-surdo-base',
+      },
+      {
+        sound: 'hh',
+        binary: '1011010110110101', // tamborim teleco-teco: 3-1-2-1 grouping — SIGNATURE of samba
+        steps: 16,
+        locked: true, // teleco-teco — cultural signature, LOCKED
+        rhythmId: 'samba-caixa',
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------

@@ -89,11 +89,10 @@ describe('A-06-01: MusicalRecipe.defaultCpm field — catalog spot-checks', () =
     expect(recipe?.defaultCpm).toBe(40);
   });
 
-  it('bossa-nova-groove has no defaultCpm pre-Phase-08 (gets defaultCpm: 32 in Phase 08 step 08.2)', () => {
-    // This assertion will be updated in step 08.2 when defaultCpm is added.
+  it('bossa-nova-groove has defaultCpm: 32 (Phase 08 step 08.2)', () => {
     const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'bossa-nova-groove');
     expect(recipe).toBeDefined();
-    expect(recipe?.defaultCpm).toBeUndefined();
+    expect(recipe?.defaultCpm).toBe(32);
   });
 
   it('pop-rock-backbeat has no defaultCpm pre-Phase-08 (gets defaultCpm: 27 in Phase 08 step 08.4)', () => {
@@ -153,34 +152,34 @@ describe('A-06-02: applyRecipeById — cueca sets bpm = 160', () => {
   });
 });
 
-describe('A-06-02: applyRecipeById — recipe without defaultCpm leaves bpm unchanged', () => {
-  it('applying bossa-nova-groove does NOT change sessionStore.bpm from initial 120', () => {
+describe('A-06-02: applyRecipeById — recipe with defaultCpm sets bpm', () => {
+  it('applying bossa-nova-groove sets bpm to 128 (defaultCpm: 32, Phase 08)', () => {
     expect(get(sessionStore).bpm).toBe(120);
 
-    // Confirm bossa has no defaultCpm
+    // Phase 08: bossa now has defaultCpm: 32 → bpm = 32 * 4 = 128
     const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'bossa-nova-groove');
-    expect(recipe?.defaultCpm).toBeUndefined();
+    expect(recipe?.defaultCpm).toBe(32);
 
     applyRecipeById('bossa-nova-groove');
 
-    // BPM must remain 120 (unchanged — no defaultCpm on this recipe)
-    expect(get(sessionStore).bpm).toBe(120);
+    // BPM set to 128 (defaultCpm: 32 → 32 * 4 = 128)
+    expect(get(sessionStore).bpm).toBe(128);
   });
 
-  it('applying bossa-nova-groove does NOT change a non-default bpm (80)', () => {
-    sessionStore.update((s) => ({ ...s, bpm: 80 }));
-    expect(get(sessionStore).bpm).toBe(80);
-
-    applyRecipeById('bossa-nova-groove');
-
-    // BPM must remain 80 (no defaultCpm — no override)
-    expect(get(sessionStore).bpm).toBe(80);
-  });
-
-  it('applying pop-rock-backbeat does NOT change bpm', () => {
+  it('applying pop-rock-backbeat sets bpm to 108 (defaultCpm: 27, Phase 08)', () => {
     sessionStore.update((s) => ({ ...s, bpm: 100 }));
+    // Phase 08: pop-rock-backbeat gets defaultCpm: 27 → bpm = 27 * 4 = 108
+    // Note: pop-rock-backbeat gets defaultCpm in step 08.4; this test will update then.
+    // For now: pop-rock-backbeat still has no defaultCpm until step 08.4.
     applyRecipeById('pop-rock-backbeat');
-    expect(get(sessionStore).bpm).toBe(100);
+    // After step 08.4: expect(get(sessionStore).bpm).toBe(108);
+    // For step 08.2: pop-rock-backbeat still has no defaultCpm — bpm unchanged (100)
+    const popRecipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'pop-rock-backbeat');
+    if (popRecipe?.defaultCpm === undefined) {
+      expect(get(sessionStore).bpm).toBe(100);
+    } else {
+      expect(get(sessionStore).bpm).toBe((popRecipe.defaultCpm) * 4);
+    }
   });
 });
 

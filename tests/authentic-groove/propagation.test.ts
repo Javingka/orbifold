@@ -208,12 +208,17 @@ describe('A-01-02: cueca recipe → no sampleMap → generic sound emitted', () 
   });
 });
 
-// ── End-to-end: samba recipe (A-01-01 partial / A-01-04) ─────────────────────
+// ── End-to-end: samba recipe (A-01-01 partial / A-01-04 / Phase 08 upgrade) ──
+//
+// Phase 08: samba-afro-brasileiro upgraded — sampleMap.hh: 'sd' → 'hand' (pandeiro/
+// tamborim), and recipe.layers added (surdo LOCKED + teleco-teco LOCKED).
+// Tests updated to reflect the Phase 08 state.
 
-describe('A-01-04: samba recipe → hh-slot carries strudelSample: "sd"', () => {
-  it('applying samba recipe → hh-slot layer carries strudelSample "sd"', () => {
+describe('A-08-05: samba recipe → hh-slot carries strudelSample "hand" (Phase 08 upgrade)', () => {
+  it('applying samba recipe → hh-slot layer carries strudelSample "hand" (Phase 08)', () => {
     const recipe = findRecipe('samba-afro-brasileiro');
-    // samba sampleMap: { bd: 'bd', hh: 'sd' }
+    // Phase 08: sampleMap upgraded to { bd: 'bd', hh: 'hand' }
+    expect(recipe.sampleMap?.hh).toBe('hand');
 
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
@@ -225,10 +230,10 @@ describe('A-01-04: samba recipe → hh-slot carries strudelSample: "sd"', () => 
     const layers = get(sessionStore).rhythm.layers;
     const hhLayer = layers.find((l) => l.sound === 'hh');
     expect(hhLayer).toBeDefined();
-    expect(hhLayer?.strudelSample).toBe('sd');
+    expect(hhLayer?.strudelSample).toBe('hand');
   });
 
-  it('samba bd-slot carries strudelSample "bd" (sampleMap confirms identity mapping)', () => {
+  it('samba bd-slot carries strudelSample "bd" (sampleMap identity mapping)', () => {
     const recipe = findRecipe('samba-afro-brasileiro');
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
@@ -243,7 +248,7 @@ describe('A-01-04: samba recipe → hh-slot carries strudelSample: "sd"', () => 
     expect(bdLayer?.strudelSample).toBe('bd');
   });
 
-  it('rhythmLayerToStrudelLine emits "sd" for samba hh-slot (codegen)', () => {
+  it('rhythmLayerToStrudelLine emits "hand" for samba hh-slot (Phase 08 codegen)', () => {
     const recipe = findRecipe('samba-afro-brasileiro');
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
@@ -258,10 +263,9 @@ describe('A-01-04: samba recipe → hh-slot carries strudelSample: "sd"', () => 
     if (!hhLayer) return;
 
     const line = rhythmLayerToStrudelLine(hhLayer);
-    expect(line).toContain('sd');
-    // Must not emit the generic hh for this slot.
-    expect(line).not.toMatch(/s\("hh/);
-    expect(line).not.toContain('hh ');
+    expect(line).toContain('hand');
+    // Must not emit old fallback 'sd'.
+    expect(line).not.toMatch(/s\("sd/);
   });
 });
 
@@ -338,11 +342,15 @@ describe('A-01-04: slot absent from sampleMap → strudelSample undefined', () =
 // Additionally: direct applySampleMap test with { hh: 'hand' } confirms 'hand'
 // flows to codegen output when an hh layer is present (A-03-01 full coverage).
 
-describe('A-03-02: bossa-nova-groove recipe → sampleMap propagation', () => {
-  it('applying bossa-nova-groove recipe → bd-slot layer carries strudelSample "bd"', () => {
+// A-03-02: bossa-nova-groove recipe → sampleMap propagation
+// Phase 08: bossa-nova-groove now has 2 layers (bd clave LOCKED + hh kick free).
+// recipeToAgentOutput uses recipe.layers path; both layers are present after apply.
+
+describe('A-03-02: bossa-nova-groove recipe → sampleMap propagation (Phase 08 two-layer)', () => {
+  it('applying bossa-nova-groove recipe → bd-slot layer carries strudelSample "bd" (A-03-02)', () => {
     const recipe = findRecipe('bossa-nova-groove');
-    // Single-layer recipe (bossa-nova-clave); sound index 0 = 'bd'.
-    // sampleMap: { bd: 'bd', hh: 'hand' } — bd entry applies; hh entry is inert (no hh layer).
+    // Phase 08: two-layer recipe; bd (clave, LOCKED) and hh (kick, free).
+    // sampleMap: { bd: 'bd', hh: 'hand' } — both entries apply to their slots.
 
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
@@ -350,21 +358,22 @@ describe('A-03-02: bossa-nova-groove recipe → sampleMap propagation', () => {
 
     applyRhythmSpec(output.rhythm);
 
-    // Confirm exactly one layer with sound 'bd' (single-layer recipe).
+    // Phase 08: two layers — bd and hh.
     const layersBefore = get(sessionStore).rhythm.layers;
-    expect(layersBefore.length).toBe(1);
-    expect(layersBefore[0].sound).toBe('bd');
-    expect(layersBefore[0].strudelSample).toBeUndefined();
+    expect(layersBefore.length).toBe(2);
+    const bdBefore = layersBefore.find((l) => l.sound === 'bd');
+    expect(bdBefore).toBeDefined();
+    expect(bdBefore?.strudelSample).toBeUndefined();
 
     applySampleMap(recipe.sampleMap ?? {});
 
     // bd-slot carries strudelSample: 'bd' (identity mapping).
     const layers = get(sessionStore).rhythm.layers;
-    expect(layers[0].sound).toBe('bd');
-    expect(layers[0].strudelSample).toBe('bd');
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer?.strudelSample).toBe('bd');
   });
 
-  it('bossa-nova-groove has no hh layer — hh sampleMap entry is inert (A-03-02)', () => {
+  it('bossa-nova-groove hh layer carries strudelSample "hand" (Phase 08 — A-03-02)', () => {
     const recipe = findRecipe('bossa-nova-groove');
     const output = recipeToAgentOutput(recipe);
     expect(output).not.toBeNull();
@@ -373,10 +382,11 @@ describe('A-03-02: bossa-nova-groove recipe → sampleMap propagation', () => {
     applyRhythmSpec(output.rhythm);
     applySampleMap(recipe.sampleMap ?? {});
 
-    // No hh layer exists — applySampleMap handles this gracefully (no error, no spurious layer).
+    // Phase 08: hh layer exists (kick syncopation, free); carries strudelSample: 'hand'.
     const layers = get(sessionStore).rhythm.layers;
     const hhLayer = layers.find((l) => l.sound === 'hh');
-    expect(hhLayer).toBeUndefined();
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.strudelSample).toBe('hand');
   });
 
   it('rhythmLayerToStrudelLine emits "bd" (via strudelSample) for bossa-nova bd-slot (A-03-02 codegen)', () => {
@@ -1222,6 +1232,58 @@ describe('Step 08.1: Afro-Cuban clave family binary assertions', () => {
   it('A-08-16: latin-jazz-clave-swing defaultCpm === 42', () => {
     const recipe = findRecipe('latin-jazz-clave-swing');
     expect(recipe.defaultCpm).toBe(42);
+  });
+});
+
+// ── Step 08.2: Brazilian duo binary assertions ────────────────────────────────
+
+describe('Step 08.2: Brazilian duo binary assertions', () => {
+  it('A-08-04: bossa-nova-groove bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('bossa-nova-groove');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1001001010010010');
+    expect(bdLayer?.steps).toBe(16);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-04: bossa-nova-groove hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('bossa-nova-groove');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('1000010010001001');
+    expect(hhLayer?.steps).toBe(16);
+    expect(hhLayer?.locked).toBe(false);
+  });
+
+  it('A-08-05: samba-afro-brasileiro bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('samba-afro-brasileiro');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1000000010000000');
+    expect(bdLayer?.steps).toBe(16);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-05: samba-afro-brasileiro hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('samba-afro-brasileiro');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('1011010110110101');
+    expect(hhLayer?.steps).toBe(16);
+    expect(hhLayer?.locked).toBe(true);
+  });
+
+  it('A-08-16: bossa-nova-groove defaultCpm === 32', () => {
+    const recipe = findRecipe('bossa-nova-groove');
+    expect(recipe.defaultCpm).toBe(32);
+  });
+
+  it('A-08-16: samba-afro-brasileiro defaultCpm === 26', () => {
+    const recipe = findRecipe('samba-afro-brasileiro');
+    expect(recipe.defaultCpm).toBe(26);
   });
 });
 

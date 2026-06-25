@@ -173,9 +173,9 @@ describe('sampleMap — per-genre value assertions', () => {
     expect(recipe.sampleMap).toEqual({ bd: 'wood' });
   });
 
-  it('samba-afro-brasileiro: bd → bd, hh → sd (sd for caixa snare character)', () => {
+  it('samba-afro-brasileiro: bd → bd, hh → hand (Phase 08 upgrade: sd → hand — pandeiro/tamborim approximation)', () => {
     const recipe = findRecipe('samba-afro-brasileiro');
-    expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'sd' });
+    expect(recipe.sampleMap).toEqual({ bd: 'bd', hh: 'hand' });
   });
 
   it('bossa-nova-groove: bd → bd, hh → hand (hand percussion approximates pandeiro — Phase 03 upgrade)', () => {
