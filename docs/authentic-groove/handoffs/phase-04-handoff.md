@@ -147,3 +147,85 @@ total 264
 |---|---|---|---|---|
 | A-04-04 | `public/samples/` contains FreePats CC0 audio files and LICENSE.txt | `ls -lh public/samples/` recorded above | operability | partial — files committed; `pnpm build` dist/ check deferred to 04.5 |
 | A-04-05 | `pnpm test` passes at 1698 | (all test files) | operability | partial — test count confirmed; full quality gate (lint, tsc, build) deferred to 04.5 |
+
+**Planner Review:** APPROVED on 2026-06-24. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 04.3
+
+---
+
+## Step 04.3 — `initAudio()` registration
+
+**Date:** 2026-06-24
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read inventory §3 for exact `samples()` call, URL scheme, and test strategy.
+- Confirmed AG-D1 in force (no genre name in `audio/strudel.ts`).
+- Confirmed all 12 committed files (`conga_0..3.ogg`, `cajon_0..3.ogg`, `wood_0..3.ogg`) are present in `public/samples/`.
+- Updated `src/vite-env.d.ts`: broadened `samples()` type signature to accept `string | Record<string, string[]>` — the runtime `Bo` function in `@strudel/web@1.0.3` accepts both forms (confirmed in `dist/index.mjs` at line 4772); the prior `string`-only declaration was too narrow.
+- Created `src/audio/sample-map.ts`: standalone pure module exporting `buildSampleMap(base: string)`. Extracted to a separate file (not inline in `strudel.ts`) to avoid pulling in `@strudel/web`'s browser-only module-scope initialisation code during unit tests.
+- Updated `src/audio/strudel.ts`: added `import { buildSampleMap } from './sample-map.js'` and the `localSamplesReady` call inside `initAudio()`, integrated into the existing `Promise.all`. The original `samples('github:tidalcycles/dirt-samples')` call is unchanged.
+- Created `tests/authentic-groove/sample-registration.test.ts` (12 tests): covers `buildSampleMap` with production base (`/orbifold/`), dev base (`/`), trailing-slash normalisation, key set, array length, URL prefix, and exact URL values for all three sample names.
+
+**Implementation detail — module split rationale:**
+The inventory §3 spec proposed `buildSampleMap` as a named export from `src/audio/strudel.ts`. However, importing `strudel.ts` in a Vitest test causes `@strudel/web/dist/index.mjs` to execute at module scope — and that bundle accesses `window` at line 14806, throwing `ReferenceError: window is not defined` in Node.js. The fix is to place `buildSampleMap` in a dedicated pure module `src/audio/sample-map.ts` with zero browser imports, making it directly unit-testable. The function is re-exported from `strudel.ts` for any callers that import from that path. This is a mechanical improvement over the inventory's proposed approach, not a spec deviation — the exported API (`buildSampleMap(base)`) is identical.
+
+**Note on `docs/authentic-groove/decisions.md` §AG-D1 seam grep extension:** The additional palette-confinement grep (checking `'conga'`, `'cajon'`, `'wood'` are confined to `src/audio/strudel.ts` / `src/audio/sample-map.ts` and `src/core/music-knowledge/`) was run and returns zero matches outside the permitted locations. This grep is recorded in full in step 04.5.
+
+### Files touched
+
+- `src/vite-env.d.ts` (modified — broadened `samples()` type signature)
+- `src/audio/sample-map.ts` (new — pure `buildSampleMap` helper)
+- `src/audio/strudel.ts` (modified — import + `localSamplesReady` in `initAudio`)
+- `tests/authentic-groove/sample-registration.test.ts` (new — 12 tests)
+- `docs/authentic-groove/handoffs/phase-04-handoff.md` (this file)
+
+### Validation evidence
+
+**`pnpm exec tsc --noEmit`:** clean (exit 0).
+
+**`pnpm exec vitest run sample-registration`:**
+```
+Test Files  1 passed (1)
+     Tests  12 passed (12)
+```
+
+**`pnpm test`:**
+```
+Test Files  34 passed (34)
+     Tests  1710 passed (1710)
+```
+No regressions. Prior count was 1698; 12 new tests added.
+
+**Seam grep (palette names):**
+```bash
+git grep -n \
+  -e "'conga'" -e '"conga"' \
+  -e "'cajon'" -e '"cajon"' \
+  -e "'wood'" -e '"wood"' \
+  -- 'src/' \
+  ':(exclude)src/core/music-knowledge/' \
+  ':(exclude)src/audio/strudel.ts' \
+  ':(exclude)src/audio/sample-map.ts'
+```
+Result: **empty output (zero matches)**. Palette names are confined to the two permitted `src/audio/` files and `src/core/music-knowledge/`.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-04-01 | `initAudio()` registers `conga`, `cajon`, `wood` via `samples()` with BASE_URL-prefixed URLs; URL construction unit-testable via `buildSampleMap` | `tests/authentic-groove/sample-registration.test.ts` | unit (pure helper) | partial — URL construction confirmed; Vite BASE_URL injection + `samples()` call confirmed by code review; propagation to codegen deferred to 04.5 |
+| A-04-02 | Genre recipes with upgradeable fallbacks carry authentic FreePats name in sampleMap | — | — | not covered (step 04.4) |
+| A-04-03 | Recipes without available authentic name retain Phase 01/03 fallbacks unchanged | — | — | not covered (step 04.4) |
+| A-04-04 | `public/samples/` contains FreePats CC0 files and LICENSE.txt; `pnpm build` includes them in `dist/samples/` | — | — | partial (files committed in 04.2; build check deferred to 04.5) |
+| A-04-05 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` passes; `pnpm build` succeeds | `pnpm exec tsc --noEmit` + `pnpm test` recorded above | operability | partial — tsc clean + 1710 tests; lint and build deferred to 04.5 |
+| A-04-06 | Seam grep returns zero genre names outside `src/core/music-knowledge/`; palette names confined | seam grep recorded above | operability | partial — palette-name grep clean; full genre-token grep deferred to 04.5 |
+
+### Notes
+
+- `import.meta.env.BASE_URL` injection bypass: disclosed in test comment and in this handoff. The test calls `buildSampleMap('/orbifold/')` directly. The actual Vite injection is a build-time replacement — not testable in Node.js without mocking. The unit test validates the URL construction logic; runtime correctness is validated by browser/dev-server testing.
+- `SCHEMA_VERSION` (6) and `SESSION_SCHEMA_VERSION` (5) unchanged — no schema change in this step.
+- `src/vite-env.d.ts` modification: this is a type-declaration change only, not a runtime change. The declaration now correctly reflects the actual `Bo` function signature in `@strudel/web@1.0.3`.
+
+**Next action:** Proceed to step 04.4 (sampleMap upgrades in the recipe catalog).

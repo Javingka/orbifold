@@ -22,8 +22,14 @@ declare module '@strudel/web' {
   /** Stop all playing patterns. */
   export function hush(): void;
 
-  /** Load a sample set (e.g. 'github:tidalcycles/dirt-samples'). */
-  export function samples(path: string): Promise<void>;
+  /**
+   * Load a sample set.
+   * Accepts either a shorthand string (e.g. 'github:tidalcycles/dirt-samples')
+   * or a plain object mapping sample names to arrays of URLs (object form used
+   * for locally-committed assets — see Phase 04 inventory §3 and buildSampleMap
+   * in src/audio/strudel.ts).
+   */
+  export function samples(path: string | Record<string, string[]>): Promise<void>;
 
   /**
    * Sets up evalScope with all strudel modules (registers functions into globalThis

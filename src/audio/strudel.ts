@@ -69,6 +69,7 @@ import {
   measureLatencyOffsetMs,
   getCalibrationOffsetMs,
 } from '../state/phase-anchor.js';
+import { buildSampleMap } from './sample-map.js';
 
 // ── Module-level state ────────────────────────────────────────────────────────
 // Mirrors prototype globals (lines 582–585), scoped to this module.
@@ -163,7 +164,14 @@ export async function initAudio(): Promise<void> {
     // functions into globalThis so the evaluated code can call them).
     // Also load dirt-samples exactly as the prototype (line 601).
     const samplesReady = samples('github:tidalcycles/dirt-samples');
-    await Promise.all([defaultPrebake(), registerSynthSounds(), samplesReady]);
+    /**
+     * Additional authentic Latin/flamenco percussion samples committed as CC0
+     * static assets in public/samples/ (freepats/world-percussion). Registered
+     * here as palette declarations — no genre knowledge. See ADR 0025 D3 and
+     * Phase 04 inventory §3.
+     */
+    const localSamplesReady = samples(buildSampleMap(import.meta.env.BASE_URL));
+    await Promise.all([defaultPrebake(), registerSynthSounds(), samplesReady, localSamplesReady]);
 
     audioReady = true;
   } catch (initErr) {
