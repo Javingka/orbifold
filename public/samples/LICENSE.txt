@@ -1,0 +1,37 @@
+CC0-1.0 Public Domain Dedication
+=================================
+
+The audio files in this directory are dedicated to the public domain under the
+Creative Commons CC0 1.0 Universal Public Domain Dedication.
+
+Full license text: https://creativecommons.org/publicdomain/zero/1.0/
+
+To the extent possible under law, the authors have waived all copyright and
+related or neighboring rights to these audio files.
+
+Attribution (voluntary, not required by CC0):
+  Source: freepats/world-percussion (https://github.com/freepats/world-percussion),
+  derived from the Versilian Community Sample Library, a CC0 sample library
+  created by Versilian Studios LLC. CC0-1.0.
+
+Per-file source list
+---------------------
+
+conga_0.ogg : samples/Conga/v2_01_01.flac from freepats/world-percussion
+conga_1.ogg : samples/Conga/v2_02_01.flac from freepats/world-percussion
+conga_2.ogg : samples/Conga/v3_01_01.flac from freepats/world-percussion
+conga_3.ogg : samples/Conga/v3_02_01.flac from freepats/world-percussion
+
+cajon_0.ogg : samples/CajonFlamenco/101.flac from freepats/world-percussion
+cajon_1.ogg : samples/CajonFlamenco/105.flac from freepats/world-percussion
+cajon_2.ogg : samples/CajonFlamenco/201.flac from freepats/world-percussion
+cajon_3.ogg : samples/CajonFlamenco/205.flac from freepats/world-percussion
+
+wood_0.ogg  : samples/Claves/01.flac from freepats/world-percussion
+wood_1.ogg  : samples/Claves/02.flac from freepats/world-percussion
+wood_2.ogg  : samples/Claves/03.flac from freepats/world-percussion
+wood_3.ogg  : samples/Claves/04.flac from freepats/world-percussion
+
+Conversion: each FLAC file was converted to OGG Vorbis (libvorbis, -qscale:a 5,
+mono, 44100 Hz) using ffmpeg 8.1. No content was altered; only the container
+format and channel count (stereo -> mono) changed.

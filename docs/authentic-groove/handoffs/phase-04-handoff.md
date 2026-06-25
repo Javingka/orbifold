@@ -83,3 +83,67 @@ The inventory confirms all five sections as required. The key decisions for Pilo
 3. **Upgrade decisions (§4):** 4 upgrades confirmed. Cumbia and candombe both upgrade to `'conga'` (FreePats Conga). Bulería upgrades to `'cajon'` (FreePats CajonFlamenco). Rumba upgrades to `'wood'` (FreePats Claves). All are genuine cultural accuracy improvements.
 
 **Next action after Pilot APPROVE:** Proceed to step 04.2 (sample acquisition, conversion, commit to `public/samples/`).
+
+**Planner Review:** APPROVED on 2026-06-24. Iteration: 1 of 5.
+**Next action:** Dev proceeds to step 04.2
+
+---
+
+## Step 04.2 — Sample acquisition, conversion, and commit
+
+**Date:** 2026-06-24
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read inventory §1 and §2 for exact file list, conversion command, and naming convention.
+- Confirmed AG-D1 in force (this step touches only `public/`).
+- Confirmed `vite.config.ts` sets `publicDir` as default (`public`) — files committed here are served as static assets.
+- No `.gitignore` rules block `.ogg` or audio files — `git add` used without `-f`.
+- FLAC files downloaded from `https://raw.githubusercontent.com/freepats/world-percussion/main/` using `curl`.
+- All 12 files converted with the exact command from inventory §1: `ffmpeg -i <input>.flac -codec:a libvorbis -qscale:a 5 -ac 1 -ar 44100 <output>.ogg`.
+- `public/samples/LICENSE.txt` written with CC0-1.0 pointer, attribution line, and per-file source list.
+
+### Files touched
+
+- `public/samples/LICENSE.txt` (new)
+- `public/samples/conga_0.ogg` through `conga_3.ogg` (4 new files)
+- `public/samples/cajon_0.ogg` through `cajon_3.ogg` (4 new files)
+- `public/samples/wood_0.ogg` through `wood_3.ogg` (4 new files)
+- `docs/authentic-groove/handoffs/phase-04-handoff.md` (this file, step entry added)
+
+No `.ts` or `.svelte` files modified.
+
+### Validation evidence
+
+**`ls -lh public/samples/` output:**
+
+```
+total 264
+-rw-r--r--  1 virtualmachine  staff   1.7K Jun 24 20:55 LICENSE.txt
+-rw-r--r--  1 virtualmachine  staff   7.3K Jun 24 20:05 cajon_0.ogg
+-rw-r--r--  1 virtualmachine  staff   7.3K Jun 24 20:05 cajon_1.ogg
+-rw-r--r--  1 virtualmachine  staff   6.9K Jun 24 20:05 cajon_2.ogg
+-rw-r--r--  1 virtualmachine  staff   6.8K Jun 24 20:05 cajon_3.ogg
+-rw-r--r--  1 virtualmachine  staff    11K Jun 24 20:04 conga_0.ogg
+-rw-r--r--  1 virtualmachine  staff    10K Jun 24 20:04 conga_1.ogg
+-rw-r--r--  1 virtualmachine  staff    14K Jun 24 20:04 conga_2.ogg
+-rw-r--r--  1 virtualmachine  staff    12K Jun 24 20:04 conga_3.ogg
+-rw-r--r--  1 virtualmachine  staff   8.7K Jun 24 20:55 wood_0.ogg
+-rw-r--r--  1 virtualmachine  staff   7.9K Jun 24 20:55 wood_1.ogg
+-rw-r--r--  1 virtualmachine  staff   7.8K Jun 24 20:55 wood_2.ogg
+-rw-r--r--  1 virtualmachine  staff   8.9K Jun 24 20:55 wood_3.ogg
+```
+
+12 OGG files + 1 LICENSE.txt = 13 files, ~264 kB total (within the estimated 220–480 kB range from inventory §2).
+
+**`git status` check:** Only `public/samples/*` (new) and `docs/authentic-groove/handoffs/phase-04-handoff.md` (modified). No `.ts` or `.svelte` files in staged set.
+
+**`pnpm test` output:** 33 test files, 1698 tests passed — no regressions. No TypeScript changed.
+
+### Acceptance Coverage
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-04-04 | `public/samples/` contains FreePats CC0 audio files and LICENSE.txt | `ls -lh public/samples/` recorded above | operability | partial — files committed; `pnpm build` dist/ check deferred to 04.5 |
+| A-04-05 | `pnpm test` passes at 1698 | (all test files) | operability | partial — test count confirmed; full quality gate (lint, tsc, build) deferred to 04.5 |
