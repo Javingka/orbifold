@@ -365,9 +365,8 @@ describe('recipeToAgentOutput — A-05-05 (partial)', () => {
       layers: [
         {
           sound: 'bd' as const,
-          binary: '100100100100',
+          binary: '101000101000',
           steps: 12,
-          euclid: { k: 4, n: 12, rot: 0 },
           locked: true,
           rhythmId: 'cueca-chilena-base',
         },
@@ -399,9 +398,19 @@ describe('recipeToAgentOutput — A-05-05 (partial)', () => {
     expect(output.rhythm.layers[1].sound).toBe('cp');
     expect(output.rhythm.layers[2].sound).toBe('hh');
 
-    // bd: euclid path (euclid.n=12 <= 16).
+    // bd: steps path — binary '101000101000' is not Euclidean (onsets 0,2,6,8 cueca zapateado).
     const bdLayer = output.rhythm.layers[0];
-    expect('euclid' in bdLayer).toBe(true);
+    expect('steps' in bdLayer).toBe(true);
+    if ('steps' in bdLayer) {
+      expect(bdLayer.steps).toHaveLength(12);
+      // binary '101000101000' → steps [1,0,1,0,0,0,1,0,1,0,0,0]
+      expect(bdLayer.steps[0]).toBe(1);
+      expect(bdLayer.steps[2]).toBe(1);
+      expect(bdLayer.steps[6]).toBe(1);
+      expect(bdLayer.steps[8]).toBe(1);
+      expect(bdLayer.steps[1]).toBe(0);
+      expect(bdLayer.steps[3]).toBe(0);
+    }
 
     // cp: steps path (no euclid, binary has 12 chars → steps array).
     const cpLayer = output.rhythm.layers[1];

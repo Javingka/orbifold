@@ -486,9 +486,8 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     layers: [
       {
         sound: 'bd',
-        binary: '100100100100',
+        binary: '101000101000', // onsets 0,2,6,8 — cueca zapateado 6/8 feel (2+1+2+1 within 12 steps)
         steps: 12,
-        euclid: { k: 4, n: 12, rot: 0 },
         locked: true, // zapateado kick — cultural signature, LOCKED
         rhythmId: 'cueca-chilena-base',
       },
@@ -610,17 +609,18 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     layers: [
       {
         sound: 'bd',
-        binary: '1001001010001000',
+        binary: '1000100010001000', // onsets 0,4,8,12 — cumbia kick on the beat (E(4,16,0))
         steps: 16,
+        euclid: { k: 4, n: 16, rot: 0 },
         locked: true, // conga caja — cultural signature, LOCKED
         strudelSample: 'conga', // FreePats Conga (CC0)
         rhythmId: 'cumbia-caja',
       },
       {
         sound: 'hh',
-        binary: '1010101010101010',
+        binary: '1011101110111011', // guacharaca pattern — rests on 2nd 16th of each beat (E(12,16,2))
         steps: 16,
-        euclid: { k: 8, n: 16, rot: 0 },
+        euclid: { k: 12, n: 16, rot: 2 },
         locked: true, // guacharaca/shaker — cultural signature, LOCKED
         strudelSample: 'shaker', // FreePats EggShaker (CC0)
         rhythmId: 'eighth-notes-16',
