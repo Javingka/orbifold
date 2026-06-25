@@ -1235,6 +1235,89 @@ describe('Step 08.1: Afro-Cuban clave family binary assertions', () => {
   });
 });
 
+// ── Step 08.3: African duo + Bulería binary assertions ───────────────────────
+
+describe('Step 08.3: African duo + Bulería binary assertions', () => {
+  it('A-08-06: west-african-bell-modal bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('west-african-bell-modal');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('101011010101');
+    expect(bdLayer?.steps).toBe(12);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-06: west-african-bell-modal hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('west-african-bell-modal');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('100100100100');
+    expect(hhLayer?.steps).toBe(12);
+    expect(hhLayer?.locked).toBe(false);
+  });
+
+  it('A-08-07: west-african-triplet-groove bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('west-african-triplet-groove');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('101011010101');
+    expect(bdLayer?.steps).toBe(12);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-07: west-african-triplet-groove hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('west-african-triplet-groove');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('100101001010');
+    expect(hhLayer?.steps).toBe(12);
+    expect(hhLayer?.locked).toBe(true);
+  });
+
+  it('A-08-08: buleria-flamenco-phrygian bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('buleria-flamenco-phrygian');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('100100101010');
+    expect(bdLayer?.steps).toBe(12);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-08: buleria-flamenco-phrygian cp layer binary, steps, locked', () => {
+    const recipe = findRecipe('buleria-flamenco-phrygian');
+    const cpLayer = recipe.layers?.find((l) => l.sound === 'cp');
+    expect(cpLayer).toBeDefined();
+    expect(cpLayer?.binary).toBe('100100100100');
+    expect(cpLayer?.steps).toBe(12);
+    expect(cpLayer?.locked).toBe(false);
+  });
+
+  it('A-08-14 (partial): buleria bd binary is NOT the wrong catalog pattern 100011010110', () => {
+    const recipe = findRecipe('buleria-flamenco-phrygian');
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer?.binary).not.toBe('100011010110'); // wrong catalog binary
+    expect(bdLayer?.binary).toBe('100100101010'); // correct recipe binary (authoritative)
+  });
+
+  it('A-08-16: west-african-bell-modal defaultCpm === 22', () => {
+    const recipe = findRecipe('west-african-bell-modal');
+    expect(recipe.defaultCpm).toBe(22);
+  });
+
+  it('A-08-16: west-african-triplet-groove defaultCpm === 22', () => {
+    const recipe = findRecipe('west-african-triplet-groove');
+    expect(recipe.defaultCpm).toBe(22);
+  });
+
+  it('A-08-16: buleria-flamenco-phrygian defaultCpm === 33', () => {
+    const recipe = findRecipe('buleria-flamenco-phrygian');
+    expect(recipe.defaultCpm).toBe(33);
+  });
+});
+
 // ── Step 08.2: Brazilian duo binary assertions ────────────────────────────────
 
 describe('Step 08.2: Brazilian duo binary assertions', () => {

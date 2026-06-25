@@ -183,25 +183,23 @@ describe('recipeToAgentOutput — round-trip (A-03-04)', () => {
 // ---------------------------------------------------------------------------
 
 describe('recipeToAgentOutput — OD-2 euclid path (A-03-05)', () => {
-  // 'west-african-bell-modal' uses rhythm 'bell-pattern-west-african' (euclid, n=12)
-  it('west-african-bell-modal: layer 0 has euclid {k,n,rot} matching RhythmEntry', () => {
+  // 'west-african-bell-modal' (Phase 08: now has recipe.layers — bd binary '101011010101' 12-step)
+  it('west-african-bell-modal: layer 0 has steps from recipe.layers[0].binary (Phase 08)', () => {
+    // Phase 08: recipe.layers added; recipeToAgentOutput uses layers path.
+    // The bd layer emits binary '101011010101' (gankogui, 12 steps).
+    // No euclid on the layer → emits as steps variant.
     const recipe = requireRecipe('west-african-bell-modal');
-    const rhythmEntry = requireRhythmEntry('bell-pattern-west-african');
-    expect(rhythmEntry.strudelStrategy).toBe('euclid');
-    expect(rhythmEntry.euclid).toBeDefined();
+    expect(recipe.layers).toBeDefined();
+    expect(recipe.layers?.[0].binary).toBe('101011010101');
+    expect(recipe.layers?.[0].steps).toBe(12);
 
     const layers = requireLayers(recipe);
     const layer0 = layers[0];
-    expect('euclid' in layer0).toBe(true);
-
-    if ('euclid' in layer0 && rhythmEntry.euclid !== undefined) {
-      expect(layer0.euclid.k).toBe(rhythmEntry.euclid.k);
-      expect(layer0.euclid.n).toBe(rhythmEntry.euclid.n);
-      expect(layer0.euclid.rot).toBe(rhythmEntry.euclid.rot);
-    }
-    // Expected: E(7,12,0)
-    if ('euclid' in layer0) {
-      expect(layer0.euclid).toEqual({ k: 7, n: 12, rot: 0 });
+    // Phase 08: layers path emits steps (no euclid on RecipeLayer), not euclid.
+    expect('steps' in layer0).toBe(true);
+    if ('steps' in layer0) {
+      expect(layer0.steps.length).toBe(12);
+      expect(layer0.steps).toEqual('101011010101'.split('').map(Number));
     }
   });
 

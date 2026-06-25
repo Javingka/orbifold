@@ -241,6 +241,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [60, 120],
     meter: '12/8',
     density: 'medium',
+    defaultCpm: 22, // 22 cpm × 4 = 88 BPM — within bpmRange [60, 120]
     agentInstruction:
       'Use the 7-onset West-African bell timeline (E(7,12)) in 12/8 ' +
       'over a suspended-chord modal drone (Fsus2–Csus4). ' +
@@ -250,6 +251,24 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       bd: 'cb', // fallback: no native bell/agogo in @strudel/web@1.0.3
       hh: 'perc', // fallback: no native bell/agogo in @strudel/web@1.0.3
     },
+    // Phase 08: gankogui bell LOCKED (ethnomusicology's most-studied timeline).
+    // gankogui: Ewe Agbadza standard pattern, 7 onsets — most-studied African timeline.
+    // djembe support (every 3rd pulse) is FREE.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '101011010101', // gankogui: Ewe Agbadza standard — 7 onsets (12-step)
+        steps: 12,
+        locked: true, // gankogui bell — LOCKED (ethnomusicology's most-studied timeline)
+        rhythmId: 'bell-pattern-west-african',
+      },
+      {
+        sound: 'hh',
+        binary: '100100100100', // ternary clap support — every 3rd pulse (pure ternary)
+        steps: 12,
+        locked: false, // djembe support — FREE
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -456,6 +475,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [60, 110],
     meter: '12/8',
     density: 'medium',
+    defaultCpm: 22, // 22 cpm × 4 = 88 BPM — within bpmRange [60, 110]
     agentInstruction:
       'Layer a sparse 5-onset bell (E(5,12)) with a minimal 3-onset triplet bass ' +
       '(E(3,12)) in 12/8, over a suspended modal drone (Fsus2–Csus4). ' +
@@ -465,6 +485,22 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       bd: 'cb', // fallback: no native bell/agogo in @strudel/web@1.0.3
       hh: 'perc', // fallback: no native bell/agogo in @strudel/web@1.0.3
     },
+    // Phase 08: both layers LOCKED — gankogui + kpanlogo interlock as a unit.
+    // gankogui + kpanlogo: 7+7 asymmetric interlock — two patterns create the polyrhythmic groove.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '101011010101', // gankogui: Ewe Agbadza — same as west-african-bell-modal (7 onsets)
+        steps: 12,
+        locked: true, // gankogui bell — LOCKED (interlocks with kpanlogo)
+      },
+      {
+        sound: 'hh',
+        binary: '100101001010', // kpanlogo interlock: 7+7 asymmetric — interlocks with gankogui
+        steps: 12,
+        locked: true, // kpanlogo — LOCKED (7+7 asymmetric polyrhythmic interlock)
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -668,6 +704,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [80, 160],
     meter: '12/8',
     density: 'dense',
+    defaultCpm: 33, // 33 cpm × 4 = 132 BPM — within bpmRange [80, 160]
     agentInstruction:
       'Use the bulería-inspired 12-step struct pattern (onsets at 0,4,5,7,9,10 — ' +
       'the characteristic asymmetric flamenco accent) over a Phrygian descent ' +
@@ -676,6 +713,26 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     sampleMap: {
       bd: 'cajon', // cajon: FreePats CajonFlamenco (CC0) — canonical flamenco percussion instrument
     },
+    // Phase 08: cajón compás LOCKED; palmas sordas FREE.
+    // cajón compás: flamenco beats 12,3,6,8,10 → step 1=beat12, each step = one 12-subdivision.
+    // CORRECTS the catalog entry 100011010110 — recipe bd layer binary 100100101010 is authoritative (A-08-14).
+    // rhythmId 'buleria-12' retained for catalog integrity (catalog has wrong binary 100011010110 —
+    // recipe bd layer binary 100100101010 is authoritative at runtime).
+    layers: [
+      {
+        sound: 'bd',
+        binary: '100100101010', // cajón compás: flamenco beats 12,3,6,8,10 (CORRECTS catalog 100011010110)
+        steps: 12,
+        locked: true, // cajón compás — LOCKED (A-08-14)
+        rhythmId: 'buleria-12', // catalog entry has wrong binary 100011010110 — recipe binary is authoritative
+      },
+      {
+        sound: 'cp',
+        binary: '100100100100', // palmas sordas — every 3 steps (ternary)
+        steps: 12,
+        locked: false, // palmas sordas — FREE
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------

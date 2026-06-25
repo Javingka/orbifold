@@ -142,29 +142,29 @@ describe('applyRecipeById — unknown recipe ID', () => {
   });
 });
 
-// ── A-02-04: non-expressible recipe — buleria-flamenco-phrygian ───────────────
+// ── A-02-04: expressible recipe — buleria-flamenco-phrygian (Phase 08 upgrade) ─
 //
-// buleria-flamenco-phrygian uses a 12-step struct rhythm, which the current
-// expressibility filter excludes (struct requires steps === 16). This recipe
-// is in the catalog but not returned by getExpressibleRecipes(). Applying it
-// directly via applyRecipeById must return false (recipeToAgentOutput → null).
+// Phase 08: buleria-flamenco-phrygian now has recipe.layers (bd + cp, 12-step binaries).
+// The layers path in recipeToAgentOutput makes any recipe with layers expressible.
+// applyRecipeById now returns true (was false pre-Phase-08).
 
-describe('applyRecipeById — non-expressible recipe (buleria-flamenco-phrygian)', () => {
-  it('returns false for buleria-flamenco-phrygian (12-step struct — not expressible)', () => {
-    // This recipe exists in the catalog but is excluded by the expressibility filter.
-    // recipeToAgentOutput returns null for it; applyRecipeById must return false.
+describe('applyRecipeById — buleria-flamenco-phrygian now expressible (Phase 08 layers)', () => {
+  it('returns true for buleria-flamenco-phrygian (Phase 08: recipe.layers added)', () => {
+    // Phase 08: recipe.layers makes this recipe expressible via the layers path.
     const result = applyRecipeById('buleria-flamenco-phrygian');
-    expect(result).toBe(false);
+    expect(result).toBe(true);
   });
 
-  it('session layers are unchanged after applying a non-expressible recipe', () => {
+  it('session layers are populated after applying bulería (Phase 08)', () => {
     applyRecipeById('buleria-flamenco-phrygian');
-    expect(get(sessionStore).rhythm.layers.length).toBe(0);
+    expect(get(sessionStore).rhythm.layers.length).toBeGreaterThan(0);
   });
 
-  it('lastRecipeApplied is unchanged after applying a non-expressible recipe', () => {
+  it('lastRecipeApplied is set after applying bulería (Phase 08)', () => {
     applyRecipeById('buleria-flamenco-phrygian');
-    expect(get(sessionStore).lastRecipeApplied).toBeUndefined();
+    const badge = get(sessionStore).lastRecipeApplied;
+    expect(badge).toBeDefined();
+    expect(badge?.recipeId).toBe('buleria-flamenco-phrygian');
   });
 });
 

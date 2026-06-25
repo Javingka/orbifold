@@ -179,18 +179,20 @@ describe.each(RHYTHM_HARMONY_RECIPES.map((r): [string, MusicalRecipe] => [r.id, 
       }
     });
 
-    it('Invariant consistency — when layers present, all rhythmIds with catalog entries appear in layers.rhythmId set', () => {
+    it('Invariant consistency — when layers present with rhythmId, each layer.rhythmId exists in rhythmIds', () => {
       if (!recipe.layers) return;
-      // Phase 08: some layers intentionally omit rhythmId (no catalog entry for that pattern).
-      // The weaker invariant: every rhythmId in recipe.rhythmIds must appear as a rhythmId on
-      // at least one layer (when layers are present). Layers may have additional entries
-      // without rhythmId — that is permitted for patterns not in the rhythm catalog.
-      const layerRhythmIds = new Set(recipe.layers.map((l) => l.rhythmId).filter(Boolean));
-      for (const rid of recipe.rhythmIds) {
-        expect(
-          layerRhythmIds.has(rid),
-          `rhythmId '${rid}' in recipe.rhythmIds not found in any layer.rhythmId`
-        ).toBe(true);
+      // Phase 08: when layers supersede rhythmIds (the primary behavior path), the relationship
+      // between rhythmIds and layers is traceability-only. The invariant checks that any
+      // layer.rhythmId that IS provided appears in recipe.rhythmIds (no orphan cross-references).
+      // Layers without rhythmId are permitted (catalog entry absent or pattern differs from catalog).
+      const rhythmIdsSet = new Set(recipe.rhythmIds);
+      for (const layer of recipe.layers) {
+        if (layer.rhythmId !== undefined) {
+          expect(
+            rhythmIdsSet.has(layer.rhythmId),
+            `layer.rhythmId '${layer.rhythmId}' not found in recipe.rhythmIds`
+          ).toBe(true);
+        }
       }
     });
 
