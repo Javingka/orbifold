@@ -44,7 +44,7 @@ const VERIFIED_SAMPLE_NAMES: readonly string[] = [
   // Phase 04 FreePats CC0 additions (ADR 0025 D6, inventory §4):
   'conga', // FreePats Conga — membrane drum (cumbia caja, candombe chico)
   'cajon', // FreePats CajonFlamenco — canonical flamenco percussion
-  'wood',  // FreePats Claves — authentic clave idiophone (rumba clave pattern)
+  'wood', // FreePats Claves — authentic clave idiophone (rumba clave pattern)
 ];
 
 // ── Genre recipes that must have a sampleMap ─────────────────────────────────

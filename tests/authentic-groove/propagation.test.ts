@@ -495,3 +495,219 @@ describe('A-01-04: no-regression — recipe with no sampleMap yields no strudelS
     }
   });
 });
+
+// ── A-04-02: candombe recipe → 'conga' propagation (Phase 04 upgrade) ────────
+//
+// candombe-dorian-groove sampleMap: { bd: 'conga' }
+// Phase 04 upgrade from 'perc' — FreePats Conga (CC0), closest available to
+// the Afro-Uruguayan candombe membrane drum.
+
+describe('A-04-02: candombe recipe → strudelSample "conga" propagation', () => {
+  it('applying candombe recipe yields bd-slot with strudelSample "conga" (Phase 04 upgrade)', () => {
+    const recipe = findRecipe('candombe-dorian-groove');
+    // Phase 04: bd upgraded from 'perc' → 'conga' (FreePats Conga, CC0).
+    expect(recipe.sampleMap?.bd).toBe('conga');
+
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+
+    // Confirm layers present but no strudelSample yet.
+    const layersBefore = get(sessionStore).rhythm.layers;
+    expect(layersBefore.length).toBeGreaterThan(0);
+    expect(layersBefore[0].strudelSample).toBeUndefined();
+
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.strudelSample).toBe('conga');
+  });
+
+  it('rhythmLayerToStrudelLine emits "conga" for candombe bd layer (A-04-02 codegen)', () => {
+    const recipe = findRecipe('candombe-dorian-groove');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    if (!bdLayer) return;
+
+    const line = rhythmLayerToStrudelLine(bdLayer);
+    // Should emit 'conga' (Phase 04 upgrade), not old fallback 'perc' or generic 'bd'.
+    expect(line).toContain('conga');
+    expect(line).not.toMatch(/s\("bd/);
+    expect(line).not.toContain('perc');
+  });
+});
+
+// ── A-04-02: bulería recipe → 'cajon' propagation (Phase 04 upgrade) ─────────
+//
+// buleria-flamenco-phrygian sampleMap: { bd: 'cajon' }
+// Phase 04 upgrade from 'perc' — FreePats CajonFlamenco (CC0), canonical
+// flamenco percussion instrument.
+//
+// Note: buleria-12 uses strudelStrategy='struct' with steps=12, which is NOT
+// expressible by recipeToAgentOutput (requires steps=16 for struct path).
+// The propagation is therefore tested via direct applySampleMap (same approach
+// used for 'hand' in A-03-01 and for unit tests throughout this file).
+// The catalog value 'cajon' is confirmed separately, and the plumbing path
+// (applySampleMap + rhythmLayerToStrudelLine) is the same regardless of recipe.
+
+describe('A-04-02: bulería recipe → sampleMap catalog value + "cajon" plumbing propagation', () => {
+  it('buleria-flamenco-phrygian sampleMap.bd is "cajon" (Phase 04 upgrade from "perc")', () => {
+    const recipe = findRecipe('buleria-flamenco-phrygian');
+    // Phase 04: bd upgraded from 'perc' → 'cajon' (FreePats CajonFlamenco, CC0).
+    expect(recipe.sampleMap?.bd).toBe('cajon');
+  });
+
+  it('applySampleMap({ bd: "cajon" }) sets strudelSample "cajon" on bd layer (A-04-02 plumbing)', () => {
+    // Direct plumbing test: confirms 'cajon' flows through applySampleMap.
+    // Uses same approach as A-03-01 tests for 'hand'.
+    sessionStore.update((s) => ({
+      ...s,
+      rhythm: {
+        ...s.rhythm,
+        layers: [{ sound: 'bd' as const, steps: [1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0] }],
+      },
+    }));
+
+    applySampleMap({ bd: 'cajon' });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.strudelSample).toBe('cajon');
+  });
+
+  it('rhythmLayerToStrudelLine emits "cajon" for bd layer with strudelSample "cajon" (A-04-02 codegen)', () => {
+    // Confirms the codegen emits 'cajon' — same plumbing as any other strudelSample value.
+    sessionStore.update((s) => ({
+      ...s,
+      rhythm: {
+        ...s.rhythm,
+        layers: [{ sound: 'bd' as const, steps: [1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0] }],
+      },
+    }));
+
+    applySampleMap({ bd: 'cajon' });
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.strudelSample).toBe('cajon');
+    if (!bdLayer) return;
+
+    const line = rhythmLayerToStrudelLine(bdLayer);
+    // Should emit 'cajon', not old fallback 'perc' or generic 'bd'.
+    expect(line).toContain('cajon');
+    expect(line).not.toMatch(/s\("bd/);
+    expect(line).not.toContain('perc');
+  });
+});
+
+// ── A-04-02: rumba recipe → 'wood' propagation (Phase 04 upgrade) ────────────
+//
+// rumba-blues-minor sampleMap: { bd: 'wood' }
+// Phase 04 upgrade from 'perc' — FreePats Claves (CC0), authentic clave
+// idiophone for the rumba clave pattern.
+
+describe('A-04-02: rumba recipe → strudelSample "wood" propagation', () => {
+  it('applying rumba recipe yields bd-slot with strudelSample "wood" (Phase 04 upgrade)', () => {
+    const recipe = findRecipe('rumba-blues-minor');
+    // Phase 04: bd upgraded from 'perc' → 'wood' (FreePats Claves, CC0).
+    expect(recipe.sampleMap?.bd).toBe('wood');
+
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+
+    // Confirm layers present but no strudelSample yet.
+    const layersBefore = get(sessionStore).rhythm.layers;
+    expect(layersBefore.length).toBeGreaterThan(0);
+    expect(layersBefore[0].strudelSample).toBeUndefined();
+
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.strudelSample).toBe('wood');
+  });
+
+  it('rhythmLayerToStrudelLine emits "wood" for rumba bd layer (A-04-02 codegen)', () => {
+    const recipe = findRecipe('rumba-blues-minor');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    if (!bdLayer) return;
+
+    const line = rhythmLayerToStrudelLine(bdLayer);
+    // Should emit 'wood' (Phase 04 upgrade from FreePats Claves), not old 'perc' or generic 'bd'.
+    expect(line).toContain('wood');
+    expect(line).not.toMatch(/s\("bd/);
+    expect(line).not.toContain('perc');
+  });
+});
+
+// ── A-04-03: fallback-retention — recipes without authentic names unchanged ───
+//
+// Recipes whose Phase 01/03 fallbacks were assessed as non-upgradeable by any
+// of the three new FreePats names (conga, cajon, wood) must retain their
+// original fallback values unchanged. The west-african bell patterns use 'cb'
+// for bd (metal bell → cowbell is closer than clave) and 'perc' for hh
+// (generic percussion is the best available approximation for agogo/gankogui).
+
+describe('A-04-03: fallback-retention — west-african-bell-modal bd="cb" hh="perc" unchanged', () => {
+  it('west-african-bell-modal sampleMap retains bd="cb" (not upgraded)', () => {
+    const recipe = findRecipe('west-african-bell-modal');
+    // Phase 04 assessment: 'cb' (cowbell/metal idiophone) is closer to agogo
+    // than 'wood' (clave/wood idiophone) — no upgrade applied.
+    expect(recipe.sampleMap?.bd).toBe('cb');
+  });
+
+  it('west-african-bell-modal sampleMap retains hh="perc" (not upgraded)', () => {
+    const recipe = findRecipe('west-african-bell-modal');
+    // Phase 04 assessment: no FreePats name approximates bell/agogo better than perc.
+    expect(recipe.sampleMap?.hh).toBe('perc');
+  });
+
+  it('applying west-african-bell-modal → bd-slot emits "cb" (A-04-03 codegen)', () => {
+    const recipe = findRecipe('west-african-bell-modal');
+    const output = recipeToAgentOutput(recipe);
+    expect(output).not.toBeNull();
+    if (!output) return;
+
+    applyRhythmSpec(output.rhythm);
+    applySampleMap(recipe.sampleMap ?? {});
+
+    const layers = get(sessionStore).rhythm.layers;
+    const bdLayer = layers.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.strudelSample).toBe('cb');
+
+    if (!bdLayer) return;
+    const line = rhythmLayerToStrudelLine(bdLayer);
+    expect(line).toContain('cb');
+    expect(line).not.toContain('conga');
+    expect(line).not.toContain('cajon');
+    expect(line).not.toContain('wood');
+  });
+});

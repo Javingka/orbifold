@@ -302,4 +302,146 @@ No regressions. Total count unchanged from step 04.3 (1710) — the 3 previously
 - `SCHEMA_VERSION` (6) and `SESSION_SCHEMA_VERSION` (5) unchanged.
 - No new ADR triggered — this is a catalog value update within the framework established by ADR 0025 D2/D6.
 
+**Planner Review:** APPROVED on 2026-06-24. Iteration: 1 of 5.
 **Next action:** Dev proceeds to step 04.5
+
+---
+
+## Step 04.5 — End-to-end propagation test + seam fitness check + full quality gate
+
+**Date:** 2026-06-24
+**Iteration:** 1 of 5
+
+### Completed
+
+- Read inventory §4 and §5, confirmed steps 04.2–04.4 are APPROVED.
+- Read ADR 0025 D3 seam grep commands and the existing propagation tests (20 tests at entry).
+- Added 10 new propagation tests to `tests/authentic-groove/propagation.test.ts`:
+  - `candombe-dorian-groove` bd → `'conga'` propagation (2 tests: applySampleMap + codegen via `recipeToAgentOutput`).
+  - `buleria-flamenco-phrygian` bd → `'cajon'` propagation (3 tests: catalog value assertion + direct applySampleMap plumbing + codegen). Note: `buleria-12` uses `struct` with 12 steps — not steps-16-expressible — so propagation is tested via direct `applySampleMap` calls (same approach as A-03-01 `hand` tests). The catalog value assertion confirms the upgrade; the plumbing tests confirm `cajon` flows through `applySampleMap` and `rhythmLayerToStrudelLine`.
+  - `rumba-blues-minor` bd → `'wood'` propagation (2 tests: applySampleMap + codegen via `recipeToAgentOutput`).
+  - `west-african-bell-modal` fallback retention — bd=`'cb'` and hh=`'perc'` unchanged (3 tests: two catalog assertions + one codegen confirmation). Confirms A-04-03: no FreePats upgrade was applied to the west-african bell recipes.
+- Confirmed existing cumbia propagation tests (updated in 04.4) assert `'conga'` — no duplicate addition needed.
+- Ran `pnpm exec prettier --write` on both modified test files (Prettier reformatted for line-length compliance).
+
+**Seam fitness check (AG-D1 extended):**
+
+Genre-token grep (ADR 0025 D3):
+```bash
+git grep -n \
+  -e "'cumbia'" -e '"cumbia"' \
+  -e "'cueca'" -e '"cueca"' \
+  -e "'candombe'" -e '"candombe"' \
+  -e "'samba'" -e '"samba"' \
+  -e "'flamenco'" -e '"flamenco"' \
+  -e "'milonga'" -e '"milonga"' \
+  -e "'maqsum'" -e '"maqsum"' \
+  -e "'baladi'" -e '"baladi"' \
+  -- 'src/' \
+  ':(exclude)src/core/music-knowledge/' \
+  ':(exclude)tests/'
+```
+Result: **GENRE-TOKEN SEAM: CLEAN (zero matches)**
+
+Palette-confinement grep (Phase 04 extension from inventory §5):
+```bash
+git grep -n \
+  -e "'conga'" -e '"conga"' \
+  -e "'cajon'" -e '"cajon"' \
+  -e "'wood'" -e '"wood"' \
+  -- 'src/' \
+  ':(exclude)src/core/music-knowledge/' \
+  ':(exclude)src/audio/strudel.ts' \
+  ':(exclude)src/audio/sample-map.ts'
+```
+Result: **PALETTE-CONFINEMENT SEAM: CLEAN (zero matches)**
+
+### Reversibility / flag-off note (required verbatim per phase spec)
+
+- The `samples()` call for FreePats names is additive. Reverting it means `conga`, `cajon`, and `wood` play silent, but no other behavior changes. The sampleMap entries still reference those names; they simply fall back to Strudel's silence-on-missing-sample behavior.
+- Reverting the sampleMap upgrades in `rhythm-harmony-recipes.ts` restores the Phase 01 fallback names (`'perc'`). The plumbing is unchanged and carries no knowledge of the upgrade.
+- Pre-Phase-04 sessions with `strudelSample: 'perc'` continue to work — the plumbing emits whatever string is in `strudelSample`.
+- The committed audio files in `public/samples/` are inert if the `samples()` call is absent — no behavior change.
+
+### Files touched
+
+- `tests/authentic-groove/propagation.test.ts` (modified — 10 new tests; Prettier-formatted)
+- `tests/authentic-groove/sample-map.test.ts` (modified — Prettier-formatted only; no logic changes)
+- `docs/authentic-groove/handoffs/phase-04-handoff.md` (this file)
+
+No source files modified.
+
+### Validation evidence
+
+**`pnpm exec tsc --noEmit`:** clean (exit 0, no output).
+
+**`pnpm lint`:**
+```
+All matched files use Prettier code style!
+```
+Clean (exit 0).
+
+**`pnpm test`:**
+```
+Test Files  34 passed (34)
+     Tests  1720 passed (1720)
+```
+No regressions. Count up from 1710 (04.4 baseline) → 1720 (10 new propagation tests added in 04.5).
+
+**`pnpm build`:**
+```
+dist/index.html                     2.32 kB │ gzip:   1.25 kB
+dist/assets/index-DbPFXRvC.css     36.96 kB │ gzip:   7.19 kB
+dist/assets/index-Cwp6D9Dg.js   1,189.73 kB │ gzip: 373.45 kB
+✓ built in 1.79s
+```
+Build succeeds. Chunk-size warning is pre-existing (not introduced in Phase 04).
+
+**`dist/samples/` contents after build (A-04-04 full):**
+```
+total 264
+-rw-r--r--  1 virtualmachine  staff   1.7K  LICENSE.txt
+-rw-r--r--  1 virtualmachine  staff   7.3K  cajon_0.ogg
+-rw-r--r--  1 virtualmachine  staff   7.3K  cajon_1.ogg
+-rw-r--r--  1 virtualmachine  staff   6.9K  cajon_2.ogg
+-rw-r--r--  1 virtualmachine  staff   6.8K  cajon_3.ogg
+-rw-r--r--  1 virtualmachine  staff    11K  conga_0.ogg
+-rw-r--r--  1 virtualmachine  staff    10K  conga_1.ogg
+-rw-r--r--  1 virtualmachine  staff    14K  conga_2.ogg
+-rw-r--r--  1 virtualmachine  staff    12K  conga_3.ogg
+-rw-r--r--  1 virtualmachine  staff   8.7K  wood_0.ogg
+-rw-r--r--  1 virtualmachine  staff   7.9K  wood_1.ogg
+-rw-r--r--  1 virtualmachine  staff   7.8K  wood_2.ogg
+-rw-r--r--  1 virtualmachine  staff   8.9K  wood_3.ogg
+```
+13 files confirmed (12 OGG + 1 LICENSE.txt).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-04-01 | `initAudio()` registers `conga`, `cajon`, `wood` via `samples()` with BASE_URL-prefixed URLs; URL construction unit-testable via `buildSampleMap`; names flow to codegen output | `tests/authentic-groove/sample-registration.test.ts` (12 URL-construction tests); propagation tests confirm names appear in `rhythmLayerToStrudelLine` output | unit (pure helper) + propagation | **FULL** — URL construction confirmed in 04.3; codegen propagation confirmed by cumbia/candombe/rumba/bulería codegen tests in 04.5 |
+| A-04-02 | Genre recipes whose fallback was upgradeable now carry the authentic FreePats name in sampleMap; applying them emits the authentic name in codegen output | `tests/authentic-groove/sample-map.test.ts` (4 per-recipe assertions); `tests/authentic-groove/propagation.test.ts` (cumbia, candombe, rumba codegen via recipeToAgentOutput; bulería via direct applySampleMap plumbing); `tests/authentic-groove/apply-recipe-by-id.test.ts` (cumbia) | unit | **FULL** — all 4 upgraded recipes confirmed: conga (cumbia, candombe), cajon (bulería), wood (rumba) |
+| A-04-03 | Recipes for which no authentic name is available retain Phase 01/03 fallbacks unchanged; no regression | `tests/authentic-groove/propagation.test.ts` — west-african-bell-modal catalog assertions (bd=cb, hh=perc) + codegen test; `tests/authentic-groove/sample-map.test.ts` — unmodified assertions for west-african, latin-jazz, samba entries | unit + propagation | **FULL** — west-african fallbacks confirmed unchanged; samba hh=sd confirmed (pre-existing test) |
+| A-04-04 | `public/samples/` contains FreePats CC0 files and LICENSE.txt; `pnpm build` includes them in `dist/samples/` | `ls -lh dist/samples/` recorded above | operability | **FULL** — 12 OGG + LICENSE.txt in dist/samples/ confirmed after build |
+| A-04-05 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` ≥ 1698 + all new tests; `pnpm build` succeeds | recorded above | operability | **FULL** — tsc clean; lint clean; 1720 tests; build succeeds |
+| A-04-06 | No genre name outside `src/core/music-knowledge/`; `conga`, `cajon`, `wood` only in permitted locations | seam greps recorded above | operability | **FULL** — both greps return zero matches |
+
+### Phase Completion
+
+**Phase 04 is COMPLETE.**
+
+All 6 acceptance criteria (A-04-01 through A-04-06) have been verified FULL in this step.
+
+**Test delta:**
+- Phase 03 baseline (gate): 1698
+- After step 04.3 (sample-registration): 1710 (+12)
+- After step 04.4 (sample-map assertions + propagation/apply-recipe stale fix): 1710 (3 stale assertions corrected, not net-new tests)
+- After step 04.5 (propagation tests): **1720** (+10)
+- Final count: **1720 tests**
+
+**Pending Register proposals:** None.
+
+**ADR triggers:** None — no new ADR needed (Phase 04 is a palette extension explicitly deferred in ADR 0025 D-Deferred).
+
+**Next action:** Pilot approval required before any next phase — phase complete (Checkpoint #5).
