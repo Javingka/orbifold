@@ -13,6 +13,53 @@
 import type { Sound } from '../rhythm/layers.js';
 
 /**
+ * A single self-contained layer in a multi-layer recipe declaration.
+ *
+ * The step pattern is embedded directly (binary/steps) so the recipe is
+ * readable without looking up the rhythm catalog. `rhythmId` is an optional
+ * cross-reference for traceability only — NOT used at runtime by
+ * `recipeToAgentOutput`.
+ *
+ * When `layers` is present on a `MusicalRecipe`, `recipeToAgentOutput` reads
+ * sound from `layers[i].sound` and pattern from `layers[i].binary` directly,
+ * instead of the index-based `soundForIndex(i)` and catalog lookup.
+ */
+export interface RecipeLayer {
+  /** Abstract sound role. Drives UI icon/color and audibility logic. */
+  sound: Sound;
+  /**
+   * When true, this layer is part of the recipe's cultural signature.
+   * After `applyRecipeById`, `applyLockedFlags` stamps `locked: true` on the
+   * session layer with matching `sound`. Genre-agnostic plumbing; the lock
+   * flag is declared here in the knowledge layer, propagated by apply.ts.
+   */
+  locked?: boolean;
+  /** Binary step pattern string; length must equal `steps`. */
+  binary: string;
+  /** Total step count (12 for 6/8 compound, 16 for 4/4). */
+  steps: number;
+  /**
+   * Optional Euclidean parameters — descriptive only. Present when the
+   * pattern was derived from `bjorklund(k, n, rot)`. Not used at runtime;
+   * the binary string is the authoritative pattern.
+   */
+  euclid?: { k: number; n: number; rot: number };
+  /**
+   * Inline sampleMap override (ADR 0025 D2 extension). When present,
+   * replaces the top-level `sampleMap` entry for this layer's sound slot.
+   * `recipeToAgentOutput` does NOT read this field — it is consumed only by
+   * the `applySampleMap` call in the recipe-application path.
+   */
+  strudelSample?: string;
+  /**
+   * Optional cross-reference into RHYTHM_CATALOG. For traceability only.
+   * NOT used at runtime by `recipeToAgentOutput`. When present, integrity
+   * tests assert it resolves in the catalog.
+   */
+  rhythmId?: string;
+}
+
+/**
  * A recipe mapping a user intent to a combination of rhythm pattern(s) and
  * a harmony entry, with musical metadata for downstream use.
  *
@@ -70,6 +117,25 @@ export interface MusicalRecipe {
    * Keys must be valid Sound values; values must appear in the verified sample list.
    */
   sampleMap?: Partial<Record<Sound, string>>;
+  /**
+   * Optional multi-layer declaration. When present, supersedes `rhythmIds` for
+   * sound assignment and pattern emission. Each RecipeLayer is self-contained:
+   * the step pattern (binary/steps) is embedded directly so the recipe is
+   * readable without looking up the rhythm catalog.
+   *
+   * Invariants (enforced by tests):
+   *  7. Every `layers[i].sound` is a valid Sound value.
+   *  8. `layers[i].binary.length === layers[i].steps`.
+   *  9. If `layers[i].rhythmId` is present, it resolves in RHYTHM_CATALOG
+   *     (optional cross-reference — not used at runtime).
+   *
+   * When present, `rhythmIds` must remain consistent:
+   * `rhythmIds` equals `layers.map(l => l.rhythmId ?? '')`.
+   *
+   * Recipes without `layers` (the 13 existing recipes) use `rhythmIds` +
+   * index-based sound assignment unchanged.
+   */
+  layers?: ReadonlyArray<RecipeLayer>;
 }
 
 // ---------------------------------------------------------------------------

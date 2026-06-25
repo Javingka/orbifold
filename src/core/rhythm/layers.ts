@@ -32,6 +32,18 @@ export interface RhythmLayer {
   muted?: boolean;
   /** When true, only soloed layers play (at least one in the array). */
   solo?: boolean;
+  /**
+   * When true, this layer is part of a recipe's cultural signature and must not
+   * be replaced by agent rhythm changes. Set by `applyLockedFlags()` after a
+   * recipe is applied; cleared when a new recipe replaces all layers.
+   *
+   * Genre-agnostic plumbing: the flag value is stamped by the recipe-application
+   * path (`applyLockedFlags` in apply.ts). The knowledge of WHICH layers to lock
+   * lives only in `src/core/music-knowledge/` (RecipeLayer.locked declarations).
+   *
+   * Per Phase 05 §3 (ADR 0025 extension, additive optional).
+   */
+  locked?: boolean;
 }
 
 /**

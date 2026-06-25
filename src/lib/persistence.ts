@@ -94,6 +94,8 @@ const SavedRhythmLayerSchema = z.object({
   strudelSample: z.string().optional(),
   muted: z.boolean().optional(),
   solo: z.boolean().optional(),
+  /** Phase 05: additive optional — pre-Phase-05 sessions without this field parse cleanly. */
+  locked: z.boolean().optional(),
 });
 
 const SavedRhythmSchema = z.object({
@@ -303,6 +305,9 @@ export function serializeSession(state: SessionState): SavedSession {
         if (l.strudelSample !== undefined) layer.strudelSample = l.strudelSample;
         if (l.muted !== undefined) layer.muted = l.muted;
         if (l.solo !== undefined) layer.solo = l.solo;
+        // Phase 05: persist locked when true so reloaded sessions retain cultural signature locks.
+        // Only written when explicitly true; absent field → undefined → treated as unlocked.
+        if (l.locked === true) layer.locked = true;
         return layer;
       }),
     },
@@ -397,6 +402,7 @@ export function deserializeSession(
           strudelSample?: string;
           muted?: boolean;
           solo?: boolean;
+          locked?: boolean;
         } = {
           sound: l.sound,
           steps: [...l.steps],
@@ -406,6 +412,8 @@ export function deserializeSession(
         if (l.strudelSample !== undefined) layer.strudelSample = l.strudelSample;
         if (l.muted !== undefined) layer.muted = l.muted;
         if (l.solo !== undefined) layer.solo = l.solo;
+        // Phase 05: carry through locked; absent in pre-Phase-05 sessions → undefined → treated as unlocked.
+        if (l.locked !== undefined) layer.locked = l.locked;
         return layer;
       }),
     },

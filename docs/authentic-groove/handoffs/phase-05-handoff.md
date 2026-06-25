@@ -89,10 +89,5 @@ No source files modified. Repository state: Phase 04 complete, `main` branch, 17
 
 ### Planner Review
 
-(Filled by the Planner in review mode)
-
-**Decision:** APPROVED / REVISE / ESCALATED
-**Reviewed on:** <ISO date>
-**Iteration:** 1 of 5
-**Reason:** <one sentence or pointer to review/blocker file>
-**Next action:** <"Dev proceeds to step 05.2" for auto-continuation, OR "Pilot approval required before step 05.2, reason: <one line>">
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5. All 8 sections present with live verification completed (FreePats API fetch recorded verbatim, catalog greps performed), all design questions resolved within ADR 0025 / AG-D1 boundaries, no Register conflicts, no source files touched.
+**Next action:** Dev proceeds to step 05.2

@@ -8,6 +8,7 @@ import {
   RHYTHM_HARMONY_RECIPES,
   type MusicalRecipe,
 } from '../../src/core/music-knowledge/rhythm-harmony-recipes.js';
+import type { Sound } from '../../src/core/rhythm/layers.js';
 
 // ---------------------------------------------------------------------------
 // Build lookup sets once — used in all per-recipe assertions
@@ -15,6 +16,7 @@ import {
 
 const rhythmIds = new Set(RHYTHM_CATALOG.map((r) => r.id));
 const harmonyIds = new Set(HARMONY_CATALOG.map((h) => h.id));
+const VALID_SOUNDS: readonly Sound[] = ['bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht'];
 
 /** Look up a rhythm entry by id (guaranteed to exist when rhythmIds has it). */
 function getRhythmMeter(id: string): string {
@@ -144,6 +146,43 @@ describe.each(RHYTHM_HARMONY_RECIPES.map((r): [string, MusicalRecipe] => [r.id, 
           expect(recipe.meter).toBe(rhythmMeter);
         }
       }
+    });
+
+    // Invariants 7–9: layers field (Phase 05) — only enforced when layers is present
+    it('Invariant 7 — every layers[i].sound is a valid Sound value', () => {
+      if (!recipe.layers) return;
+      for (const layer of recipe.layers) {
+        expect(VALID_SOUNDS, `layers sound '${layer.sound}' is not a valid Sound`).toContain(
+          layer.sound
+        );
+      }
+    });
+
+    it('Invariant 8 — every layers[i].binary.length equals layers[i].steps', () => {
+      if (!recipe.layers) return;
+      for (const layer of recipe.layers) {
+        expect(layer.binary.length, `binary length mismatch for sound '${layer.sound}'`).toBe(
+          layer.steps
+        );
+      }
+    });
+
+    it('Invariant 9 — every layers[i].rhythmId (when present) resolves in RHYTHM_CATALOG', () => {
+      if (!recipe.layers) return;
+      for (const layer of recipe.layers) {
+        if (layer.rhythmId !== undefined) {
+          expect(
+            rhythmIds.has(layer.rhythmId),
+            `layers rhythmId '${layer.rhythmId}' not found in RHYTHM_CATALOG`
+          ).toBe(true);
+        }
+      }
+    });
+
+    it('Invariant consistency — when layers present, rhythmIds equals layers.map(l => l.rhythmId ?? "")', () => {
+      if (!recipe.layers) return;
+      const expectedRhythmIds = recipe.layers.map((l) => l.rhythmId ?? '');
+      expect(recipe.rhythmIds).toEqual(expectedRhythmIds);
     });
   }
 );

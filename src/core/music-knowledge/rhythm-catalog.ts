@@ -157,24 +157,26 @@ function structEntry(
 }
 
 // ---------------------------------------------------------------------------
-// RHYTHM_CATALOG — ≥45 entries (Phase 05 expansion)
+// RHYTHM_CATALOG — ≥48 entries (Phase 05 expansion)
 //
 // Coverage:
 //   Euclidean 8-step   : 6 entries  (tresillo, cinquillo, habanera rotation,
 //                                     8th-half, near-full, 4-of-8)
-//   Euclidean 12-step  : 6 entries  (West-African bell, sparse, minimal,
-//                                     standard, cueca-base, bulería-euclid)
+//   Euclidean 12-step  : 7 entries  (West-African bell, sparse, minimal,
+//                                     standard, cueca-base, cueca-syncopated,
+//                                     cueca-subdivision-12 [Phase 05])
 //   Euclidean 16-step  : 11 entries (sparse/medium/dense/near-full/quarter/
 //                                     8th/cascara-Euclidean, samba-euclid,
 //                                     cumbia-guache, candombe-repique, baladi)
 //   Euclidean odd      : 7 entries  (3/4, 7/8 ×2, 9/8 ×2, 5/4 ×2)
-//   Struct 12-step     : 3 entries  (cueca-syncopated, bulería, soleá)
+//   Struct 12-step     : 4 entries  (cueca-palmas-12 [Phase 05], bulería, soleá,
+//                                     NOTE: cueca-chilena-syncopated is euclidEntry)
 //   Struct 16-step     : 12 entries (son clave 3-2/2-3, rumba 3-2/2-3,
 //                                     bossa-nova-clave, backbeat, samba-surdo,
 //                                     samba-caixa, cumbia-caja, candombe-chico,
 //                                     milonga, maqsum, bossa-nova-variation)
 //
-// Total: 46 entries (Phase 05: +15 new entries appended below existing 31)
+// Total: 48 entries (Phase 05: +15 original + 2 cueca Phase-05 entries = 48 total)
 //
 // Binary strings are pre-computed from the real bjorklund() engine (verified
 // by the test suite via invariant 5). Do NOT change them without updating
@@ -602,6 +604,36 @@ export const RHYTHM_CATALOG: RhythmEntry[] = [
     roles: ['groove', 'melody'],
     binary: '010100101010', // E(5,12,2) — syncopated 5-onset cueca variation
     euclid: { k: 5, n: 12, rot: 2 },
+  }),
+
+  // Phase 05: cueca palmas — 12-step struct entry (not Euclidean)
+  // Onsets at steps 4 and 10 (0-indexed): binary '000010000010'.
+  // E(2,12,0) = '100000100000' (different pattern); this is a non-Euclidean struct entry.
+  // Used as the `cp` (palmas/clap) layer in the cueca-chilena-folk recipe.
+  structEntry({
+    id: 'cueca-palmas-12',
+    name: 'Cueca Palmas (12-step, struct)',
+    family: 'cueca',
+    traditions: ['Chilean folk-inspired', 'cueca'],
+    meter: '6/8',
+    steps: 12,
+    roles: ['timeline', 'groove'],
+    binary: '000010000010',
+    // Onsets: 4, 10 — the characteristic palmas (hand-clap) accent positions in cueca
+  }),
+
+  // Phase 05: cueca 8th-note subdivision — E(6,12,0)
+  // Every other step in 12 (alternating 8th notes); used as the hh layer in cueca.
+  euclidEntry({
+    id: 'cueca-subdivision-12',
+    name: 'Cueca 8th-Note Subdivision (12-step, euclid)',
+    family: 'straight',
+    traditions: ['Chilean folk-inspired', 'cueca', '6/8 compound'],
+    meter: '6/8',
+    steps: 12,
+    roles: ['groove', 'decoration'],
+    binary: '101010101010', // E(6,12,0) — alternating 8th notes in 12/8
+    euclid: { k: 6, n: 12, rot: 0 },
   }),
 
   // --- Samba (4/4, 16 steps) ---
