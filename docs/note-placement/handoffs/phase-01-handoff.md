@@ -220,3 +220,119 @@ Step 01.3 implements the full `melodyLine` NoteSlot codegen branch:
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Step 01.3 — Codegen branch for `NoteSlot`
+
+**Date:** 2026-06-26
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `import { NOTE_NAMES } from '../theory/pitch.js'` to `src/core/codegen/strudel.ts`
+- Replaced the step 01.2 silence stub in `melodyLine`'s NoteSlot arm with the real `note("...")` codegen:
+  - Derives `noteOctave = octave + slot.octaveOffset` and `noteName = NOTE_NAMES[slot.rootPc] + noteOctave`
+  - Emits `[numCycles, note("${noteName}")${slowStr}]` (with `.slow(numCycles)` when `bars !== 1`)
+  - Documents emitted capabilities (pitch, duration) and reserved capabilities (`.s()`, `.gain()`, `.room()`, `.decay()`, `.lpf()`, mini-notation) in a comment block to make extension points visible to future implementers
+  - `NOTE_NAMES` fallback `?? 'C'` guards against out-of-range `rootPc` (impossible at runtime but satisfies TypeScript strict null-check)
+- Updated the comment block on `HarmonySlotInput` to reference step 01.3 implementation
+- Created `tests/note-placement/codegen-note.test.ts` with 17 tests covering:
+  - Single NoteSlot → `arrange(\n  [1, note("C4")]\n)` (A-01-16/17)
+  - NoteSlot with `bars=2` → `.slow(2)` suffix (A-01-17)
+  - NoteSlot bars=1 → no `.slow` (A-01-17)
+  - Five note-name derivation cases: F4, F#4 (sharp spelling), octaveOffset=-1 → C3, octaveOffset=+1 → A5, A#3 not Bb3 (A-01-18)
+  - Mixed [Chord, NoteSlot] → arrange() forced, chord carries full attr chain (A-01-16)
+  - Mixed [NoteSlot, RestSlot] → correct arrange() with both segments (A-01-16)
+  - Mixed [NoteSlot(bars=2), RestSlot, Chord] → three segments (A-01-16)
+  - Three chord-only regression guards: uniform slowcat, arrange bars:2, arrange with rest (A-01-19)
+  - Edge: fractional bars=0.5, octave-param shift, all 12 pitch classes produce sharp names (A-01-20)
+- `pnpm test` → 2056/2056 (was 2039; +17 new); `tsc --noEmit` → 0 errors; `pnpm lint` → clean
+
+### Files touched
+
+- `src/core/codegen/strudel.ts` — `NOTE_NAMES` import, NoteSlot codegen branch (replaces stub), HarmonySlotInput comment updated
+- `docs/note-placement/decisions.md` — Pilot-authored OD-1/OD-2/OD-3 entries (written by Pilot; committed here as they were not captured in step 01.2 commit)
+- `tests/note-placement/codegen-note.test.ts` (created — 17 tests)
+- `docs/note-placement/handoffs/phase-01-handoff.md` (this file, step 01.3 entry appended)
+
+### Prototype parity note
+
+This step is not a direct port from `reference/orbifold.html`. The `melodyLine` function was ported in Phase 02 (prototype lines 765–773). The NoteSlot codegen is a new feature with no prototype analog (the prototype has no single-note slot type). The note name derivation (`NOTE_NAMES[rootPc] + (octave + octaveOffset)`) uses `NOTE_NAMES` from `src/core/theory/pitch.ts`, which was ported from prototype line 592. Behavioral fidelity is demonstrated via 17 unit tests with golden values.
+
+### Validation evidence (per Acceptance ID)
+
+- A-01-15: `HarmonySlotInput` in `strudel.ts` line 28–30 includes `{ isNote: true; rootPc: number; octaveOffset: number; bars?: number }` arm — confirmed.
+- A-01-16: `melodyLine` forces `arrange()` whenever any slot has `isNote: true` — implemented via `const hasNoteSlot = progression.some(...)` (line ~140) which sets `uniformDuration = false`; tests confirm.
+- A-01-17: NoteSlot segment is `[N, note("<noteName>")]` with `.slow(N)` when N ≠ 1 — 3 test cases confirm this exactly.
+- A-01-18: Note names use sharp spelling from `NOTE_NAMES` (`"C#"`, `"F#"`, `"A#"`, etc.); 5 note-name derivation tests + all-12-pc loop confirm no flats.
+- A-01-19: Chord-only `melodyLine` output byte-identical to pre-phase — 3 regression tests using golden strings from `tests/codegen.test.ts`.
+- A-01-20: `pnpm exec vitest run codegen-note` → 17 tests pass (> 6 required).
+- A-01-21: `pnpm exec tsc --noEmit` → exit 0, no output.
+
+### Routine validations (one-liner each)
+
+- `pnpm exec vitest run codegen-note` → 17 passed (0 failed)
+- `pnpm test` → 2056 passed, 43 files passed (0 failed)
+- `pnpm exec tsc --noEmit` → exit 0 (no output)
+- `pnpm lint` → exit 0 ("All matched files use Prettier code style!")
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-15 | `HarmonySlotInput` includes a NoteSlot-compatible arm | proxy:static-analysis (tsc) | proxy:static-analysis | covered |
+| A-01-16 | `melodyLine` forces `arrange()` whenever any slot has `isNote: true` | `tests/note-placement/codegen-note.test.ts` | unit | covered |
+| A-01-17 | NoteSlot segment is `[N, note("<noteName>")]`; `.slow(N)` when N ≠ 1 | `tests/note-placement/codegen-note.test.ts` | unit | covered |
+| A-01-18 | Generated note names use sharp spelling consistent with NOTE_NAMES | `tests/note-placement/codegen-note.test.ts` | unit | covered |
+| A-01-19 | Chord-only `melodyLine` output byte-identical to pre-phase — regression test | `tests/note-placement/codegen-note.test.ts` | unit | covered |
+| A-01-20 | `pnpm exec vitest run codegen-note` passes with at least 6 test cases | `tests/note-placement/codegen-note.test.ts` (17 tests) | unit | covered |
+| A-01-21 | `pnpm exec tsc --noEmit` passes clean | (none — tsc is the test) | operability | covered |
+
+**Proxy disclosures:**
+- A-01-15: `HarmonySlotInput` arm presence confirmed by `tsc --noEmit` (strict mode would error on `slot.rootPc`/`slot.octaveOffset` access in the codegen branch if the union arm were absent) and by direct file read.
+
+**Operability evidence:**
+- `pnpm exec tsc --noEmit`: exit 0, no output
+- `pnpm lint`: exit 0, "All matched files use Prettier code style!"
+- `pnpm exec vitest run codegen-note`: 17/17 passed
+- `pnpm test`: 2056/2056 passed, 43/43 files passed
+
+### Decisions made (if any)
+
+None — all decisions were within the approved scope (OD-1 Option A, OD-2 Option A, OD-3 Option B already resolved). The `?? 'C'` fallback in the note name derivation is a defensive guard for out-of-range `rootPc` (never reachable at runtime given the Zod schema `min(0).max(11)`) required only to satisfy TypeScript strict mode without a non-null assertion.
+
+### Proposed Decisions Register entries (if any)
+
+None — no new decisions required.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `pnpm test`: 2056 passed (was 2039 after step 01.2; +17 new)
+- `tsc --noEmit`: clean
+- `pnpm lint`: clean
+- `melodyLine` NoteSlot codegen is fully implemented: no more silence stub
+- Chord-only progression output is byte-identical to pre-phase (regression verified)
+
+### Next-step context
+
+Step 01.4 adds `noteMode: boolean` to `HarmonyState` and wires the `pickNote` path in `tonnetz-scene.ts`:
+- `setNoteMode` store action needed in `session.ts`
+- `onStagePointerDown` branches on `noteMode`: in note mode hit-test `_renderNodes` (OD-2), call `addNote(node.pc)`
+- A UI toggle button in `HarmonyPanel.svelte` (or the Tonnetz subview controls component) to call `setNoteMode`
+- `noteMode` is EPHEMERAL — not persisted, not in agent schema
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**

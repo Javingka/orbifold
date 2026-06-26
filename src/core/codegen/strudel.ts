@@ -8,6 +8,7 @@
 import { type Quality, chordVoicing } from '../theory/chords.js';
 import { type RhythmLayer, layerAudible, rhythmLayerToStrudelLine } from '../rhythm/layers.js';
 import { resolveChordAttrs, type ChordAttrs } from './presets.js';
+import { NOTE_NAMES } from '../theory/pitch.js';
 
 // ── Local union for harmony slot input ────────────────────────────────────────
 // NOT exported — avoids pulling session.ts (with Svelte-transitive dependencies)
@@ -19,7 +20,10 @@ import { resolveChordAttrs, type ChordAttrs } from './presets.js';
 // filter/envelope support — ADR 0019 D4.
 // note-placement Phase 01 step 01.2: NoteSlot arm added to the type declaration
 // so `ProgressionSlot[]` (now Chord|RestSlot|NoteSlot) is assignable.
-// The codegen branch itself is implemented in step 01.3.
+// note-placement Phase 01 step 01.3: full NoteSlot codegen branch implemented
+// in melodyLine — emits note("NOTE_NAMES[rootPc]+(octave+octaveOffset)") with
+// .slow(bars) when bars !== 1. Future optional attributes (.s(), .gain(), .room(),
+// .decay(), .lpf()) will chain here when added to NoteSlot in a later phase.
 type HarmonySlotInput =
   | ({ rootPc: number; qual: Quality; gain?: number | null; bars?: number } & ChordAttrs)
   | { isRest: true; bars?: number }
@@ -208,11 +212,32 @@ export function melodyLine(
       return `  [${numCycles}, silence]`;
     }
     if ('isNote' in slot) {
-      // NoteSlot — STUB: full codegen (note("...") with NOTE_NAMES derivation) added in step 01.3.
-      // For step 01.2, emit silence as a placeholder so the pattern compiles correctly
-      // and the arrange() path is invoked. The step 01.3 implementation replaces this.
+      // NoteSlot — note-placement Phase 01 step 01.3.
+      //
+      // Derives the note name using OD-1 Option A:
+      //   noteName = NOTE_NAMES[rootPc] + (octave + octaveOffset)
+      // NOTE_NAMES uses sharp spellings (e.g. "C#", "F#") consistent with pitch.ts.
+      //
+      // Emitted capabilities (Phase 01):
+      //   - pitch: note("C4") — derived from rootPc + (octave + octaveOffset)
+      //   - duration: .slow(bars) when bars !== 1 (cancels arrange()'s internal .fast)
+      //
+      // Reserved for future phases (NoteSlot interface has placeholder comments for):
+      //   - instrument: .s("piano") — from slot.instrument when present
+      //   - gain: .gain(n) — from slot.gain when present
+      //   - room: .room(n) — from slot.room when present
+      //   - decay: .decay(n) — from slot.decay when present
+      //   - lpf: .lpf(n) — from slot.lpf when present
+      //   - mini-notation: note("C4 E4 G4") — multiple pitches in one slot
+      //
+      // The branch is intentionally written to chain any future optional attrs without a
+      // breaking change: append .s(...).gain(...) after note("...") and before the slowStr.
+      const noteOctave = octave + slot.octaveOffset;
+      const noteName = `${NOTE_NAMES[slot.rootPc] ?? 'C'}${noteOctave}`;
+      // .slow(numCycles) cancels arrange()'s internal .fast(numCycles) so the note plays
+      // exactly once across its span (same invariant as chord slots — ADR 0016).
       const slowStr = numCycles !== 1 ? `.slow(${numCycles})` : '';
-      return `  [${numCycles}, silence${slowStr}]`;
+      return `  [${numCycles}, note("${noteName}")${slowStr}]`;
     }
     // Chord slot. ADR 0016 (Phase 10, Pilot-authorized 2026-06-15): a slot whose span
     // is not exactly one cycle (bars !== 1) must play its chord/arp EXACTLY ONCE across
