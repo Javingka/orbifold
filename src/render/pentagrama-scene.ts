@@ -1461,36 +1461,14 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
 
   stageEl.appendChild(_canvas);
 
-  // ── Pitch-offset + timbre DOM overlay (step 01.5 / post-phase-01 fix 2026-06-26) ─
+  // ── Pitch-offset + timbre DOM overlay (step 01.5 / post-phase-01 fixes 2026-06-26) ─
   // Absolute-positioned <div> containing:
   //   - +/- octave-offset buttons (step 01.5)
-  //   - sound <select> — 16 SK_SOUNDS values + "—" (none) option
+  //   - sound <select> — melodic oscillators + instruments (Fix B: no percussion)
   //   - gain <input type="number"> (0.0–1.2)
   // Mounted inside stageEl (position:relative); z-index:2 places it above the canvas.
   // Initially hidden; paint() positions + shows/hides it each frame.
   {
-    // 16 SK_SOUNDS values — mirrors SK_SOUNDS in src/agent/schema.ts.
-    // Defined inline to avoid importing from src/agent/ (CLAUDE.md invariant: no
-    // agent imports in render layer).
-    const NOTE_SOUNDS = [
-      'bd',
-      'sd',
-      'hh',
-      'oh',
-      'cp',
-      'rim',
-      'lt',
-      'mt',
-      'ht',
-      'conga',
-      'cajon',
-      'wood',
-      'shaker',
-      'cb',
-      'perc',
-      'hand',
-    ] as const;
-
     const ov = document.createElement('div');
     ov.id = 'pentagrama-note-offset';
     ov.style.cssText =
@@ -1513,23 +1491,51 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
       'padding:2px 4px;cursor:pointer;border-radius:4px;';
     plus.title = 'Raise pitch by one octave';
 
-    // Sound <select> — "—" + 16 SK_SOUNDS.
+    // Sound <select> — melodic instruments (Fix B: replaced percussion with melodic).
+    // Oscillators + named instruments; no percussion (bd/sd/hh…).
     const soundSel = document.createElement('select');
     soundSel.style.cssText =
       'background:rgba(10,11,18,0.9);border:1px solid rgba(138,160,255,0.35);' +
       'color:#8aa0ff;font-size:11px;border-radius:4px;padding:1px 2px;' +
-      'cursor:pointer;max-width:64px;';
+      'cursor:pointer;max-width:80px;';
     soundSel.title = 'Sound (.s)';
+
     const noneOpt = document.createElement('option');
     noneOpt.value = '';
-    noneOpt.textContent = '—';
+    noneOpt.textContent = '— (default)';
     soundSel.appendChild(noneOpt);
-    for (const s of NOTE_SOUNDS) {
+
+    // Oscillator optgroup
+    const oscGroup = document.createElement('optgroup');
+    oscGroup.label = 'Oscillators';
+    for (const [val, lbl] of [
+      ['sawtooth', 'Sawtooth'],
+      ['sine', 'Sine'],
+      ['square', 'Square'],
+      ['triangle', 'Triangle'],
+      ['pink', 'Noise'],
+    ] as const) {
       const opt = document.createElement('option');
-      opt.value = s;
-      opt.textContent = s;
-      soundSel.appendChild(opt);
+      opt.value = val;
+      opt.textContent = lbl;
+      oscGroup.appendChild(opt);
     }
+    soundSel.appendChild(oscGroup);
+
+    // Instrument optgroup
+    const instrGroup = document.createElement('optgroup');
+    instrGroup.label = 'Instruments';
+    for (const [val, lbl] of [
+      ['piano', 'Piano'],
+      ['guitar', 'Guitar'],
+      ['synth-bass', 'Synth Bass'],
+    ] as const) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = lbl;
+      instrGroup.appendChild(opt);
+    }
+    soundSel.appendChild(instrGroup);
 
     // Gain <input> — 0.0–1.2, step 0.1.
     const gainInput = document.createElement('input');
