@@ -22,12 +22,24 @@ import { NOTE_NAMES } from '../theory/pitch.js';
 // so `ProgressionSlot[]` (now Chord|RestSlot|NoteSlot) is assignable.
 // note-placement Phase 01 step 01.3: full NoteSlot codegen branch implemented
 // in melodyLine — emits note("NOTE_NAMES[rootPc]+(octave+octaveOffset)") with
-// .slow(bars) when bars !== 1. Future optional attributes (.s(), .gain(), .room(),
-// .decay(), .lpf()) will chain here when added to NoteSlot in a later phase.
+// .slow(bars) when bars !== 1.
+// post-phase-01 fix (2026-06-26): NoteSlot arm extended with timbre attributes;
+// codegen emits .s(), .gain(), .room(), .decay(), .attack(), .lpf() when present.
 type HarmonySlotInput =
   | ({ rootPc: number; qual: Quality; gain?: number | null; bars?: number } & ChordAttrs)
   | { isRest: true; bars?: number }
-  | { isNote: true; rootPc: number; octaveOffset: number; bars?: number };
+  | {
+      isNote: true;
+      rootPc: number;
+      octaveOffset: number;
+      bars?: number;
+      instrument?: string;
+      gain?: number;
+      room?: number;
+      decay?: number;
+      attack?: number;
+      lpf?: number;
+    };
 
 /**
  * Returns the trimmed pattern string unchanged.
@@ -212,32 +224,38 @@ export function melodyLine(
       return `  [${numCycles}, silence]`;
     }
     if ('isNote' in slot) {
-      // NoteSlot — note-placement Phase 01 step 01.3.
+      // NoteSlot — note-placement Phase 01 step 01.3 / post-phase-01 fix 2026-06-26.
       //
       // Derives the note name using OD-1 Option A:
       //   noteName = NOTE_NAMES[rootPc] + (octave + octaveOffset)
       // NOTE_NAMES uses sharp spellings (e.g. "C#", "F#") consistent with pitch.ts.
       //
-      // Emitted capabilities (Phase 01):
-      //   - pitch: note("C4") — derived from rootPc + (octave + octaveOffset)
-      //   - duration: .slow(bars) when bars !== 1 (cancels arrange()'s internal .fast)
-      //
-      // Reserved for future phases (NoteSlot interface has placeholder comments for):
+      // Emitted capabilities (Phase 01 + post-phase-01 fix):
+      //   - pitch:      note("C4") — derived from rootPc + (octave + octaveOffset)
       //   - instrument: .s("piano") — from slot.instrument when present
-      //   - gain: .gain(n) — from slot.gain when present
-      //   - room: .room(n) — from slot.room when present
-      //   - decay: .decay(n) — from slot.decay when present
-      //   - lpf: .lpf(n) — from slot.lpf when present
-      //   - mini-notation: note("C4 E4 G4") — multiple pitches in one slot
+      //   - gain:       .gain(n) — from slot.gain when present
+      //   - room:       .room(n) — from slot.room when present
+      //   - decay:      .decay(n) — from slot.decay when present
+      //   - attack:     .attack(n) — from slot.attack when present
+      //   - lpf:        .lpf(n) — from slot.lpf when present
+      //   - duration:   .slow(bars) when bars !== 1 (cancels arrange()'s internal .fast)
       //
-      // The branch is intentionally written to chain any future optional attrs without a
-      // breaking change: append .s(...).gain(...) after note("...") and before the slowStr.
+      // Reserved for future phases:
+      //   - mini-notation: note("C4 E4 G4") — multiple pitches in one slot
       const noteOctave = octave + slot.octaveOffset;
       const noteName = `${NOTE_NAMES[slot.rootPc] ?? 'C'}${noteOctave}`;
+      // Build attribute chain — each field is only emitted when non-null.
+      let chain = `note("${noteName}")`;
+      if (slot.instrument != null) chain += `.s("${slot.instrument}")`;
+      if (slot.gain != null) chain += `.gain(${slot.gain})`;
+      if (slot.room != null) chain += `.room(${slot.room})`;
+      if (slot.decay != null) chain += `.decay(${slot.decay})`;
+      if (slot.attack != null) chain += `.attack(${slot.attack})`;
+      if (slot.lpf != null) chain += `.lpf(${slot.lpf})`;
       // .slow(numCycles) cancels arrange()'s internal .fast(numCycles) so the note plays
       // exactly once across its span (same invariant as chord slots — ADR 0016).
-      const slowStr = numCycles !== 1 ? `.slow(${numCycles})` : '';
-      return `  [${numCycles}, note("${noteName}")${slowStr}]`;
+      if (numCycles !== 1) chain += `.slow(${numCycles})`;
+      return `  [${numCycles}, ${chain}]`;
     }
     // Chord slot. ADR 0016 (Phase 10, Pilot-authorized 2026-06-15): a slot whose span
     // is not exactly one cycle (bars !== 1) must play its chord/arp EXACTLY ONCE across

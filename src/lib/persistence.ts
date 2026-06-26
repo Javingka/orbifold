@@ -119,6 +119,14 @@ const SavedNoteSlotSchema = z.object({
   octaveOffset: z.number().int().min(-4).max(4),
   /** Duration in Strudel cycles. Follows the same clampBars semantics as Chord.bars. */
   bars: z.number().min(0.25).max(8).optional(),
+  // ── Timbre attributes (post-phase-01 fix, 2026-06-26) — all optional and additive ──
+  // Old blobs parse cleanly: absent fields are undefined, not errors.
+  instrument: z.string().optional(),
+  gain: z.number().min(0).max(1.2).optional(),
+  room: z.number().min(0).max(1).optional(),
+  decay: z.number().min(0).optional(),
+  attack: z.number().min(0).optional(),
+  lpf: z.number().min(0).optional(),
 });
 
 const SavedHarmonySchema = z.object({

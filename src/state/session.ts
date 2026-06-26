@@ -270,12 +270,34 @@ export interface NoteSlot {
    * Follows the same `clampBars` semantics as `Chord.bars`.
    */
   bars?: number;
-  // ── Future extension fields (reserved; not emitted in Phase 01 codegen) ────
-  // instrument?: string;  // .s() instrument for the note
-  // gain?: number;        // .gain() amplitude 0–1.2
-  // room?: number;        // .room() reverb 0–1
-  // decay?: number;       // .decay() amplitude decay time
-  // lpf?: number;         // .lpf() low-pass filter cutoff
+  // ── Timbre attributes (post-phase-01 fix, 2026-06-26) ────────────────────
+  // Parallel Chord's optional sound attributes so codegen can emit the full chain.
+  /**
+   * Strudel sound/instrument name — emitted as .s("piano").
+   * Same semantics as Chord.instrument.
+   * Future: preset bundles (ADR 0019 D2 pattern).
+   */
+  instrument?: string;
+  /**
+   * Amplitude 0–1.2. Emitted as .gain(n). Default: no .gain() emitted (Strudel default).
+   */
+  gain?: number;
+  /**
+   * Reverb level 0–1. Emitted as .room(n).
+   */
+  room?: number;
+  /**
+   * Amplitude decay time in seconds (> 0). Emitted as .decay(n).
+   */
+  decay?: number;
+  /**
+   * Amplitude attack time in seconds (>= 0). Emitted as .attack(n).
+   */
+  attack?: number;
+  /**
+   * Low-pass filter cutoff in Hz. Emitted as .lpf(n).
+   */
+  lpf?: number;
 }
 
 /**
@@ -1457,6 +1479,35 @@ export function setNoteOffset(index: number, octaveOffset: number): void {
     const progression: ProgressionSlot[] = s.harmony.progression.map((p, i) =>
       i === index ? { ...slot, octaveOffset: clamped } : p
     );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Update optional timbre attributes on a `NoteSlot`.
+ *
+ * Patches the `instrument`, `gain`, `room`, `decay`, `attack`, and/or `lpf`
+ * fields on the slot at `idx`. No-ops if `idx` is out of bounds or the slot
+ * is not a `NoteSlot`. Calls `requeueLive()` so the updated chain takes effect
+ * at the next Strudel cycle boundary.
+ *
+ * Post-phase-01 fix (2026-06-26) — adds timbre attribute support to NoteSlot,
+ * parallel to Chord's per-slot sound attributes.
+ *
+ * @param idx   - Index into `harmony.progression`.
+ * @param attrs - Partial map of fields to update (undefined = leave unchanged).
+ */
+export function setNoteAttrs(
+  idx: number,
+  attrs: Partial<Pick<NoteSlot, 'instrument' | 'gain' | 'room' | 'decay' | 'attack' | 'lpf'>>
+): void {
+  sessionStore.update((s) => {
+    const slot = s.harmony.progression[idx];
+    if (slot === undefined || !isNoteSlot(slot)) return s;
+    const updated: NoteSlot = { ...slot, ...attrs };
+    const progression = [...s.harmony.progression];
+    progression[idx] = updated;
     return { ...s, harmony: { ...s.harmony, progression } };
   });
   requeueLive();

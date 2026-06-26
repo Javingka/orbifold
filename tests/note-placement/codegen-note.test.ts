@@ -183,3 +183,56 @@ describe('melodyLine — NoteSlot edge cases', () => {
     }
   });
 });
+
+// ── F2-4 / F2-6: timbre attribute codegen (post-phase-01 fix, 2026-06-26) ────────
+
+describe('melodyLine — NoteSlot timbre attribute codegen', () => {
+  it('F2-4: NoteSlot with instrument:"piano" emits note("C4").s("piano")', () => {
+    const result = melodyLine(
+      [{ isNote: true, rootPc: 0, octaveOffset: 0, instrument: 'piano' }],
+      'chord',
+      4
+    );
+    expect(result).toBe('arrange(\n  [1, note("C4").s("piano")]\n)');
+  });
+
+  it('F2-4: NoteSlot with instrument:"sawtooth", gain:0.8, room:0.3 emits full chain', () => {
+    const result = melodyLine(
+      [{ isNote: true, rootPc: 0, octaveOffset: 0, instrument: 'sawtooth', gain: 0.8, room: 0.3 }],
+      'chord',
+      4
+    );
+    expect(result).toBe('arrange(\n  [1, note("C4").s("sawtooth").gain(0.8).room(0.3)]\n)');
+  });
+
+  it('F2-4: NoteSlot with bars:2, instrument:"piano" emits [2, note("C4").s("piano").slow(2)]', () => {
+    const result = melodyLine(
+      [{ isNote: true, rootPc: 0, octaveOffset: 0, bars: 2, instrument: 'piano' }],
+      'chord',
+      4
+    );
+    expect(result).toBe('arrange(\n  [2, note("C4").s("piano").slow(2)]\n)');
+  });
+
+  it('F2-4: NoteSlot with no attributes emits note("C4") with no chain (regression guard)', () => {
+    // A NoteSlot with no timbre attrs must still emit only note("C4") — no dangling chain.
+    const result = melodyLine([{ isNote: true, rootPc: 0, octaveOffset: 0 }], 'chord', 4);
+    expect(result).toBe('arrange(\n  [1, note("C4")]\n)');
+  });
+
+  it('F2-4: NoteSlot with decay and attack emits correct chain order (gain/room absent)', () => {
+    const result = melodyLine(
+      [{ isNote: true, rootPc: 0, octaveOffset: 0, attack: 0.05, decay: 0.3 }],
+      'chord',
+      4
+    );
+    // chain order: .decay() before .attack() (per codegen sequence: gain/room/decay/attack/lpf)
+    // gain and room are undefined so NOT emitted
+    expect(result).toBe('arrange(\n  [1, note("C4").decay(0.3).attack(0.05)]\n)');
+  });
+
+  it('F2-4: NoteSlot with only lpf emits .lpf(n)', () => {
+    const result = melodyLine([{ isNote: true, rootPc: 0, octaveOffset: 0, lpf: 800 }], 'chord', 4);
+    expect(result).toBe('arrange(\n  [1, note("C4").lpf(800)]\n)');
+  });
+});
