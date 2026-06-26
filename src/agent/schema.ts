@@ -30,9 +30,22 @@ export const SCHEMA_VERSION = 6;
 // ── Constants (prototype lines 1670–1673) ─────────────────────────────────
 
 const SK_SOUNDS = [
-  'bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht',
-  'conga', 'cajon', 'wood', 'shaker',
-  'cb', 'perc', 'hand',
+  'bd',
+  'sd',
+  'hh',
+  'oh',
+  'cp',
+  'rim',
+  'lt',
+  'mt',
+  'ht',
+  'conga',
+  'cajon',
+  'wood',
+  'shaker',
+  'cb',
+  'perc',
+  'hand',
 ] as const;
 const SK_MODES = [
   'major',

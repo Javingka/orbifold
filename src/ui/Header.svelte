@@ -44,7 +44,6 @@
     addEmptyLayer,
     previewEuclid,
     hushAll,
-    requeueLive,
   } from '../state/session.js';
   import StepEditor from './StepEditor.svelte';
   import { bjorklund, rotate } from '../core/rhythm/euclid.js';
@@ -196,22 +195,7 @@
     }
   }
 
-  // ── Step editor toggle (Phase 09 step 09.2) ───────────────────────────────
-  // Toggles a single step in a layer. Locked layers are guarded (immutable).
-  // Clears euclid when editing steps directly (consistent with rhythm-scene.ts).
-  function handleStepToggle(layerIdx: number, stepIdx: number): void {
-    sessionStore.update((s) => {
-      const layer = s.rhythm.layers[layerIdx];
-      if (!layer || layer.locked) return s; // guard: locked layers immutable
-      const newSteps = [...layer.steps];
-      newSteps[stepIdx] = newSteps[stepIdx] === 1 ? 0 : 1;
-      // Clear euclid when editing steps directly (consistent with existing behavior)
-      const newLayers = [...s.rhythm.layers];
-      newLayers[layerIdx] = { ...layer, steps: newSteps, euclid: undefined };
-      return { ...s, rhythm: { ...s.rhythm, layers: newLayers } };
-    });
-    requeueLive();
-  }
+
 
   // ── Language selector (Phase 11 step 11.3, ADR 0017 OQ-5) ────────────────
   // The 文A button opens an inline dropdown listing the four native labels.

@@ -26,10 +26,7 @@
 
 <div class="step-editor">
   {#each layers as layer, li}
-    <div
-      class="step-row"
-      style="grid-template-columns: auto repeat({layer.steps.length}, 1fr)"
-    >
+    <div class="step-row" style="grid-template-columns: auto repeat({layer.steps.length}, 1fr)">
       <span
         class="step-sound-label"
         title={layer.strudelSample && layer.strudelSample !== layer.sound
@@ -104,7 +101,9 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: transparent;
     cursor: pointer;
-    transition: background 0.1s, border-color 0.1s;
+    transition:
+      background 0.1s,
+      border-color 0.1s;
     padding: 0;
   }
 

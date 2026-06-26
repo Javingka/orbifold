@@ -41,13 +41,9 @@ import type { SessionState } from '../../src/state/session.js';
  * Returns the updated SessionState (or the same reference if the layer is locked
  * or the indices are out of bounds).
  */
-function applyStepToggle(
-  s: SessionState,
-  layerIdx: number,
-  stepIdx: number,
-): SessionState {
+function applyStepToggle(s: SessionState, layerIdx: number, stepIdx: number): SessionState {
   const layer = s.rhythm.layers[layerIdx];
-  if (!layer || layer.locked) return s;  // guard: locked layers immutable
+  if (!layer || layer.locked) return s; // guard: locked layers immutable
   const newSteps = [...layer.steps];
   newSteps[stepIdx] = newSteps[stepIdx] === 1 ? 0 : 1;
   const newLayers = [...s.rhythm.layers];
@@ -69,10 +65,7 @@ describe('cueca recipe layer step count (A-09-07)', () => {
     const layers = get(sessionStore).rhythm.layers;
     expect(layers.length).toBeGreaterThan(0);
     const layer12 = layers.find((l: RhythmLayer) => l.steps.length === 12);
-    expect(
-      layer12,
-      'Expected at least one layer with 12 steps (6/8 cueca grid)',
-    ).toBeDefined();
+    expect(layer12, 'Expected at least one layer with 12 steps (6/8 cueca grid)').toBeDefined();
   });
 
   it('cueca recipe: all layers have steps.length === 12 (pure 6/8 recipe)', () => {
@@ -82,7 +75,7 @@ describe('cueca recipe layer step count (A-09-07)', () => {
     for (const layer of layers) {
       expect(
         layer.steps.length,
-        `Layer '${layer.sound}' should have 12 steps; got ${layer.steps.length}`,
+        `Layer '${layer.sound}' should have 12 steps; got ${layer.steps.length}`
       ).toBe(12);
     }
   });
@@ -107,10 +100,7 @@ describe('aksak recipe layer step count (A-09-08)', () => {
     const layers = get(sessionStore).rhythm.layers;
     expect(layers.length).toBeGreaterThan(0);
     const layer7 = layers.find((l: RhythmLayer) => l.steps.length === 7);
-    expect(
-      layer7,
-      'Expected at least one layer with 7 steps (7/8 aksak grid)',
-    ).toBeDefined();
+    expect(layer7, 'Expected at least one layer with 7 steps (7/8 aksak grid)').toBeDefined();
   });
 
   it('aksak recipe: all layers have steps.length === 7 (pure 7/8 recipe)', () => {
@@ -119,7 +109,7 @@ describe('aksak recipe layer step count (A-09-08)', () => {
     for (const layer of layers) {
       expect(
         layer.steps.length,
-        `Layer '${layer.sound}' should have 7 steps; got ${layer.steps.length}`,
+        `Layer '${layer.sound}' should have 7 steps; got ${layer.steps.length}`
       ).toBe(7);
     }
   });
@@ -224,8 +214,14 @@ describe('handleStepToggle — free layer toggle (A-09-06)', () => {
   });
 
   it('toggle does not mutate other layers', () => {
-    const layer0: RhythmLayer = { sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] };
-    const layer1: RhythmLayer = { sound: 'hh', steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] };
+    const layer0: RhythmLayer = {
+      sound: 'bd',
+      steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+    };
+    const layer1: RhythmLayer = {
+      sound: 'hh',
+      steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    };
     const session: SessionState = {
       ...DEFAULT_SESSION_STATE,
       rhythm: { ...DEFAULT_SESSION_STATE.rhythm, layers: [layer0, layer1] },

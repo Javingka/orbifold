@@ -45,6 +45,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 - `pnpm exec vitest run propagation` → pass.
 - `pnpm test` → 1931 tests passing (≥ 1888).
 
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. Commit scope clean (recipes + tests only, all cascading test updates disclosed). Commit message format matches convention. Acceptance Coverage Table maps A-08-01/02/03 and A-08-16 partial to `propagation.test.ts` with passing evidence. Tests exercise actual binary data fields, not helpers. Register respected (AG-D1 seam; afro-cuban sampleMap stays inside music-knowledge). No new deps or env changes. Reversibility intact — additive data fields only, no schema bump.
+**Next action:** Dev proceeds to step 08.2.
+
 ---
 
 ## Step 08.2 — Brazilian duo: bossa-nova-groove, samba-afro-brasileiro
@@ -75,6 +81,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 - A-08-05: `samba-afro-brasileiro` bd=`1000000010000000` (LOCKED), hh=`1011010110110101` (LOCKED) — passes.
 - A-08-16 (partial): bossa defaultCpm=32 (128 BPM, in [100,160]), samba defaultCpm=26 (104 BPM, in [100,160]).
 - `pnpm test` → 1931 tests passing.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. Commit scope clean (recipes + tests only). Binary strings match Dev reference table exactly (verified against recipe source). samba sampleMap upgrade from `sd` to `hand` documented and tested in `sample-map.test.ts`. AG-D1 seam respected — no genre names outside music-knowledge. Reversibility intact — additive data only; samba `sampleMap.hh` upgrade is a data change in `rhythm-harmony-recipes.ts`, revertible without schema change.
+**Next action:** Dev proceeds to step 08.3.
 
 ---
 
@@ -111,6 +123,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 - A-08-14 (partial): wrong pattern `'100011010110'` confirmed absent in bulería bd layer — passes.
 - A-08-16 (partial): west-african-bell defaultCpm=22 (88 BPM, [60,120]), west-african-triplet defaultCpm=22 (88 BPM, [60,110]), bulería defaultCpm=33 (132 BPM, [80,160]).
 - `pnpm test` → 1931 tests passing.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. One noted deviation from the Dev reference table: the phase spec said `hh` for the bulería palmas sordas layer; the implementation used `cp`. This is semantically more accurate — `cp` (clap) is the established convention for palmas in this codebase (the cueca recipe from Phase 05 uses `cp` for palmas, and the i18n strings define `cp` as "palmas"). The binary pattern `100100100100`, step count 12, and free-lock status are all exactly correct. All 1931 tests pass. The handoff's coverage summary description ("hh layer") is a minor text inaccuracy vs the actual implementation (`cp`), but the test verifies `cp` directly. AG-D1 seam clean — catalog wrong binary documented but not patched in catalog (RecipeLayer.binary authoritative per Phase 05 design).
+**Next action:** Dev proceeds to step 08.4.
 
 ---
 
@@ -149,6 +167,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 - A-08-16 (partial): pop-rock defaultCpm=27, gospel defaultCpm=20, aksak defaultCpm=34, dorian-ritual defaultCpm=18.
 - `pnpm test` → 1931 tests passing.
 - `pnpm exec tsc --noEmit` → clean.
+
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. Binary strings match Dev reference table exactly for all four recipes. 3-layer pop/rock and gospel structures correctly use `cp` for snare (matching spec). 7-step aksak patterns have correct lengths (verified: `'1010100'.length === 7`, `'1011011'.length === 7`). `dorian-ritual-sparse` correctly receives `defaultCpm` only with no `layers`. Gospel `euclid-9-16` comment ("retained for catalog integrity; layers supersede at runtime") correctly describes the runtime precedence. A-08-15 partial (E(9,16) exclusion) demonstrated via propagation test. AG-D1 respected — pop/rock, gospel, aksak, dorian-ritual use default sounds with no sampleMap (correct per ADR 0025 D2: generic recipes leave sampleMap undefined).
+**Next action:** Dev proceeds to step 08.5.
 
 ---
 
@@ -208,6 +232,12 @@ Result: 2 cosmetic matches only — `src/agent/schema.ts:256` (JSDoc comment exa
 
 All Phase 08 changes are additive data fields on `MusicalRecipe` (`layers` and `defaultCpm`). Reverting them removes the authentic binary layers and default tempos; recipes fall back to `rhythmIds` + index-based sound assignment (pre-Phase-08 behavior). No schema change, no migration, no `SESSION_SCHEMA_VERSION` bump. `rhythm-catalog.ts` is not modified. Reverting Phase 08 does not affect the catalog. The samba `sampleMap.hh: 'sd' → 'hand'` upgrade and the `afro-cuban-clave-minor` `sampleMap` addition are data changes in `rhythm-harmony-recipes.ts`. Reverting them restores Phase 05/07 sampleMap values.
 
+### Planner Review
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. New test file `recipe-layers-phase08.test.ts` (63 tests) is scoped to test-only — no source changes. All A-08-01 through A-08-17 map to concrete test assertions in the file (Coverage Table FULL on all 17 IDs). Tests exercise actual binary data from the Dev reference table rather than helpers. A-08-13 full (aksak `applyRhythmSpec` → `steps.length === 7`) exercises the Phase 07 native step-count path end-to-end. A-08-14 full (wrong bulería pattern explicitly asserted absent). A-08-15 full (E(9,16) binary computed dynamically via `bjorklund` import and asserted absent from gospel layers). Quality gate output recorded verbatim (tsc, lint, test 1994/1994, build). Seam grep result recorded with explanation of the 2 cosmetic matches. Reversibility note present verbatim. Register respected: AG-D1 and ADR 0025 D3 both confirmed. No new deps or env changes.
+**Next action:** Pilot approval required before any next phase — Phase 08 is the final phase of the `authentic-groove` initiative; initiative close below.
+
 ---
 
 ## Phase-completion block
@@ -237,7 +267,7 @@ All Phase 08 changes are additive data fields on `MusicalRecipe` (`layers` and `
 | A-08-05 | `samba-afro-brasileiro` bd layer `1000000010000000` (16 steps, locked); hh layer `1011010110110101` (16 steps, locked) | FULL |
 | A-08-06 | `west-african-bell-modal` bd layer `101011010101` (12 steps, locked); hh layer `100100100100` (12 steps, free) | FULL |
 | A-08-07 | `west-african-triplet-groove` bd layer `101011010101` (12 steps, locked); hh layer `100101001010` (12 steps, locked) | FULL |
-| A-08-08 | `buleria-flamenco-phrygian` bd layer `100100101010` (12 steps, locked); hh layer `100100100100` (12 steps, free) | FULL |
+| A-08-08 | `buleria-flamenco-phrygian` bd layer `100100101010` (12 steps, locked); cp layer `100100100100` (12 steps, free) — note: `cp` used (not `hh` per spec text), consistent with Phase 05 cueca palmas convention | FULL |
 | A-08-09 | `pop-rock-backbeat` three layers: bd `1000000010000000` (free), cp `0000100000001000` (locked), hh `1010101010101010` (free) | FULL |
 | A-08-10 | `gospel-soul-euclid` three layers: bd `1000010010000100` (free), cp `0000100000001000` (locked), hh `1010101010101010` (free) | FULL |
 | A-08-11 | `aksak-dorian-odd` two layers: bd `1010100` (7 steps, locked), hh `1011011` (7 steps, free) | FULL |
@@ -253,3 +283,71 @@ All Phase 08 changes are additive data fields on `MusicalRecipe` (`layers` and `
 All Phase 08 acceptance criteria are met. 12 target recipes now carry culturally verified binary step patterns. The Dorian Ritual recipe is the only recipe without layers (intentionally abstract). `dorian-ritual-sparse` is confirmed as the sole layerless recipe post-Phase-08. Test count advanced from 1888 (pre-Phase-08 gate) to 1994 (+106 tests). Quality gate clean on all four commands.
 
 **Next action (from phase-08.md):** Phase 08 is the final phase of the `authentic-groove` initiative. All initiative goals are complete. Pilot decides on next initiative or closes the initiative.
+
+---
+
+## Initiative-close block — authentic-groove (Phases 01–08)
+
+**Initiative:** `authentic-groove`
+**Status:** COMPLETE — all 8 phases delivered and approved.
+**Dates:** 2026-06-23 (Phase 01 start) → 2026-06-25 (Phase 08 close)
+
+### What was delivered
+
+**Phase 01 — Genre-Authentic Strudel Sample Palette**
+Introduced `strudelSample?: string` on `RhythmLayer` (ADR 0025 D1) and `sampleMap` on `MusicalRecipe` (ADR 0025 D2). Added generic `applySampleMap` plumbing helper in `apply.ts` (D4 / Option B — AgentOutputSchema stays clean). Persisted `strudelSample` through `SavedRhythmLayerSchema` (D5 — SESSION_SCHEMA_VERSION stays 5). Established the music-knowledge seam invariant (AG-D1 / ADR 0025 D3): no genre name or hardcoded sample map in plumbing layers. Populated `sampleMap` for 5 genre-specific recipes with CC0-verified Dirt-Samples names. ADR 0025 ratified.
+
+**Phase 02 — Recipe-Application Wiring + UI Chip Row**
+Wired `applySampleMap` into the recipe-application call site (`autopilot.ts`). Built UI recipe chip row for one-tap recipe selection. Confirmed `strudelSample` propagates from knowledge layer through apply path to codegen output.
+
+**Phase 03 — Hand Percussion Upgrade (bossa-nova hh)**
+Upgraded `bossa-nova-groove` hi-hat from generic `hh` to `hand` (FreePats CC0 confirmed via live `strudel.json` inventory). Extended propagation tests for end-to-end `hand` sample flow.
+
+**Phase 04 — FreePats CC0 Sample Registration**
+Registered `wood` (claves), `conga`, `cajon`, and related FreePats CC0 samples via `initAudio` in the app startup path. Added `public/samples/` directory with committed audio files and LICENSE.txt. Confirmed `pnpm build` includes them in `dist/samples/`.
+
+**Phase 05 — Locked Layers for Cueca + Cumbia**
+Introduced `locked?: boolean` on `RecipeLayer` and `RhythmLayer` (round-tripped through persistence, SESSION_SCHEMA_VERSION stays 5). Added `layers: ReadonlyArray<RecipeLayer>` to `MusicalRecipe`. Implemented `recipeToAgentOutput` reading `recipe.layers` when present (superseding index-based `soundForIndex`). Implemented `applyLockedFlags` propagation. Embedded authentic binary patterns for cueca-chilena-folk (3 layers: bd LOCKED, cp+hh free) and cumbia-latina-groove (2 layers: both LOCKED). Extended `SYSTEM_PROMPT_EVOLUTION` with locked-layer respect rule.
+
+**Phase 06 — Default Tempo per Recipe**
+Added `defaultCpm?: number` field to `MusicalRecipe`. Populated initial `defaultCpm` for cueca (40 cpm = 160 BPM) and cumbia (30 cpm = 120 BPM). Wired `applyRecipeById` to call `setbpm(defaultCpm * 4)` when present. Added UI-layer display showing recipe name and BPM on apply. Added PIXI canvas dots-per-layer count fix (native step count rather than RSTEPS constant).
+
+**Phase 07 — Native Step-Count Support**
+Removed the 16-step normalization that was truncating/padding 12-step and 8-step patterns to 16 in `applyRhythmSpec`. `RhythmLayer.steps` now preserves native length: 12-step layers stay 12, 8-step layers stay 8, 7-step layers stay 7. `SavedRhythmLayerSchema` relaxed (`min(1).max(16)` → accepts any positive integer). Backward-compatible: 16-step agent specs and pre-phase sessions unchanged.
+
+**Phase 08 — Authentic Binary Layers for the Remaining 12 Recipes**
+Embedded culturally verified binary step patterns and `defaultCpm` values in all 12 remaining recipes. 3 Afro-Cuban/Latin (16-step son clave 3-2, rumba clave 3-2, son clave 2-3 + cascara). 2 Brazilian (16-step bossa nova clave, samba surdo + teleco-teco). 3 African/Flamenco (12-step gankogui bell, gankogui + kpanlogo interlock, bulería compás correction). 4 Standard/Edge (pop-rock 3-layer, gospel-soul 3-layer, aksak 7-step — first odd-meter recipe using Phase 07 support, dorian-ritual defaultCpm only). Corrected the wrong bulería catalog binary via authoritative `RecipeLayer.binary`. Added 63 comprehensive binary assertion tests.
+
+### Test count progression
+
+| Phase | Close count | Delta |
+|---|---|---|
+| Pre-initiative (ai-jam close) | 1589 | — |
+| Phase 01 | 1673 | +84 |
+| Phase 02 | 1693 | +20 |
+| Phase 03 | 1698 | +5 |
+| Phase 04 | 1720 | +22 |
+| Phase 05 | 1831 | +111 |
+| Phase 06 | 1863 | +32 |
+| Phase 07 | 1888 | +25 |
+| Phase 08 | 1994 | +106 |
+
+**Total initiative delta: +405 tests** (1589 → 1994)
+
+### Key invariants maintained throughout
+
+- **AG-D1 / ADR 0025 D3 — music-knowledge seam:** All genre-to-sample mappings remain entirely inside `src/core/music-knowledge/`. No genre name or hardcoded sample map appeared in `apply.ts`, `persistence.ts`, codegen, or any Svelte file across all 8 phases. Seam grep recorded at phases 01 (step 01.5), 05 (step 05.5), 06 (step 06.4), 07 (step 07.4), and 08 (step 08.5) — all returned zero violations in plumbing files.
+- **SCHEMA_VERSION = 6 and SESSION_SCHEMA_VERSION = 5:** Both unchanged across the entire initiative. All new fields (`strudelSample`, `locked`, `defaultCpm` on recipes, `layers` on recipe) are additive and optional; old sessions parse cleanly.
+- **TS strict + `core/**` purity:** `tsc --noEmit` passed clean at the close of every phase. No DOM/PIXI/Svelte imports entered `src/core/`.
+- **AGPL-3.0 header:** Present on all new files across all phases.
+- **Dependency pins:** `@strudel/web@1.0.3` and PixiJS v7 unchanged.
+
+### Deferred items (carried to next initiative or permanently deferred)
+
+- `applyLoadedSession` locked-field gap — permanently deferred.
+- Dimension 2: per-hit accent/velocity variation — permanently deferred (outside initiative scope).
+- Dimension 3: swing/groove feel — permanently deferred (outside initiative scope).
+- Pandeiro one-shots — permanently deferred (no CC0 source found).
+- `NoteSlot` free placement on Pentagrama (from orbifold-v2 Ph10) — carried forward.
+- Per-chord `lpf`/`lpq` slider D-3 (from harmonic-rhythm-improvements) — carried forward.
+- Wrong `buleria-12` catalog binary `100011010110` — documented but not patched in `rhythm-catalog.ts`; `RecipeLayer.binary` is authoritative at runtime. A future phase may patch the catalog if a direct catalog consumer emerges.

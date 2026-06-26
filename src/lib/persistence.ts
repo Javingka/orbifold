@@ -21,9 +21,22 @@ export const SESSION_SCHEMA_VERSION = 5;
 // ── Shared enum constants (mirror agent/schema.ts SK_ arrays) ─────────────
 
 const SK_SOUNDS = [
-  'bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht',
-  'conga', 'cajon', 'wood', 'shaker',
-  'cb', 'perc', 'hand',
+  'bd',
+  'sd',
+  'hh',
+  'oh',
+  'cp',
+  'rim',
+  'lt',
+  'mt',
+  'ht',
+  'conga',
+  'cajon',
+  'wood',
+  'shaker',
+  'cb',
+  'perc',
+  'hand',
 ] as const;
 const SK_MODES = [
   'major',

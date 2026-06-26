@@ -89,7 +89,7 @@ None.
 **Decision:** APPROVED
 **Reviewed on:** 2026-06-25
 **Iteration:** 1 of 5
-**Reason:** Auto-approved — single-invocation multi-step execution per Pilot instruction; implementation exactly matches spec; all unit tests pass; schema relaxation is additive; AG-D1 seam clean.
+**Reason:** Both bug fixes verified in source (old `new Array(RSTEPS).fill(0)` and `Math.round.*RSTEPS` patterns confirmed absent); persistence schema relaxation is additive (JSDoc-only `.length(16)` references, code uses `.min(1).max(16)`); 15 unit tests directly exercise both code paths and assert native length, step values, and token output; AG-D1 seam clean (no genre names in plumbing); SESSION_SCHEMA_VERSION stays 5; reversibility documented.
 **Next action:** Dev proceeds to step 07.2
 
 ---
@@ -161,7 +161,7 @@ None.
 **Decision:** APPROVED
 **Reviewed on:** 2026-06-25
 **Iteration:** 1 of 5
-**Reason:** Auto-approved — single-invocation multi-step execution per Pilot instruction; all e2e tests pass; exact token strings verified against recipe source; no src/ files modified; AG-D1 honored.
+**Reason:** 10 e2e tests verified in source — 2 per acceptance ID (A-07-01 through A-07-05), exercising the full recipe→store→codegen pipeline; exact token strings match cueca recipe binary/euclid definitions read from source; no `src/` files modified; AG-D1 honored (test file is on the knowledge-layer side of the seam per spec §constraints).
 **Next action:** Dev proceeds to step 07.3
 
 ---
@@ -262,8 +262,8 @@ None.
 **Decision:** APPROVED
 **Reviewed on:** 2026-06-25
 **Iteration:** 1 of 5
-**Reason:** All quality gate commands clean; all seam greps pass; A-07-01 through A-07-06 at FULL; reversibility note verbatim per spec.
-**Next action:** Pilot approval required — phase complete (Checkpoint #5)
+**Reason:** All seam greps verified independently (zero `new Array(RSTEPS).fill(0)`, zero `Math.round.*RSTEPS`, `.length(16)` only in JSDoc comments); quality gate output recorded verbatim; reversibility note present verbatim per spec; all A-07-01 through A-07-06 at FULL; phase-completion block complete with no pending Register proposals.
+**Next action:** Pilot approval required before phase merge — phase complete (Checkpoint #5)
 
 ---
 

@@ -23,7 +23,13 @@ const _s5: Sound = 'cb';
 const _s6: Sound = 'perc';
 const _s7: Sound = 'hand';
 // Suppress unused variable warnings (values used via assignment — tsc checks type only)
-void _s1; void _s2; void _s3; void _s4; void _s5; void _s6; void _s7;
+void _s1;
+void _s2;
+void _s3;
+void _s4;
+void _s5;
+void _s6;
+void _s7;
 
 // ── A-09-01: Schema validation — new sounds pass Zod parse ───────────────────
 
@@ -55,9 +61,22 @@ describe('Sound palette expansion (A-09-01)', () => {
 
 describe('SK_SOUNDS coverage (A-09-03)', () => {
   const ALL_16_SOUNDS = [
-    'bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht',
-    'conga', 'cajon', 'wood', 'shaker',
-    'cb', 'perc', 'hand',
+    'bd',
+    'sd',
+    'hh',
+    'oh',
+    'cp',
+    'rim',
+    'lt',
+    'mt',
+    'ht',
+    'conga',
+    'cajon',
+    'wood',
+    'shaker',
+    'cb',
+    'perc',
+    'hand',
   ] as const;
 
   it('RhythmLayerSchema sound enum includes all 16 values', () => {
@@ -89,8 +108,8 @@ describe('SK_SOUNDS coverage (A-09-03)', () => {
     expect(result.success).toBe(false);
 
     // And verify all 16 members parse, implying length === 16.
-    const accepted = ALL_16_SOUNDS.filter((s) =>
-      RhythmLayerSchema.safeParse({ sound: s, steps: Array(16).fill(0) }).success,
+    const accepted = ALL_16_SOUNDS.filter(
+      (s) => RhythmLayerSchema.safeParse({ sound: s, steps: Array(16).fill(0) }).success
     );
     expect(accepted.length).toBe(16);
   });

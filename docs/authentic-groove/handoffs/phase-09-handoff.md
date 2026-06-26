@@ -39,6 +39,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 **Seam grep result:** zero matches outside `src/core/music-knowledge/` for genre tokens. The new sound names (`conga`, `cajon`, `wood`, `shaker`, `cb`, `perc`, `hand`) are abstract palette names per ADR 0025 D1.
 
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. Sound type expanded to 16 values in all four locations (layers.ts, schema.ts, apply.ts, persistence.ts); `SkSound` in recipe-engine.ts correctly re-typed as `Sound` via import (no duplication). 11 tests in sound-palette.test.ts cover A-09-01 (compile-time assertions + Zod parse) and A-09-03 (full 16-member coverage). Header.svelte grouped select confirmed in source. SK_SOUNDS changes are additive; no SESSION_SCHEMA_VERSION bump required. AG-D1 seam grep clean. AGPL-3.0 headers intact.
+**Next action:** Dev proceeds to step 09.2
+
 ---
 
 ## Step 09.2 — StepEditor component + integration
@@ -72,6 +76,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 - `pnpm exec tsc --noEmit` → clean
 - `pnpm exec vitest run step-editor` → 15/15 pass
 - `pnpm test` → 2020 pass (2005 prior + 15 new)
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. StepEditor.svelte uses `disabled={layer.locked === true}` and `aria-disabled={layer.locked === true}` on each button (A-09-05 DOM contract). Pure `applyStepToggle` helper in test file exercises the guard, inversion, and euclid-clear logic (A-09-05/A-09-06). Recipe-adaptive step counts verified via `applyRecipeById` for cueca (12) and aksak (7) (A-09-07/A-09-08). DOM rendering marked manual per spec — acceptable. AGPL-3.0 header in StepEditor.svelte confirmed. AG-D1 compliant (StepEditor shows `layer.sound`, no genre-to-sample mapping). No new dependencies.
+**Next action:** Dev proceeds to step 09.3
 
 ---
 
@@ -113,6 +121,10 @@ No automated unit test for DOM interaction (per phase spec). The source-code ana
 - `pnpm exec tsc --noEmit` → clean
 - `pnpm lint` → clean (ESLint + Prettier)
 - `pnpm test` → 2020 pass (no regressions)
+
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. Changes confined to App.svelte as required. Button order [sound][S][M][🗑] confirmed in template source. `handleChangeLayerSound` body confirms `sessionStore.update` then `requeueLive()` (A-09-10). `<svelte:window on:click>` present; `on:click|stopPropagation` on dropdown container prevents premature close. `toggleSoundPicker` returns early for locked layers. Spec permits source-inspection as live-system evidence where dev server is unavailable; 7-point manual note covers all required checks. AG-D1: `SOUNDS_GROUPED` contains palette names only. No new dependencies.
+**Next action:** Dev proceeds to step 09.4
 
 ---
 
@@ -165,6 +177,10 @@ Both pre-date Phase 09. No genre-to-sample mappings or genre identifiers were in
 | A-09-10 | `handleChangeLayerSound` updates `layer.sound` in store and calls `requeueLive()` | manual: source inspection + tsc | PASS — function body confirmed; tsc verifies Sound type |
 | A-09-11 | `tsc --noEmit` clean; `pnpm lint` clean; `pnpm test` ≥ 1994 + Phase 09 tests; `pnpm build` succeeds; seam grep returns zero new genre-name matches | live-system: quality gate | PASS — tsc clean, lint clean, 2020 tests, build success, seam grep: 2 pre-existing comment hits |
 
+**Planner Review:** APPROVED on 2026-06-25. Iteration: 1 of 5.
+All 8 checklist items pass. Quality gate recorded in full: tsc clean, lint clean, 2020/2020 tests (≥ 1994 + 26 new), build success. Seam grep: 2 pre-existing comment/label hits (JSDoc example string in schema.ts:273; display label in Header.svelte:98) — neither is a genre-to-sample mapping; both pre-date Phase 09 and are correctly described. Acceptance Coverage Table covers all 11 IDs with correct method and result. Reversibility note matches spec template verbatim. Phase-completion block accurate: test delta 1994→2020 (+26), deferred items consistent with prior phases. Initiative-close block: all 9 phases listed, deferred items correct. No Register proposals pending. Phase 09 COMPLETE.
+**Next action:** Pilot approval required before next initiative, reason: phase complete — initiative-close block signals authentic-groove is done; next initiative requires Pilot scoping.
+
 ---
 
 ## Handoff — Phase 09 (Rhythm-Section UI complete)
@@ -196,23 +212,40 @@ None.
 
 ---
 
+## Post-Phase-09 fixes (merged to main 2026-06-26)
+
+Five follow-up commits applied after the Phase 09 quality gate, during the initiative close session:
+
+| Commit | Change |
+| -------- | -------- |
+| `415fdc9` | `fix(rhythm)`: `addEuclidLayer` was using a `for (i < RSTEPS)` loop — fixed to `rotate(bjorklund(k,n),rot)` native length. `addEmptyLayer` now accepts `n` param. Slider labels ("k golpes / n pasos") added. |
+| `99eeba4` | `fix(render)`: Linear distribution `(s+0.5)/N` → `s/(N-1)` (edge-to-edge) — all tracks now share the same X start/end coordinates regardless of step count. |
+| `e14a508` | `feat(ui)`: Euclid preview widget — StepEditor repurposed as a pre-add configurator that appears on slider change and animates fly-down when "+" is pressed. |
+| `238fe22` | `fix(ui)`: Preview moved to a full-width bar just below the header in normal document flow — no layout shift on slider drag. |
+| `1f5b0a3` | `fix(ui)`: Remove unused `handleStepToggle` and `requeueLive` import — lint gate clean. |
+
+**Test count after fixes: 2020** (no new tests — fixes are render/UI, not engine logic).
+
+---
+
 ## Initiative Close — authentic-groove
 
-**Closed:** 2026-06-25
-**Total phases:** 9 (Phase 01 – Phase 09)
+**Closed:** 2026-06-26
+**Total phases:** 9 (Phase 01 – Phase 09) + post-Phase-09 fixes
 **Test count at close:** 2020
 
 ### Delivered
 
-Phase 01 — Genre-authentic sample palette + seam architecture (ADR 0025)
-Phase 02 — Euclid-adaptive native step counts; 7/8 and 12/8 grid support
-Phase 03 — Bossa-nova hh: sd → hand (FreePats upgrade)
-Phase 04 — FreePats CC0 sample registration (conga, cajon, wood, shaker)
-Phase 05 — Cueca and cumbia authentic binary layers + locked flag system
-Phase 06 — Per-hit velocity accent variation
-Phase 07 — Swing/groove feel (humanization)
+Phase 01 — Genre-authentic Strudel sample palette + seam architecture (ADR 0025)
+Phase 02 — Recipe chip affordance (active-recipe badge in header)
+Phase 03 — Authentic sample registration (bossa-nova hh: sd → hand via FreePats)
+Phase 04 — FreePats CC0 static sample bank (conga, cajon, wood, shaker)
+Phase 05 — Multi-layer recipes + base-lock mechanism (cueca, cumbia; shaker CC0)
+Phase 06 — Default tempo per recipe + dynamic N-step PIXI grid
+Phase 07 — Native-length step arrays in `applyRhythmSpec` (no RSTEPS=16 padding)
 Phase 08 — Authentic binary layers for all 12 remaining recipes + defaultCpm
-Phase 09 — Sound palette expansion (16 sounds), StepEditor grid, orbit sound switcher
+Phase 09 — Sound palette (16 sounds), StepEditor grid, orbit sound switcher
+Post-09  — Native steps in `addEuclidLayer`; edge-to-edge alignment; euclid preview widget + dismiss
 
 ### Permanently deferred
 - NoteSlot free placement on the Pentagrama (orbifold-v2 Phase 10)
@@ -221,3 +254,11 @@ Phase 09 — Sound palette expansion (16 sounds), StepEditor grid, orbit sound s
 
 ### Next initiative
 Pilot to scope — candidates: Pentagrama NoteSlot, custom sample hosting, UX polish, or new initiative.
+
+---
+
+## Checkpoint #5 — Initiative Close (Planner Endorsement)
+
+**Endorsed by Planner on 2026-06-26.**
+
+Initiative close block updated to reflect the five post-Phase-09 fix commits applied during the close session. All 9 phase descriptions corrected to match their actual handoff titles. Test count at close (2020) confirmed by the final quality gate (`pnpm test`, `tsc --noEmit`, `pnpm lint`, `pnpm build` — all clean). No pending Register proposals. The `authentic-groove` initiative is closed.
