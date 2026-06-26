@@ -704,3 +704,64 @@ Phase 01 complete. The Planner should write the phase-completion entry. Open ite
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Post-phase fixes (2026-06-26)
+
+**Pilot authorization:** Verbal, same session as phase-01 close.
+**Commits:** `cbb9884`, `187f3c0` (branch `note-placement/phase-01`)
+
+### Fix 1 — Remove noteMode toggle; use spatial hit-test
+
+**Rationale:** The Tonnetz already encodes the distinction spatially. No toggle or `noteMode` flag needed.
+
+**Changes:**
+- `src/state/session.ts`: Removed `HarmonyState.noteMode` field, `noteMode: false` default initializer, and `setNoteMode` store action. Removed `noteMode: s.harmony.noteMode` from `loadSession`.
+- `src/lib/persistence.ts`: Removed `noteMode: false as const` from `deserializeSession`.
+- `src/core/composition/snapshot.ts`: Removed `noteMode: false` from `restoreArmoniaSnapshot`.
+- `src/ui/Header.svelte`: Removed `setNoteMode` import and the `#noteModeToggle` button block.
+- `src/i18n/types.ts`: Removed `noteModeChordLabel`, `noteModeNoteLabel`, `noteModeTip` keys from `Dictionary.header.harmony`.
+- `src/i18n/locales/en.ts`, `es.ts`, `pt.ts`, `zh.ts`: Removed the same 3 keys from all 4 locale files.
+- `src/render/tonnetz-scene.ts`: Rewrote `onStagePointerDown` to check `_renderNodes` first (vertex hit → `pickNote`), then `_renderTris` (triangle hit → `pickChord`). `NODE_HIT_RADIUS = 13` covers both in-scale (13px) and out-of-scale (10px) circles.
+
+**Acceptance criteria verified:**
+- F1-1: `HarmonyState` has no `noteMode` field — `tsc --noEmit` exits 0.
+- F1-2: `setNoteMode` does not exist — grep confirms.
+- F1-3: `#noteModeToggle` button does not exist — grep confirms.
+- F1-4: The 3 i18n keys do not exist in any locale file — grep confirms.
+- F1-5: `onStagePointerDown` checks `_renderNodes` first, then `_renderTris` — no `noteMode` branch.
+- F1-6: `pnpm exec tsc --noEmit` exits 0.
+- F1-7: `pnpm lint` exits 0.
+- F1-8: `pnpm test` — 43 test files, 2056 tests pass.
+
+### Fix 2 — Timbre attributes on NoteSlot
+
+**Rationale:** Strudel's `note()` is chainable. `NoteSlot` must support the same optional sound attributes as `Chord`.
+
+**Changes:**
+- `src/state/session.ts`: Added `instrument?`, `gain?`, `room?`, `decay?`, `attack?`, `lpf?` optional fields to `NoteSlot` interface (with JSDoc paralleling `Chord`). Added `setNoteAttrs` store action (exported).
+- `src/lib/persistence.ts`: Added the same 6 optional fields to `SavedNoteSlotSchema`. No `SESSION_SCHEMA_VERSION` bump — all fields are optional and additive; old blobs parse cleanly.
+- `src/core/codegen/strudel.ts`: Extended `HarmonySlotInput` NoteSlot arm with the 6 new fields. Updated NoteSlot codegen branch to emit the full chain (`.s()/.gain()/.room()/.decay()/.attack()/.lpf()`) when fields are non-null. `.slow(bars)` appended after attr fields.
+- `src/render/pentagrama-scene.ts`: Added `setNoteAttrs` import. Extended the pitch-offset DOM overlay with a sound `<select>` (16 SK_SOUNDS values + "—" none) and a gain `<input type="number">` (0–1.2, step 0.1). SK_SOUNDS defined inline (no agent import).
+- `tests/note-placement/codegen-note.test.ts`: Added 6 new tests in `NoteSlot timbre attribute codegen` describe block.
+
+**Acceptance criteria verified:**
+- F2-1: `NoteSlot` has the 6 optional timbre fields — `tsc --noEmit` confirms.
+- F2-2: `setNoteAttrs` exists and is exported from `src/state/session.ts`.
+- F2-3: `SavedNoteSlotSchema` includes the same 6 optional fields.
+- F2-4: `melodyLine` NoteSlot branch emits the full chain when fields are non-null — 6 new tests confirm.
+- F2-5: Overlay shows a sound `<select>` and a gain `<input>`.
+- F2-6: `pnpm exec vitest run codegen-note` — 23 tests pass (17 pre-existing + 6 new).
+- F2-7: `pnpm exec tsc --noEmit` exits 0.
+- F2-8: `pnpm lint` exits 0.
+- F2-9: `pnpm test` — 43 test files, 2062 tests pass (2056 + 6 new).
+
+### Final quality gate
+
+| Command | Result |
+|---|---|
+| `pnpm test` | 43 files, **2062 tests** pass |
+| `pnpm exec tsc --noEmit` | Exit 0 (clean) |
+| `pnpm lint` | Exit 0 (clean) |
+| `pnpm build` | Exit 0 — pre-existing chunk-size warning, unchanged |
