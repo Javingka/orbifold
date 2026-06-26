@@ -25,7 +25,14 @@ import type { NRLabel } from '../core/theory/neo-riemannian.js';
 import { minimalVoiceLeading } from '../core/theory/voice-leading.js';
 import type { VoiceLeadingResult } from '../core/theory/voice-leading.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
-import { sessionStore, playChord, playNote, requeueLive, isNoteSlot, addNote } from '../state/session.js';
+import {
+  sessionStore,
+  playChord,
+  playNote,
+  requeueLive,
+  isNoteSlot,
+  addNote,
+} from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
 import { soundIntentStore } from '../state/selectedSlot.js';

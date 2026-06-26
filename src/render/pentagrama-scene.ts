@@ -1118,17 +1118,13 @@ function paint(ts: DOMHighResTimeStamp): void {
   // Only one slot type shown at a time (note and chord are mutually exclusive).
   if (_offsetOverlay !== null) {
     const hovIdx =
-      _hoverSlotIdx !== null &&
-      !_resizeActive &&
-      !_moveActive &&
-      _hoverSlotIdx < progression.length
+      _hoverSlotIdx !== null && !_resizeActive && !_moveActive && _hoverSlotIdx < progression.length
         ? _hoverSlotIdx
         : -1;
 
     const hovSlot = hovIdx >= 0 ? progression[hovIdx] : undefined;
     const isNote = hovSlot !== undefined && isNoteSlot(hovSlot);
-    const isChord =
-      hovSlot !== undefined && !('isRest' in hovSlot) && !isNoteSlot(hovSlot);
+    const isChord = hovSlot !== undefined && !('isRest' in hovSlot) && !isNoteSlot(hovSlot);
 
     if ((isNote || isChord) && hovSlot !== undefined) {
       const ox = slotX(hovIdx, progression);
