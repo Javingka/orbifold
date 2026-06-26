@@ -44,6 +44,7 @@
     addEmptyLayer,
     previewEuclid,
     hushAll,
+    isNoteSlot,
   } from '../state/session.js';
   import StepEditor from './StepEditor.svelte';
   import { bjorklund, rotate } from '../core/rhythm/euclid.js';
@@ -100,7 +101,10 @@
 
   function dismissPreview(): void {
     isDismissing = true;
-    setTimeout(() => { showPreview = false; isDismissing = false; }, 200);
+    setTimeout(() => {
+      showPreview = false;
+      isDismissing = false;
+    }, 200);
   }
   let previewLayer: RhythmLayer = {
     sound: 'hh' as RhythmLayer['sound'],
@@ -195,8 +199,6 @@
     }
   }
 
-
-
   // ── Language selector (Phase 11 step 11.3, ADR 0017 OQ-5) ────────────────
   // The 文A button opens an inline dropdown listing the four native labels.
   // Clicking a language writes to the `lang` store (which triggers write-back
@@ -278,20 +280,26 @@
     $selectedSlotIdxStore !== null
       ? $sessionStore.harmony.progression[$selectedSlotIdxStore]
       : undefined;
-  $: selIsChord = selSlot !== undefined && !('isRest' in selSlot);
+  // NoteSlot does not support chord sound controls in Phase 01 — treat as not-a-chord.
+  $: selIsChord = selSlot !== undefined && !('isRest' in selSlot) && !isNoteSlot(selSlot);
 
   // Display values: prefer selected slot's attrs, then intent store.
   $: displayInstrument = (
     selIsChord &&
     selSlot !== undefined &&
     !('isRest' in selSlot) &&
+    !isNoteSlot(selSlot) &&
     selSlot.instrument !== undefined
       ? selSlot.instrument
       : $soundIntentStore.instrument
   ) as OscillatorToken;
 
   $: displayPreset = (
-    selIsChord && selSlot !== undefined && !('isRest' in selSlot) && selSlot.preset !== undefined
+    selIsChord &&
+    selSlot !== undefined &&
+    !('isRest' in selSlot) &&
+    !isNoteSlot(selSlot) &&
+    selSlot.preset !== undefined
       ? selSlot.preset
       : ($soundIntentStore.preset ?? '')
   ) as string;
@@ -496,7 +504,12 @@
         <!--
         Sound select. Prototype lines 430–434.
       -->
-        <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')} on:change={onConfigChange}>
+        <select
+          id="euclidSound"
+          bind:value={euclidSound}
+          data-tip={$t('header.rhythm.soundTip')}
+          on:change={onConfigChange}
+        >
           <optgroup label="Drum kit">
             <option value="bd">bd</option>
             <option value="sd">sd</option>
@@ -529,7 +542,8 @@
         <!--
         k slider. Prototype line 436.
       -->
-        <span data-tip={$t('header.rhythm.kTip')} title="k — golpes (hits)">k <b>{euclidK}</b></span>
+        <span data-tip={$t('header.rhythm.kTip')} title="k — golpes (hits)">k <b>{euclidK}</b></span
+        >
         <input
           type="range"
           id="euclidK"
@@ -545,7 +559,8 @@
         <!--
         n slider. Prototype line 437.
       -->
-        <span data-tip={$t('header.rhythm.nTip')} title="n — pasos (steps)">n <b>{euclidN}</b></span>
+        <span data-tip={$t('header.rhythm.nTip')} title="n — pasos (steps)">n <b>{euclidN}</b></span
+        >
         <input
           type="range"
           id="euclidN"
@@ -561,7 +576,9 @@
         <!--
         rot readout + slider. Prototype lines 438–439.
       -->
-        <span data-tip={$t('header.rhythm.rotTip')} title="rot — rotación (offset)">rot <b>{euclidR}</b></span>
+        <span data-tip={$t('header.rhythm.rotTip')} title="rot — rotación (offset)"
+          >rot <b>{euclidR}</b></span
+        >
         <input
           type="range"
           id="euclidR"
@@ -1219,7 +1236,9 @@
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     box-sizing: border-box;
-    transition: opacity 0.28s ease-in, transform 0.28s ease-in;
+    transition:
+      opacity 0.28s ease-in,
+      transform 0.28s ease-in;
     opacity: 1;
     transform: translateY(0);
   }
@@ -1254,7 +1273,9 @@
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 4px;
-    transition: color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
   }
   .preview-close:hover {
     color: rgba(255, 255, 255, 0.8);

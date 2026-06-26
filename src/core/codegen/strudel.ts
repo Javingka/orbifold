@@ -17,9 +17,13 @@ import { resolveChordAttrs, type ChordAttrs } from './presets.js';
 // Introduced in Phase 06 — ADR 0012 D2.
 // Phase 03 amendment: chord branch extended with ChordAttrs fields for preset/
 // filter/envelope support — ADR 0019 D4.
+// note-placement Phase 01 step 01.2: NoteSlot arm added to the type declaration
+// so `ProgressionSlot[]` (now Chord|RestSlot|NoteSlot) is assignable.
+// The codegen branch itself is implemented in step 01.3.
 type HarmonySlotInput =
   | ({ rootPc: number; qual: Quality; gain?: number | null; bars?: number } & ChordAttrs)
-  | { isRest: true; bars?: number };
+  | { isRest: true; bars?: number }
+  | { isNote: true; rootPc: number; octaveOffset: number; bars?: number };
 
 /**
  * Returns the trimmed pattern string unchanged.
@@ -131,11 +135,19 @@ export function melodyLine(
   // Phase 03 sound-attribute fields (preset, lpf, attack, sustain, release,
   // lpenv, lpa, lpd, lpq). When all new fields are absent (undefined), the
   // comparison undefined===undefined evaluates to true — gate outcome unchanged.
-  const uniformDuration = progression.every(
-    (slot) => !('isRest' in slot) && ((slot as { bars?: number }).bars ?? 1) === 1
-  );
+  // note-placement Phase 01 step 01.2: NoteSlot forces arrange() path.
+  // The full NoteSlot codegen branch (note("...") output) is added in step 01.3.
+  const hasNoteSlot = progression.some((slot) => 'isNote' in slot);
+  const uniformDuration =
+    !hasNoteSlot &&
+    progression.every(
+      (slot) => !('isRest' in slot) && ((slot as { bars?: number }).bars ?? 1) === 1
+    );
   const uniformAttrs = (() => {
-    const chordSlots = progression.filter((slot) => !('isRest' in slot)) as Array<ChordAttrs>;
+    // Filter out rest and note slots — only chord slots contribute to uniformAttrs.
+    const chordSlots = progression.filter(
+      (slot) => !('isRest' in slot) && !('isNote' in slot)
+    ) as Array<ChordAttrs>;
     if (chordSlots.length === 0) return true;
     const ref = chordSlots[0];
     if (ref === undefined) return true;
@@ -195,6 +207,13 @@ export function melodyLine(
       // Rest slot — ADR 0012 D3: [bars, silence] with two leading spaces.
       return `  [${numCycles}, silence]`;
     }
+    if ('isNote' in slot) {
+      // NoteSlot — STUB: full codegen (note("...") with NOTE_NAMES derivation) added in step 01.3.
+      // For step 01.2, emit silence as a placeholder so the pattern compiles correctly
+      // and the arrange() path is invoked. The step 01.3 implementation replaces this.
+      const slowStr = numCycles !== 1 ? `.slow(${numCycles})` : '';
+      return `  [${numCycles}, silence${slowStr}]`;
+    }
     // Chord slot. ADR 0016 (Phase 10, Pilot-authorized 2026-06-15): a slot whose span
     // is not exactly one cycle (bars !== 1) must play its chord/arp EXACTLY ONCE across
     // that span. arrange() internally `.fast(numCycles)`-es each segment (see engine:
@@ -208,13 +227,21 @@ export function melodyLine(
     // bars === 1 is left byte-identical (arrange's .fast(1) is already identity).
     // This `.slow` is per-segment DURATION, not the global TEMPO time-stretch the ADR
     // 0005 ban targets.
-    const voicing = chordVoicing(slot.rootPc, slot.qual, octave).join(sep);
-    const g = (slot.gain == null ? 0.6 : slot.gain).toFixed(2);
+    // Cast is safe: isRest and isNote guards above have returned; remainder is chord shape.
+    type ChordSlotLocal = {
+      rootPc: number;
+      qual: Quality;
+      gain?: number | null;
+      bars?: number;
+    } & ChordAttrs;
+    const chordSlot = slot as ChordSlotLocal;
+    const voicing = chordVoicing(chordSlot.rootPc, chordSlot.qual, octave).join(sep);
+    const g = (chordSlot.gain == null ? 0.6 : chordSlot.gain).toFixed(2);
     const slowStr = numCycles !== 1 ? `.slow(${numCycles})` : '';
     // Per ADR 0018 D2: top-level instrument/room/decay params take priority.
     // Per ADR 0019 D4b: resolveChordAttrs merges slot attrs + top-level overrides.
     // roomDefault=0.3 preserves the melodyLine arrange-path byte-identical baseline.
-    const slotBase = slot as ChordAttrs;
+    const slotBase = chordSlot as ChordAttrs;
     const baseAttrs: ChordAttrs = {
       ...slotBase,
       ...(instrument !== undefined ? { instrument } : {}),

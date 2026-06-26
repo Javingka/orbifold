@@ -18,7 +18,7 @@ import { noteToPc } from '../core/theory/pitch.js';
 import { QUAL_INTERVALS } from '../core/theory/chords.js';
 import type { Quality } from '../core/theory/chords.js';
 import type { RhythmLayer, Sound } from '../core/rhythm/layers.js';
-import type { Chord, RestSlot, ProgressionSlot } from '../state/session.js';
+import type { Chord, RestSlot, NoteSlot, ProgressionSlot } from '../state/session.js';
 import {
   sessionStore,
   clampBars,
@@ -228,6 +228,30 @@ export function applyHarmonySpec(spec: HarmonySpec): void {
           const restSlot: RestSlot = { isRest: true };
           if (c.bars !== undefined) restSlot.bars = clampBars(c.bars);
           newProg.push(restSlot);
+          continue;
+        }
+
+        // note-placement Phase 01 (OD-3 = defer): agent schema does not support
+        // NoteSlot yet. If the input somehow contains isNote: true, pass it through
+        // unchanged so existing NoteSlot entries round-trip correctly.
+        // isNoteSlot cannot be used directly here because c is typed as a partial
+        // agent spec type, not a ProgressionSlot. Use the raw discriminant check.
+        if ('isNote' in c && (c as { isNote: boolean }).isNote === true) {
+          const noteInput = c as {
+            isNote: true;
+            rootPc?: number;
+            octaveOffset?: number;
+            bars?: number;
+          };
+          if (typeof noteInput.rootPc === 'number' && typeof noteInput.octaveOffset === 'number') {
+            const noteSlot: NoteSlot = {
+              isNote: true,
+              rootPc: noteInput.rootPc,
+              octaveOffset: noteInput.octaveOffset,
+            };
+            if (noteInput.bars !== undefined) noteSlot.bars = clampBars(noteInput.bars);
+            newProg.push(noteSlot);
+          }
           continue;
         }
 

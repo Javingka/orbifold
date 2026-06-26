@@ -60,14 +60,15 @@
 //   onUp:        lines 578–590 (ported; reorderSlot store action replaces prototype splice)
 
 import { get } from 'svelte/store';
-import { sessionStore } from '../state/session.js';
-import type { ProgressionSlot, Chord, SessionState } from '../state/session.js';
+import { sessionStore, isNoteSlot } from '../state/session.js';
+import type { ProgressionSlot, Chord, NoteSlot, SessionState } from '../state/session.js';
 import { clearChordAt, setChordBars, reorderSlot, clampBars } from '../state/session.js';
 import { selectedSlotIdxStore } from '../state/selectedSlot.js';
 import type { Quality } from '../core/theory/chords.js';
 import { chordVoicing, chordLabel } from '../core/theory/chords.js';
 import { diatonicLookup } from '../core/theory/scales.js';
 import type { Mode } from '../core/theory/scales.js';
+import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
 import {
   computeSlotBounds,
@@ -590,6 +591,54 @@ function pRest(
   ctx.stroke();
 }
 
+/**
+ * Placeholder paint for a `NoteSlot`. Used in step 01.2 to make the slot
+ * visually identifiable before the full `pNote` implementation in step 01.5.
+ *
+ * Paints an accent-color (#8aa0ff) sustain bar and a small note-head circle
+ * at the staff center, using the same OR radius constant as chord onset circles.
+ *
+ * IMPORTANT: This function will be REPLACED by `pNote` in step 01.5. It exists
+ * only to satisfy TypeScript exhaustiveness and give a minimal visual indication.
+ *
+ * Phase 01 step 01.2 (note-placement) — placeholder; superseded in step 01.5.
+ */
+function pNotePlaceholder(
+  ctx: CanvasRenderingContext2D,
+  slot: NoteSlot,
+  x: number,
+  w: number,
+  cy: number,
+  _H: number, // reserved for step 01.5 use
+  ls: number,
+  octave: number,
+  isAct: boolean,
+  ts: number
+): void {
+  // Accent color (CLAUDE.md §guardrails tonal-function colors — accent).
+  const accentCol = '#8aa0ff';
+
+  // Sustain bar — same dims as pRest but in accent color.
+  ctx.fillStyle = isAct ? accentCol + 'aa' : accentCol + '55';
+  rr(ctx, x + 5, cy - BH / 2, w - 10, BH, 2);
+  ctx.fill();
+
+  // Note-head circle at staff center (placeholder position — step 01.5 derives from m2p).
+  // Derive note name for display (OD-1 resolution: NOTE_NAMES[rootPc] + (octave + octaveOffset)).
+  const absOctave = octave + slot.octaveOffset;
+  const noteName = (NOTE_NAMES[slot.rootPc] ?? 'C') + String(absOctave);
+  void noteName; // used in step 01.5 for m2p derivation; retained here for type safety
+
+  // Active pulse (same pattern as pChord/pArp onset circles).
+  const pulse = isAct ? 0.5 + 0.5 * Math.sin((ts / 320) * Math.PI * 2) : 0;
+  ctx.fillStyle = accentCol;
+  ctx.globalAlpha = 0.65 + 0.3 * pulse;
+  ctx.beginPath();
+  ctx.arc(x + w / 2, cy, OR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
 // ── Module-level singleton state ─────────────────────────────────────────────
 
 let _canvas: HTMLCanvasElement | null = null;
@@ -728,8 +777,9 @@ function paint(ts: DOMHighResTimeStamp): void {
     const activeSlot = progression[ai];
     if (activeSlot !== undefined) {
       // Derive spotlight color from tonal function (or accent fallback).
+      // NoteSlot and RestSlot both use the accent color default (#8aa0ff).
       let spotCol = '#8aa0ff';
-      if (!('isRest' in activeSlot && activeSlot.isRest)) {
+      if (!('isRest' in activeSlot && activeSlot.isRest) && !isNoteSlot(activeSlot)) {
         const chord = activeSlot as Chord;
         const key = `${chord.rootPc}:${chord.qual}`;
         const dfn = dmap[key];
@@ -781,7 +831,13 @@ function paint(ts: DOMHighResTimeStamp): void {
       ctx.fillRect(x, cy - ls * 2.5, w, ls * 5);
     }
 
-    if ('isRest' in slot && slot.isRest) {
+    if (isNoteSlot(slot)) {
+      // NoteSlot — render is deferred to step 01.5 (pNote paint function).
+      // For now: paint a minimal placeholder (same accent-color rect as a rest,
+      // but with a note-head indicator) so the slot is visually distinguishable.
+      // This placeholder will be replaced by pNote in step 01.5.
+      pNotePlaceholder(ctx, slot, x, w, cy, H, ls, octave, isAct, ts);
+    } else if ('isRest' in slot && slot.isRest) {
       // Rest slot
       // Ported from prototype pRest (lines 500–506)
       pRest(ctx, x, w, cy);
@@ -901,9 +957,9 @@ function paint(ts: DOMHighResTimeStamp): void {
       }
     }
 
-    // ── Rest slot selection chrome ────────────────────────────────────────────
-    // Selection chrome for rest slots (same visual, no label since no chord label).
-    if (isSel && 'isRest' in slot && slot.isRest) {
+    // ── Rest/Note slot selection chrome ──────────────────────────────────────
+    // Selection chrome for rest and note slots (same visual structure as chord chrome).
+    if (isSel && (('isRest' in slot && slot.isRest) || isNoteSlot(slot))) {
       ctx.strokeStyle = 'rgba(255,255,255,0.62)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([]);
@@ -926,13 +982,15 @@ function paint(ts: DOMHighResTimeStamp): void {
 
       const bars = slot.bars ?? 1;
       const barCount = bars === 1 ? '1 ciclo' : `${bars} ciclos`;
+      // Derive label: 'silencio' for RestSlot, note name for NoteSlot.
+      const slotLabel = isNoteSlot(slot) ? `♩ · ${barCount}` : `silencio · ${barCount}`;
       ctx.save();
       ctx.font = '500 10px "IBM Plex Mono", monospace';
       ctx.fillStyle = '#eaedf4';
       ctx.globalAlpha = 0.84;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
-      ctx.fillText('silencio · ' + barCount, x + 4, cy - ls * 2 - 3);
+      ctx.fillText(slotLabel, x + 4, cy - ls * 2 - 3);
       ctx.restore();
     }
   });

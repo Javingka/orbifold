@@ -25,7 +25,7 @@ import type { NRLabel } from '../core/theory/neo-riemannian.js';
 import { minimalVoiceLeading } from '../core/theory/voice-leading.js';
 import type { VoiceLeadingResult } from '../core/theory/voice-leading.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
-import { sessionStore, playChord, requeueLive } from '../state/session.js';
+import { sessionStore, playChord, requeueLive, isNoteSlot } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
 import { soundIntentStore } from '../state/selectedSlot.js';
@@ -312,7 +312,8 @@ export function updateTonnetzDynamic(state: SessionState): void {
   if (progression.length > 0) {
     const last = progression[progression.length - 1];
     // Phase 06: skip rest slots — they have no Tonnetz position.
-    if (!('isRest' in last)) {
+    // note-placement Phase 01: skip note slots — they also have no Tonnetz centroid.
+    if (!('isRest' in last) && !isNoteSlot(last)) {
       const prevCx = _lastPick !== null ? _lastPick.cx : undefined;
       const prevCy = _lastPick !== null ? _lastPick.cy : undefined;
       const sel = findRenderTriForChord(last, prevCx, prevCy);
@@ -504,11 +505,12 @@ function pickChord(tri: RenderTri, state: SessionState): void {
   const prevProg = state.harmony.progression;
   const newLabel = chordLabel(tri.rootPc, tri.qual);
   // Phase 06: find the last chord slot in the progression (skip rest slots).
+  // note-placement Phase 01: also skip note slots — they have no voice-leading computation.
   const prevChordSlot = prevProg
     .slice()
     .reverse()
-    .find((s) => !('isRest' in s));
-  if (prevChordSlot !== undefined && !('isRest' in prevChordSlot)) {
+    .find((s) => !('isRest' in s) && !isNoteSlot(s));
+  if (prevChordSlot !== undefined && !('isRest' in prevChordSlot) && !isNoteSlot(prevChordSlot)) {
     const prevPcsArr = chordPcs(prevChordSlot.rootPc, prevChordSlot.qual);
     const newPcsArr = tri.pcs; // TonnetzTriangle.pcs: number[]
     if (prevPcsArr.length === 3 && newPcsArr.length === 3) {
@@ -614,6 +616,7 @@ export function tickHarmony(delta: number): void {
   let pathHintCy: number | undefined;
   for (const ch of prog) {
     if ('isRest' in ch) continue; // Phase 06: rest slots have no centroid
+    if (isNoteSlot(ch)) continue; // note-placement Phase 01: note slots have no Tonnetz centroid
     const tri = findRenderTriForChord(ch, pathHintCx, pathHintCy);
     if (tri !== null) {
       centroids.push({ cx: tri.cx, cy: tri.cy });
@@ -658,6 +661,7 @@ export function tickHarmony(delta: number): void {
   let highlightHintCy: number | undefined;
   prog.forEach((ch, idx) => {
     if ('isRest' in ch) return; // Phase 06: rest slots have no Tonnetz position
+    if (isNoteSlot(ch)) return; // note-placement Phase 01: note slots have no Tonnetz centroid
     const tri = findRenderTriForChord(ch, highlightHintCx, highlightHintCy);
     if (tri === null) return;
     highlightHintCx = tri.cx;
