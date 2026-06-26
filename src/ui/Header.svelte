@@ -47,6 +47,8 @@
     requeueLive,
   } from '../state/session.js';
   import StepEditor from './StepEditor.svelte';
+  import { bjorklund, rotate } from '../core/rhythm/euclid.js';
+  import type { RhythmLayer } from '../core/rhythm/layers.js';
   import { selectedSlotIdxStore, soundIntentStore } from '../state/selectedSlot.js';
 
   // Phase 11 step 11.3: i18n store + language selector (ADR 0017 D1, D3, OQ-5).
@@ -88,6 +90,35 @@
 
   /** Morph target: 0 = radial (default), 1 = linear. */
   let morphTarget: 0 | 1 = 0;
+
+  // ── Euclid preview state ──────────────────────────────────────────────────
+  // The StepEditor in the header is a PRE-ADD preview, not a mirror of existing
+  // layers. It appears when the user changes any euclid control, shows the pattern
+  // that would be added, and disappears (with a fly animation) when "+" is pressed.
+  let showPreview = false;
+  let isFlying = false;
+  let previewLayer: RhythmLayer = {
+    sound: 'hh' as RhythmLayer['sound'],
+    steps: rotate(bjorklund(3, 8), 0),
+    locked: false,
+  };
+
+  function onConfigChange(): void {
+    previewLayer = {
+      sound: euclidSound as RhythmLayer['sound'],
+      steps: rotate(bjorklund(euclidK, euclidN), euclidR),
+      euclid: euclidR ? `${euclidK},${euclidN},${euclidR}` : `${euclidK},${euclidN}`,
+      locked: false,
+    };
+    showPreview = true;
+    isFlying = false;
+  }
+
+  function handlePreviewStepToggle(_li: number, si: number): void {
+    const newSteps = [...previewLayer.steps];
+    newSteps[si] = newSteps[si] === 1 ? 0 : 1;
+    previewLayer = { ...previewLayer, steps: newSteps, euclid: undefined };
+  }
 
   // ── Named-pattern lookup ───────────────────────────────────────────────────
   // Prototype lines 844–846.
@@ -132,11 +163,31 @@
   }
 
   function handleAddEuclid(): void {
-    addEuclidLayer(euclidSound, euclidK, euclidN, euclidR);
+    const doAdd = () => {
+      addEuclidLayer(euclidSound, euclidK, euclidN, euclidR);
+      showPreview = false;
+      isFlying = false;
+    };
+    if (showPreview) {
+      isFlying = true;
+      setTimeout(doAdd, 280);
+    } else {
+      doAdd();
+    }
   }
 
   function handleAddEmpty(): void {
-    addEmptyLayer(euclidSound, euclidN);
+    const doAdd = () => {
+      addEmptyLayer(euclidSound, euclidN);
+      showPreview = false;
+      isFlying = false;
+    };
+    if (showPreview) {
+      isFlying = true;
+      setTimeout(doAdd, 280);
+    } else {
+      doAdd();
+    }
   }
 
   // ── Step editor toggle (Phase 09 step 09.2) ───────────────────────────────
@@ -446,12 +497,14 @@
         <span class="r-sep">│</span>
 
         <!--
-        Step editor grid: one row per layer with N toggle buttons (Phase 09 step 09.2).
-        Shown only when there are layers. Adapts to 7/12/16-step recipes automatically.
-        Locked layers show disabled buttons (cultural signature protection).
+        Euclid preview: shows the pattern about to be added. Appears when the user
+        changes any euclid control; disappears (with a fly-down animation) when "+"
+        is pressed. Not a mirror of existing layers — those are visible in the canvas.
       -->
-        {#if $sessionStore.rhythm.layers.length > 0}
-          <StepEditor layers={$sessionStore.rhythm.layers} onToggle={handleStepToggle} />
+        {#if showPreview}
+          <div class="preview-wrap" class:preview-flying={isFlying}>
+            <StepEditor layers={[previewLayer]} onToggle={handlePreviewStepToggle} />
+          </div>
           <span class="r-sep">│</span>
         {/if}
 
@@ -465,7 +518,7 @@
         <!--
         Sound select. Prototype lines 430–434.
       -->
-        <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')}>
+        <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')} on:change={onConfigChange}>
           <optgroup label="Drum kit">
             <option value="bd">bd</option>
             <option value="sd">sd</option>
@@ -508,6 +561,7 @@
           aria-label="k — número de golpes"
           title="k — número de golpes (hits)"
           data-tip={$t('header.rhythm.kTip')}
+          on:input={onConfigChange}
         />
 
         <!--
@@ -523,6 +577,7 @@
           aria-label="n — número de pasos"
           title="n — número de pasos (steps)"
           data-tip={$t('header.rhythm.nTip')}
+          on:input={onConfigChange}
         />
 
         <!--
@@ -538,6 +593,7 @@
           aria-label="rot — rotación del patrón"
           title="rot — rotación del patrón (offset)"
           data-tip={$t('header.rhythm.rotSliderTip')}
+          on:input={onConfigChange}
         />
 
         <!--
@@ -1157,5 +1213,17 @@
     border-radius: 8px;
     padding: 4px 6px;
     font-size: 11px;
+  }
+
+  /* Euclid preview widget — slides down and fades when "+" is pressed */
+  .preview-wrap {
+    transition: opacity 0.28s ease-in, transform 0.28s ease-in;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  .preview-wrap.preview-flying {
+    opacity: 0;
+    transform: translateY(44px) scale(0.88);
+    pointer-events: none;
   }
 </style>
