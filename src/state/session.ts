@@ -61,6 +61,7 @@ import {
   buildSession,
 } from '../core/codegen/strudel.js';
 import { chordLabel } from '../core/theory/chords.js';
+import { NOTE_NAMES } from '../core/theory/pitch.js';
 import {
   getCompState,
   getCompPausedBars,
@@ -971,6 +972,40 @@ export function playChord(
     })
   );
   setNowPlaying(label, 'chord');
+}
+
+/**
+ * Play a single note immediately via runNow (one-cycle preview).
+ * Called by pickNote in tonnetz-scene after addNote.
+ * Sets nowPlaying to { label: '♩ <noteName>', source: 'preview' }.
+ *
+ * Follows the exact pattern of playChord: one cycle auto-stop with a guard
+ * on source === 'preview'.
+ *
+ * note-placement initiative — Fix A (2026-06-26).
+ *
+ * @param rootPc       - Pitch class 0–11.
+ * @param octaveOffset - Offset relative to HarmonyState.octave (0 = same octave).
+ * @param instrument   - Optional Strudel instrument/waveform name (e.g. 'piano').
+ */
+export function playNote(rootPc: number, octaveOffset: number, instrument?: string): void {
+  const state = get(sessionStore);
+  const octave = state.harmony.octave;
+  const noteName = NOTE_NAMES[rootPc] + String(octave + octaveOffset);
+  let code = `note("${noteName}")`;
+  if (instrument) code += `.s("${instrument}")`;
+  const cycleDurationMs = Math.round(240000 / state.bpm);
+  setNowPlaying('♩ ' + noteName, 'preview');
+  void getAudio().then((a) =>
+    a.initAudio().then(() => {
+      void a.runNow(code);
+      setTimeout(() => {
+        if (get(sessionStore).nowPlaying.source === 'preview') {
+          void hushAll();
+        }
+      }, cycleDurationMs);
+    })
+  );
 }
 
 // ── Step 04.2: new action functions ───────────────────────────────────────

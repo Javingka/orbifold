@@ -25,7 +25,7 @@ import type { NRLabel } from '../core/theory/neo-riemannian.js';
 import { minimalVoiceLeading } from '../core/theory/voice-leading.js';
 import type { VoiceLeadingResult } from '../core/theory/voice-leading.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
-import { sessionStore, playChord, requeueLive, isNoteSlot, addNote } from '../state/session.js';
+import { sessionStore, playChord, playNote, requeueLive, isNoteSlot, addNote } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
 import { soundIntentStore } from '../state/selectedSlot.js';
@@ -512,6 +512,11 @@ export function onStagePointerDown(e: PointerEvent): void {
  */
 function pickNote(rootPc: number): void {
   addNote(rootPc);
+  // Play a one-cycle note preview so the user gets audio feedback immediately.
+  // octaveOffset=0 — same octave as HarmonyState.octave (OD-1).
+  // No instrument forwarded: the default Strudel synth sounds clearly for preview.
+  // note-placement Fix A (2026-06-26).
+  playNote(rootPc, 0);
   // No voice-leading, no _lastPick, no click-pulse — NoteSlot has no centroid.
   // requeueLive() is called inside addNote() from session.ts.
 }
