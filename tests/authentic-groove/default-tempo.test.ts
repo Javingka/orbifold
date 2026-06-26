@@ -95,11 +95,10 @@ describe('A-06-01: MusicalRecipe.defaultCpm field — catalog spot-checks', () =
     expect(recipe?.defaultCpm).toBe(32);
   });
 
-  it('pop-rock-backbeat has no defaultCpm pre-Phase-08 (gets defaultCpm: 27 in Phase 08 step 08.4)', () => {
-    // This assertion will be updated in step 08.4 when defaultCpm is added.
+  it('pop-rock-backbeat has defaultCpm: 27 (Phase 08 step 08.4)', () => {
     const recipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'pop-rock-backbeat');
     expect(recipe).toBeDefined();
-    expect(recipe?.defaultCpm).toBeUndefined();
+    expect(recipe?.defaultCpm).toBe(27);
   });
 
   it('all 2 pre-Phase-08 tempo recipes have their original defaultCpm values', () => {
@@ -166,20 +165,11 @@ describe('A-06-02: applyRecipeById — recipe with defaultCpm sets bpm', () => {
     expect(get(sessionStore).bpm).toBe(128);
   });
 
-  it('applying pop-rock-backbeat sets bpm to 108 (defaultCpm: 27, Phase 08)', () => {
+  it('applying pop-rock-backbeat sets bpm to 108 (defaultCpm: 27, Phase 08 step 08.4)', () => {
     sessionStore.update((s) => ({ ...s, bpm: 100 }));
-    // Phase 08: pop-rock-backbeat gets defaultCpm: 27 → bpm = 27 * 4 = 108
-    // Note: pop-rock-backbeat gets defaultCpm in step 08.4; this test will update then.
-    // For now: pop-rock-backbeat still has no defaultCpm until step 08.4.
     applyRecipeById('pop-rock-backbeat');
-    // After step 08.4: expect(get(sessionStore).bpm).toBe(108);
-    // For step 08.2: pop-rock-backbeat still has no defaultCpm — bpm unchanged (100)
-    const popRecipe = RHYTHM_HARMONY_RECIPES.find((r) => r.id === 'pop-rock-backbeat');
-    if (popRecipe?.defaultCpm === undefined) {
-      expect(get(sessionStore).bpm).toBe(100);
-    } else {
-      expect(get(sessionStore).bpm).toBe((popRecipe.defaultCpm) * 4);
-    }
+    // Phase 08: defaultCpm: 27 → bpm = 27 * 4 = 108
+    expect(get(sessionStore).bpm).toBe(108);
   });
 });
 
@@ -257,10 +247,11 @@ describe('A-06-02 integration: cueca recipe apply — BPM 160, layers confirmed'
   });
 });
 
-describe('A-06-02 integration: no-tempo recipe leaves bpm unchanged', () => {
-  it('applying dorian-ritual-sparse (no defaultCpm) leaves bpm at 90', () => {
+describe('A-06-02 integration: dorian-ritual-sparse sets bpm to 72 (Phase 08: defaultCpm: 18)', () => {
+  it('applying dorian-ritual-sparse sets bpm to 72 (defaultCpm: 18 × 4 = 72)', () => {
     sessionStore.update((s) => ({ ...s, bpm: 90 }));
     applyRecipeById('dorian-ritual-sparse');
-    expect(get(sessionStore).bpm).toBe(90);
+    // Phase 08: dorian-ritual-sparse now has defaultCpm: 18 → bpm = 72
+    expect(get(sessionStore).bpm).toBe(72);
   });
 });

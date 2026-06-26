@@ -340,6 +340,7 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [60, 110],
     meter: '4/4',
     density: 'sparse',
+    defaultCpm: 18, // meditative tempo; no authentic layers — Dorian Ritual is abstract, not genre-specific
     agentInstruction:
       'Use a very sparse Euclidean pattern (E(3,16) — 3 hits per bar) ' +
       'over a Dorian modal drone (Dm–F–Gsus4). ' +
@@ -419,11 +420,35 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [80, 160],
     meter: '4/4',
     density: 'medium',
+    defaultCpm: 27, // 27 cpm × 4 = 108 BPM — within bpmRange [80, 160]
     agentInstruction:
       'Layer a backbeat snare (beats 2 and 4) with steady quarter notes ' +
       'over the classic I-V-vi-IV progression (C–G–Am–F). ' +
       'Keep everything straight and driving; this is the universal pop template. ' +
       'Suggested tempo: 100–130 BPM.',
+    // Phase 08: snare backbeat LOCKED (the backbeat IS pop/rock); kick and hi-hat FREE.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1000000010000000', // kick on beats 1 and 3 only
+        steps: 16,
+        locked: false, // kick — FREE (agent may vary)
+      },
+      {
+        sound: 'cp',
+        binary: '0000100000001000', // snare on beats 2 and 4 — the backbeat IS pop/rock
+        steps: 16,
+        locked: true, // snare backbeat — LOCKED
+        rhythmId: 'backbeat-snare',
+      },
+      {
+        sound: 'hh',
+        binary: '1010101010101010', // steady 8th-note hi-hat
+        steps: 16,
+        locked: false, // hi-hat — FREE
+        rhythmId: 'quarter-notes-16',
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -447,11 +472,30 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
     bpmRange: [80, 160],
     meter: '7/8',
     density: 'sparse',
+    defaultCpm: 34, // 34 cpm × 4 = 136 BPM — within bpmRange [80, 160]
     agentInstruction:
       'Use the sparse aksak pattern (E(3,7) in 7/8) over a Dorian modal drone (Dm–F–Gsus4). ' +
       'The asymmetric meter creates tension; the open Dorian harmony provides modal character. ' +
       'Subdivide 7/8 as 3+4 or 4+3 depending on feel. ' +
       'Suggested tempo: 100–140 BPM.',
+    // Phase 08: tapan LOCKED (2+2+3 grouping); def frame drum FREE.
+    // First 7-step recipe — uses Phase 07 native step-count support.
+    // tapan/davul 2+2+3: step 1=düm (heavy), 3=tek (light), 5=tek (light); steps 6-7 = long unit silence.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1010100', // tapan 2+2+3: düm (1), tek (3), tek (5) — 7 steps
+        steps: 7,
+        locked: true, // tapan — LOCKED (first 7-step recipe; Phase 07 native step-count support)
+        rhythmId: 'aksak-7-sparse',
+      },
+      {
+        sound: 'hh',
+        binary: '1011011', // def frame drum fills: interlocks short units
+        steps: 7,
+        locked: false, // def/frame drum — FREE
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -561,16 +605,42 @@ export const RHYTHM_HARMONY_RECIPES: MusicalRecipe[] = [
       'soulful euclidean',
       'warm gospel',
     ],
+    // rhythmIds retained for catalog integrity; layers supersedes at runtime —
+    // E(9,16) does NOT appear in the applied pattern (layers use explicit binaries).
     rhythmIds: ['euclid-9-16'],
     harmonyId: 'gospel-soul-add9',
     bpmRange: [70, 130],
     meter: '4/4',
     density: 'dense',
+    defaultCpm: 20, // 20 cpm × 4 = 80 BPM — within bpmRange [70, 130]
     agentInstruction:
       'Use a dense Euclidean pattern (E(9,16) — 9 hits per bar) over a gospel soul ' +
       'add9 progression (Dadd9–Gadd9–Bm–Asus4–A). ' +
       'The dense rhythm fills the space with energy; the add9 chords add warmth and color. ' +
       'Suggested tempo: 80–110 BPM.',
+    // Phase 08: gospel snare LOCKED (non-negotiable gospel); kick and hi-hat FREE.
+    // gospel kick: hits 1,6,9,13 (syncopated; 'and of 2' anticipation on step 6).
+    // snare on 2 and 4 (non-negotiable gospel) — LOCKED.
+    layers: [
+      {
+        sound: 'bd',
+        binary: '1000010010000100', // gospel kick: hits 1,6,9,13 — syncopated; 'and of 2' on step 6
+        steps: 16,
+        locked: false, // kick — FREE
+      },
+      {
+        sound: 'cp',
+        binary: '0000100000001000', // gospel snare on beats 2 and 4 (non-negotiable)
+        steps: 16,
+        locked: true, // gospel snare — LOCKED
+      },
+      {
+        sound: 'hh',
+        binary: '1010101010101010', // 8th-note hi-hat
+        steps: 16,
+        locked: false, // hi-hat — FREE
+      },
+    ],
   },
 
   // -------------------------------------------------------------------------

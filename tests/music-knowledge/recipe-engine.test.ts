@@ -214,14 +214,22 @@ describe('recipeToAgentOutput — OD-2 euclid path (A-03-05)', () => {
     }
   });
 
-  // 'gospel-soul-euclid' uses 'euclid-9-16' (euclid, n=16, k=9, rot=0)
-  it('gospel-soul-euclid: layer 0 has euclid E(9,16,0)', () => {
+  // 'gospel-soul-euclid' (Phase 08: now has recipe.layers — uses steps path, not euclid)
+  it('gospel-soul-euclid: layers path — layer 0 is bd gospel kick steps (Phase 08)', () => {
+    // Phase 08: recipe.layers added; recipeToAgentOutput uses layers path.
+    // rhythmIds: ['euclid-9-16'] is retained for catalog integrity but NOT used at runtime.
+    // Layer 0 (bd) emits steps from binary '1000010010000100'.
     const recipe = requireRecipe('gospel-soul-euclid');
+    expect(recipe.layers).toBeDefined();
+    expect(recipe.layers?.length).toBe(3);
+
     const layers = requireLayers(recipe);
     const layer0 = layers[0];
-    expect('euclid' in layer0).toBe(true);
-    if ('euclid' in layer0) {
-      expect(layer0.euclid).toEqual({ k: 9, n: 16, rot: 0 });
+    // Phase 08: layers path emits steps (binary), NOT euclid — E(9,16) is not in the output.
+    expect('steps' in layer0).toBe(true);
+    if ('steps' in layer0) {
+      expect(layer0.steps.length).toBe(16);
+      expect(layer0.steps).toEqual('1000010010000100'.split('').map(Number));
     }
   });
 });
@@ -316,14 +324,18 @@ describe('recipeToAgentOutput — multi-layer recipes', () => {
     }
   });
 
-  // Sound assignment by layer index: 0→'bd', 1→'hh'
-  it('multi-layer: layer 0 sound is bd, layer 1 sound is hh', () => {
+  // Sound assignment by recipe.layers (Phase 08: pop-rock-backbeat now has 3 layers)
+  it('multi-layer: pop-rock-backbeat has 3 layers — bd, cp, hh (Phase 08)', () => {
+    // Phase 08: pop-rock-backbeat has recipe.layers: bd (0), cp (1), hh (2).
     const recipe = requireRecipe('pop-rock-backbeat');
-    expect(recipe.rhythmIds.length).toBe(2);
+    expect(recipe.layers).toBeDefined();
+    expect(recipe.layers?.length).toBe(3);
 
     const layers = requireLayers(recipe);
+    expect(layers.length).toBe(3);
     expect(layers[0].sound).toBe('bd');
-    expect(layers[1].sound).toBe('hh');
+    expect(layers[1].sound).toBe('cp');
+    expect(layers[2].sound).toBe('hh');
   });
 });
 

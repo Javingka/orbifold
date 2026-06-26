@@ -1235,6 +1235,113 @@ describe('Step 08.1: Afro-Cuban clave family binary assertions', () => {
   });
 });
 
+// ── Step 08.4: Standard + edge cases binary assertions ────────────────────────
+
+describe('Step 08.4: Standard + edge cases binary assertions', () => {
+  it('A-08-09: pop-rock-backbeat cp layer binary, steps, locked', () => {
+    const recipe = findRecipe('pop-rock-backbeat');
+    expect(recipe.layers).toBeDefined();
+    const cpLayer = recipe.layers?.find((l) => l.sound === 'cp');
+    expect(cpLayer).toBeDefined();
+    expect(cpLayer?.binary).toBe('0000100000001000');
+    expect(cpLayer?.steps).toBe(16);
+    expect(cpLayer?.locked).toBe(true);
+  });
+
+  it('A-08-09: pop-rock-backbeat bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('pop-rock-backbeat');
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1000000010000000');
+    expect(bdLayer?.steps).toBe(16);
+    expect(bdLayer?.locked).toBe(false);
+  });
+
+  it('A-08-09: pop-rock-backbeat hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('pop-rock-backbeat');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('1010101010101010');
+    expect(hhLayer?.steps).toBe(16);
+    expect(hhLayer?.locked).toBe(false);
+  });
+
+  it('A-08-10: gospel-soul-euclid cp layer binary, steps, locked', () => {
+    const recipe = findRecipe('gospel-soul-euclid');
+    expect(recipe.layers).toBeDefined();
+    const cpLayer = recipe.layers?.find((l) => l.sound === 'cp');
+    expect(cpLayer).toBeDefined();
+    expect(cpLayer?.binary).toBe('0000100000001000');
+    expect(cpLayer?.steps).toBe(16);
+    expect(cpLayer?.locked).toBe(true);
+  });
+
+  it('A-08-10: gospel-soul-euclid bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('gospel-soul-euclid');
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1000010010000100');
+    expect(bdLayer?.steps).toBe(16);
+    expect(bdLayer?.locked).toBe(false);
+  });
+
+  it('A-08-11: aksak-dorian-odd bd layer binary, steps, locked', () => {
+    const recipe = findRecipe('aksak-dorian-odd');
+    expect(recipe.layers).toBeDefined();
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer).toBeDefined();
+    expect(bdLayer?.binary).toBe('1010100');
+    expect(bdLayer?.steps).toBe(7);
+    expect(bdLayer?.locked).toBe(true);
+  });
+
+  it('A-08-11: aksak-dorian-odd hh layer binary, steps, locked', () => {
+    const recipe = findRecipe('aksak-dorian-odd');
+    const hhLayer = recipe.layers?.find((l) => l.sound === 'hh');
+    expect(hhLayer).toBeDefined();
+    expect(hhLayer?.binary).toBe('1011011');
+    expect(hhLayer?.steps).toBe(7);
+    expect(hhLayer?.locked).toBe(false);
+  });
+
+  it('A-08-13: aksak-dorian-odd bd layer steps === 7 (native 7/8 grid)', () => {
+    const recipe = findRecipe('aksak-dorian-odd');
+    const bdLayer = recipe.layers?.find((l) => l.sound === 'bd');
+    expect(bdLayer?.steps).toBe(7);
+    expect(bdLayer?.binary.length).toBe(7);
+  });
+
+  it('A-08-12: dorian-ritual-sparse has no layers field', () => {
+    const recipe = findRecipe('dorian-ritual-sparse');
+    expect(recipe.layers).toBeUndefined();
+  });
+
+  it('A-08-16: pop-rock-backbeat defaultCpm === 27', () => {
+    const recipe = findRecipe('pop-rock-backbeat');
+    expect(recipe.defaultCpm).toBe(27);
+  });
+
+  it('A-08-16: gospel-soul-euclid defaultCpm === 20', () => {
+    const recipe = findRecipe('gospel-soul-euclid');
+    expect(recipe.defaultCpm).toBe(20);
+  });
+
+  it('A-08-16: aksak-dorian-odd defaultCpm === 34', () => {
+    const recipe = findRecipe('aksak-dorian-odd');
+    expect(recipe.defaultCpm).toBe(34);
+  });
+
+  it('A-08-16: dorian-ritual-sparse defaultCpm === 18', () => {
+    const recipe = findRecipe('dorian-ritual-sparse');
+    expect(recipe.defaultCpm).toBe(18);
+  });
+
+  it('A-08-12: dorian-ritual-sparse defaultCpm === 18', () => {
+    const recipe = findRecipe('dorian-ritual-sparse');
+    expect(recipe.defaultCpm).toBe(18);
+  });
+});
+
 // ── Step 08.3: African duo + Bulería binary assertions ───────────────────────
 
 describe('Step 08.3: African duo + Bulería binary assertions', () => {
