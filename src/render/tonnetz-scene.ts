@@ -449,47 +449,46 @@ export function updateTonnetzDynamic(state: SessionState): void {
 /**
  * Handle canvas pointerdown in harmony view.
  *
- * In chord mode (default): hit-tests against _renderTris using pointInTri and
- * calls pickChord if found — unchanged from pre-phase behavior.
+ * Spatial routing — no mode toggle needed; the Tonnetz encodes the distinction
+ * geometrically:
+ *   1. Check vertex circles (_renderNodes) first — a click within NODE_HIT_RADIUS
+ *      of any node always adds a NoteSlot via pickNote().
+ *   2. If no vertex was hit, check triangles (_renderTris) — a click inside a
+ *      triangle face adds a Chord via pickChord().
  *
- * In note mode (harmony.noteMode === true): hit-tests against _renderNodes
- * (vertex circles, each carrying {pc, x, y}) and calls pickNote if a node
- * is within 13px (the maximum node circle radius from buildTonnetz). OD-2
- * resolved: hit-test _renderNodes so the exact vertex pitch class is captured.
+ * Node radius from buildTonnetz: 13px for in-scale nodes, 10px for out-of-scale.
+ * NODE_HIT_RADIUS = 13 covers both circle sizes so vertex clicks are always captured.
+ *
+ * Post-phase-01 fix (2026-06-26): removed noteMode flag; spatial routing replaces
+ * the explicit mode toggle. OD-2 resolution preserved: _renderNodes carries {pc, x, y}.
  *
  * Prototype: onStagePointer() harmony branch, lines 1281–1286.
- * note-placement Phase 01 step 01.4 — OD-2 resolution.
  *
  * @param e - Native PointerEvent from the canvas DOM element.
  */
 export function onStagePointerDown(e: PointerEvent): void {
-  // Round-2 fix: events are on app.view (canvas); e.offsetX/Y are canvas-local
-  // CSS pixels. With autoDensity:true, PIXI logical px === CSS px — no DPR
-  // conversion needed. Replaces getBoundingClientRect + clientX/Y + DPR scale.
+  // events are on app.view (canvas); e.offsetX/Y are canvas-local CSS pixels.
+  // With autoDensity:true, PIXI logical px === CSS px — no DPR conversion needed.
   // Prototype: app.view.addEventListener('pointerdown', onStagePointer) line 2157.
   const localX = e.offsetX;
   const localY = e.offsetY;
-  const state = get(sessionStore);
 
-  if (state.harmony.noteMode) {
-    // ── Note mode: hit-test vertex circles (OD-2 — _renderNodes, not _renderTris) ──
-    // Node radius from buildTonnetz: 13px for in-scale nodes, 10px for out-of-scale.
-    // Use 13px as the hit radius to consistently capture both circle types.
-    const NODE_HIT_RADIUS = 13;
-    for (const node of _renderNodes) {
-      const d = Math.hypot(localX - node.x, localY - node.y);
-      if (d <= NODE_HIT_RADIUS) {
-        pickNote(node.pc);
-        return;
-      }
+  // ── 1. Vertex circles first — a vertex click always adds a NoteSlot ─────────
+  const NODE_HIT_RADIUS = 13;
+  for (const node of _renderNodes) {
+    const d = Math.hypot(localX - node.x, localY - node.y);
+    if (d <= NODE_HIT_RADIUS) {
+      pickNote(node.pc);
+      return;
     }
-  } else {
-    // ── Chord mode (default): hit-test triangles — unchanged path ──────────────
-    for (const tri of _renderTris) {
-      if (pointInTri(localX, localY, tri)) {
-        pickChord(tri, state);
-        return;
-      }
+  }
+
+  // ── 2. No vertex hit — check triangles to add a Chord ───────────────────────
+  const state = get(sessionStore);
+  for (const tri of _renderTris) {
+    if (pointInTri(localX, localY, tri)) {
+      pickChord(tri, state);
+      return;
     }
   }
 }

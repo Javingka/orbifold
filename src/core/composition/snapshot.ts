@@ -310,8 +310,6 @@ export function restoreArmoniaSnapshot(snap: ArmoniaSnapshot): Partial<SessionSt
       // Ephemeral UI state — use defaults; openBlock caller spreads existing state.
       subview: 'tonnetz',
       registerMode: 'suavizado',
-      // note-placement Phase 01 step 01.4: noteMode is EPHEMERAL — default false on restore.
-      noteMode: false,
     },
   };
 }

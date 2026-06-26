@@ -495,8 +495,6 @@ export function deserializeSession(
       // See HarmonyState.subview and HarmonyState.registerMode JSDoc.
       subview: 'tonnetz' as const,
       registerMode: 'suavizado' as const,
-      // note-placement Phase 01 step 01.4: noteMode is EPHEMERAL — always false on load.
-      noteMode: false as const,
     },
     rhythm: {
       layers: saved.rhythm.layers.map((l) => {

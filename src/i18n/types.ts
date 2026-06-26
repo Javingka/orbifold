@@ -87,12 +87,6 @@ export interface Dictionary {
       chordLabel: string;
       arpTip: string;
       arpLabel: string;
-      /** note-placement Phase 01 step 01.4 — note-mode toggle button label when in chord mode */
-      noteModeChordLabel: string;
-      /** note-placement Phase 01 step 01.4 — note-mode toggle button label when in note mode */
-      noteModeNoteLabel: string;
-      /** note-placement Phase 01 step 01.4 — tooltip for the note-mode toggle */
-      noteModeTip: string;
       sendMarcoTitle: string;
       sendMarcoLabel: string;
       keyLabel: string;

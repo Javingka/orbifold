@@ -72,10 +72,6 @@ const pt: Dictionary = {
       chordLabel: '◧ acorde',
       arpTip: 'Arpejar o acorde (notas em sucessão, duração por subdivisão).',
       arpLabel: '⋯ arpejo',
-      noteModeChordLabel: '♩ nota',
-      noteModeNoteLabel: '♩ nota',
-      noteModeTip:
-        'Modo nota: clique em um vértice do Tonnetz para adicionar uma nota individual em vez de um acorde. Clique novamente para retornar ao modo acorde.',
       sendMarcoTitle: 'Enviar a tonalidade + progressão ao agente como moldura harmônica',
       sendMarcoLabel: '📨 moldura',
       keyLabel: 'tonalidade',

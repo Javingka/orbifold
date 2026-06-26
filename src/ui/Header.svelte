@@ -38,7 +38,6 @@
     setHarmonyKey,
     setHarmonySubview,
     setChordMode,
-    setNoteMode,
     setChordOscillator,
     setChordPreset,
     addEuclidLayer,
@@ -715,26 +714,6 @@
           {$t('header.harmony.arpLabel')}
         </button>
       </div>
-
-      <!--
-      note-placement Phase 01 step 01.4: Note-mode toggle.
-      Only shown when the Tonnetz sub-view is active (note-mode applies to vertex clicks).
-      Clicking toggles HarmonyState.noteMode via setNoteMode().
-      Active state uses class:active which is already defined in existing CSS.
-      EPHEMERAL: noteMode is not persisted; resets to false on session load.
-    -->
-      {#if $sessionStore.harmony.subview === 'tonnetz'}
-        <button
-          id="noteModeToggle"
-          class:active={$sessionStore.harmony.noteMode}
-          data-tip={$t('header.harmony.noteModeTip')}
-          on:click={() => setNoteMode(!$sessionStore.harmony.noteMode)}
-        >
-          {$sessionStore.harmony.noteMode
-            ? $t('header.harmony.noteModeNoteLabel')
-            : $t('header.harmony.noteModeChordLabel')}
-        </button>
-      {/if}
 
       <!--
       Phase 08 (step 08.6): Marco context button relocated from HarmonyControls.svelte.
