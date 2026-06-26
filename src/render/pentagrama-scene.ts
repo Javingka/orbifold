@@ -62,7 +62,13 @@
 import { get } from 'svelte/store';
 import { sessionStore, isNoteSlot } from '../state/session.js';
 import type { ProgressionSlot, Chord, NoteSlot, SessionState } from '../state/session.js';
-import { clearChordAt, setChordBars, reorderSlot, clampBars } from '../state/session.js';
+import {
+  clearChordAt,
+  setChordBars,
+  reorderSlot,
+  clampBars,
+  setNoteOffset,
+} from '../state/session.js';
 import { selectedSlotIdxStore } from '../state/selectedSlot.js';
 import type { Quality } from '../core/theory/chords.js';
 import { chordVoicing, chordLabel } from '../core/theory/chords.js';
@@ -371,6 +377,20 @@ function drawStaffLines(ctx: CanvasRenderingContext2D, cy: number, ls: number, W
   }
 }
 
+// ── Exhaustiveness helper ─────────────────────────────────────────────────────
+
+/**
+ * TypeScript exhaustiveness check — called in unreachable branches to ensure
+ * that every `ProgressionSlot` variant is handled. If the union gains a new
+ * member and this `else` branch becomes reachable, TypeScript will error
+ * because `x` will no longer be assignable to `never`.
+ *
+ * Phase 01 step 01.5 (note-placement) — satisfies A-01-31.
+ */
+function assertNeverSlot(x: never): never {
+  throw new Error(`Unhandled ProgressionSlot variant: ${JSON.stringify(x)}`);
+}
+
 // ── Chord slot rendering ──────────────────────────────────────────────────────
 
 /**
@@ -592,56 +612,114 @@ function pRest(
 }
 
 /**
- * Placeholder paint for a `NoteSlot`. Used in step 01.2 to make the slot
- * visually identifiable before the full `pNote` implementation in step 01.5.
+ * Render a note-head for a `NoteSlot` on the staff.
  *
- * Paints an accent-color (#8aa0ff) sustain bar and a small note-head circle
- * at the staff center, using the same OR radius constant as chord onset circles.
+ * The note name is derived from `slot.rootPc` and `slot.octaveOffset` at render time,
+ * matching the codegen formula exactly:
+ *   `NOTE_NAMES[slot.rootPc] + (octave + slot.octaveOffset)`
  *
- * IMPORTANT: This function will be REPLACED by `pNote` in step 01.5. It exists
- * only to satisfy TypeScript exhaustiveness and give a minimal visual indication.
+ * Renders:
+ *   - Accent-colored sustain bar (horizontal backdrop, same dims as pRest but in #8aa0ff)
+ *   - Ledger lines when the note falls outside the 5-line staff (|pos| > 4)
+ *   - A filled note-head circle at the correct staff position, in accent color (#8aa0ff)
+ *   - Sharp accidental label ('♯') when the note is a sharp
+ *   - Active pulse on the note-head (same pattern as pChord onset circles)
  *
- * Phase 01 step 01.2 (note-placement) — placeholder; superseded in step 01.5.
+ * Phase 01 step 01.5 (note-placement) — replaces pNotePlaceholder from step 01.2.
+ *
+ * Prototype parity: pNote is a new feature; no prototype analog. Note-head position
+ * uses noteNameToMidi + m2p + ny helpers already ported from prototype lines 160–168.
  */
-function pNotePlaceholder(
+function pNote(
   ctx: CanvasRenderingContext2D,
   slot: NoteSlot,
-  x: number,
-  w: number,
-  cy: number,
-  _H: number, // reserved for step 01.5 use
+  x: number, // slot left edge (canvas coords, includes SL)
+  w: number, // slot pixel width
+  H: number,
   ls: number,
   octave: number,
   isAct: boolean,
-  ts: number
+  ts: DOMHighResTimeStamp
 ): void {
-  // Accent color (CLAUDE.md §guardrails tonal-function colors — accent).
   const accentCol = '#8aa0ff';
 
-  // Sustain bar — same dims as pRest but in accent color.
-  ctx.fillStyle = isAct ? accentCol + 'aa' : accentCol + '55';
-  rr(ctx, x + 5, cy - BH / 2, w - 10, BH, 2);
-  ctx.fill();
-
-  // Note-head circle at staff center (placeholder position — step 01.5 derives from m2p).
-  // Derive note name for display (OD-1 resolution: NOTE_NAMES[rootPc] + (octave + octaveOffset)).
+  // Derive note name — same formula as codegen (strudel.ts NoteSlot branch):
+  // NOTE_NAMES[rootPc] + (octave + octaveOffset)
   const absOctave = octave + slot.octaveOffset;
   const noteName = (NOTE_NAMES[slot.rootPc] ?? 'C') + String(absOctave);
-  void noteName; // used in step 01.5 for m2p derivation; retained here for type safety
 
-  // Active pulse (same pattern as pChord/pArp onset circles).
-  const pulse = isAct ? 0.5 + 0.5 * Math.sin((ts / 320) * Math.PI * 2) : 0;
-  ctx.fillStyle = accentCol;
-  ctx.globalAlpha = 0.65 + 0.3 * pulse;
-  ctx.beginPath();
-  ctx.arc(x + w / 2, cy, OR, 0, Math.PI * 2);
+  // Convert note name → MIDI → staff position
+  const midi = noteNameToMidi(noteName);
+  const { pos, sh } = m2p(midi);
+
+  // Canvas y of the note-head
+  const yn = ny(pos, H, ls);
+
+  // Note-head x — centered in the slot
+  const nx = x + w / 2;
+
+  // Accent-color sustain bar (horizontal backdrop across the slot).
+  // Same dimensions as pRest but using the accent color with appropriate opacity.
+  const barAlpha = isAct ? 0.55 : 0.3;
+  ctx.fillStyle = accentCol + ha(barAlpha);
+  rr(ctx, x + 5, yn - BH / 2, w - 10, BH, 2);
   ctx.fill();
-  ctx.globalAlpha = 1;
+
+  // Ledger lines above/below the 5-line staff (ldg is a no-op when |pos| <= 4).
+  ldg(ctx, pos, nx, H, ls);
+
+  // Active pulse: radius scale and glow (matches pChord onset circle pattern).
+  const pulse = isAct ? 1 + 0.16 * Math.sin((ts / 700) * Math.PI * 2) : 1;
+
+  // Note-head circle: filled accent color + dark outline + active glow.
+  ctx.save();
+  if (isAct) {
+    ctx.shadowColor = accentCol;
+    ctx.shadowBlur = 7 + 5 * Math.abs(Math.sin((ts / 700) * Math.PI * 2));
+  }
+  ctx.fillStyle = accentCol;
+  ctx.strokeStyle = 'rgba(8,10,16,0.70)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(nx, yn, OR * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // Sharp accidental label ('♯') when the note is a sharp.
+  if (sh) {
+    ctx.save();
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.fillStyle = accentCol;
+    ctx.globalAlpha = 0.82;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('♯', nx - OR - 6, yn);
+    ctx.restore();
+  }
 }
 
 // ── Module-level singleton state ─────────────────────────────────────────────
 
 let _canvas: HTMLCanvasElement | null = null;
+
+// ── Pitch-offset DOM overlay (step 01.5) ─────────────────────────────────────
+//
+// A small `+`/`-` button overlay that appears when a NoteSlot is hovered.
+// Implemented as an absolutely-positioned <div> mounted inside stageEl's parent.
+// This is a DOM element (not a PIXI or Canvas 2D primitive), consistent with the
+// spec requirement ("DOM overlay, not a PIXI object").
+//
+// Lifecycle:
+//   initPentagrama   → creates _offsetOverlay and appends to stageEl (relative container)
+//   destroyPentagrama → removes _offsetOverlay from DOM
+//   paint()          → positions + shows/hides per frame based on _hoverSlotIdx + isNoteSlot
+//
+// The overlay intercepts pointer events; the canvas's pointer-events CSS is set to
+// 'auto' only when Pentagrama is visible, so the overlay only receives events then.
+let _offsetOverlay: HTMLDivElement | null = null;
+/** Index of the NoteSlot whose offset control is currently shown (−1 = hidden). */
+let _offsetOverlaySlotIdx = -1;
 let _ctx: CanvasRenderingContext2D | null = null;
 let _dpr = 1;
 let _W = 0;
@@ -832,18 +910,33 @@ function paint(ts: DOMHighResTimeStamp): void {
     }
 
     if (isNoteSlot(slot)) {
-      // NoteSlot — render is deferred to step 01.5 (pNote paint function).
-      // For now: paint a minimal placeholder (same accent-color rect as a rest,
-      // but with a note-head indicator) so the slot is visually distinguishable.
-      // This placeholder will be replaced by pNote in step 01.5.
-      pNotePlaceholder(ctx, slot, x, w, cy, H, ls, octave, isAct, ts);
+      // NoteSlot — full pNote paint (step 01.5).
+      pNote(ctx, slot, x, w, H, ls, octave, isAct, ts);
+
+      // Hover label: note name above slot (parallel to chord hover label).
+      if (isHov) {
+        const absOctave = octave + slot.octaveOffset;
+        const noteLabel = (NOTE_NAMES[slot.rootPc] ?? 'C') + String(absOctave);
+        ctx.save();
+        ctx.font = '500 9.5px "IBM Plex Mono", monospace';
+        ctx.fillStyle = '#8aa0ff';
+        ctx.globalAlpha = 0.65;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`♩ ${noteLabel}`, x + w / 2, cy - ls * 2 - 5);
+        ctx.restore();
+      }
     } else if ('isRest' in slot && slot.isRest) {
       // Rest slot
       // Ported from prototype pRest (lines 500–506)
       pRest(ctx, x, w, cy);
-    } else {
-      // Chord slot — type guard
-      const chord = slot as Chord;
+    } else if ('rootPc' in slot && 'qual' in slot) {
+      // Chord slot — exhaustive narrowing via structural properties.
+      // `assertNeverSlot` (step 01.5) is the compile-time guard: if ProgressionSlot
+      // gains a new member that does not have rootPc+qual, TypeScript will widen `slot`
+      // in this branch and fail the Chord assignment below; if it does have rootPc+qual
+      // it would reach this branch, and the caller must add a new guard above it.
+      const chord: Chord = slot;
 
       if (chordMode === 'chord') {
         // Chord mode: sustain bars + gemstone onset circles + isAct pulse (step 10.13).
@@ -955,6 +1048,12 @@ function paint(ts: DOMHighResTimeStamp): void {
           ctx.restore();
         }
       }
+    } else {
+      // Unreachable — all ProgressionSlot variants handled above.
+      // assertNeverSlot enforces compile-time exhaustiveness (step 01.5, A-01-31):
+      // if ProgressionSlot gains a new member that is neither NoteSlot, RestSlot,
+      // nor a Chord-shaped object, TypeScript will error here.
+      assertNeverSlot(slot as never);
     }
 
     // ── Rest/Note slot selection chrome ──────────────────────────────────────
@@ -994,6 +1093,40 @@ function paint(ts: DOMHighResTimeStamp): void {
       ctx.restore();
     }
   });
+
+  // ── Pitch-offset overlay (step 01.5) ─────────────────────────────────────
+  // Show the +/- offset control when a NoteSlot is hovered (not selected or dragging).
+  // Position: horizontally centred on the slot, vertically just below the staff area.
+  // Hide immediately when the hovered slot changes or is no longer a NoteSlot.
+  if (_offsetOverlay !== null) {
+    const hovNoteIdx =
+      _hoverSlotIdx !== null &&
+      !_resizeActive &&
+      !_moveActive &&
+      _hoverSlotIdx < progression.length &&
+      isNoteSlot(progression[_hoverSlotIdx])
+        ? _hoverSlotIdx
+        : -1;
+
+    if (hovNoteIdx >= 0) {
+      const hovSlot = progression[hovNoteIdx];
+      if (hovSlot !== undefined) {
+        const ox = slotX(hovNoteIdx, progression);
+        const ow = slotW(hovSlot);
+        // Position below the staff (cy + ls*2 + margin) — overlay width estimated 56px
+        const overlayW = 56;
+        const overlayLeft = Math.round(ox + ow / 2 - overlayW / 2);
+        const overlayTop = Math.round(cy + ls * 2 + 4);
+        _offsetOverlay.style.left = `${overlayLeft}px`;
+        _offsetOverlay.style.top = `${overlayTop}px`;
+        _offsetOverlay.style.display = 'flex';
+        _offsetOverlaySlotIdx = hovNoteIdx;
+      }
+    } else {
+      _offsetOverlay.style.display = 'none';
+      _offsetOverlaySlotIdx = -1;
+    }
+  }
 
   // ── Move ghost + insertion indicator (step 10.14 §b) ─────────────────────
   // Port of prototype paint() drag.mode==='moving' block (lines 375–394).
@@ -1327,6 +1460,60 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
 
   stageEl.appendChild(_canvas);
 
+  // ── Pitch-offset DOM overlay (step 01.5) ──────────────────────────────────
+  // Absolute-positioned <div> containing +/- buttons for NoteSlot octaveOffset.
+  // Mounted inside stageEl (which is position:relative) so absolute coords
+  // are relative to the stage container — same coordinate system as the canvas.
+  // z-index:2 places it above the canvas (z-index:1).
+  // Initially hidden; paint() positions + shows/hides it each frame.
+  {
+    const ov = document.createElement('div');
+    ov.id = 'pentagrama-note-offset';
+    ov.style.cssText =
+      'position:absolute;display:none;z-index:2;' +
+      'background:rgba(10,11,18,0.85);border:1px solid rgba(138,160,255,0.45);' +
+      'border-radius:6px;padding:1px 4px;' +
+      'align-items:center;gap:3px;pointer-events:auto;user-select:none;';
+
+    const minus = document.createElement('button');
+    minus.textContent = '−';
+    minus.style.cssText =
+      'background:none;border:none;color:#8aa0ff;font-size:13px;line-height:1;' +
+      'padding:2px 4px;cursor:pointer;border-radius:4px;';
+    minus.title = 'Lower pitch by one octave';
+
+    const plus = document.createElement('button');
+    plus.textContent = '+';
+    plus.style.cssText =
+      'background:none;border:none;color:#8aa0ff;font-size:13px;line-height:1;' +
+      'padding:2px 4px;cursor:pointer;border-radius:4px;';
+    plus.title = 'Raise pitch by one octave';
+
+    minus.addEventListener('click', () => {
+      if (_offsetOverlaySlotIdx < 0) return;
+      const state = get(sessionStore);
+      const slot = state.harmony.progression[_offsetOverlaySlotIdx];
+      if (slot !== undefined && isNoteSlot(slot)) {
+        setNoteOffset(_offsetOverlaySlotIdx, slot.octaveOffset - 1);
+      }
+    });
+
+    plus.addEventListener('click', () => {
+      if (_offsetOverlaySlotIdx < 0) return;
+      const state = get(sessionStore);
+      const slot = state.harmony.progression[_offsetOverlaySlotIdx];
+      if (slot !== undefined && isNoteSlot(slot)) {
+        setNoteOffset(_offsetOverlaySlotIdx, slot.octaveOffset + 1);
+      }
+    });
+
+    ov.appendChild(minus);
+    ov.appendChild(plus);
+    stageEl.appendChild(ov);
+
+    _offsetOverlay = ov;
+  }
+
   // Initial size based on current container dimensions.
   const rect = stageEl.getBoundingClientRect();
   setup(rect.width || stageEl.offsetWidth, rect.height || stageEl.offsetHeight);
@@ -1378,6 +1565,13 @@ export function destroyPentagrama(): void {
   }
   _ctx = null;
 
+  // Remove pitch-offset DOM overlay (step 01.5, symmetric with initPentagrama).
+  if (_offsetOverlay !== null) {
+    _offsetOverlay.remove();
+    _offsetOverlay = null;
+    _offsetOverlaySlotIdx = -1;
+  }
+
   // Reset interaction state so a subsequent initPentagrama starts clean.
   selectedSlotIdxStore.set(null);
   _hoverSlotIdx = null;
@@ -1414,5 +1608,10 @@ export function setPentagramaVisible(visible: boolean): void {
   } else {
     _canvas.style.display = 'none';
     _canvas.style.pointerEvents = 'none';
+    // Hide pitch-offset overlay when Pentagrama is not visible (step 01.5).
+    if (_offsetOverlay !== null) {
+      _offsetOverlay.style.display = 'none';
+      _offsetOverlaySlotIdx = -1;
+    }
   }
 }

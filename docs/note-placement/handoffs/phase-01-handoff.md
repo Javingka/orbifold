@@ -467,3 +467,129 @@ Step 01.5 adds `pNote` rendering branch to `src/render/pentagrama-scene.ts`:
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Step 01.5 — Pentagrama slot paint for `NoteSlot`
+
+**Date:** 2026-06-26
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Replaced `pNotePlaceholder` stub (added in step 01.2) with the full `pNote` paint function in `src/render/pentagrama-scene.ts`
+- Added `assertNeverSlot(x: never): never` exhaustiveness helper at module scope
+- Restructured the `paint()` slot dispatch to use `if (isNoteSlot) / else if (isRest) / else if (rootPc+qual) / else { assertNeverSlot }` — all four arms handle the three union members plus the unreachable terminal case
+- `pNote` implements:
+  - Note name derivation at render time: `NOTE_NAMES[slot.rootPc] + (octave + slot.octaveOffset)` — identical formula to codegen
+  - `noteNameToMidi(noteName)` → MIDI integer
+  - `m2p(midi)` → `{ pos, sh }` (diatonic staff position + sharp flag)
+  - `ny(pos, H, ls)` → canvas Y coordinate
+  - Accent-color sustain bar (horizontal backdrop at note height, same dims as pRest, using `#8aa0ff` at 30%/55% alpha for inactive/active)
+  - `ldg(ctx, pos, nx, H, ls)` for ledger lines (no-op when `|pos| <= 4`)
+  - Filled note-head circle in accent color `#8aa0ff`, pulsed with `OR × (1 + 0.16×sin(ts/700×2π))` when active
+  - Dark outline stroke on the note-head: `rgba(8,10,16,0.70)`
+  - Active glow: `shadowColor = '#8aa0ff'`, `shadowBlur = 7 + 5×|sin(...)|`
+  - Sharp accidental `♯` label left of the note-head when `sh === true`
+- Added hover label for `NoteSlot` slots: `♩ <noteName>` in accent color, matching chord hover label position
+- Added `setNoteOffset` to the import from `'../state/session.js'`
+- Created pitch-offset DOM overlay (`_offsetOverlay: HTMLDivElement | null`) in `initPentagrama`:
+  - Absolute-positioned `<div id="pentagrama-note-offset">` with `−`/`+` buttons appended inside `stageEl`
+  - z-index: 2 (above canvas at z-index 1)
+  - Buttons dispatch `setNoteOffset(idx, offset ± 1)` on click, reading current `octaveOffset` from `sessionStore`
+  - `paint()` loop shows/positions the overlay when `_hoverSlotIdx` points to a `NoteSlot`, hides otherwise
+  - `destroyPentagrama()` removes the overlay from DOM and resets `_offsetOverlaySlotIdx`
+  - `setPentagramaVisible(false)` hides the overlay (belt-and-suspenders)
+- All quality gates pass: `pnpm exec tsc --noEmit` → 0 errors; `pnpm lint` → clean; `pnpm test` → 2056/2056
+
+### Files touched
+
+- `src/render/pentagrama-scene.ts` — `pNote` full implementation (replaces `pNotePlaceholder`), `assertNeverSlot` helper, restructured dispatch with `never` check, pitch-offset DOM overlay creation/destruction/update, `setNoteOffset` import
+- `docs/note-placement/handoffs/phase-01-handoff.md` (this file, step 01.5 entry appended)
+
+### Parity note (A-01-33)
+
+Existing chord/arp/rest paint branches unchanged:
+
+- `pChord` is called exactly as before in the `else if ('rootPc' in slot && 'qual' in slot)` branch with `const chord: Chord = slot`. No logic change, only guard syntax changed from `else { const chord = slot as Chord; }`.
+- `pArp` is called exactly as before in the same chord branch.
+- `pRest` is called exactly as before in the `else if ('isRest' in slot && slot.isRest)` branch. No logic change.
+- All three branches produce identical canvas output to pre-step-01.5 behavior when no `NoteSlot` is in the progression.
+
+Parity note (A-01-29): Note-head vertical position for C4 on a treble staff:
+- `noteNameToMidi("C4")` → MIDI 60
+- `m2p(60)`: `N[60%12] = N[0] = 'C'`, `sh = false`, `pos = (floor(60/12) - 5)*7 + 0 - 6 = (5-5)*7 - 6 = -6`
+- `ny(-6, H, ls) = H/2 - (-6)*(ls/2) = H/2 + 3*ls` — three line-spacings below the staff center (B4)
+- This correctly places C4 just below the bottom staff line on the treble clef (standard position), consistent with the prototype `m2p` derivation (lines 160–165).
+- `ldg(ctx, -6, nx, H, ls)`: since `|pos| > 4`, a ledger line is drawn at staff position -6.
+
+### Validation evidence (per Acceptance ID)
+
+- A-01-29: `pNote` exists in `pentagrama-scene.ts`; uses `noteNameToMidi` → `m2p` → `ny` pipeline for vertical note-head placement. Confirmed by reading the function body at lines 633–703 of the formatted file.
+- A-01-30: Note-head painted with `ctx.fillStyle = '#8aa0ff'` (accent color, CLAUDE.md §guardrails). Confirmed by reading `pNote` function body.
+- A-01-31: `assertNeverSlot(x: never): never` helper at module scope. Called as `assertNeverSlot(slot as never)` in the final else of the slot dispatch. The `const chord: Chord = slot` in the third arm ensures TypeScript would widen `slot` if a new union member were added without matching the `rootPc+qual` structural guard.
+- A-01-32: Pitch-offset DOM overlay exists: `_offsetOverlay` created in `initPentagrama`, positioned/shown/hidden in `paint()` loop based on `_hoverSlotIdx` pointing to a `NoteSlot`, buttons call `setNoteOffset(idx, offset ± 1)`. Confirmed by reading init/destroy/paint sections.
+- A-01-33: Parity note above confirms chord/arp/rest paint branches unchanged.
+- A-01-34: `pnpm exec tsc --noEmit` → exit 0 (no output).
+- A-01-35: `pnpm lint` → exit 0 ("All matched files use Prettier code style!").
+
+### Routine validations (one-liner each)
+
+- `pnpm exec tsc --noEmit` → exit 0 (no output)
+- `pnpm lint` → exit 0 ("All matched files use Prettier code style!")
+- `pnpm test` → 2056 passed, 43 files passed (0 failed)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-29 | `pNote` paint function exists; uses `m2p` + `noteNameToMidi` for vertical placement | (none — render-layer) | manual/parity note | covered |
+| A-01-30 | Note-head painted in accent color `#8aa0ff` | (none — render-layer) | manual/code read | covered |
+| A-01-31 | `paint()` slot dispatch exhaustive; `assertNeverSlot` called in terminal `else` | proxy:static-analysis (tsc) | proxy:static-analysis | covered |
+| A-01-32 | Pitch-offset DOM control appears on hover for NoteSlot; calls `setNoteOffset` | (none — render-layer / DOM) | manual/code read | covered |
+| A-01-33 | Existing chord/arp/rest paint branches unchanged — parity note | (none — handoff doc) | manual | covered |
+| A-01-34 | `pnpm exec tsc --noEmit` passes clean | (none — tsc is the test) | operability | covered |
+| A-01-35 | `pnpm lint` passes clean | (none — lint is the test) | operability | covered |
+
+**Proxy disclosures:**
+- A-01-31: `assertNeverSlot` has parameter type `never`. TypeScript enforces that calls to it with a non-`never` type argument fail to compile. The `slot as never` cast is used because `Chord` is a structural type without a unique discriminant property, so TypeScript cannot automatically narrow to `never` after the three preceding guards. The compile-time guarantee is that `tsc --noEmit` with strict mode passes — which it does (exit 0, no output).
+
+**Operability evidence:**
+- `pnpm exec tsc --noEmit`: exit 0, no output
+- `pnpm lint`: exit 0, "All matched files use Prettier code style!"
+- `pnpm test`: 2056/2056 passed, 43/43 files passed
+
+### Decisions made (if any)
+
+- `pNote` sustain bar positioned at the note's staff height (`yn - BH/2`), not at `cy` (staff center). This mirrors how `pChord` draws sustain bars at each voice's staff position, providing a visual cue of pitch height within the slot. Using `cy` (as in `pRest`) would obscure the pitch information.
+- Pitch-offset control uses octave-level steps (`octaveOffset ± 1`) matching the `setNoteOffset` API. Semitone-level pitch dragging (vertical note-head drag) is deferred to a future step; this phase delivers the `+`/`-` button form per the spec.
+- The overlay is hidden during resize and move operations (`!_resizeActive && !_moveActive`) to prevent interference with those interactions.
+
+### Proposed Decisions Register entries (if any)
+
+None — all decisions within approved scope.
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `pnpm test`: 2056 passed (unchanged from step 01.4 — no new unit tests; render-layer step)
+- `tsc --noEmit`: clean
+- `pnpm lint`: clean
+- `pNote` full paint implementation live; `pNotePlaceholder` removed
+- Pitch-offset DOM overlay active; `−`/`+` buttons call `setNoteOffset`
+- `assertNeverSlot` exhaustiveness guard in slot dispatch
+
+### Next-step context
+
+Step 01.6 is the quality gate:
+- Run `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build` in order
+- Confirm test count > 2020 (current: 2056)
+- Report exact output for each command
+
+- **Terminal commit:** `feat(render): Phase 01 step 01.5 — pNote paint branch, pitch-offset control`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
