@@ -10,6 +10,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { sessionStore, requeueLive, applyLoadedSession } from '../state/session.js';
   import { decodeSession } from '../lib/persistence.js';
+  import type { Sound } from '../core/rhythm/layers.js';
   import { hudStore } from '../state/hud.js';
   import Header from '../ui/Header.svelte';
   import Transport from '../ui/Transport.svelte';
@@ -68,6 +69,7 @@
     if (hideOverlayTimer !== null) clearTimeout(hideOverlayTimer);
     hideOverlayTimer = setTimeout(() => {
       hoveredLayerIndex = -1;
+      showSoundPicker = -1; // Phase 09 step 09.3: close picker when overlay hides
       hideOverlayTimer = null;
     }, 400);
   }
@@ -313,6 +315,39 @@
     destroyPentagrama();
   });
 
+  // ── Sound picker state (Phase 09 step 09.3) ──────────────────────────────
+  // -1 = picker closed; >= 0 = picker open for that layer index.
+  let showSoundPicker = -1;
+
+  // Grouped sound palette — mirrors SK_SOUNDS expansion in step 09.1.
+  // Abstract palette names only (ADR 0025 D1, AG-D1 seam invariant).
+  const SOUNDS_GROUPED = [
+    {
+      label: 'Drum kit',
+      sounds: ['bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht'] as Sound[],
+    },
+    {
+      label: 'Percussion',
+      sounds: ['conga', 'cajon', 'wood', 'shaker', 'cb', 'perc', 'hand'] as Sound[],
+    },
+  ] as const;
+
+  function toggleSoundPicker(layerIdx: number): void {
+    const layer = $sessionStore.rhythm.layers[layerIdx];
+    if (!layer || layer.locked) return; // locked layers: no picker
+    showSoundPicker = showSoundPicker === layerIdx ? -1 : layerIdx;
+  }
+
+  function handleChangeLayerSound(layerIdx: number, newSound: Sound): void {
+    sessionStore.update((s) => {
+      const newLayers = [...s.rhythm.layers];
+      newLayers[layerIdx] = { ...newLayers[layerIdx], sound: newSound };
+      return { ...s, rhythm: { ...s.rhythm, layers: newLayers } };
+    });
+    showSoundPicker = -1;
+    requeueLive();
+  }
+
   // ── Layer overlay button handlers ────────────────────────────────────────
   // OD-1 resolution: DOM overlay with solo/mute/delete buttons.
   // Prototype: wireLayerCtl() lines 1343–1350.
@@ -354,6 +389,17 @@
     requeueLive();
   }
 </script>
+
+<!--
+  Phase 09 step 09.3: close sound picker on outside click.
+  The PIXI canvas captures pointer events, so we use a window-level click handler
+  rather than a document-level handler, to catch clicks outside the overlay.
+-->
+<svelte:window
+  on:click={() => {
+    showSoundPicker = -1;
+  }}
+/>
 
 <!--
   Phase 04 step 04.3: Header component at top of flex-column layout.
@@ -460,10 +506,57 @@
     on:pointerleave={() => {
       // Cursor left the overlay; hide immediately.
       hoveredLayerIndex = -1;
+      showSoundPicker = -1; // Phase 09 step 09.3: close picker when overlay disappears
     }}
     role="toolbar"
     aria-label={$t('app.layerCtl.ariaLabel')}
   >
+    <!--
+      Phase 09 step 09.3: Sound switcher button (leftmost in overlay).
+      Shows the current sound name for the hovered layer.
+      Locked layers: button is dimmed and inert (no picker opens).
+      Free layers: click opens a grouped dropdown to switch the sound.
+    -->
+    {#if showSoundPicker === hoveredLayerIndex}
+      <div
+        class="sound-picker-dropdown"
+        class:dropup={overlayY > window.innerHeight / 2}
+        on:click|stopPropagation={() => {
+          /* prevent svelte:window close */
+        }}
+        on:keydown|stopPropagation={() => {
+          /* prevent svelte:window close */
+        }}
+        role="menu"
+        aria-label="Choose sound"
+        tabindex="-1"
+      >
+        {#each SOUNDS_GROUPED as group}
+          <div class="sound-group-label">{group.label}</div>
+          {#each group.sounds as s}
+            <button
+              class="sound-option"
+              class:active={s === $sessionStore.rhythm.layers[hoveredLayerIndex]?.sound}
+              aria-pressed={s === $sessionStore.rhythm.layers[hoveredLayerIndex]?.sound}
+              on:click|stopPropagation={() => handleChangeLayerSound(hoveredLayerIndex, s)}
+              >{s}</button
+            >
+          {/each}
+        {/each}
+      </div>
+    {/if}
+    <button
+      class="sound-btn"
+      title={$sessionStore.rhythm.layers[hoveredLayerIndex]?.locked
+        ? 'Sound locked (recipe signature)'
+        : 'Change sound: ' + ($sessionStore.rhythm.layers[hoveredLayerIndex]?.sound ?? '?')}
+      style={$sessionStore.rhythm.layers[hoveredLayerIndex]?.locked
+        ? 'opacity:0.5;cursor:default'
+        : ''}
+      on:click|stopPropagation={() => toggleSoundPicker(hoveredLayerIndex)}
+      >{$sessionStore.rhythm.layers[hoveredLayerIndex]?.sound ?? '?'}</button
+    >
+
     <!--
       Solo button: active state when layer.solo === true.
       Prototype: button[data-a="solo"].on { background:var(--subdom); color:#0b0d12 } (line 335).
@@ -670,5 +763,85 @@
     color: #fff;
     background: rgba(232, 123, 172, 0.4);
     border-color: var(--dom);
+  }
+
+  /*
+   * Phase 09 step 09.3: Sound switcher button + dropdown.
+   * The sound-btn is the leftmost button in the overlay (before Solo).
+   * Shows the current layer's abstract sound name.
+   * Locked layers: opacity 0.5, cursor default (set via inline style).
+   */
+  .sound-btn {
+    min-width: 36px;
+    width: auto;
+    padding: 0 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+
+  /*
+   * Sound picker dropdown: a glass panel that floats above (or below) the overlay.
+   * Default position: above (bottom: calc(100% + 4px)) — the common case for
+   * orbits in the lower viewport half. The .dropup class flips to below.
+   *
+   * Note: .layer-ctl has transform: translate(-50%, -140%), so position:absolute
+   * children are relative to the overlay's own size. The dropdown uses position:absolute
+   * relative to .layer-ctl.
+   */
+  .sound-picker-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    background: #1a1c23;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 6px;
+    z-index: 200;
+    min-width: 110px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  }
+
+  /*
+   * .dropup: when overlayY > window.innerHeight/2 (orbit in upper half),
+   * dropdown opens downward (below the overlay).
+   */
+  .sound-picker-dropdown.dropup {
+    bottom: auto;
+    top: calc(100% + 4px);
+  }
+
+  .sound-group-label {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 6px 1px;
+    user-select: none;
+  }
+
+  .sound-option {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.72);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .sound-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .sound-option.active {
+    background: rgba(138, 160, 255, 0.2);
+    color: #8aa0ff;
   }
 </style>
