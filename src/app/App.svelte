@@ -821,9 +821,9 @@
     border-radius: 6px;
     padding: 8px;
     z-index: 200;
-    min-width: 160px;
+    min-width: 180px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(78px, 1fr));
     gap: 3px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
     max-height: min(260px, 45vh);
@@ -875,19 +875,22 @@
    * of label length. Two columns mean 16 sounds fit in ~8 rows (~120–140px).
    */
   .sound-option {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 5px;
-    color: rgba(255, 255, 255, 0.72);
+    color: rgba(255, 255, 255, 0.8);
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
-    padding: 6px 8px;
-    text-align: center;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
     cursor: pointer;
-    transition: background 0.12s;
+    transition:
+      background 0.12s,
+      border-color 0.12s;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .sound-option:hover {
