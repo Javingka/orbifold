@@ -1009,12 +1009,12 @@ export function setView(view: SessionState['view']): void {
 }
 
 /**
- * Add a new Euclidean rhythm layer (bjorklund + rotate → 16-step array).
+ * Add a new Euclidean rhythm layer (bjorklund + rotate → native n-step array).
  *
- * Computes `bjorklund(k,n)`, rotates by `rot`, and maps to a 16-step array
- * (if n < RSTEPS the pattern is repeated/truncated; if n === RSTEPS it is used
- * directly). The `euclid` field is set to the compact `"k,n,rot"` string so
- * `rhythmLayerToStrudelLine` can use euclidean mode.
+ * Computes `bjorklund(k,n)`, rotates by `rot`, and stores at native length n.
+ * Consistent with Phase 07 invariant: step arrays live at their natural step count
+ * (7 for aksak, 12 for 6/8, 16 for 4/4). The `euclid` field is set to the compact
+ * `"k,n"` or `"k,n,rot"` string so codegen can emit the pattern descriptor.
  *
  * Pushes the new layer to `rhythm.layers` in the store.
  *
@@ -1026,12 +1026,8 @@ export function setView(view: SessionState['view']): void {
  * @param rot   - Rotation offset.
  */
 export function addEuclidLayer(sound: string, k: number, n: number, rot: number): void {
-  // bjorklund gives a pattern of length n; map to RSTEPS by repeating/truncating.
-  const raw = rotate(bjorklund(k, n), rot);
-  const steps: number[] = [];
-  for (let i = 0; i < RSTEPS; i++) {
-    steps.push(raw[i % raw.length]);
-  }
+  // Native n-step array — no RSTEPS mapping (Phase 07 invariant).
+  const steps = rotate(bjorklund(k, n), rot);
   // euclid compact string — rhythm-scene and codegen will use this directly.
   const euclidStr = rot !== 0 ? `${k},${n},${rot}` : `${k},${n}`;
   const layer: RhythmLayer = {
@@ -1054,19 +1050,21 @@ export function addEuclidLayer(sound: string, k: number, n: number, rot: number)
 }
 
 /**
- * Add a new empty rhythm layer (all rests, 16 steps).
+ * Add a new empty rhythm layer (all rests, n steps).
  *
- * Pushes a zero-filled 16-step layer so the user can toggle individual steps
- * in the rhythm view.
+ * Pushes a zero-filled layer of length `n` so the user can toggle individual
+ * steps in the rhythm view. `n` defaults to RSTEPS (16) for backward compat
+ * but should be passed from the UI's current step-count selection.
  *
  * Prototype: `addLayerEmpty.onclick` handler, lines 858–861.
  *
  * @param sound - Drum sound name.
+ * @param n     - Number of steps (default RSTEPS = 16).
  */
-export function addEmptyLayer(sound: string): void {
+export function addEmptyLayer(sound: string, n: number = RSTEPS): void {
   const layer: RhythmLayer = {
     sound: sound as Sound,
-    steps: new Array(RSTEPS).fill(0) as number[],
+    steps: new Array(n).fill(0) as number[],
   };
   sessionStore.update((s) => ({
     ...s,

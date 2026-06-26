@@ -136,7 +136,7 @@
   }
 
   function handleAddEmpty(): void {
-    addEmptyLayer(euclidSound);
+    addEmptyLayer(euclidSound, euclidN);
   }
 
   // ── Step editor toggle (Phase 09 step 09.2) ───────────────────────────────
@@ -145,7 +145,7 @@
   function handleStepToggle(layerIdx: number, stepIdx: number): void {
     sessionStore.update((s) => {
       const layer = s.rhythm.layers[layerIdx];
-      if (!layer || layer.locked) return s;  // guard: locked layers immutable
+      if (!layer || layer.locked) return s; // guard: locked layers immutable
       const newSteps = [...layer.steps];
       newSteps[stepIdx] = newSteps[stepIdx] === 1 ? 0 : 1;
       // Clear euclid when editing steps directly (consistent with existing behavior)
@@ -498,37 +498,45 @@
         <!--
         k slider. Prototype line 436.
       -->
+        <span data-tip={$t('header.rhythm.kTip')} title="k — golpes (hits)">k <b>{euclidK}</b></span>
         <input
           type="range"
           id="euclidK"
           min="1"
           max="16"
           bind:value={euclidK}
+          aria-label="k — número de golpes"
+          title="k — número de golpes (hits)"
           data-tip={$t('header.rhythm.kTip')}
         />
 
         <!--
         n slider. Prototype line 437.
       -->
+        <span data-tip={$t('header.rhythm.nTip')} title="n — pasos (steps)">n <b>{euclidN}</b></span>
         <input
           type="range"
           id="euclidN"
           min="2"
           max="16"
           bind:value={euclidN}
+          aria-label="n — número de pasos"
+          title="n — número de pasos (steps)"
           data-tip={$t('header.rhythm.nTip')}
         />
 
         <!--
         rot readout + slider. Prototype lines 438–439.
       -->
-        <span data-tip={$t('header.rhythm.rotTip')}>rot <b>{euclidR}</b></span>
+        <span data-tip={$t('header.rhythm.rotTip')} title="rot — rotación (offset)">rot <b>{euclidR}</b></span>
         <input
           type="range"
           id="euclidR"
           min="0"
           max={euclidRMax}
           bind:value={euclidR}
+          aria-label="rot — rotación del patrón"
+          title="rot — rotación del patrón (offset)"
           data-tip={$t('header.rhythm.rotSliderTip')}
         />
 
