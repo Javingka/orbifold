@@ -324,6 +324,14 @@ export interface HarmonyState {
    * ADR 0011 Amendment §D6.
    */
   registerMode: RegisterMode;
+  /**
+   * When true, Tonnetz clicks add a NoteSlot instead of a Chord.
+   * EPHEMERAL — not persisted, not in agent schema.
+   * Default: false (chord mode, preserves existing behavior on load).
+   *
+   * note-placement Phase 01 step 01.4.
+   */
+  noteMode: boolean;
 }
 
 /**
@@ -505,6 +513,8 @@ export const DEFAULT_SESSION_STATE: SessionState = {
     // Phase 08 (step 08.5): ephemeral UI defaults — not persisted.
     subview: 'tonnetz', // Pilot decision: Tonnetz visible by default (reversibility)
     registerMode: 'suavizado', // Pilot decision: smooth contour by default
+    // note-placement Phase 01 step 01.4: note mode toggle — not persisted.
+    noteMode: false, // default: chord mode (existing behavior preserved on load)
   },
   rhythm: {
     layers: [],
@@ -1038,6 +1048,26 @@ export function setRegisterMode(mode: RegisterMode): void {
     harmony: { ...s.harmony, registerMode: mode },
   }));
   // Visual-only: no requeueLive(). The staff re-renders via App.svelte store subscription.
+}
+
+/**
+ * Toggle the Tonnetz note-mode.
+ *
+ * When `on` is true, clicking a Tonnetz vertex adds a `NoteSlot` instead of a `Chord`.
+ * When `on` is false, Tonnetz clicks restore to the existing `pickChord` behavior.
+ *
+ * EPHEMERAL: this field is not persisted (see HarmonyState.noteMode JSDoc).
+ * Does NOT call `requeueLive()` — no audio change; mode only affects the NEXT click.
+ *
+ * note-placement Phase 01 step 01.4.
+ *
+ * @param on - true to enter note mode; false to return to chord mode.
+ */
+export function setNoteMode(on: boolean): void {
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: { ...s.harmony, noteMode: on },
+  }));
 }
 
 /**
@@ -1937,6 +1967,8 @@ export function applyLoadedSession(saved: SavedSession): void {
       // Phase 08 (step 08.5): ephemeral fields NOT persisted — always reset to defaults.
       subview: s.harmony.subview,
       registerMode: s.harmony.registerMode,
+      // note-placement Phase 01 step 01.4: noteMode is EPHEMERAL — preserve current value on session load.
+      noteMode: s.harmony.noteMode,
     },
     rhythm: {
       layers: saved.rhythm.layers.map((l) => {

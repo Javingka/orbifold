@@ -72,6 +72,10 @@ const en: Dictionary = {
       chordLabel: '◧ chord',
       arpTip: 'Arpeggiate the chord (notes in succession, duration per subdivision).',
       arpLabel: '⋯ arpeggio',
+      noteModeChordLabel: '♩ note',
+      noteModeNoteLabel: '♩ note',
+      noteModeTip:
+        'Note mode: click a Tonnetz vertex to add a single note instead of a chord. Click again to return to chord mode.',
       sendMarcoTitle: 'Send the key + progression to the agent as the harmonic framework',
       sendMarcoLabel: '📨 framework',
       keyLabel: 'key',

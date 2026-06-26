@@ -25,7 +25,7 @@ import type { NRLabel } from '../core/theory/neo-riemannian.js';
 import { minimalVoiceLeading } from '../core/theory/voice-leading.js';
 import type { VoiceLeadingResult } from '../core/theory/voice-leading.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
-import { sessionStore, playChord, requeueLive, isNoteSlot } from '../state/session.js';
+import { sessionStore, playChord, requeueLive, isNoteSlot, addNote } from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
 import { soundIntentStore } from '../state/selectedSlot.js';
@@ -448,8 +448,17 @@ export function updateTonnetzDynamic(state: SessionState): void {
 
 /**
  * Handle canvas pointerdown in harmony view.
- * Hit-tests against _renderTris using pointInTri and calls pickChord if found.
+ *
+ * In chord mode (default): hit-tests against _renderTris using pointInTri and
+ * calls pickChord if found — unchanged from pre-phase behavior.
+ *
+ * In note mode (harmony.noteMode === true): hit-tests against _renderNodes
+ * (vertex circles, each carrying {pc, x, y}) and calls pickNote if a node
+ * is within 13px (the maximum node circle radius from buildTonnetz). OD-2
+ * resolved: hit-test _renderNodes so the exact vertex pitch class is captured.
+ *
  * Prototype: onStagePointer() harmony branch, lines 1281–1286.
+ * note-placement Phase 01 step 01.4 — OD-2 resolution.
  *
  * @param e - Native PointerEvent from the canvas DOM element.
  */
@@ -460,13 +469,52 @@ export function onStagePointerDown(e: PointerEvent): void {
   // Prototype: app.view.addEventListener('pointerdown', onStagePointer) line 2157.
   const localX = e.offsetX;
   const localY = e.offsetY;
+  const state = get(sessionStore);
 
-  for (const tri of _renderTris) {
-    if (pointInTri(localX, localY, tri)) {
-      pickChord(tri, get(sessionStore));
-      return;
+  if (state.harmony.noteMode) {
+    // ── Note mode: hit-test vertex circles (OD-2 — _renderNodes, not _renderTris) ──
+    // Node radius from buildTonnetz: 13px for in-scale nodes, 10px for out-of-scale.
+    // Use 13px as the hit radius to consistently capture both circle types.
+    const NODE_HIT_RADIUS = 13;
+    for (const node of _renderNodes) {
+      const d = Math.hypot(localX - node.x, localY - node.y);
+      if (d <= NODE_HIT_RADIUS) {
+        pickNote(node.pc);
+        return;
+      }
+    }
+  } else {
+    // ── Chord mode (default): hit-test triangles — unchanged path ──────────────
+    for (const tri of _renderTris) {
+      if (pointInTri(localX, localY, tri)) {
+        pickChord(tri, state);
+        return;
+      }
     }
   }
+}
+
+// ── pickNote (internal) ───────────────────────────────────────────────────────
+
+/**
+ * Add a NoteSlot for the clicked Tonnetz vertex pitch class.
+ *
+ * Calls `addNote(rootPc)` from session.ts which appends a new NoteSlot with
+ * `octaveOffset: 0` (same octave as HarmonyState.octave) and calls requeueLive().
+ *
+ * Deliberately does NOT trigger a click-pulse on the Tonnetz canvas (there is
+ * no triangle to pulse), does NOT compute voice-leading (NoteSlot has no
+ * Tonnetz centroid), and does NOT play a single-chord preview (not applicable
+ * for a single note — the progression requeue is the audio feedback).
+ *
+ * note-placement Phase 01 step 01.4 — OD-2 resolution.
+ *
+ * @param rootPc - Pitch class 0–11 of the clicked vertex.
+ */
+function pickNote(rootPc: number): void {
+  addNote(rootPc);
+  // No voice-leading, no _lastPick, no click-pulse — NoteSlot has no centroid.
+  // requeueLive() is called inside addNote() from session.ts.
 }
 
 // ── pickChord (internal) ──────────────────────────────────────────────────────

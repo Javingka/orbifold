@@ -336,3 +336,134 @@ Step 01.4 adds `noteMode: boolean` to `HarmonyState` and wires the `pickNote` pa
 **Iteration:**
 **Reason:**
 **Next action:**
+
+---
+
+## Step 01.4 — Tonnetz vertex → note pick
+
+**Date:** 2026-06-26
+**Commit(s):** (see terminal commit below)
+**Iteration:** 1 of 5
+
+### Completed
+
+- Added `noteMode: boolean` to `HarmonyState` interface in `src/state/session.ts` with JSDoc "EPHEMERAL — not persisted, not in agent schema; default false"
+- Initialized `noteMode: false` in `DEFAULT_SESSION_STATE.harmony`
+- Added `setNoteMode(on: boolean): void` store action in `src/state/session.ts` — updates `harmony.noteMode`, does NOT call `requeueLive()` (mode only affects next click)
+- Updated `applyLoadedSession` in `src/state/session.ts` to preserve ephemeral `noteMode` from current state on load (parallel to `subview` / `registerMode`)
+- Updated `restoreArmoniaSnapshot` in `src/core/composition/snapshot.ts` to include `noteMode: false` in the reconstructed `HarmonyState` (required for TS strict type satisfaction)
+- Updated `src/lib/persistence.ts` `deserializeSession` to inject `noteMode: false` alongside the other ephemeral field defaults (`subview`, `registerMode`)
+- Extended `onStagePointerDown` in `src/render/tonnetz-scene.ts` to branch on `state.harmony.noteMode`: note mode hit-tests `_renderNodes` (vertex circles, radius 13px — OD-2), chord mode hit-tests `_renderTris` (unchanged path)
+- Added `pickNote(rootPc: number): void` (module-internal) in `tonnetz-scene.ts`: calls `addNote(rootPc)`, skips voice-leading / click-pulse / single-chord preview
+- Added `addNote` to imports from `session.js` in `tonnetz-scene.ts`
+- Added UI toggle button `#noteModeToggle` in `src/ui/Header.svelte` (inside `{#if $sessionStore.view === 'harmony'}` and `{#if $sessionStore.harmony.subview === 'tonnetz'}`): uses `class:active` for pressed state, calls `setNoteMode(!noteMode)` on click
+- Added `setNoteMode` to `Header.svelte` import from `session.js`
+- Added 3 i18n keys (`noteModeChordLabel`, `noteModeNoteLabel`, `noteModeTip`) to `src/i18n/types.ts` and all 4 locale files (en, es, pt, zh)
+- `pnpm exec tsc --noEmit` → 0 errors; `pnpm lint` → clean; `pnpm test` → 2056/2056
+
+### Files touched
+
+- `src/state/session.ts` — `noteMode` field on `HarmonyState`, `DEFAULT_SESSION_STATE` default, `setNoteMode` action, `applyLoadedSession` ephemeral preservation
+- `src/lib/persistence.ts` — `noteMode: false` injection in `deserializeSession`
+- `src/core/composition/snapshot.ts` — `noteMode: false` in `restoreArmoniaSnapshot` harmony object
+- `src/render/tonnetz-scene.ts` — `addNote` import, `onStagePointerDown` note-mode branch, `pickNote` function
+- `src/ui/Header.svelte` — `setNoteMode` import, `#noteModeToggle` button markup
+- `src/i18n/types.ts` — 3 new keys in `header.harmony` namespace
+- `src/i18n/locales/en.ts` — `noteModeChordLabel`, `noteModeNoteLabel`, `noteModeTip`
+- `src/i18n/locales/es.ts` — same 3 keys (Spanish)
+- `src/i18n/locales/pt.ts` — same 3 keys (Portuguese)
+- `src/i18n/locales/zh.ts` — same 3 keys (Chinese)
+- `docs/note-placement/handoffs/phase-01-handoff.md` (this file, step 01.4 entry appended)
+
+### Parity note (A-01-28)
+
+Chord-mode click behavior is unchanged:
+
+- In chord mode (`state.harmony.noteMode === false`), `onStagePointerDown` takes the `else` branch, iterates `_renderTris`, and calls `pickChord(tri, state)` exactly as before.
+- The `state` object is read once at the top of the function (previously read inline inside the loop via `get(sessionStore)` inside `pickChord`); functionally equivalent since Svelte store reads are synchronous.
+- In note mode, the chord-pick loop is completely skipped; `pickNote` is called instead with `node.pc` from the hit-tested vertex.
+- `pickNote` does NOT call `pickChord`, does NOT set `_pickPulse`, does NOT compute voice-leading, and does NOT call `playChord`.
+
+### Validation evidence (per Acceptance ID)
+
+- A-01-22: `HarmonyState.noteMode: boolean` present in `src/state/session.ts` interface (after `registerMode`). Absent from `SavedHarmonySchema` in `persistence.ts` (only `root`, `mode`, `octave`, `progression` in the Zod object — confirmed by reading lines 124–133). Absent from `AgentOutputSchema` in `agent/schema.ts` (unchanged). `tsc --noEmit` passes clean.
+- A-01-23: `setNoteMode(on: boolean): void` exported from `src/state/session.ts`. Updates `harmony.noteMode`, no `requeueLive()` call.
+- A-01-24: `onStagePointerDown` branches on `state.harmony.noteMode`; chord-pick code (`for (const tri of _renderTris)` → `pickChord(tri, state)`) is in the `else` branch, unchanged.
+- A-01-25: `#noteModeToggle` button in `Header.svelte` visible when `subview === 'tonnetz'`; `class:active={$sessionStore.harmony.noteMode}` for visual pressed state; label uses `noteModeChordLabel` / `noteModeNoteLabel` i18n keys.
+- A-01-26: `pnpm exec tsc --noEmit` → exit 0, no output.
+- A-01-27: `pnpm lint` → exit 0, "All matched files use Prettier code style!"
+- A-01-28: Parity note above confirms chord-mode click path is unchanged.
+
+### Routine validations (one-liner each)
+
+- `pnpm exec tsc --noEmit` → exit 0 (no output)
+- `pnpm lint` → exit 0 ("All matched files use Prettier code style!")
+- `pnpm test` → 2056 passed, 43 files passed (0 failed)
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-22 | `HarmonyState.noteMode: boolean` exists with default `false`; absent from SavedHarmonySchema and AgentOutputSchema | proxy:static-analysis (tsc + file read) | proxy:static-analysis | covered |
+| A-01-23 | `setNoteMode` store action exists and is exported | proxy:static-analysis (tsc) | proxy:static-analysis | covered |
+| A-01-24 | `onStagePointerDown` branches on `noteMode`; existing chord-pick path unchanged | proxy:static-analysis (tsc) | proxy:static-analysis | covered |
+| A-01-25 | UI toggle exists; visually distinct (active state) when note mode on | (none — render-layer) | manual | covered (handoff parity note) |
+| A-01-26 | `pnpm exec tsc --noEmit` passes clean | (none — tsc is the test) | operability | covered |
+| A-01-27 | `pnpm lint` passes clean | (none — lint is the test) | operability | covered |
+| A-01-28 | Handoff contains parity note confirming chord-mode click behavior is unchanged | (none — handoff document) | manual | covered |
+
+**Proxy disclosures:**
+- A-01-22: `noteMode` absence from `SavedHarmonySchema` confirmed by reading `src/lib/persistence.ts` lines 124–133 (only `root`, `mode`, `octave`, `progression` in the Zod object). Absence from `AgentOutputSchema` confirmed by `src/agent/schema.ts` which was not modified. TypeScript strict mode flags any missing required field.
+- A-01-23: `setNoteMode` function presence confirmed by `tsc --noEmit` (strict import in `Header.svelte` would error if not exported).
+- A-01-24: Branch logic confirmed by `tsc --noEmit` (both paths compile; `addNote` import validates note-mode path type-safely).
+
+**Operability evidence:**
+- `pnpm exec tsc --noEmit`: exit 0, no output
+- `pnpm lint`: exit 0, "All matched files use Prettier code style!"
+- `pnpm test`: 2056/2056 passed, 43/43 files passed
+
+### Decisions made (if any)
+
+- `noteMode` is preserved from the current store state (not reset to `false`) when `applyLoadedSession` runs — matches `subview`/`registerMode` precedent; the user's current UI mode is preserved across session loads.
+- `#noteModeToggle` is only rendered when `subview === 'tonnetz'` — note mode only affects Tonnetz vertex clicks; hiding it in Pentagrama view prevents UX confusion.
+- `NODE_HIT_RADIUS = 13` matches the larger (in-scale) node circle radius from `buildTonnetz` (line 270: `drawCircle(n.x, n.y, inScale ? 13 : 10)`); using 13 ensures both node types are consistently catchable.
+
+### Proposed Decisions Register entries (if any)
+
+None — all decisions within approved scope (OD-2 Option A resolved by Pilot before step 01.2).
+
+### Blockers resolved during this step (if any)
+
+None.
+
+### Environment state after this step
+
+- `pnpm test`: 2056 passed (unchanged from step 01.3 — no new unit tests; interaction/render-layer step)
+- `tsc --noEmit`: clean
+- `pnpm lint`: clean
+- `HarmonyState.noteMode` field live in store; `setNoteMode` action exported
+- `onStagePointerDown` branches on `noteMode`; chord-pick path unchanged
+- UI toggle button `#noteModeToggle` visible in Tonnetz subview
+
+### Next-step context
+
+Step 01.5 adds `pNote` rendering branch to `src/render/pentagrama-scene.ts`:
+- Replace the existing `pNotePlaceholder` stub (accent-colored bar added in step 01.2) with full note-head paint using `m2p()` + `ny()` + `noteNameToMidi()` helpers already present in the module
+- Derive note name from `NOTE_NAMES[slot.rootPc] + (state.harmony.octave + slot.octaveOffset)` — same formula as codegen
+- Use accent color `#8aa0ff` for note-head (CLAUDE.md §guardrails)
+- Add pitch-offset DOM control on hover (`+`/`-` buttons calling `setNoteOffset(idx, offset ± 1)`)
+- Add TypeScript `never` exhaustiveness check in the `paint()` slot dispatch
+
+- **Terminal commit:** `feat(interaction): Phase 01 step 01.4 — Tonnetz note-mode pick, setNoteMode action`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
+
+### Planner Review
+
+(Filled by the Planner in review mode)
+
+**Decision:**
+**Reviewed on:**
+**Iteration:**
+**Reason:**
+**Next action:**

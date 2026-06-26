@@ -73,6 +73,10 @@ const es: Dictionary = {
       chordLabel: '◧ acorde',
       arpTip: 'Arpegia el acorde (notas en sucesión, duración por subdivisión).',
       arpLabel: '⋯ arpegio',
+      noteModeChordLabel: '♩ nota',
+      noteModeNoteLabel: '♩ nota',
+      noteModeTip:
+        'Modo nota: haz clic en un vértice del Tonnetz para añadir una nota individual en lugar de un acorde. Vuelve a hacer clic para regresar al modo acorde.',
       sendMarcoTitle: 'Enviar la clave + progresión al agente como marco armónico',
       sendMarcoLabel: '📨 marco',
       keyLabel: 'clave',
