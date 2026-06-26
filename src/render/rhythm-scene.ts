@@ -141,8 +141,9 @@ function rebuildRhythmGeo(state: SessionState): void {
       // Prototype line 1046: ang = -PI/2 + s/RSTEPS*PI*2 — now per-layer N
       const ang = -Math.PI / 2 + (s / N) * Math.PI * 2;
       polar.push({ x: cx + Math.cos(ang) * R, y: cy + Math.sin(ang) * R });
-      // Prototype line 1048: lin x uses (s+0.5)/N (centers step in its slot)
-      lin.push({ x: xL + ((s + 0.5) / N) * Wlin, y: yBase });
+      // Edge-to-edge distribution: step 0 at xL, step N-1 at xL+Wlin.
+      // All rows align at the same start/end X regardless of step count.
+      lin.push({ x: xL + (N > 1 ? s / (N - 1) : 0.5) * Wlin, y: yBase });
     }
 
     // Prototype line 1050–1051: labelPolar right of ring, labelLin left of row
