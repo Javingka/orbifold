@@ -69,6 +69,8 @@ import {
   clampBars,
   setNoteOffset,
   setNoteAttrs,
+  setChordPreset,
+  setChordOscillator,
 } from '../state/session.js';
 import { selectedSlotIdxStore } from '../state/selectedSlot.js';
 import type { Quality } from '../core/theory/chords.js';
@@ -704,23 +706,37 @@ function pNote(
 
 let _canvas: HTMLCanvasElement | null = null;
 
-// ── Pitch-offset DOM overlay (step 01.5) ─────────────────────────────────────
+// ── Pitch-offset / sound DOM overlay (step 01.5 / Fix C 2026-06-26) ──────────
 //
-// A small `+`/`-` button overlay that appears when a NoteSlot is hovered.
+// A small overlay that appears when a NoteSlot or Chord slot is hovered.
 // Implemented as an absolutely-positioned <div> mounted inside stageEl's parent.
-// This is a DOM element (not a PIXI or Canvas 2D primitive), consistent with the
-// spec requirement ("DOM overlay, not a PIXI object").
+// This is a DOM element (not a PIXI or Canvas 2D primitive).
+//
+// Content:
+//   NoteSlot: +/- octave buttons + sound <select> + gain <input>
+//   Chord:    sound <select> + gain <input> (no octave buttons)
+//
+// The +/- buttons are shown/hidden each frame based on slot type.
+// Only one overlay shown at a time (note and chord are mutually exclusive).
 //
 // Lifecycle:
-//   initPentagrama   → creates _offsetOverlay and appends to stageEl (relative container)
+//   initPentagrama    → creates _offsetOverlay and appends to stageEl (relative container)
 //   destroyPentagrama → removes _offsetOverlay from DOM
-//   paint()          → positions + shows/hides per frame based on _hoverSlotIdx + isNoteSlot
+//   paint()           → positions + shows/hides per frame based on _hoverSlotIdx + slot type
 //
 // The overlay intercepts pointer events; the canvas's pointer-events CSS is set to
 // 'auto' only when Pentagrama is visible, so the overlay only receives events then.
 let _offsetOverlay: HTMLDivElement | null = null;
-/** Index of the NoteSlot whose offset control is currently shown (−1 = hidden). */
+/** Index of the slot whose timbre control is currently shown (−1 = hidden). */
 let _offsetOverlaySlotIdx = -1;
+/** Type of the slot currently shown in the overlay. */
+let _offsetOverlaySlotType: 'note' | 'chord' = 'note';
+/** Reference to the minus/plus buttons (hidden for chord slots). */
+let _overlayMinus: HTMLButtonElement | null = null;
+let _overlayPlus: HTMLButtonElement | null = null;
+/** Reference to the sound select and gain input (shared by note + chord). */
+let _overlaySoundSel: HTMLSelectElement | null = null;
+let _overlayGainInput: HTMLInputElement | null = null;
 let _ctx: CanvasRenderingContext2D | null = null;
 let _dpr = 1;
 let _W = 0;
@@ -1095,33 +1111,57 @@ function paint(ts: DOMHighResTimeStamp): void {
     }
   });
 
-  // ── Pitch-offset overlay (step 01.5) ─────────────────────────────────────
-  // Show the +/- offset control when a NoteSlot is hovered (not selected or dragging).
-  // Position: horizontally centred on the slot, vertically just below the staff area.
-  // Hide immediately when the hovered slot changes or is no longer a NoteSlot.
+  // ── Slot timbre overlay (step 01.5 / Fix C 2026-06-26) ──────────────────────
+  // Show the shared overlay when a NoteSlot or Chord slot is hovered.
+  // NoteSlot: +/- buttons visible + sound + gain.
+  // Chord: +/- buttons hidden + sound + gain.
+  // Only one slot type shown at a time (note and chord are mutually exclusive).
   if (_offsetOverlay !== null) {
-    const hovNoteIdx =
+    const hovIdx =
       _hoverSlotIdx !== null &&
       !_resizeActive &&
       !_moveActive &&
-      _hoverSlotIdx < progression.length &&
-      isNoteSlot(progression[_hoverSlotIdx])
+      _hoverSlotIdx < progression.length
         ? _hoverSlotIdx
         : -1;
 
-    if (hovNoteIdx >= 0) {
-      const hovSlot = progression[hovNoteIdx];
-      if (hovSlot !== undefined) {
-        const ox = slotX(hovNoteIdx, progression);
-        const ow = slotW(hovSlot);
-        // Position below the staff (cy + ls*2 + margin) — overlay width estimated 56px
-        const overlayW = 56;
-        const overlayLeft = Math.round(ox + ow / 2 - overlayW / 2);
-        const overlayTop = Math.round(cy + ls * 2 + 4);
-        _offsetOverlay.style.left = `${overlayLeft}px`;
-        _offsetOverlay.style.top = `${overlayTop}px`;
-        _offsetOverlay.style.display = 'flex';
-        _offsetOverlaySlotIdx = hovNoteIdx;
+    const hovSlot = hovIdx >= 0 ? progression[hovIdx] : undefined;
+    const isNote = hovSlot !== undefined && isNoteSlot(hovSlot);
+    const isChord =
+      hovSlot !== undefined && !('isRest' in hovSlot) && !isNoteSlot(hovSlot);
+
+    if ((isNote || isChord) && hovSlot !== undefined) {
+      const ox = slotX(hovIdx, progression);
+      const ow = slotW(hovSlot);
+      const overlayLeft = Math.round(ox + ow / 2 - 60);
+      const overlayTop = Math.round(cy + ls * 2 + 4);
+      _offsetOverlay.style.left = `${overlayLeft}px`;
+      _offsetOverlay.style.top = `${overlayTop}px`;
+      _offsetOverlay.style.display = 'flex';
+      _offsetOverlaySlotIdx = hovIdx;
+      _offsetOverlaySlotType = isNote ? 'note' : 'chord';
+
+      // Show/hide octave buttons based on slot type.
+      if (_overlayMinus !== null) _overlayMinus.style.display = isNote ? '' : 'none';
+      if (_overlayPlus !== null) _overlayPlus.style.display = isNote ? '' : 'none';
+
+      // Sync soundSel value to current slot attrs each frame.
+      if (_overlaySoundSel !== null) {
+        let soundVal = '';
+        if (isNote) {
+          soundVal = (hovSlot as NoteSlot).instrument ?? '';
+        } else {
+          // Chord: prefer preset, then instrument, then ''.
+          const ch = hovSlot as Chord;
+          soundVal = ch.preset ?? ch.instrument ?? '';
+        }
+        if (_overlaySoundSel.value !== soundVal) _overlaySoundSel.value = soundVal;
+      }
+
+      // Sync gainInput value.
+      if (_overlayGainInput !== null) {
+        const g = String((hovSlot as { gain?: number }).gain ?? 0.6);
+        if (_overlayGainInput.value !== g) _overlayGainInput.value = g;
       }
     } else {
       _offsetOverlay.style.display = 'none';
@@ -1461,16 +1501,15 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
 
   stageEl.appendChild(_canvas);
 
-  // ── Pitch-offset + timbre DOM overlay (step 01.5 / post-phase-01 fixes 2026-06-26) ─
-  // Absolute-positioned <div> containing:
-  //   - +/- octave-offset buttons (step 01.5)
-  //   - sound <select> — melodic oscillators + instruments (Fix B: no percussion)
-  //   - gain <input type="number"> (0.0–1.2)
+  // ── Pitch-offset / timbre DOM overlay (step 01.5 / Fix B+C 2026-06-26) ─────
+  // Shared absolutely-positioned <div> for NoteSlot and Chord slot hover panels.
+  //   NoteSlot: +/- octave buttons + sound <select> + gain <input>
+  //   Chord:    sound <select> + gain <input> (no octave buttons — hidden via display:none)
+  // Only one panel shown at a time; mutually exclusive (paint() routes by slot type).
   // Mounted inside stageEl (position:relative); z-index:2 places it above the canvas.
-  // Initially hidden; paint() positions + shows/hides it each frame.
   {
     const ov = document.createElement('div');
-    ov.id = 'pentagrama-note-offset';
+    ov.id = 'pentagrama-slot-overlay';
     ov.style.cssText =
       'position:absolute;display:none;z-index:2;' +
       'background:rgba(10,11,18,0.85);border:1px solid rgba(138,160,255,0.45);' +
@@ -1491,8 +1530,7 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
       'padding:2px 4px;cursor:pointer;border-radius:4px;';
     plus.title = 'Raise pitch by one octave';
 
-    // Sound <select> — melodic instruments (Fix B: replaced percussion with melodic).
-    // Oscillators + named instruments; no percussion (bd/sd/hh…).
+    // Sound <select> — shared by NoteSlot and Chord (Fix B+C: melodic, not percussion).
     const soundSel = document.createElement('select');
     soundSel.style.cssText =
       'background:rgba(10,11,18,0.9);border:1px solid rgba(138,160,255,0.35);' +
@@ -1505,7 +1543,6 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
     noneOpt.textContent = '— (default)';
     soundSel.appendChild(noneOpt);
 
-    // Oscillator optgroup
     const oscGroup = document.createElement('optgroup');
     oscGroup.label = 'Oscillators';
     for (const [val, lbl] of [
@@ -1522,7 +1559,6 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
     }
     soundSel.appendChild(oscGroup);
 
-    // Instrument optgroup
     const instrGroup = document.createElement('optgroup');
     instrGroup.label = 'Instruments';
     for (const [val, lbl] of [
@@ -1550,6 +1586,7 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
       'width:46px;';
     gainInput.title = 'Gain (.gain) 0–1.2';
 
+    // ── Event handlers — dispatch based on _offsetOverlaySlotType ────────────
     minus.addEventListener('click', () => {
       if (_offsetOverlaySlotIdx < 0) return;
       const state = get(sessionStore);
@@ -1568,17 +1605,48 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
       }
     });
 
+    const PRESETS = new Set(['piano', 'guitar', 'synth-bass']);
+
     soundSel.addEventListener('change', () => {
       if (_offsetOverlaySlotIdx < 0) return;
       const value = soundSel.value;
-      setNoteAttrs(_offsetOverlaySlotIdx, { instrument: value !== '' ? value : undefined });
+      if (_offsetOverlaySlotType === 'note') {
+        setNoteAttrs(_offsetOverlaySlotIdx, { instrument: value !== '' ? value : undefined });
+      } else {
+        // Chord slot: mutual-exclusion between preset and oscillator (Fix C).
+        if (PRESETS.has(value)) {
+          setChordPreset(_offsetOverlaySlotIdx, value as 'piano' | 'guitar' | 'synth-bass');
+          // Clear instrument when a preset is selected (ADR 0019 D1/D2 mutual-exclusion).
+          setChordOscillator(_offsetOverlaySlotIdx, 'sawtooth');
+        } else {
+          // Oscillator selected — clear any preset.
+          const osc = value !== '' ? value : 'sawtooth';
+          setChordOscillator(_offsetOverlaySlotIdx, osc);
+          setChordPreset(_offsetOverlaySlotIdx, undefined);
+        }
+      }
     });
 
     gainInput.addEventListener('change', () => {
       if (_offsetOverlaySlotIdx < 0) return;
       const value = parseFloat(gainInput.value);
       if (!isNaN(value)) {
-        setNoteAttrs(_offsetOverlaySlotIdx, { gain: value });
+        if (_offsetOverlaySlotType === 'note') {
+          setNoteAttrs(_offsetOverlaySlotIdx, { gain: value });
+        } else {
+          // Chord gain — no dedicated action exists; update the store directly.
+          // (render-layer store write, same pattern as the ProgressionStrip does
+          //  for slot edits; no new core action needed for this Fix C scope.)
+          const idx = _offsetOverlaySlotIdx;
+          sessionStore.update((s) => {
+            const slot = s.harmony.progression[idx];
+            if (slot === undefined || 'isRest' in slot || isNoteSlot(slot)) return s;
+            const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+              i === idx ? { ...slot, gain: value } : ch
+            );
+            return { ...s, harmony: { ...s.harmony, progression } };
+          });
+        }
       }
     });
 
@@ -1589,6 +1657,10 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
     stageEl.appendChild(ov);
 
     _offsetOverlay = ov;
+    _overlayMinus = minus;
+    _overlayPlus = plus;
+    _overlaySoundSel = soundSel;
+    _overlayGainInput = gainInput;
   }
 
   // Initial size based on current container dimensions.
@@ -1642,11 +1714,15 @@ export function destroyPentagrama(): void {
   }
   _ctx = null;
 
-  // Remove pitch-offset DOM overlay (step 01.5, symmetric with initPentagrama).
+  // Remove slot timbre DOM overlay (step 01.5 / Fix C, symmetric with initPentagrama).
   if (_offsetOverlay !== null) {
     _offsetOverlay.remove();
     _offsetOverlay = null;
     _offsetOverlaySlotIdx = -1;
+    _overlayMinus = null;
+    _overlayPlus = null;
+    _overlaySoundSel = null;
+    _overlayGainInput = null;
   }
 
   // Reset interaction state so a subsequent initPentagrama starts clean.
