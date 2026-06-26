@@ -20,7 +20,9 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 ## Current initiative
 
-**Name:** (none — awaiting Pilot scoping)
+**Name:** `note-placement`
+
+**Phase 01** (complete, branch `note-placement/phase-01`, PR pending merge) — `NoteSlot` third slot type (`Chord | RestSlot | NoteSlot`), `SESSION_SCHEMA_VERSION` → 6, codegen `note("C4").s("triangle")…` via `resolveChordAttrs`, Tonnetz vertex click → note (spatial hit-test, no toggle), Pentagrama `pNote` paint + pitch-offset overlay, timbre attributes (`instrument`/`preset`/`gain`/`room`/`decay`/`attack`/`lpf`), floating sound panel on chord slots, unified sound selector in Header; 2069 tests. Docs: `docs/note-placement/`.
 
 **Previous initiatives:**
 
@@ -33,9 +35,9 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 **Deferred items available for next initiative:**
 
-- Note-level free placement on the Pentagrama (`NoteSlot` model, pitch-drag, Tonnetz vertex→single note) — deferred from orbifold-v2 Phase 10.
 - Per-chord `lpf`/`lpq` direct user slider (D-3) — deferred from harmonic-rhythm-improvements Phase 01 triage.
 - Custom sample hosting for 10 remaining sampleMap fallbacks — deferred from authentic-groove.
+- Agent `notes` schema extension (NoteSlot support for autopilot/agent) — deferred from note-placement Phase 01 (OD-3 = Option B).
 
 ## Project-specific conventions
 
