@@ -44,7 +44,9 @@
     addEmptyLayer,
     previewEuclid,
     hushAll,
+    requeueLive,
   } from '../state/session.js';
+  import StepEditor from './StepEditor.svelte';
   import { selectedSlotIdxStore, soundIntentStore } from '../state/selectedSlot.js';
 
   // Phase 11 step 11.3: i18n store + language selector (ADR 0017 D1, D3, OQ-5).
@@ -135,6 +137,23 @@
 
   function handleAddEmpty(): void {
     addEmptyLayer(euclidSound);
+  }
+
+  // ── Step editor toggle (Phase 09 step 09.2) ───────────────────────────────
+  // Toggles a single step in a layer. Locked layers are guarded (immutable).
+  // Clears euclid when editing steps directly (consistent with rhythm-scene.ts).
+  function handleStepToggle(layerIdx: number, stepIdx: number): void {
+    sessionStore.update((s) => {
+      const layer = s.rhythm.layers[layerIdx];
+      if (!layer || layer.locked) return s;  // guard: locked layers immutable
+      const newSteps = [...layer.steps];
+      newSteps[stepIdx] = newSteps[stepIdx] === 1 ? 0 : 1;
+      // Clear euclid when editing steps directly (consistent with existing behavior)
+      const newLayers = [...s.rhythm.layers];
+      newLayers[layerIdx] = { ...layer, steps: newSteps, euclid: undefined };
+      return { ...s, rhythm: { ...s.rhythm, layers: newLayers } };
+    });
+    requeueLive();
   }
 
   // ── Language selector (Phase 11 step 11.3, ADR 0017 OQ-5) ────────────────
@@ -425,6 +444,16 @@
         </button>
 
         <span class="r-sep">│</span>
+
+        <!--
+        Step editor grid: one row per layer with N toggle buttons (Phase 09 step 09.2).
+        Shown only when there are layers. Adapts to 7/12/16-step recipes automatically.
+        Locked layers show disabled buttons (cultural signature protection).
+      -->
+        {#if $sessionStore.rhythm.layers.length > 0}
+          <StepEditor layers={$sessionStore.rhythm.layers} onToggle={handleStepToggle} />
+          <span class="r-sep">│</span>
+        {/if}
 
         <!--
         Euclidean section header. Prototype line 429.
