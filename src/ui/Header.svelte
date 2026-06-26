@@ -437,15 +437,26 @@
         Sound select. Prototype lines 430–434.
       -->
         <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')}>
-          <option value="bd">bd</option>
-          <option value="sd">sd</option>
-          <option value="hh" selected>hh</option>
-          <option value="oh">oh</option>
-          <option value="cp">cp</option>
-          <option value="rim">rim</option>
-          <option value="lt">lt</option>
-          <option value="mt">mt</option>
-          <option value="ht">ht</option>
+          <optgroup label="Drum kit">
+            <option value="bd">bd</option>
+            <option value="sd">sd</option>
+            <option value="hh" selected>hh</option>
+            <option value="oh">oh</option>
+            <option value="cp">cp</option>
+            <option value="rim">rim</option>
+            <option value="lt">lt</option>
+            <option value="mt">mt</option>
+            <option value="ht">ht</option>
+          </optgroup>
+          <optgroup label="Percussion">
+            <option value="conga">conga</option>
+            <option value="cajon">cajon</option>
+            <option value="wood">wood</option>
+            <option value="shaker">shaker</option>
+            <option value="cb">cb</option>
+            <option value="perc">perc</option>
+            <option value="hand">hand</option>
+          </optgroup>
         </select>
 
         <!--

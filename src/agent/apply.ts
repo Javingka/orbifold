@@ -37,7 +37,11 @@ function clampi(v: number, a: number, b: number): number {
 }
 
 /** Validated sound names (prototype line 1670). */
-const SK_SOUNDS: readonly string[] = ['bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht'];
+const SK_SOUNDS: readonly string[] = [
+  'bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht',
+  'conga', 'cajon', 'wood', 'shaker',
+  'cb', 'perc', 'hand',
+];
 
 /** Valid quality names. */
 const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug'];

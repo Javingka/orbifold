@@ -6,7 +6,10 @@
  * Drum-machine sound names supported by the app.
  * Matches the prototype's implicit set used in the UI.
  */
-export type Sound = 'bd' | 'sd' | 'hh' | 'oh' | 'cp' | 'rim' | 'lt' | 'mt' | 'ht';
+export type Sound =
+  | 'bd' | 'sd' | 'hh' | 'oh' | 'cp' | 'rim' | 'lt' | 'mt' | 'ht'  // Dirt-Samples standard
+  | 'conga' | 'cajon' | 'wood' | 'shaker'                             // FreePats CC0 (local, Phase 04)
+  | 'cb' | 'perc' | 'hand';                                           // Additional Dirt-Samples
 
 /**
  * A single rhythm layer: a named drum sound with either explicit per-step

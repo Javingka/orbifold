@@ -7,6 +7,7 @@
 
 import { AgentOutputSchema } from '../../agent/schema.js';
 import type { AgentOutput } from '../../agent/schema.js';
+import type { Sound } from '../rhythm/layers.js';
 import { getRhythmById, getHarmonyById } from './query.js';
 import { RHYTHM_HARMONY_RECIPES, type MusicalRecipe } from './rhythm-harmony-recipes.js';
 import { HARMONY_QUALITIES, type HarmonyQuality } from './rhythm-catalog.js';
@@ -81,7 +82,7 @@ export interface RecipeEngineOptions {
 const LAYER_SOUNDS = ['bd', 'hh', 'sd', 'oh', 'cp', 'rim'] as const;
 
 /** Valid SK_SOUNDS values from AgentOutputSchema (for type safety in sound lookup). */
-type SkSound = 'bd' | 'sd' | 'hh' | 'oh' | 'cp' | 'rim' | 'lt' | 'mt' | 'ht';
+type SkSound = Sound; // re-use the full Sound type from layers.ts
 
 function soundForIndex(index: number): SkSound {
   const name = LAYER_SOUNDS[index] ?? 'bd';
