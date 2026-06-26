@@ -497,18 +497,6 @@
         <span class="r-sep">│</span>
 
         <!--
-        Euclid preview: shows the pattern about to be added. Appears when the user
-        changes any euclid control; disappears (with a fly-down animation) when "+"
-        is pressed. Not a mirror of existing layers — those are visible in the canvas.
-      -->
-        {#if showPreview}
-          <div class="preview-wrap" class:preview-flying={isFlying}>
-            <StepEditor layers={[previewLayer]} onToggle={handlePreviewStepToggle} />
-          </div>
-          <span class="r-sep">│</span>
-        {/if}
-
-        <!--
         Euclidean section header. Prototype line 429.
       -->
         <span data-tip={$t('header.rhythm.euclidSectionTip')}>
@@ -831,6 +819,19 @@
     keyBox span (line 394) — deferred.
   -->
 </header>
+
+<!--
+  Euclid preview panel — fixed position, outside header flex flow.
+  Appears in the top-right when the user moves any euclid control.
+  Disappears (fly-down animation) when "+" is pressed.
+  Fixed positioning means it never causes layout shifts in the header.
+-->
+{#if showPreview}
+  <div class="preview-floating" class:preview-flying={isFlying}>
+    <span class="preview-label">preview</span>
+    <StepEditor layers={[previewLayer]} onToggle={handlePreviewStepToggle} />
+  </div>
+{/if}
 
 <style>
   /*
@@ -1215,15 +1216,33 @@
     font-size: 11px;
   }
 
-  /* Euclid preview widget — slides down and fades when "+" is pressed */
-  .preview-wrap {
+  /* Euclid preview panel — fixed overlay, never in the header flex flow */
+  .preview-floating {
+    position: fixed;
+    right: 20px;
+    top: 64px; /* just below the header */
+    background: rgba(10, 13, 25, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 8px 12px 10px;
+    z-index: 8; /* above canvas (z:0), below agent panel (z:7 → raise to 8) */
     transition: opacity 0.28s ease-in, transform 0.28s ease-in;
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-  .preview-wrap.preview-flying {
+  .preview-floating.preview-flying {
     opacity: 0;
-    transform: translateY(44px) scale(0.88);
+    transform: translateY(40px) scale(0.88);
     pointer-events: none;
+  }
+  .preview-label {
+    display: block;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.35);
+    margin-bottom: 4px;
   }
 </style>
