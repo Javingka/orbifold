@@ -97,6 +97,12 @@
   // that would be added, and disappears (with a fly animation) when "+" is pressed.
   let showPreview = false;
   let isFlying = false;
+  let isDismissing = false;
+
+  function dismissPreview(): void {
+    isDismissing = true;
+    setTimeout(() => { showPreview = false; isDismissing = false; }, 200);
+  }
   let previewLayer: RhythmLayer = {
     sound: 'hh' as RhythmLayer['sound'],
     steps: rotate(bjorklund(3, 8), 0),
@@ -821,15 +827,16 @@
 </header>
 
 <!--
-  Euclid preview panel — fixed position, outside header flex flow.
-  Appears in the top-right when the user moves any euclid control.
-  Disappears (fly-down animation) when "+" is pressed.
-  Fixed positioning means it never causes layout shifts in the header.
+  Euclid preview bar — sits immediately below the header in normal document flow.
+  Appears when the user moves any euclid control; disappears when "+" is pressed
+  (fly-down animation) or when "×" is clicked (fade-up dismiss).
+  Being in normal flow means it never shifts the header controls.
 -->
 {#if showPreview}
-  <div class="preview-floating" class:preview-flying={isFlying}>
+  <div class="preview-bar" class:preview-flying={isFlying} class:preview-dismissing={isDismissing}>
     <span class="preview-label">preview</span>
     <StepEditor layers={[previewLayer]} onToggle={handlePreviewStepToggle} />
+    <button class="preview-close" title="Descartar preview" on:click={dismissPreview}>×</button>
   </div>
 {/if}
 
@@ -1216,33 +1223,57 @@
     font-size: 11px;
   }
 
-  /* Euclid preview panel — fixed overlay, never in the header flex flow */
-  .preview-floating {
-    position: fixed;
-    right: 20px;
-    top: 64px; /* just below the header */
-    background: rgba(10, 13, 25, 0.88);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 8px 12px 10px;
-    z-index: 8; /* above canvas (z:0), below agent panel (z:7 → raise to 8) */
+  /* Euclid preview bar — flows below the header, never inside it */
+  .preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 5px 16px 6px;
+    background: rgba(10, 13, 25, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    box-sizing: border-box;
     transition: opacity 0.28s ease-in, transform 0.28s ease-in;
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
-  .preview-floating.preview-flying {
+  /* "+" pressed — fly toward canvas */
+  .preview-bar.preview-flying {
     opacity: 0;
-    transform: translateY(40px) scale(0.88);
+    transform: translateY(36px) scale(0.94);
+    pointer-events: none;
+  }
+  /* "×" pressed — slide up and fade */
+  .preview-bar.preview-dismissing {
+    opacity: 0;
+    transform: translateY(-8px);
     pointer-events: none;
   }
   .preview-label {
-    display: block;
     font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .preview-close {
+    margin-left: auto;
+    flex-shrink: 0;
+    background: none;
+    border: none;
     color: rgba(255, 255, 255, 0.35);
-    margin-bottom: 4px;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .preview-close:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.08);
   }
 </style>
