@@ -757,7 +757,60 @@ Phase 01 complete. The Planner should write the phase-completion entry. Open ite
 - F2-8: `pnpm lint` exits 0.
 - F2-9: `pnpm test` — 43 test files, 2062 tests pass (2056 + 6 new).
 
-### Final quality gate
+### Final quality gate (post-Fix-2)
+
+| Command | Result |
+|---|---|
+| `pnpm test` | 43 files, **2062 tests** pass |
+| `pnpm exec tsc --noEmit` | Exit 0 (clean) |
+| `pnpm lint` | Exit 0 (clean) |
+| `pnpm build` | Exit 0 — pre-existing chunk-size warning, unchanged |
+
+---
+
+## Post-phase fixes (2026-06-26) — UI/UX corrections (Fix A–D)
+
+**Pilot authorization:** Verbal, same session.
+**Commits:** `c9d81e8`, `2531c73`, `617c481`, `eb94703` (branch `note-placement/phase-01`)
+
+### Fix A — Audio preview when a Tonnetz vertex is clicked
+
+**Rationale:** Clicking a Tonnetz vertex added a NoteSlot but gave no audio feedback. The user did not know which note was added.
+
+**Changes:**
+- `src/state/session.ts`: Added `NOTE_NAMES` import from `../core/theory/pitch.js`. Added exported `playNote(rootPc, octaveOffset, instrument?)` function — mirrors `playChord` pattern: derives note name, builds `note("X")` Strudel code, calls `getAudio().then(a => a.runNow(code))`, sets `nowPlaying` to `'♩ <noteName>'` with source `'preview'`, auto-stops after one cycle via `setTimeout` with guard on source.
+- `src/render/tonnetz-scene.ts`: Added `playNote` to the `session.js` import. Added `playNote(rootPc, 0)` call in `pickNote()` after `addNote(rootPc)`.
+
+**Acceptance:** After clicking a Tonnetz vertex, user hears a one-cycle note preview; `nowPlaying.label` shows `'♩ C4'` (or the appropriate note name). Preview stops after one cycle. Chord click behavior unchanged.
+
+### Fix B — Melodic instruments in NoteSlot overlay
+
+**Rationale:** The NoteSlot hover overlay `<select>` listed percussion samples (bd, sd, hh…). NoteSlots are melodic; percussion options were confusing and non-functional.
+
+**Changes:**
+- `src/render/pentagrama-scene.ts`: Replaced the 16-item `NOTE_SOUNDS` percussion array with `<optgroup>` structure — Oscillators (sawtooth, sine, square, triangle, pink) and Instruments (piano, guitar, synth-bass). No percussion sounds. Handler still calls `setNoteAttrs`. Updated comment block.
+
+**Acceptance:** NoteSlot overlay `<select>` shows only melodic options. No `bd`/`sd`/`hh` etc. appear. `tsc --noEmit` clean.
+
+### Fix C — Floating sound panel for chord slots in the Pentagrama
+
+**Rationale:** Hovering a chord slot showed no inline controls. Users had to navigate to the Header to change sound.
+
+**Changes:**
+- `src/render/pentagrama-scene.ts`: Extended the single shared overlay to also appear for chord slots on hover (previously only NoteSlots). Added `setChordPreset`, `setChordOscillator` imports. Added module-level refs `_overlayMinus`, `_overlayPlus`, `_overlaySoundSel`, `_overlayGainInput` for per-frame sync. Extended `paint()` overlay section: shows overlay for both `isNote` and `isChord` hovered slots; hides `−`/`+` buttons for chord slots. Chord sound handler implements preset/oscillator mutual-exclusion: preset selection calls `setChordPreset` + `setChordOscillator('sawtooth')`; oscillator selection calls `setChordOscillator` + `setChordPreset(undefined)`. Chord gain updates the store directly (no dedicated `setChordGain` action exists). Updated `destroyPentagrama` to null the new refs.
+
+**Acceptance:** Hovering a chord slot shows a floating panel with sound selector + gain input. Changes update the chord in the progression. NoteSlot overlay behavior unchanged.
+
+### Fix D — Unified Oscillator + Preset selector in the Header
+
+**Rationale:** Two separate selectors (Oscillator + Preset) confused users — they are mutually exclusive in practice (a preset overrides the oscillator in codegen).
+
+**Changes:**
+- `src/ui/Header.svelte`: Removed `displayInstrument`, `displayPreset`, `handleOscillatorChange`, `handlePresetChange`. Added `PRESETS` constant, `displaySound` reactive variable (prefer `slot.preset` over `slot.instrument`, fall back to intent store), `handleSoundChange` function with full mutual-exclusion logic. Replaced two `<label class="sound-field">` blocks with one `<select id="soundSelect">` with `<optgroup label>` sections. Used existing i18n keys for group labels (`header.harmony.oscillatorLabel`, `header.harmony.presetLabel`) and option labels. No new i18n keys added.
+
+**Acceptance:** Header shows one sound selector with optgroup sections. Selecting a preset clears any oscillator intent (and slot instrument if a chord is selected). Selecting an oscillator clears any preset intent. `tsc --noEmit` clean. `pnpm lint` clean.
+
+### Final quality gate (post-Fix-A–D)
 
 | Command | Result |
 |---|---|
