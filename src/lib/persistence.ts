@@ -127,6 +127,8 @@ const SavedNoteSlotSchema = z.object({
   decay: z.number().min(0).optional(),
   attack: z.number().min(0).optional(),
   lpf: z.number().min(0).optional(),
+  /** Named preset bundle — same tokens as Chord.preset; resolved via resolveChordAttrs in codegen. */
+  preset: z.string().optional(),
 });
 
 const SavedHarmonySchema = z.object({
@@ -347,15 +349,22 @@ export function serializeSession(state: SessionState): SavedSession {
       progression: state.harmony.progression.map((slot) => {
         // note-placement Phase 01: narrow on isNote discriminant first.
         if ('isNote' in slot && slot.isNote === true) {
-          // NoteSlot — serialize discriminant, rootPc, octaveOffset, and optional bars.
-          return slot.bars !== undefined
-            ? {
-                isNote: true as const,
-                rootPc: slot.rootPc,
-                octaveOffset: slot.octaveOffset,
-                bars: slot.bars,
-              }
-            : { isNote: true as const, rootPc: slot.rootPc, octaveOffset: slot.octaveOffset };
+          // NoteSlot — serialize all persisted fields (discriminant, pitch, bars, timbre).
+          // Timbre attributes added in post-phase-01 fix (2026-06-26); preset added in
+          // NoteSlot preset bug fix. Absent fields are omitted (additive schema).
+          return {
+            isNote: true as const,
+            rootPc: slot.rootPc,
+            octaveOffset: slot.octaveOffset,
+            ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+            ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+            ...(slot.gain !== undefined ? { gain: slot.gain } : {}),
+            ...(slot.room !== undefined ? { room: slot.room } : {}),
+            ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
+            ...(slot.attack !== undefined ? { attack: slot.attack } : {}),
+            ...(slot.lpf !== undefined ? { lpf: slot.lpf } : {}),
+            ...(slot.preset !== undefined ? { preset: slot.preset } : {}),
+          };
         }
         // ADR 0012 D4: narrow on isRest discriminant.
         if ('isRest' in slot) {
@@ -459,14 +468,26 @@ export function deserializeSession(
       // note-placement Phase 01: also narrow on isNote for NoteSlot.
       progression: saved.harmony.progression.map((slot) => {
         if ('isNote' in slot && slot.isNote === true) {
-          return slot.bars !== undefined
-            ? {
-                isNote: true as const,
-                rootPc: slot.rootPc,
-                octaveOffset: slot.octaveOffset,
-                bars: slot.bars,
-              }
-            : { isNote: true as const, rootPc: slot.rootPc, octaveOffset: slot.octaveOffset };
+          // NoteSlot — restore pitch fields plus all optional timbre attributes.
+          return {
+            isNote: true as const,
+            rootPc: slot.rootPc,
+            octaveOffset: slot.octaveOffset,
+            ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+            ...('instrument' in slot && slot.instrument !== undefined
+              ? { instrument: slot.instrument as string }
+              : {}),
+            ...('gain' in slot && slot.gain !== undefined ? { gain: slot.gain as number } : {}),
+            ...('room' in slot && slot.room !== undefined ? { room: slot.room as number } : {}),
+            ...('decay' in slot && slot.decay !== undefined ? { decay: slot.decay as number } : {}),
+            ...('attack' in slot && slot.attack !== undefined
+              ? { attack: slot.attack as number }
+              : {}),
+            ...('lpf' in slot && slot.lpf !== undefined ? { lpf: slot.lpf as number } : {}),
+            ...('preset' in slot && slot.preset !== undefined
+              ? { preset: slot.preset as string }
+              : {}),
+          };
         }
         if ('isRest' in slot) {
           return slot.bars !== undefined

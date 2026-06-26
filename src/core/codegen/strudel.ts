@@ -33,6 +33,7 @@ type HarmonySlotInput =
       rootPc: number;
       octaveOffset: number;
       bars?: number;
+      preset?: string;
       instrument?: string;
       gain?: number;
       room?: number;
@@ -225,33 +226,53 @@ export function melodyLine(
     }
     if ('isNote' in slot) {
       // NoteSlot — note-placement Phase 01 step 01.3 / post-phase-01 fix 2026-06-26.
+      // NoteSlot preset bug fix: preset bundles now resolve through resolveChordAttrs,
+      // exactly the same pattern as chord slots in the arrange() path.
       //
       // Derives the note name using OD-1 Option A:
       //   noteName = NOTE_NAMES[rootPc] + (octave + octaveOffset)
       // NOTE_NAMES uses sharp spellings (e.g. "C#", "F#") consistent with pitch.ts.
       //
-      // Emitted capabilities (Phase 01 + post-phase-01 fix):
+      // Emitted capabilities:
       //   - pitch:      note("C4") — derived from rootPc + (octave + octaveOffset)
-      //   - instrument: .s("piano") — from slot.instrument when present
-      //   - gain:       .gain(n) — from slot.gain when present
-      //   - room:       .room(n) — from slot.room when present
-      //   - decay:      .decay(n) — from slot.decay when present
-      //   - attack:     .attack(n) — from slot.attack when present
-      //   - lpf:        .lpf(n) — from slot.lpf when present
+      //   - instrument: .s("triangle") — from resolveChordAttrs (preset or raw instrument)
+      //   - lpf:        .lpf(n) — always emitted (resolveChordAttrs provides a default)
+      //   - room:       .room(n) — always emitted (resolveChordAttrs provides a default)
+      //   - attack:     .attack(n) — emitted when preset or slot provides a value
+      //   - decay:      .decay(n) — emitted when preset or slot provides a value
+      //   - sustain:    .sustain(n) — emitted when preset provides a value
+      //   - release:    .release(n) — emitted when preset provides a value
+      //   - gain:       .gain(n) — from slot.gain when present (not part of resolveChordAttrs)
       //   - duration:   .slow(bars) when bars !== 1 (cancels arrange()'s internal .fast)
+      //
+      // The slot structurally satisfies ChordAttrs (has preset?, instrument?, lpf?, room?,
+      // decay?, attack?). resolveChordAttrs applies the per-attribute explicit-wins rule
+      // (ADR 0019 D3): explicit slot field → preset value → hardcoded default.
       //
       // Reserved for future phases:
       //   - mini-notation: note("C4 E4 G4") — multiple pitches in one slot
+      //   - lpenv/lpa/lpd/lpq — filter envelope (not yet on NoteSlot interface)
       const noteOctave = octave + slot.octaveOffset;
       const noteName = `${NOTE_NAMES[slot.rootPc] ?? 'C'}${noteOctave}`;
-      // Build attribute chain — each field is only emitted when non-null.
-      let chain = `note("${noteName}")`;
-      if (slot.instrument != null) chain += `.s("${slot.instrument}")`;
+      // Resolve sound attributes through the preset system (same as chord slots).
+      // roomDefault=0.3 matches the melodyLine arrange-path baseline.
+      const noteAttrs: ChordAttrs = {
+        preset: slot.preset,
+        instrument: slot.instrument,
+        lpf: slot.lpf,
+        room: slot.room,
+        decay: slot.decay,
+        attack: slot.attack,
+      };
+      const resolved = resolveChordAttrs(noteAttrs, 0.3);
+      const attackStr = resolved.attack !== undefined ? `.attack(${resolved.attack})` : '';
+      const decayStr = resolved.decay !== undefined ? `.decay(${resolved.decay})` : '';
+      const sustainStr = resolved.sustain !== undefined ? `.sustain(${resolved.sustain})` : '';
+      const releaseStr = resolved.release !== undefined ? `.release(${resolved.release})` : '';
+      // Build chain: note → .s() → .lpf() → optional .gain() → .room() → envelope
+      let chain = `note("${noteName}").s("${resolved.instrument}").lpf(${resolved.lpf})`;
       if (slot.gain != null) chain += `.gain(${slot.gain})`;
-      if (slot.room != null) chain += `.room(${slot.room})`;
-      if (slot.decay != null) chain += `.decay(${slot.decay})`;
-      if (slot.attack != null) chain += `.attack(${slot.attack})`;
-      if (slot.lpf != null) chain += `.lpf(${slot.lpf})`;
+      chain += `.room(${resolved.room})${attackStr}${decayStr}${sustainStr}${releaseStr}`;
       // .slow(numCycles) cancels arrange()'s internal .fast(numCycles) so the note plays
       // exactly once across its span (same invariant as chord slots — ADR 0016).
       if (numCycles !== 1) chain += `.slow(${numCycles})`;

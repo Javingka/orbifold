@@ -60,6 +60,7 @@ import {
   rhythmToStrudel,
   buildSession,
 } from '../core/codegen/strudel.js';
+import { resolveChordAttrs } from '../core/codegen/presets.js';
 import { chordLabel } from '../core/theory/chords.js';
 import { NOTE_NAMES } from '../core/theory/pitch.js';
 import {
@@ -299,6 +300,13 @@ export interface NoteSlot {
    * Low-pass filter cutoff in Hz. Emitted as .lpf(n).
    */
   lpf?: number;
+  /**
+   * Named preset bundle (same tokens as Chord.preset: 'piano' | 'guitar' | 'synth-bass').
+   * Mutually exclusive with `instrument` — setting preset clears instrument and vice versa.
+   * Resolved via resolveChordAttrs in melodyLine codegen and playNote preview.
+   * Post-fix 2026-06-26 (NoteSlot preset bug fix).
+   */
+  preset?: string;
 }
 
 /**
@@ -982,18 +990,36 @@ export function playChord(
  * Follows the exact pattern of playChord: one cycle auto-stop with a guard
  * on source === 'preview'.
  *
+ * Uses resolveChordAttrs so that preset bundles ('piano', 'guitar', 'synth-bass')
+ * are correctly expanded to their oscillator + envelope chains in the preview.
+ *
  * note-placement initiative — Fix A (2026-06-26).
+ * Post-fix 2026-06-26: added preset? param; preview uses resolveChordAttrs.
  *
  * @param rootPc       - Pitch class 0–11.
  * @param octaveOffset - Offset relative to HarmonyState.octave (0 = same octave).
- * @param instrument   - Optional Strudel instrument/waveform name (e.g. 'piano').
+ * @param instrument   - Optional Strudel oscillator/waveform name (e.g. 'sawtooth').
+ * @param preset       - Optional named preset bundle ('piano' | 'guitar' | 'synth-bass').
+ *                       When set, resolveChordAttrs expands it to instrument + envelope.
+ *                       Mutually exclusive with instrument — preset wins when both present.
  */
-export function playNote(rootPc: number, octaveOffset: number, instrument?: string): void {
+export function playNote(
+  rootPc: number,
+  octaveOffset: number,
+  instrument?: string,
+  preset?: string
+): void {
   const state = get(sessionStore);
   const octave = state.harmony.octave;
   const noteName = NOTE_NAMES[rootPc] + String(octave + octaveOffset);
-  let code = `note("${noteName}")`;
-  if (instrument) code += `.s("${instrument}")`;
+  // Resolve through resolveChordAttrs so preset bundles expand to their full chains.
+  // roomDefault=0.3 matches the melodyLine arrange path (byte-consistent).
+  const resolved = resolveChordAttrs({ preset, instrument }, 0.3);
+  let code = `note("${noteName}").s("${resolved.instrument}").lpf(${resolved.lpf}).room(${resolved.room})`;
+  if (resolved.attack != null) code += `.attack(${resolved.attack})`;
+  if (resolved.decay != null) code += `.decay(${resolved.decay})`;
+  if (resolved.sustain != null) code += `.sustain(${resolved.sustain})`;
+  if (resolved.release != null) code += `.release(${resolved.release})`;
   const cycleDurationMs = Math.round(240000 / state.bpm);
   setNowPlaying('♩ ' + noteName, 'preview');
   void getAudio().then((a) =>
@@ -1535,7 +1561,9 @@ export function setNoteOffset(index: number, octaveOffset: number): void {
  */
 export function setNoteAttrs(
   idx: number,
-  attrs: Partial<Pick<NoteSlot, 'instrument' | 'gain' | 'room' | 'decay' | 'attack' | 'lpf'>>
+  attrs: Partial<
+    Pick<NoteSlot, 'instrument' | 'gain' | 'room' | 'decay' | 'attack' | 'lpf' | 'preset'>
+  >
 ): void {
   sessionStore.update((s) => {
     const slot = s.harmony.progression[idx];
@@ -1984,14 +2012,34 @@ export function applyLoadedSession(saved: SavedSession): void {
       // note-placement Phase 01: also narrow on isNote for NoteSlot.
       progression: saved.harmony.progression.map((slot): ProgressionSlot => {
         if ('isNote' in slot && slot.isNote === true) {
-          // NoteSlot — restore rootPc, octaveOffset, and optional bars.
+          // NoteSlot — restore pitch fields plus all optional timbre attributes.
+          // Timbre fields (instrument, gain, room, decay, attack, lpf, preset) were
+          // added post-phase-01; absent in older blobs → undefined → not set.
+          const s = slot as {
+            rootPc: number;
+            octaveOffset: number;
+            bars?: number;
+            instrument?: string;
+            gain?: number;
+            room?: number;
+            decay?: number;
+            attack?: number;
+            lpf?: number;
+            preset?: string;
+          };
           const noteSlot: NoteSlot = {
             isNote: true as const,
-            rootPc: slot.rootPc,
-            octaveOffset: (slot as { octaveOffset: number }).octaveOffset,
+            rootPc: s.rootPc,
+            octaveOffset: s.octaveOffset,
           };
-          if ((slot as { bars?: number }).bars !== undefined)
-            noteSlot.bars = (slot as { bars: number }).bars;
+          if (s.bars !== undefined) noteSlot.bars = s.bars;
+          if (s.instrument !== undefined) noteSlot.instrument = s.instrument;
+          if (s.gain !== undefined) noteSlot.gain = s.gain;
+          if (s.room !== undefined) noteSlot.room = s.room;
+          if (s.decay !== undefined) noteSlot.decay = s.decay;
+          if (s.attack !== undefined) noteSlot.attack = s.attack;
+          if (s.lpf !== undefined) noteSlot.lpf = s.lpf;
+          if (s.preset !== undefined) noteSlot.preset = s.preset;
           return noteSlot;
         }
         if ('isRest' in slot) {

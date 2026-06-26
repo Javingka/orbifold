@@ -1145,7 +1145,10 @@ function paint(ts: DOMHighResTimeStamp): void {
       if (_overlaySoundSel !== null) {
         let soundVal = '';
         if (isNote) {
-          soundVal = (hovSlot as NoteSlot).instrument ?? '';
+          // NoteSlot: prefer preset (bundle token), then instrument (raw oscillator).
+          // This mirrors the mutual-exclusion in the soundSel change handler.
+          const note = hovSlot as NoteSlot;
+          soundVal = note.preset ?? note.instrument ?? '';
         } else {
           // Chord: prefer preset, then instrument, then ''.
           const ch = hovSlot as Chord;
@@ -1601,16 +1604,25 @@ export function initPentagrama(stageEl: HTMLDivElement): void {
       }
     });
 
-    const PRESETS = new Set(['piano', 'guitar', 'synth-bass']);
+    const PRESET_NAMES_SET = new Set(['piano', 'guitar', 'synth-bass']);
 
     soundSel.addEventListener('change', () => {
       if (_offsetOverlaySlotIdx < 0) return;
       const value = soundSel.value;
       if (_offsetOverlaySlotType === 'note') {
-        setNoteAttrs(_offsetOverlaySlotIdx, { instrument: value !== '' ? value : undefined });
+        // NoteSlot: mutual-exclusion between preset and instrument (NoteSlot preset bug fix).
+        // 'piano', 'guitar', 'synth-bass' are preset tokens → resolve via resolveChordAttrs.
+        // All other non-empty values are raw oscillator/instrument names.
+        if (PRESET_NAMES_SET.has(value)) {
+          setNoteAttrs(_offsetOverlaySlotIdx, { preset: value, instrument: undefined });
+        } else if (value !== '') {
+          setNoteAttrs(_offsetOverlaySlotIdx, { instrument: value, preset: undefined });
+        } else {
+          setNoteAttrs(_offsetOverlaySlotIdx, { instrument: undefined, preset: undefined });
+        }
       } else {
         // Chord slot: mutual-exclusion between preset and oscillator (Fix C).
-        if (PRESETS.has(value)) {
+        if (PRESET_NAMES_SET.has(value)) {
           setChordPreset(_offsetOverlaySlotIdx, value as 'piano' | 'guitar' | 'synth-bass');
           // Clear instrument when a preset is selected (ADR 0019 D1/D2 mutual-exclusion).
           setChordOscillator(_offsetOverlaySlotIdx, 'sawtooth');
