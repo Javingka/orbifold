@@ -70,7 +70,19 @@ export interface RestSnapshotEntry {
   bars?: number;
 }
 
-export type ProgressionSnapshotEntry = ChordSnapshotEntry | RestSnapshotEntry;
+/**
+ * Snapshot entry for a NoteSlot.
+ * Mirrors NoteSlot (note-placement Phase 01 — OD-1 resolution):
+ * `{ isNote: true; rootPc; octaveOffset; bars? }`.
+ */
+export interface NoteSnapshotEntry {
+  isNote: true;
+  rootPc: number;
+  octaveOffset: number;
+  bars?: number;
+}
+
+export type ProgressionSnapshotEntry = ChordSnapshotEntry | RestSnapshotEntry | NoteSnapshotEntry;
 
 export interface ArmoniaSnapshot {
   type: 'armonia';
@@ -139,6 +151,16 @@ export function captureGrooveSnapshot(state: SessionState): GrooveSnapshot {
  */
 export function captureArmoniaSnapshot(state: SessionState): ArmoniaSnapshot {
   const progression: ProgressionSnapshotEntry[] = state.harmony.progression.map((slot) => {
+    if ('isNote' in slot && slot.isNote === true) {
+      // NoteSlot — capture discriminant, rootPc, octaveOffset, and optional bars.
+      const note: NoteSnapshotEntry = {
+        isNote: true,
+        rootPc: (slot as import('../../state/session.js').NoteSlot).rootPc,
+        octaveOffset: (slot as import('../../state/session.js').NoteSlot).octaveOffset,
+      };
+      if (slot.bars !== undefined) note.bars = slot.bars;
+      return note;
+    }
     if ('isRest' in slot && slot.isRest) {
       const rest: RestSnapshotEntry = { isRest: true };
       if (slot.bars !== undefined) rest.bars = slot.bars;
@@ -239,6 +261,17 @@ export function restoreGrooveSnapshot(snap: GrooveSnapshot): Partial<SessionStat
 export function restoreArmoniaSnapshot(snap: ArmoniaSnapshot): Partial<SessionState> {
   const progression: import('../../state/session.js').ProgressionSlot[] = snap.progression.map(
     (entry) => {
+      if ('isNote' in entry && entry.isNote === true) {
+        // NoteSlot — restore from NoteSnapshotEntry.
+        const e = entry as NoteSnapshotEntry;
+        const note: import('../../state/session.js').NoteSlot = {
+          isNote: true,
+          rootPc: e.rootPc,
+          octaveOffset: e.octaveOffset,
+        };
+        if (e.bars !== undefined) note.bars = e.bars;
+        return note;
+      }
       if ('isRest' in entry && entry.isRest) {
         const rest: import('../../state/session.js').RestSlot = { isRest: true };
         if (entry.bars !== undefined) rest.bars = entry.bars;
@@ -274,7 +307,7 @@ export function restoreArmoniaSnapshot(snap: ArmoniaSnapshot): Partial<SessionSt
       mode: snap.mode,
       octave: snap.octave,
       progression,
-      // Ephemeral UI state — use defaults; openBlock caller spreads existing state
+      // Ephemeral UI state — use defaults; openBlock caller spreads existing state.
       subview: 'tonnetz',
       registerMode: 'suavizado',
     },

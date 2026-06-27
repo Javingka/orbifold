@@ -46,6 +46,7 @@ import {
   requeueLive,
 } from '../state/session.js';
 import type { LastRecipeDisplay } from '../state/session.js';
+import { isNoteSlot } from '../state/session.js';
 import { sendEvolution } from './agent.js';
 import { applyRhythmSpec, applyHarmonySpec, applySampleMap, applyLockedFlags } from './apply.js';
 import { getRecipeById } from '../core/music-knowledge/query.js';
@@ -101,6 +102,8 @@ function applyHarmonyPresetOverride(): void {
       ...s.harmony,
       progression: harmony.progression.map((slot) => {
         if ('isRest' in slot) return slot;
+        // NoteSlot: preset is a future-phase concern; pass through unchanged.
+        if (isNoteSlot(slot)) return slot;
         const preset = pool[Math.floor(Math.random() * pool.length)];
         return { ...slot, preset };
       }),

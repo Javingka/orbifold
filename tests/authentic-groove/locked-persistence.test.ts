@@ -43,7 +43,7 @@ function makeSessionState(
 
 function makeBaseSavedSession(extraLayerFields: Record<string, unknown> = {}): SavedSession {
   return {
-    version: 5,
+    version: 6,
     bpm: 120,
     view: 'rhythm',
     chordMode: 'chord',
@@ -180,13 +180,14 @@ describe('backward-compatibility: pre-Phase-05 sessions (no locked field) parse 
     }
   });
 
-  it('SESSION_SCHEMA_VERSION is still 5 (no bump required for locked)', () => {
-    // This is a static check: the schema version must stay 5.
-    // If this fails, the schema was bumped without Pilot decision.
+  it('SESSION_SCHEMA_VERSION is now 6 (bumped in note-placement Phase 01 step 01.2 — NoteSlot added)', () => {
+    // SESSION_SCHEMA_VERSION was 5 when the locked feature was added.
+    // note-placement Phase 01 step 01.2 bumped it to 6 (NoteSlot variant added to progression).
+    // This test is updated to reflect the authorized bump.
     const blob = makeBaseSavedSession({ locked: true });
     const parsed = SavedSessionSchema.safeParse(blob);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(parsed.data.version).toBe(5);
+    expect(parsed.data.version).toBe(6);
   });
 });

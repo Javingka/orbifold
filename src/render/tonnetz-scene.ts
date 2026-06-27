@@ -25,7 +25,14 @@ import type { NRLabel } from '../core/theory/neo-riemannian.js';
 import { minimalVoiceLeading } from '../core/theory/voice-leading.js';
 import type { VoiceLeadingResult } from '../core/theory/voice-leading.js';
 import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
-import { sessionStore, playChord, requeueLive } from '../state/session.js';
+import {
+  sessionStore,
+  playChord,
+  playNote,
+  requeueLive,
+  isNoteSlot,
+  addNote,
+} from '../state/session.js';
 import type { SessionState, Chord } from '../state/session.js';
 import { showHud } from '../state/hud.js';
 import { soundIntentStore } from '../state/selectedSlot.js';
@@ -312,7 +319,8 @@ export function updateTonnetzDynamic(state: SessionState): void {
   if (progression.length > 0) {
     const last = progression[progression.length - 1];
     // Phase 06: skip rest slots — they have no Tonnetz position.
-    if (!('isRest' in last)) {
+    // note-placement Phase 01: skip note slots — they also have no Tonnetz centroid.
+    if (!('isRest' in last) && !isNoteSlot(last)) {
       const prevCx = _lastPick !== null ? _lastPick.cx : undefined;
       const prevCy = _lastPick !== null ? _lastPick.cy : undefined;
       const sel = findRenderTriForChord(last, prevCx, prevCy);
@@ -447,25 +455,77 @@ export function updateTonnetzDynamic(state: SessionState): void {
 
 /**
  * Handle canvas pointerdown in harmony view.
- * Hit-tests against _renderTris using pointInTri and calls pickChord if found.
+ *
+ * Spatial routing — no mode toggle needed; the Tonnetz encodes the distinction
+ * geometrically:
+ *   1. Check vertex circles (_renderNodes) first — a click within NODE_HIT_RADIUS
+ *      of any node always adds a NoteSlot via pickNote().
+ *   2. If no vertex was hit, check triangles (_renderTris) — a click inside a
+ *      triangle face adds a Chord via pickChord().
+ *
+ * Node radius from buildTonnetz: 13px for in-scale nodes, 10px for out-of-scale.
+ * NODE_HIT_RADIUS = 13 covers both circle sizes so vertex clicks are always captured.
+ *
+ * Post-phase-01 fix (2026-06-26): removed noteMode flag; spatial routing replaces
+ * the explicit mode toggle. OD-2 resolution preserved: _renderNodes carries {pc, x, y}.
+ *
  * Prototype: onStagePointer() harmony branch, lines 1281–1286.
  *
  * @param e - Native PointerEvent from the canvas DOM element.
  */
 export function onStagePointerDown(e: PointerEvent): void {
-  // Round-2 fix: events are on app.view (canvas); e.offsetX/Y are canvas-local
-  // CSS pixels. With autoDensity:true, PIXI logical px === CSS px — no DPR
-  // conversion needed. Replaces getBoundingClientRect + clientX/Y + DPR scale.
+  // events are on app.view (canvas); e.offsetX/Y are canvas-local CSS pixels.
+  // With autoDensity:true, PIXI logical px === CSS px — no DPR conversion needed.
   // Prototype: app.view.addEventListener('pointerdown', onStagePointer) line 2157.
   const localX = e.offsetX;
   const localY = e.offsetY;
 
-  for (const tri of _renderTris) {
-    if (pointInTri(localX, localY, tri)) {
-      pickChord(tri, get(sessionStore));
+  // ── 1. Vertex circles first — a vertex click always adds a NoteSlot ─────────
+  const NODE_HIT_RADIUS = 13;
+  for (const node of _renderNodes) {
+    const d = Math.hypot(localX - node.x, localY - node.y);
+    if (d <= NODE_HIT_RADIUS) {
+      pickNote(node.pc);
       return;
     }
   }
+
+  // ── 2. No vertex hit — check triangles to add a Chord ───────────────────────
+  const state = get(sessionStore);
+  for (const tri of _renderTris) {
+    if (pointInTri(localX, localY, tri)) {
+      pickChord(tri, state);
+      return;
+    }
+  }
+}
+
+// ── pickNote (internal) ───────────────────────────────────────────────────────
+
+/**
+ * Add a NoteSlot for the clicked Tonnetz vertex pitch class.
+ *
+ * Calls `addNote(rootPc)` from session.ts which appends a new NoteSlot with
+ * `octaveOffset: 0` (same octave as HarmonyState.octave) and calls requeueLive().
+ *
+ * Deliberately does NOT trigger a click-pulse on the Tonnetz canvas (there is
+ * no triangle to pulse), does NOT compute voice-leading (NoteSlot has no
+ * Tonnetz centroid), and does NOT play a single-chord preview (not applicable
+ * for a single note — the progression requeue is the audio feedback).
+ *
+ * note-placement Phase 01 step 01.4 — OD-2 resolution.
+ *
+ * @param rootPc - Pitch class 0–11 of the clicked vertex.
+ */
+function pickNote(rootPc: number): void {
+  addNote(rootPc);
+  // Play a one-cycle note preview so the user gets audio feedback immediately.
+  // octaveOffset=0 — same octave as HarmonyState.octave (OD-1).
+  // No instrument forwarded: the default Strudel synth sounds clearly for preview.
+  // note-placement Fix A (2026-06-26).
+  playNote(rootPc, 0);
+  // No voice-leading, no _lastPick, no click-pulse — NoteSlot has no centroid.
+  // requeueLive() is called inside addNote() from session.ts.
 }
 
 // ── pickChord (internal) ──────────────────────────────────────────────────────
@@ -504,11 +564,12 @@ function pickChord(tri: RenderTri, state: SessionState): void {
   const prevProg = state.harmony.progression;
   const newLabel = chordLabel(tri.rootPc, tri.qual);
   // Phase 06: find the last chord slot in the progression (skip rest slots).
+  // note-placement Phase 01: also skip note slots — they have no voice-leading computation.
   const prevChordSlot = prevProg
     .slice()
     .reverse()
-    .find((s) => !('isRest' in s));
-  if (prevChordSlot !== undefined && !('isRest' in prevChordSlot)) {
+    .find((s) => !('isRest' in s) && !isNoteSlot(s));
+  if (prevChordSlot !== undefined && !('isRest' in prevChordSlot) && !isNoteSlot(prevChordSlot)) {
     const prevPcsArr = chordPcs(prevChordSlot.rootPc, prevChordSlot.qual);
     const newPcsArr = tri.pcs; // TonnetzTriangle.pcs: number[]
     if (prevPcsArr.length === 3 && newPcsArr.length === 3) {
@@ -614,6 +675,7 @@ export function tickHarmony(delta: number): void {
   let pathHintCy: number | undefined;
   for (const ch of prog) {
     if ('isRest' in ch) continue; // Phase 06: rest slots have no centroid
+    if (isNoteSlot(ch)) continue; // note-placement Phase 01: note slots have no Tonnetz centroid
     const tri = findRenderTriForChord(ch, pathHintCx, pathHintCy);
     if (tri !== null) {
       centroids.push({ cx: tri.cx, cy: tri.cy });
@@ -658,6 +720,7 @@ export function tickHarmony(delta: number): void {
   let highlightHintCy: number | undefined;
   prog.forEach((ch, idx) => {
     if ('isRest' in ch) return; // Phase 06: rest slots have no Tonnetz position
+    if (isNoteSlot(ch)) return; // note-placement Phase 01: note slots have no Tonnetz centroid
     const tri = findRenderTriForChord(ch, highlightHintCx, highlightHintCy);
     if (tri === null) return;
     highlightHintCx = tri.cx;

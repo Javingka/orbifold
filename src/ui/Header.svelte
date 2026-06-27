@@ -44,6 +44,7 @@
     addEmptyLayer,
     previewEuclid,
     hushAll,
+    isNoteSlot,
   } from '../state/session.js';
   import StepEditor from './StepEditor.svelte';
   import { bjorklund, rotate } from '../core/rhythm/euclid.js';
@@ -100,7 +101,10 @@
 
   function dismissPreview(): void {
     isDismissing = true;
-    setTimeout(() => { showPreview = false; isDismissing = false; }, 200);
+    setTimeout(() => {
+      showPreview = false;
+      isDismissing = false;
+    }, 200);
   }
   let previewLayer: RhythmLayer = {
     sound: 'hh' as RhythmLayer['sound'],
@@ -195,8 +199,6 @@
     }
   }
 
-
-
   // ── Language selector (Phase 11 step 11.3, ADR 0017 OQ-5) ────────────────
   // The 文A button opens an inline dropdown listing the four native labels.
   // Clicking a language writes to the `lang` store (which triggers write-back
@@ -256,9 +258,10 @@
     setHarmonyKey($sessionStore.harmony.root, $sessionStore.harmony.mode, octave);
   }
 
-  // ── Sound attribute controls (Phase 03 step 03.5 — ADR 0019) ─────────────
-  // Two selectors: Oscillator (waveform + noise) and Presets (named bundles).
-  // Replace the Phase 02 flat block (instrument select + room/decay sliders).
+  // ── Sound attribute controls (Phase 03 step 03.5 — ADR 0019 / Fix D 2026-06-26) ──
+  // Single unified selector: oscillators + preset instruments in one <select>.
+  // Replaces the previous two-select design (Oscillator + Preset) which confused
+  // users — the two selectors were mutually exclusive in practice.
   //
   // Design (Pilot-decided):
   // - Always visible (do NOT hide when no slot is selected).
@@ -273,27 +276,22 @@
   // Valid oscillator token type (ADR 0019 D1: 'pink' added to instrument field).
   type OscillatorToken = 'sine' | 'triangle' | 'square' | 'sawtooth' | 'pink';
 
+  // Preset names (Fix D — used for mutual-exclusion logic).
+  const PRESETS = new Set(['piano', 'guitar', 'synth-bass']);
+
   // Derive selected slot (reactive). Rest slots have no sound attrs.
   $: selSlot =
     $selectedSlotIdxStore !== null
       ? $sessionStore.harmony.progression[$selectedSlotIdxStore]
       : undefined;
-  $: selIsChord = selSlot !== undefined && !('isRest' in selSlot);
+  // NoteSlot does not support chord sound controls in Phase 01 — treat as not-a-chord.
+  $: selIsChord = selSlot !== undefined && !('isRest' in selSlot) && !isNoteSlot(selSlot);
 
-  // Display values: prefer selected slot's attrs, then intent store.
-  $: displayInstrument = (
-    selIsChord &&
-    selSlot !== undefined &&
-    !('isRest' in selSlot) &&
-    selSlot.instrument !== undefined
-      ? selSlot.instrument
-      : $soundIntentStore.instrument
-  ) as OscillatorToken;
-
-  $: displayPreset = (
-    selIsChord && selSlot !== undefined && !('isRest' in selSlot) && selSlot.preset !== undefined
-      ? selSlot.preset
-      : ($soundIntentStore.preset ?? '')
+  // Unified display value: prefer preset over instrument for selected chord, then intent.
+  $: displaySound = (
+    selIsChord && selSlot !== undefined && !('isRest' in selSlot) && !isNoteSlot(selSlot)
+      ? (selSlot.preset ?? selSlot.instrument ?? '')
+      : ($soundIntentStore.preset ?? $soundIntentStore.instrument ?? '')
   ) as string;
 
   // ── Edit-mode highlight + pulse ───────────────────────────────────────────
@@ -319,20 +317,33 @@
     _prevSlotIdx = idx;
   }
 
-  function handleOscillatorChange(e: Event): void {
-    const val = (e.currentTarget as HTMLSelectElement).value as OscillatorToken;
-    soundIntentStore.update((s) => ({ ...s, instrument: val }));
-    if ($selectedSlotIdxStore !== null && selIsChord) {
-      setChordOscillator($selectedSlotIdxStore, val);
-    }
-  }
-
-  function handlePresetChange(e: Event): void {
-    const raw = (e.currentTarget as HTMLSelectElement).value;
-    const val = raw === '' ? undefined : (raw as 'piano' | 'guitar' | 'synth-bass');
-    soundIntentStore.update((s) => ({ ...s, preset: val }));
-    if ($selectedSlotIdxStore !== null && selIsChord) {
-      setChordPreset($selectedSlotIdxStore, val);
+  /**
+   * Unified sound selector handler (Fix D).
+   * Selecting an oscillator clears the preset; selecting a preset clears the instrument
+   * (mutual-exclusion per ADR 0019 D1/D2).
+   */
+  function handleSoundChange(e: Event): void {
+    const val = (e.currentTarget as HTMLSelectElement).value;
+    if (PRESETS.has(val)) {
+      // Preset selected — clear instrument from intent, set preset.
+      soundIntentStore.update((s) => ({
+        ...s,
+        preset: val as 'piano' | 'guitar' | 'synth-bass',
+        instrument: 'sawtooth',
+      }));
+      if ($selectedSlotIdxStore !== null && selIsChord) {
+        setChordPreset($selectedSlotIdxStore, val as 'piano' | 'guitar' | 'synth-bass');
+        // Restore default oscillator on the slot so codegen falls back to preset only.
+        setChordOscillator($selectedSlotIdxStore, 'sawtooth');
+      }
+    } else {
+      // Oscillator (or '' = clear) — set instrument, clear preset.
+      const osc = (val !== '' ? val : 'sawtooth') as OscillatorToken;
+      soundIntentStore.update((s) => ({ ...s, instrument: osc, preset: undefined }));
+      if ($selectedSlotIdxStore !== null && selIsChord) {
+        setChordOscillator($selectedSlotIdxStore, osc);
+        setChordPreset($selectedSlotIdxStore, undefined);
+      }
     }
   }
 </script>
@@ -496,7 +507,12 @@
         <!--
         Sound select. Prototype lines 430–434.
       -->
-        <select id="euclidSound" bind:value={euclidSound} data-tip={$t('header.rhythm.soundTip')} on:change={onConfigChange}>
+        <select
+          id="euclidSound"
+          bind:value={euclidSound}
+          data-tip={$t('header.rhythm.soundTip')}
+          on:change={onConfigChange}
+        >
           <optgroup label="Drum kit">
             <option value="bd">bd</option>
             <option value="sd">sd</option>
@@ -529,7 +545,8 @@
         <!--
         k slider. Prototype line 436.
       -->
-        <span data-tip={$t('header.rhythm.kTip')} title="k — golpes (hits)">k <b>{euclidK}</b></span>
+        <span data-tip={$t('header.rhythm.kTip')} title="k — golpes (hits)">k <b>{euclidK}</b></span
+        >
         <input
           type="range"
           id="euclidK"
@@ -545,7 +562,8 @@
         <!--
         n slider. Prototype line 437.
       -->
-        <span data-tip={$t('header.rhythm.nTip')} title="n — pasos (steps)">n <b>{euclidN}</b></span>
+        <span data-tip={$t('header.rhythm.nTip')} title="n — pasos (steps)">n <b>{euclidN}</b></span
+        >
         <input
           type="range"
           id="euclidN"
@@ -561,7 +579,9 @@
         <!--
         rot readout + slider. Prototype lines 438–439.
       -->
-        <span data-tip={$t('header.rhythm.rotTip')} title="rot — rotación (offset)">rot <b>{euclidR}</b></span>
+        <span data-tip={$t('header.rhythm.rotTip')} title="rot — rotación (offset)"
+          >rot <b>{euclidR}</b></span
+        >
         <input
           type="range"
           id="euclidR"
@@ -777,26 +797,28 @@
       >
         <span class="sound-lbl">{$t('header.harmony.soundLabel')}</span>
 
-        <!-- Oscillator select (ADR 0019 D1: instrument field, UI label "Oscillator") -->
-        <label class="sound-field" title={$t('header.harmony.oscillatorLabel')}>
-          <span>{$t('header.harmony.oscillatorLabel')}</span>
-          <select id="instrSelect" value={displayInstrument} on:change={handleOscillatorChange}>
-            <option value="sine">{$t('header.harmony.instrSine')}</option>
-            <option value="triangle">{$t('header.harmony.instrTriangle')}</option>
-            <option value="square">{$t('header.harmony.instrSquare')}</option>
-            <option value="sawtooth">{$t('header.harmony.instrSawtooth')}</option>
-            <option value="pink">{$t('header.harmony.instrNoise')}</option>
-          </select>
-        </label>
-
-        <!-- Presets select (ADR 0019 D2: name-only; '' = no preset) -->
-        <label class="sound-field" title={$t('header.harmony.presetLabel')}>
-          <span>{$t('header.harmony.presetLabel')}</span>
-          <select id="presetSelect" value={displayPreset} on:change={handlePresetChange}>
-            <option value="">{$t('header.harmony.presetNone')}</option>
-            <option value="piano">{$t('header.harmony.presetPiano')}</option>
-            <option value="guitar">{$t('header.harmony.presetGuitar')}</option>
-            <option value="synth-bass">{$t('header.harmony.presetSynthBass')}</option>
+        <!--
+          Unified sound selector (Fix D 2026-06-26): one <select> replaces
+          the previous Oscillator + Preset pair. Selecting a preset clears the
+          oscillator intent; selecting an oscillator clears the preset intent.
+          ADR 0019 D1/D2 mutual-exclusion applies in handleSoundChange.
+        -->
+        <label class="sound-field" title={$t('header.harmony.soundLabel')}>
+          <span>{$t('header.harmony.soundLabel')}</span>
+          <select id="soundSelect" value={displaySound} on:change={handleSoundChange}>
+            <option value="">— ({$t('header.harmony.presetNone')})</option>
+            <optgroup label={$t('header.harmony.oscillatorLabel')}>
+              <option value="sawtooth">{$t('header.harmony.instrSawtooth')}</option>
+              <option value="sine">{$t('header.harmony.instrSine')}</option>
+              <option value="square">{$t('header.harmony.instrSquare')}</option>
+              <option value="triangle">{$t('header.harmony.instrTriangle')}</option>
+              <option value="pink">{$t('header.harmony.instrNoise')}</option>
+            </optgroup>
+            <optgroup label={$t('header.harmony.presetLabel')}>
+              <option value="piano">{$t('header.harmony.presetPiano')}</option>
+              <option value="guitar">{$t('header.harmony.presetGuitar')}</option>
+              <option value="synth-bass">{$t('header.harmony.presetSynthBass')}</option>
+            </optgroup>
           </select>
         </label>
       </div>
@@ -1219,7 +1241,9 @@
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     box-sizing: border-box;
-    transition: opacity 0.28s ease-in, transform 0.28s ease-in;
+    transition:
+      opacity 0.28s ease-in,
+      transform 0.28s ease-in;
     opacity: 1;
     transform: translateY(0);
   }
@@ -1254,7 +1278,9 @@
     cursor: pointer;
     padding: 2px 4px;
     border-radius: 4px;
-    transition: color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
   }
   .preview-close:hover {
     color: rgba(255, 255, 255, 0.8);

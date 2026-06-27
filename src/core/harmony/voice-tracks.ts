@@ -81,6 +81,19 @@ interface RestInput {
   bars?: number;
 }
 
+/**
+ * Minimal subset of NoteSlot for voice-track purposes.
+ * A NoteSlot contributes a rest gap (no voice events) — it is a single note,
+ * not a triad, so it has no multi-voice assignment. Voice-leading continuity
+ * skips over NoteSlot entries, same as RestSlot.
+ *
+ * Phase 01 (note-placement initiative) — added alongside NoteSlot.
+ */
+interface NoteInput {
+  isNote: true;
+  bars?: number;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ──────────────────────────────────────────────────────────────────────────────
@@ -166,7 +179,7 @@ function smoothOctave(noteName: string, estrictoOctave: number, prevMidi: number
  * @returns             Exactly 3 VoiceTrack objects (indices 0, 1, 2).
  */
 export function computeVoiceTracks(
-  progression: (ChordInput | RestInput)[],
+  progression: (ChordInput | RestInput | NoteInput)[],
   octave: number,
   registerMode: RegisterMode = 'suavizado'
 ): VoiceTrack[] {
@@ -201,9 +214,12 @@ export function computeVoiceTracks(
     const slot = progression[i];
     const bars = slot.bars ?? 1;
 
-    if ('isRest' in slot) {
-      // Rest slot (Phase 06 — ADR 0012 Consequence 3):
-      // Append VoiceRestEvent to each track; prevPcs and prevMidi unchanged.
+    if ('isRest' in slot || 'isNote' in slot) {
+      // Rest slot (Phase 06 — ADR 0012 Consequence 3) or NoteSlot
+      // (note-placement Phase 01): append VoiceRestEvent as a gap placeholder.
+      // prevPcs and prevMidi are unchanged so voice-leading continuity is
+      // preserved across the gap — the next chord after a note/rest uses
+      // minimalVoiceLeading against the last chord before it.
       for (let v = 0; v < 3; v++) {
         tracks[v].events.push({
           isRest: true,
@@ -217,7 +233,7 @@ export function computeVoiceTracks(
     }
 
     // Chord slot.
-    const ch = slot;
+    const ch = slot as ChordInput;
     const nextPcs = chordPcs(ch.rootPc, ch.qual) as [number, number, number];
 
     if (prevPcs === null) {

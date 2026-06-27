@@ -60,7 +60,9 @@ import {
   rhythmToStrudel,
   buildSession,
 } from '../core/codegen/strudel.js';
+import { resolveChordAttrs } from '../core/codegen/presets.js';
 import { chordLabel } from '../core/theory/chords.js';
+import { NOTE_NAMES } from '../core/theory/pitch.js';
 import {
   getCompState,
   getCompPausedBars,
@@ -238,10 +240,90 @@ export interface RestSlot {
 }
 
 /**
- * A slot in the harmony progression: either a chord or a silent rest.
- * Introduced in Phase 06 — ADR 0012 D1.
+ * A single-note slot in the progression. Captures a pitch class from the Tonnetz vertex
+ * plus an octave offset relative to `HarmonyState.octave` (OD-1, note-placement Phase 01).
+ *
+ * The absolute note name is derived at codegen/render time:
+ *   `NOTE_NAMES[rootPc] + (HarmonyState.octave + octaveOffset)`
+ *
+ * This model keeps the note in the same "register universe" as surrounding chord slots:
+ * when the user changes `HarmonyState.octave`, both chord and note slots shift together.
+ *
+ * The interface is intentionally open for future extension — optional fields for
+ * instrument, gain, room, decay, lpf, etc. parallel the `Chord` attributes. Do NOT
+ * narrow to a closed struct; future phases will add these fields without a breaking change.
+ *
+ * Discriminant: `isNote: true` (analogous to `RestSlot.isRest: true`).
+ *
+ * Phase 01 (note-placement initiative) — OD-1 resolved: Option A `{ rootPc, octaveOffset }`.
  */
-export type ProgressionSlot = Chord | RestSlot;
+export interface NoteSlot {
+  /** Discriminant — always `true`, analogous to RestSlot.isRest. */
+  isNote: true;
+  /** Pitch class 0–11 from the Tonnetz vertex. Preserved for Tonnetz highlighting. */
+  rootPc: number;
+  /**
+   * Integer offset relative to `HarmonyState.octave` (default 0 = same octave as the key).
+   * Range [-4, 4]. The absolute octave is `HarmonyState.octave + octaveOffset`.
+   */
+  octaveOffset: number;
+  /**
+   * Duration in Strudel cycles (default 1; multiples of 0.25; min 0.25, max 8).
+   * Follows the same `clampBars` semantics as `Chord.bars`.
+   */
+  bars?: number;
+  // ── Timbre attributes (post-phase-01 fix, 2026-06-26) ────────────────────
+  // Parallel Chord's optional sound attributes so codegen can emit the full chain.
+  /**
+   * Strudel sound/instrument name — emitted as .s("piano").
+   * Same semantics as Chord.instrument.
+   * Future: preset bundles (ADR 0019 D2 pattern).
+   */
+  instrument?: string;
+  /**
+   * Amplitude 0–1.2. Emitted as .gain(n). Default: no .gain() emitted (Strudel default).
+   */
+  gain?: number;
+  /**
+   * Reverb level 0–1. Emitted as .room(n).
+   */
+  room?: number;
+  /**
+   * Amplitude decay time in seconds (> 0). Emitted as .decay(n).
+   */
+  decay?: number;
+  /**
+   * Amplitude attack time in seconds (>= 0). Emitted as .attack(n).
+   */
+  attack?: number;
+  /**
+   * Low-pass filter cutoff in Hz. Emitted as .lpf(n).
+   */
+  lpf?: number;
+  /**
+   * Named preset bundle (same tokens as Chord.preset: 'piano' | 'guitar' | 'synth-bass').
+   * Mutually exclusive with `instrument` — setting preset clears instrument and vice versa.
+   * Resolved via resolveChordAttrs in melodyLine codegen and playNote preview.
+   * Post-fix 2026-06-26 (NoteSlot preset bug fix).
+   */
+  preset?: string;
+}
+
+/**
+ * A slot in the harmony progression: a chord, a silent rest, or a single note.
+ * Introduced in Phase 06 — ADR 0012 D1 (Chord | RestSlot).
+ * Extended in note-placement Phase 01 — NoteSlot added (OD-1).
+ */
+export type ProgressionSlot = Chord | RestSlot | NoteSlot;
+
+/**
+ * Type guard: returns true if `slot` is a `NoteSlot`.
+ *
+ * Phase 01 (note-placement) — OD-1 resolution.
+ */
+export function isNoteSlot(slot: ProgressionSlot): slot is NoteSlot {
+  return 'isNote' in slot && slot.isNote === true;
+}
 
 /**
  * Harmony sub-state: root scale / key, octave, and chord progression.
@@ -777,7 +859,8 @@ function deriveLiveCode(state: SessionState): string | null {
   }
   if (source === 'chord') {
     const ch = state.harmony.progression[state.harmony.progression.length - 1];
-    if (!ch || 'isRest' in ch) return null;
+    // NoteSlot and RestSlot have no chordToStrudel representation — skip.
+    if (!ch || 'isRest' in ch || isNoteSlot(ch)) return null;
     return chordToStrudel(ch.rootPc, ch.qual, ch.gain, state.chordMode, state.harmony.octave);
   }
   return null;
@@ -825,7 +908,8 @@ export function requeueLive(): string | null {
     // Prototype line 1313: last chord in progression
     const progression = state.harmony.progression;
     const ch = progression[progression.length - 1];
-    if (!ch || 'isRest' in ch) return null;
+    // NoteSlot and RestSlot have no chordToStrudel representation — skip.
+    if (!ch || 'isRest' in ch || isNoteSlot(ch)) return null;
     const code = chordToStrudel(ch.rootPc, ch.qual, ch.gain, state.chordMode, state.harmony.octave);
     queueLiveCodeIfPlaying(code);
     return code;
@@ -896,6 +980,58 @@ export function playChord(
     })
   );
   setNowPlaying(label, 'chord');
+}
+
+/**
+ * Play a single note immediately via runNow (one-cycle preview).
+ * Called by pickNote in tonnetz-scene after addNote.
+ * Sets nowPlaying to { label: '♩ <noteName>', source: 'preview' }.
+ *
+ * Follows the exact pattern of playChord: one cycle auto-stop with a guard
+ * on source === 'preview'.
+ *
+ * Uses resolveChordAttrs so that preset bundles ('piano', 'guitar', 'synth-bass')
+ * are correctly expanded to their oscillator + envelope chains in the preview.
+ *
+ * note-placement initiative — Fix A (2026-06-26).
+ * Post-fix 2026-06-26: added preset? param; preview uses resolveChordAttrs.
+ *
+ * @param rootPc       - Pitch class 0–11.
+ * @param octaveOffset - Offset relative to HarmonyState.octave (0 = same octave).
+ * @param instrument   - Optional Strudel oscillator/waveform name (e.g. 'sawtooth').
+ * @param preset       - Optional named preset bundle ('piano' | 'guitar' | 'synth-bass').
+ *                       When set, resolveChordAttrs expands it to instrument + envelope.
+ *                       Mutually exclusive with instrument — preset wins when both present.
+ */
+export function playNote(
+  rootPc: number,
+  octaveOffset: number,
+  instrument?: string,
+  preset?: string
+): void {
+  const state = get(sessionStore);
+  const octave = state.harmony.octave;
+  const noteName = NOTE_NAMES[rootPc] + String(octave + octaveOffset);
+  // Resolve through resolveChordAttrs so preset bundles expand to their full chains.
+  // roomDefault=0.3 matches the melodyLine arrange path (byte-consistent).
+  const resolved = resolveChordAttrs({ preset, instrument }, 0.3);
+  let code = `note("${noteName}").s("${resolved.instrument}").lpf(${resolved.lpf}).room(${resolved.room})`;
+  if (resolved.attack != null) code += `.attack(${resolved.attack})`;
+  if (resolved.decay != null) code += `.decay(${resolved.decay})`;
+  if (resolved.sustain != null) code += `.sustain(${resolved.sustain})`;
+  if (resolved.release != null) code += `.release(${resolved.release})`;
+  const cycleDurationMs = Math.round(240000 / state.bpm);
+  setNowPlaying('♩ ' + noteName, 'preview');
+  void getAudio().then((a) =>
+    a.initAudio().then(() => {
+      void a.runNow(code);
+      setTimeout(() => {
+        if (get(sessionStore).nowPlaying.source === 'preview') {
+          void hushAll();
+        }
+      }, cycleDurationMs);
+    })
+  );
 }
 
 // ── Step 04.2: new action functions ───────────────────────────────────────
@@ -987,6 +1123,7 @@ export function setRegisterMode(mode: RegisterMode): void {
   // Visual-only: no requeueLive(). The staff re-renders via App.svelte store subscription.
 }
 
+/**
 /**
  * Switch the active primary view.
  *
@@ -1223,7 +1360,8 @@ export function setChordInstrument(index: number, instrument: string): void {
   sessionStore.update((s) => {
     if (index < 0 || index >= s.harmony.progression.length) return s;
     const slot = s.harmony.progression[index];
-    if (slot === undefined || 'isRest' in slot) return s;
+    // NoteSlot instrument support is deferred (note-placement Phase 01 scope).
+    if (slot === undefined || 'isRest' in slot || isNoteSlot(slot)) return s;
     const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
       i === index ? { ...ch, instrument } : ch
     );
@@ -1252,7 +1390,8 @@ export function setChordSoundAttrs(
   sessionStore.update((s) => {
     if (index < 0 || index >= s.harmony.progression.length) return s;
     const slot = s.harmony.progression[index];
-    if (slot === undefined || 'isRest' in slot) return s;
+    // NoteSlot sound-attrs support is deferred (note-placement Phase 01 scope).
+    if (slot === undefined || 'isRest' in slot || isNoteSlot(slot)) return s;
     const updated = { ...slot };
     if (attrs.instrument !== undefined) updated.instrument = attrs.instrument;
     if (attrs.room !== undefined) updated.room = attrs.room;
@@ -1285,7 +1424,8 @@ export function setChordPreset(
   sessionStore.update((s) => {
     if (index < 0 || index >= s.harmony.progression.length) return s;
     const slot = s.harmony.progression[index];
-    if (slot === undefined || 'isRest' in slot) return s;
+    // NoteSlot preset support is deferred (note-placement Phase 01 scope).
+    if (slot === undefined || 'isRest' in slot || isNoteSlot(slot)) return s;
     const updated: Chord = { ...slot };
     updated.preset = preset;
     const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
@@ -1349,6 +1489,89 @@ export function addRestAt(index: number): void {
       ...progression.slice(clamped),
     ];
     return { ...s, harmony: { ...s.harmony, progression: newProgression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Append a new `NoteSlot` to the end of the progression.
+ *
+ * Creates a `NoteSlot` with `rootPc` from the clicked Tonnetz vertex and
+ * `octaveOffset: 0` (same octave as `HarmonyState.octave`). Duration defaults
+ * to `bars: 1`, following the same semantics as `addRestAt`.
+ *
+ * Calls `requeueLive()` so a running harmony engine picks up the change at
+ * the next cycle boundary.
+ *
+ * Phase 01 (note-placement initiative) — OD-1/OD-2 resolution.
+ *
+ * @param rootPc - Pitch class 0–11 from the Tonnetz vertex.
+ */
+export function addNote(rootPc: number): void {
+  const newSlot: NoteSlot = { isNote: true as const, rootPc, octaveOffset: 0, bars: 1 };
+  sessionStore.update((s) => ({
+    ...s,
+    harmony: {
+      ...s.harmony,
+      progression: [...s.harmony.progression, newSlot],
+    },
+  }));
+  requeueLive();
+}
+
+/**
+ * Update the `octaveOffset` of the `NoteSlot` at `index`.
+ *
+ * Clamps `octaveOffset` to [-4, 4] (matching the OD-1 range in the persistence
+ * schema). No-op if `index` is out of bounds or the slot is not a `NoteSlot`.
+ * Calls `requeueLive()` so a running harmony engine picks up the change.
+ *
+ * Phase 01 (note-placement initiative) — OD-1 resolution.
+ *
+ * @param index        - Zero-based index into `harmony.progression`.
+ * @param octaveOffset - New offset relative to `HarmonyState.octave` (clamped to [-4, 4]).
+ */
+export function setNoteOffset(index: number, octaveOffset: number): void {
+  const clamped = Math.max(-4, Math.min(4, Math.round(octaveOffset)));
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    if (slot === undefined || !isNoteSlot(slot)) return s;
+    const progression: ProgressionSlot[] = s.harmony.progression.map((p, i) =>
+      i === index ? { ...slot, octaveOffset: clamped } : p
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
+ * Update optional timbre attributes on a `NoteSlot`.
+ *
+ * Patches the `instrument`, `gain`, `room`, `decay`, `attack`, and/or `lpf`
+ * fields on the slot at `idx`. No-ops if `idx` is out of bounds or the slot
+ * is not a `NoteSlot`. Calls `requeueLive()` so the updated chain takes effect
+ * at the next Strudel cycle boundary.
+ *
+ * Post-phase-01 fix (2026-06-26) — adds timbre attribute support to NoteSlot,
+ * parallel to Chord's per-slot sound attributes.
+ *
+ * @param idx   - Index into `harmony.progression`.
+ * @param attrs - Partial map of fields to update (undefined = leave unchanged).
+ */
+export function setNoteAttrs(
+  idx: number,
+  attrs: Partial<
+    Pick<NoteSlot, 'instrument' | 'gain' | 'room' | 'decay' | 'attack' | 'lpf' | 'preset'>
+  >
+): void {
+  sessionStore.update((s) => {
+    const slot = s.harmony.progression[idx];
+    if (slot === undefined || !isNoteSlot(slot)) return s;
+    const updated: NoteSlot = { ...slot, ...attrs };
+    const progression = [...s.harmony.progression];
+    progression[idx] = updated;
+    return { ...s, harmony: { ...s.harmony, progression } };
   });
   requeueLive();
 }
@@ -1786,21 +2009,64 @@ export function applyLoadedSession(saved: SavedSession): void {
       mode: saved.harmony.mode,
       octave: saved.harmony.octave,
       // ADR 0012 D4: SavedHarmonySchema.progression is now a union; narrow on isRest.
+      // note-placement Phase 01: also narrow on isNote for NoteSlot.
       progression: saved.harmony.progression.map((slot): ProgressionSlot => {
+        if ('isNote' in slot && slot.isNote === true) {
+          // NoteSlot — restore pitch fields plus all optional timbre attributes.
+          // Timbre fields (instrument, gain, room, decay, attack, lpf, preset) were
+          // added post-phase-01; absent in older blobs → undefined → not set.
+          const s = slot as {
+            rootPc: number;
+            octaveOffset: number;
+            bars?: number;
+            instrument?: string;
+            gain?: number;
+            room?: number;
+            decay?: number;
+            attack?: number;
+            lpf?: number;
+            preset?: string;
+          };
+          const noteSlot: NoteSlot = {
+            isNote: true as const,
+            rootPc: s.rootPc,
+            octaveOffset: s.octaveOffset,
+          };
+          if (s.bars !== undefined) noteSlot.bars = s.bars;
+          if (s.instrument !== undefined) noteSlot.instrument = s.instrument;
+          if (s.gain !== undefined) noteSlot.gain = s.gain;
+          if (s.room !== undefined) noteSlot.room = s.room;
+          if (s.decay !== undefined) noteSlot.decay = s.decay;
+          if (s.attack !== undefined) noteSlot.attack = s.attack;
+          if (s.lpf !== undefined) noteSlot.lpf = s.lpf;
+          if (s.preset !== undefined) noteSlot.preset = s.preset;
+          return noteSlot;
+        }
         if ('isRest' in slot) {
           return slot.bars !== undefined
             ? { isRest: true as const, bars: slot.bars }
             : { isRest: true as const };
         }
+        // Chord slot: isNote and isRest guards above have returned.
+        // Cast is safe — the remaining Zod-union member is the chord shape.
+        const chord = slot as {
+          rootPc: number;
+          qual: Quality;
+          gain: number;
+          bars?: number;
+          instrument?: string;
+          room?: number;
+          decay?: number;
+        };
         return {
-          rootPc: slot.rootPc,
-          qual: slot.qual,
-          gain: slot.gain,
-          ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          rootPc: chord.rootPc,
+          qual: chord.qual,
+          gain: chord.gain,
+          ...(chord.bars !== undefined ? { bars: chord.bars } : {}),
           // ADR 0018 D3: restore sound attributes when present in the saved session.
-          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
-          ...(slot.room !== undefined ? { room: slot.room } : {}),
-          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
+          ...(chord.instrument !== undefined ? { instrument: chord.instrument } : {}),
+          ...(chord.room !== undefined ? { room: chord.room } : {}),
+          ...(chord.decay !== undefined ? { decay: chord.decay } : {}),
         };
       }),
       // Phase 08 (step 08.5): ephemeral fields NOT persisted — always reset to defaults.

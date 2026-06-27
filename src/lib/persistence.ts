@@ -8,15 +8,17 @@ import type { SessionState } from '../state/session.js';
 // ── Schema version ─────────────────────────────────────────────────────────
 
 /**
- * Schema version 5 — editable-composition Phase 01 step 01.4, ADR 0020 D5.
- * Change from v4: `SavedBlockSchema` gains an optional `snapshot?` field — a
- * `z.discriminatedUnion` mirroring the `BlockSnapshot` discriminated union
- * (GrooveSnapshot | ArmoniaSnapshot | SesionSnapshot). Version 4 blobs fail
- * the `z.literal(5)` check and are dropped by the existing safeParse
- * graceful-degradation path — no migration function. Pilot-confirmed tradeoff
- * (same precedent as ADR 0020 D5 / ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1).
+ * Schema version 6 — note-placement Phase 01 step 01.2.
+ * Change from v5: `SavedNoteSlotSchema` added to the `progression` union in
+ * `SavedHarmonySchema` (new `NoteSlot` variant — `isNote: true` discriminant).
+ * Old v5 blobs fail the `z.literal(6)` check and are dropped by the existing
+ * safeParse graceful-degradation path — no migration function needed (chord-only
+ * progressions continue to load). Pilot-confirmed tradeoff consistent with
+ * ADR 0020 D5 / ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1 precedent.
+ *
+ * v5 (prior): `SavedBlockSchema` + `snapshot?` field — editable-composition Phase 01, ADR 0020 D5.
  */
-export const SESSION_SCHEMA_VERSION = 5;
+export const SESSION_SCHEMA_VERSION = 6;
 
 // ── Shared enum constants (mirror agent/schema.ts SK_ arrays) ─────────────
 
@@ -93,14 +95,51 @@ const SavedRestSchema = z.object({
   bars: z.number().min(0.25).max(8).optional(),
 });
 
+/**
+ * A serialised note slot. `isNote: true` is the required discriminant (OD-1 resolution).
+ *
+ * Encodes pitch as `{ rootPc, octaveOffset }` — pitch class from the Tonnetz vertex
+ * plus an integer offset relative to `HarmonyState.octave`. The absolute note name is
+ * derived at codegen/render time: `NOTE_NAMES[rootPc] + (octave + octaveOffset)`.
+ *
+ * Listed SECOND in the progression union (after SavedRestSchema, before SavedChordSchema)
+ * so that `isNote: true` entries are always parsed as notes, never as chords.
+ *
+ * Phase 01 (note-placement initiative) — OD-1 resolution. SESSION_SCHEMA_VERSION = 6.
+ */
+const SavedNoteSlotSchema = z.object({
+  /** Discriminant — always `true`, analogous to SavedRestSchema.isRest. */
+  isNote: z.literal(true),
+  /** Pitch class 0–11 from the Tonnetz vertex. */
+  rootPc: z.number().int().min(0).max(11),
+  /**
+   * Integer offset relative to `HarmonyState.octave`. Range [-4, 4].
+   * Absolute octave = `HarmonyState.octave + octaveOffset`.
+   */
+  octaveOffset: z.number().int().min(-4).max(4),
+  /** Duration in Strudel cycles. Follows the same clampBars semantics as Chord.bars. */
+  bars: z.number().min(0.25).max(8).optional(),
+  // ── Timbre attributes (post-phase-01 fix, 2026-06-26) — all optional and additive ──
+  // Old blobs parse cleanly: absent fields are undefined, not errors.
+  instrument: z.string().optional(),
+  gain: z.number().min(0).max(1.2).optional(),
+  room: z.number().min(0).max(1).optional(),
+  decay: z.number().min(0).optional(),
+  attack: z.number().min(0).optional(),
+  lpf: z.number().min(0).optional(),
+  /** Named preset bundle — same tokens as Chord.preset; resolved via resolveChordAttrs in codegen. */
+  preset: z.string().optional(),
+});
+
 const SavedHarmonySchema = z.object({
   root: z.number().int().min(0).max(11),
   mode: z.enum(SK_MODES),
   octave: z.number().int().min(2).max(5),
   // ADR 0012 D4: rest schema first so { isRest: true, ... } always parses as rest.
-  // Old sessions (chord-only, no isRest field) still parse: elements fail SavedRestSchema
-  // (missing isRest: literal(true)) and succeed on SavedChordSchema as before.
-  progression: z.array(z.union([SavedRestSchema, SavedChordSchema])).max(16),
+  // note-placement Phase 01: note schema second so { isNote: true, ... } always parses as note.
+  // Old sessions (chord-only, no isRest/isNote field) still parse: elements fail
+  // SavedRestSchema and SavedNoteSlotSchema, then succeed on SavedChordSchema as before.
+  progression: z.array(z.union([SavedRestSchema, SavedNoteSlotSchema, SavedChordSchema])).max(16),
 });
 
 const SavedRhythmLayerSchema = z.object({
@@ -187,9 +226,21 @@ const SavedRestSnapshotEntrySchema = z.object({
 });
 
 /**
+ * Zod schema for a note entry inside an ArmoniaSnapshot.
+ * Mirrors NoteSnapshotEntry from snapshot.ts (note-placement Phase 01 — OD-1 resolution).
+ */
+const SavedNoteSnapshotEntrySchema = z.object({
+  isNote: z.literal(true),
+  rootPc: z.number().int().min(0).max(11),
+  octaveOffset: z.number().int().min(-4).max(4),
+  bars: z.number().min(0.25).max(8).optional(),
+});
+
+/**
  * Zod schema for ArmoniaSnapshot — type:'armonia' + harmonic context + progression.
  * Mirrors ArmoniaSnapshot from snapshot.ts (ADR 0020 D1 / D3).
- * Progression uses a union: rest schema listed first (ADR 0012 D4 precedent).
+ * Progression uses a union: rest schema listed first (ADR 0012 D4 precedent),
+ * note schema second (note-placement Phase 01), chord schema last.
  */
 const SavedArmoniaSnapshotSchema = z.object({
   type: z.literal('armonia'),
@@ -197,7 +248,13 @@ const SavedArmoniaSnapshotSchema = z.object({
   mode: z.string(),
   octave: z.number().int().min(2).max(5),
   chordMode: z.enum(['chord', 'arp']),
-  progression: z.array(z.union([SavedRestSnapshotEntrySchema, SavedChordSnapshotEntrySchema])),
+  progression: z.array(
+    z.union([
+      SavedRestSnapshotEntrySchema,
+      SavedNoteSnapshotEntrySchema,
+      SavedChordSnapshotEntrySchema,
+    ])
+  ),
 });
 
 /**
@@ -244,19 +301,21 @@ const SavedCompositionSchema = z.object({
 });
 
 /**
- * SavedSessionSchema v5 — editable-composition Phase 01 step 01.4, ADR 0020 D5.
+ * SavedSessionSchema v6 — note-placement Phase 01 step 01.2.
  *
- * Changes from v4:
- *   - `version` literal bumped from 4 to 5.
- *   - `SavedBlockSchema` gains an optional `snapshot?` field — a Zod discriminated
- *     union for GrooveSnapshot | ArmoniaSnapshot | SesionSnapshot (ADR 0020 D1/D5).
+ * Changes from v5:
+ *   - `version` literal bumped from 5 to 6.
+ *   - `SavedNoteSlotSchema` added to the `progression` union in `SavedHarmonySchema`.
+ *     New `NoteSlot` variant with `isNote: true` discriminant (OD-1 resolution).
  *
- * Version 4 blobs fail the `z.literal(5)` check → dropped by safeParse (existing
- * graceful-degradation behavior, Pilot-confirmed tradeoff per ADR 0020 D5 /
- * ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1 precedent).
+ * Version 5 blobs fail the `z.literal(6)` check → dropped by safeParse (existing
+ * graceful-degradation behavior, Pilot-confirmed tradeoff consistent with
+ * ADR 0020 D5 / ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1 precedent).
+ *
+ * v5 (prior): SavedBlockSchema + snapshot? field — editable-composition Phase 01, ADR 0020 D5.
  */
 export const SavedSessionSchema = z.object({
-  version: z.literal(5),
+  version: z.literal(6),
   bpm: z.number().int().min(40).max(280),
   view: z
     .enum(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)
@@ -288,6 +347,25 @@ export function serializeSession(state: SessionState): SavedSession {
       mode: state.harmony.mode as SavedSession['harmony']['mode'],
       octave: state.harmony.octave,
       progression: state.harmony.progression.map((slot) => {
+        // note-placement Phase 01: narrow on isNote discriminant first.
+        if ('isNote' in slot && slot.isNote === true) {
+          // NoteSlot — serialize all persisted fields (discriminant, pitch, bars, timbre).
+          // Timbre attributes added in post-phase-01 fix (2026-06-26); preset added in
+          // NoteSlot preset bug fix. Absent fields are omitted (additive schema).
+          return {
+            isNote: true as const,
+            rootPc: slot.rootPc,
+            octaveOffset: slot.octaveOffset,
+            ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+            ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
+            ...(slot.gain !== undefined ? { gain: slot.gain } : {}),
+            ...(slot.room !== undefined ? { room: slot.room } : {}),
+            ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
+            ...(slot.attack !== undefined ? { attack: slot.attack } : {}),
+            ...(slot.lpf !== undefined ? { lpf: slot.lpf } : {}),
+            ...(slot.preset !== undefined ? { preset: slot.preset } : {}),
+          };
+        }
         // ADR 0012 D4: narrow on isRest discriminant.
         if ('isRest' in slot) {
           // Rest slot — serialize only the discriminant and optional bars.
@@ -297,25 +375,27 @@ export function serializeSession(state: SessionState): SavedSession {
             : { isRest: true as const };
         }
         // Chord slot — cx/cy excluded (Decisions Register: render hints ephemeral).
+        // Cast is safe: isNote and isRest branches above have returned already.
+        const chord = slot as import('../state/session.js').Chord;
         return {
-          rootPc: slot.rootPc,
-          qual: slot.qual,
-          gain: slot.gain,
-          ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          rootPc: chord.rootPc,
+          qual: chord.qual,
+          gain: chord.gain,
+          ...(chord.bars !== undefined ? { bars: chord.bars } : {}),
           // ADR 0018 D3: persist sound attributes when present.
-          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
-          ...(slot.room !== undefined ? { room: slot.room } : {}),
-          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
+          ...(chord.instrument !== undefined ? { instrument: chord.instrument } : {}),
+          ...(chord.room !== undefined ? { room: chord.room } : {}),
+          ...(chord.decay !== undefined ? { decay: chord.decay } : {}),
           // ADR 0019 D5: persist preset and filter/envelope attributes when present.
-          ...(slot.preset !== undefined ? { preset: slot.preset } : {}),
-          ...(slot.lpf !== undefined ? { lpf: slot.lpf } : {}),
-          ...(slot.attack !== undefined ? { attack: slot.attack } : {}),
-          ...(slot.sustain !== undefined ? { sustain: slot.sustain } : {}),
-          ...(slot.release !== undefined ? { release: slot.release } : {}),
-          ...(slot.lpenv !== undefined ? { lpenv: slot.lpenv } : {}),
-          ...(slot.lpa !== undefined ? { lpa: slot.lpa } : {}),
-          ...(slot.lpd !== undefined ? { lpd: slot.lpd } : {}),
-          ...(slot.lpq !== undefined ? { lpq: slot.lpq } : {}),
+          ...(chord.preset !== undefined ? { preset: chord.preset } : {}),
+          ...(chord.lpf !== undefined ? { lpf: chord.lpf } : {}),
+          ...(chord.attack !== undefined ? { attack: chord.attack } : {}),
+          ...(chord.sustain !== undefined ? { sustain: chord.sustain } : {}),
+          ...(chord.release !== undefined ? { release: chord.release } : {}),
+          ...(chord.lpenv !== undefined ? { lpenv: chord.lpenv } : {}),
+          ...(chord.lpa !== undefined ? { lpa: chord.lpa } : {}),
+          ...(chord.lpd !== undefined ? { lpd: chord.lpd } : {}),
+          ...(chord.lpq !== undefined ? { lpq: chord.lpq } : {}),
         };
       }),
     },
@@ -385,31 +465,58 @@ export function deserializeSession(
       mode: saved.harmony.mode,
       octave: saved.harmony.octave,
       // ADR 0012 D4: narrow on isRest discriminant in deserialized union.
+      // note-placement Phase 01: also narrow on isNote for NoteSlot.
       progression: saved.harmony.progression.map((slot) => {
+        if ('isNote' in slot && slot.isNote === true) {
+          // NoteSlot — restore pitch fields plus all optional timbre attributes.
+          return {
+            isNote: true as const,
+            rootPc: slot.rootPc,
+            octaveOffset: slot.octaveOffset,
+            ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+            ...('instrument' in slot && slot.instrument !== undefined
+              ? { instrument: slot.instrument as string }
+              : {}),
+            ...('gain' in slot && slot.gain !== undefined ? { gain: slot.gain as number } : {}),
+            ...('room' in slot && slot.room !== undefined ? { room: slot.room as number } : {}),
+            ...('decay' in slot && slot.decay !== undefined ? { decay: slot.decay as number } : {}),
+            ...('attack' in slot && slot.attack !== undefined
+              ? { attack: slot.attack as number }
+              : {}),
+            ...('lpf' in slot && slot.lpf !== undefined ? { lpf: slot.lpf as number } : {}),
+            ...('preset' in slot && slot.preset !== undefined
+              ? { preset: slot.preset as string }
+              : {}),
+          };
+        }
         if ('isRest' in slot) {
           return slot.bars !== undefined
             ? { isRest: true as const, bars: slot.bars }
             : { isRest: true as const };
         }
+        // Chord slot: cast is safe — isNote and isRest branches above have returned.
+        // The Zod-inferred union after ruling out isNote and isRest is the chord shape.
+        type ChordShape = z.infer<typeof SavedChordSchema>;
+        const chord = slot as ChordShape;
         return {
-          rootPc: slot.rootPc,
-          qual: slot.qual,
-          gain: slot.gain,
-          ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+          rootPc: chord.rootPc,
+          qual: chord.qual,
+          gain: chord.gain,
+          ...(chord.bars !== undefined ? { bars: chord.bars } : {}),
           // ADR 0018 D3: carry through sound attributes.
-          ...(slot.instrument !== undefined ? { instrument: slot.instrument } : {}),
-          ...(slot.room !== undefined ? { room: slot.room } : {}),
-          ...(slot.decay !== undefined ? { decay: slot.decay } : {}),
+          ...(chord.instrument !== undefined ? { instrument: chord.instrument } : {}),
+          ...(chord.room !== undefined ? { room: chord.room } : {}),
+          ...(chord.decay !== undefined ? { decay: chord.decay } : {}),
           // ADR 0019 D5: carry through preset and filter/envelope attributes.
-          ...(slot.preset !== undefined ? { preset: slot.preset } : {}),
-          ...(slot.lpf !== undefined ? { lpf: slot.lpf } : {}),
-          ...(slot.attack !== undefined ? { attack: slot.attack } : {}),
-          ...(slot.sustain !== undefined ? { sustain: slot.sustain } : {}),
-          ...(slot.release !== undefined ? { release: slot.release } : {}),
-          ...(slot.lpenv !== undefined ? { lpenv: slot.lpenv } : {}),
-          ...(slot.lpa !== undefined ? { lpa: slot.lpa } : {}),
-          ...(slot.lpd !== undefined ? { lpd: slot.lpd } : {}),
-          ...(slot.lpq !== undefined ? { lpq: slot.lpq } : {}),
+          ...(chord.preset !== undefined ? { preset: chord.preset } : {}),
+          ...(chord.lpf !== undefined ? { lpf: chord.lpf } : {}),
+          ...(chord.attack !== undefined ? { attack: chord.attack } : {}),
+          ...(chord.sustain !== undefined ? { sustain: chord.sustain } : {}),
+          ...(chord.release !== undefined ? { release: chord.release } : {}),
+          ...(chord.lpenv !== undefined ? { lpenv: chord.lpenv } : {}),
+          ...(chord.lpa !== undefined ? { lpa: chord.lpa } : {}),
+          ...(chord.lpd !== undefined ? { lpd: chord.lpd } : {}),
+          ...(chord.lpq !== undefined ? { lpq: chord.lpq } : {}),
         };
       }),
       // Phase 08 (step 08.5): ephemeral UI fields — NOT from SavedHarmonySchema.

@@ -26,6 +26,7 @@ import {
   rhythmCode,
   harmonyCode,
   sessionCode,
+  isNoteSlot,
 } from '../state/session.js';
 import { NOTE_NAMES } from '../core/theory/pitch.js';
 import { PROVIDERS, loadApiKey, type ProviderKey, type ChatMessage } from './providers.js';
@@ -367,6 +368,12 @@ export async function sendEvolution(): Promise<void> {
         if ('isRest' in ch) {
           return ch.bars ? { isRest: true, bars: ch.bars } : { isRest: true };
         }
+        // NoteSlot: represent as a compact note descriptor in the agent prompt.
+        if (isNoteSlot(ch)) {
+          return ch.bars
+            ? { isNote: true, rootPc: ch.rootPc, octaveOffset: ch.octaveOffset, bars: ch.bars }
+            : { isNote: true, rootPc: ch.rootPc, octaveOffset: ch.octaveOffset };
+        }
         const entry: Record<string, unknown> = {
           root: NOTE_NAMES[ch.rootPc],
           quality: ch.qual,
@@ -675,7 +682,11 @@ function buildContextAddendum(ctx: AgentSendContext): string {
     let progDesc = '(sin progresión)';
     if (progression.length) {
       progDesc = progression
-        .map((c) => ('isRest' in c ? '–' : `${NOTE_NAMES[c.rootPc]}${c.qual}`))
+        .map((c) => {
+          if ('isRest' in c) return '–';
+          if (isNoteSlot(c)) return `♩${NOTE_NAMES[c.rootPc] ?? '?'}`;
+          return `${NOTE_NAMES[c.rootPc]}${c.qual}`;
+        })
         .join(' → ');
     }
     addendum += `\n\n[MARCO ARMÓNICO (geometría de acordes; COMPÓN DENTRO de esta clave):\nClave: ${scaleName} (octava ${octave})\nProgresión: ${progDesc}\nPrioriza voice-leadings pequeños entre acordes consecutivos. T=tónica, SD=subdominante, D=dominante.]`;

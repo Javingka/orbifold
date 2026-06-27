@@ -319,6 +319,11 @@
   // -1 = picker closed; >= 0 = picker open for that layer index.
   let showSoundPicker = -1;
 
+  // Fix 1: bind ref to .layer-ctl so toggleSoundPicker can read its bounding rect.
+  let layerCtlEl: HTMLDivElement | null = null;
+  // true = dropdown opens downward (overlay is in upper half of viewport).
+  let pickerDropsDown = false;
+
   // Grouped sound palette — mirrors SK_SOUNDS expansion in step 09.1.
   // Abstract palette names only (ADR 0025 D1, AG-D1 seam invariant).
   const SOUNDS_GROUPED = [
@@ -335,7 +340,20 @@
   function toggleSoundPicker(layerIdx: number): void {
     const layer = $sessionStore.rhythm.layers[layerIdx];
     if (!layer || layer.locked) return; // locked layers: no picker
-    showSoundPicker = showSoundPicker === layerIdx ? -1 : layerIdx;
+    if (showSoundPicker === layerIdx) {
+      showSoundPicker = -1;
+      return;
+    }
+    // Fix 1: determine open direction from the actual element bounding rect, not
+    // from overlayY. The overlay is already translated -140% upward by CSS, so an
+    // orbit near the TOP produces a small overlayY (< innerHeight/2) while the
+    // rendered overlay is already near the top of the viewport. Reading the actual
+    // rect gives us the true rendered position of the overlay.
+    if (layerCtlEl !== null) {
+      const rect = layerCtlEl.getBoundingClientRect();
+      pickerDropsDown = rect.top < window.innerHeight / 2;
+    }
+    showSoundPicker = layerIdx;
   }
 
   function handleChangeLayerSound(layerIdx: number, newSound: Sound): void {
@@ -501,12 +519,14 @@
 {#if hoveredLayerIndex >= 0}
   <div
     class="layer-ctl"
+    bind:this={layerCtlEl}
     style="left: {overlayX}px; top: {overlayY}px;"
     on:pointerenter={cancelHideOverlay}
     on:pointerleave={() => {
-      // Cursor left the overlay; hide immediately.
-      hoveredLayerIndex = -1;
-      showSoundPicker = -1; // Phase 09 step 09.3: close picker when overlay disappears
+      // Fix 3: use the same debounced timer as the canvas pointerleave so the
+      // cursor has 400 ms to travel to the dropdown before it disappears.
+      // (Previously this hid immediately, causing flicker when crossing the gap.)
+      scheduleHideOverlay();
     }}
     role="toolbar"
     aria-label={$t('app.layerCtl.ariaLabel')}
@@ -520,7 +540,7 @@
     {#if showSoundPicker === hoveredLayerIndex}
       <div
         class="sound-picker-dropdown"
-        class:dropup={overlayY > window.innerHeight / 2}
+        class:dropup={pickerDropsDown}
         on:click|stopPropagation={() => {
           /* prevent svelte:window close */
         }}
@@ -782,8 +802,11 @@
 
   /*
    * Sound picker dropdown: a glass panel that floats above (or below) the overlay.
-   * Default position: above (bottom: calc(100% + 4px)) — the common case for
-   * orbits in the lower viewport half. The .dropup class flips to below.
+   * Fix 1: max-height + overflow-y so it never clips even if position is slightly off.
+   * Fix 2: grid layout (2 columns) for uniform badge appearance.
+   * Fix 3: bottom: calc(100% + 0px) — no gap between overlay and dropdown so the
+   *   cursor does not fall through. The ::before pseudo-element extends 6px outward
+   *   to catch the cursor even if there is sub-pixel rounding.
    *
    * Note: .layer-ctl has transform: translate(-50%, -140%), so position:absolute
    * children are relative to the overlay's own size. The dropdown uses position:absolute
@@ -791,57 +814,93 @@
    */
   .sound-picker-dropdown {
     position: absolute;
-    bottom: calc(100% + 4px);
+    bottom: calc(100% + 0px);
     left: 0;
     background: #1a1c23;
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
-    padding: 6px;
+    padding: 8px;
     z-index: 200;
-    min-width: 110px;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
+    min-width: 180px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(78px, 1fr));
+    gap: 3px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    max-height: min(260px, 45vh);
+    overflow-y: auto;
+  }
+
+  /* Fix 3: transparent extension below the dropdown covers any sub-pixel gap. */
+  .sound-picker-dropdown::before {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 0;
+    right: 0;
+    height: 6px;
   }
 
   /*
-   * .dropup: when overlayY > window.innerHeight/2 (orbit in upper half),
-   * dropdown opens downward (below the overlay).
+   * Fix 1: corrected flip class.
+   * pickerDropsDown === true means the overlay is in the upper viewport half,
+   * so the dropdown opens downward (top: calc(100% + 0px)).
    */
   .sound-picker-dropdown.dropup {
     bottom: auto;
-    top: calc(100% + 4px);
+    top: calc(100% + 0px);
   }
 
+  /* Fix 3: when opening downward the extension must be above the dropdown. */
+  .sound-picker-dropdown.dropup::before {
+    bottom: auto;
+    top: -6px;
+    height: 6px;
+  }
+
+  /*
+   * Fix 2: group label spans both grid columns.
+   */
   .sound-group-label {
+    grid-column: 1 / -1;
     font-size: 9px;
     color: rgba(255, 255, 255, 0.35);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    padding: 3px 6px 1px;
+    padding: 4px 4px 2px;
     user-select: none;
   }
 
+  /*
+   * Fix 2: uniform badge cell — each sound option is the same size regardless
+   * of label length. Two columns mean 16 sounds fit in ~8 rows (~120–140px).
+   */
   .sound-option {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 5px;
+    color: rgba(255, 255, 255, 0.8);
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    text-align: left;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
     cursor: pointer;
-    transition: background 0.1s;
+    transition:
+      background 0.12s,
+      border-color 0.12s;
+    white-space: nowrap;
   }
 
   .sound-option:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
   }
 
   .sound-option.active {
-    background: rgba(138, 160, 255, 0.2);
+    background: rgba(138, 160, 255, 0.18);
+    border-color: rgba(138, 160, 255, 0.4);
     color: #8aa0ff;
   }
 </style>

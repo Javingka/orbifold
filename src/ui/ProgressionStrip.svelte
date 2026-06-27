@@ -104,6 +104,7 @@
     setChordBars,
     barsLabel,
     appendRest,
+    isNoteSlot,
   } from '../state/session.js';
   import { getVisualPhaseAnchor } from '../state/phase-anchor.js';
   import { chordLabel } from '../core/theory/chords.js';
@@ -318,8 +319,9 @@
    */
   function handlePointerDown(e: PointerEvent, i: number): void {
     // Phase 06: rest slots have no gain to drag — no-op entirely.
+    // note-placement Phase 01: NoteSlot also has no gain drag — no-op.
     const slot = $sessionStore.harmony.progression[i];
-    if (slot && 'isRest' in slot) return;
+    if (slot && ('isRest' in slot || isNoteSlot(slot))) return;
     const target = e.target as HTMLElement;
     if (target.classList.contains('rm')) return;
     // Do not start gain drag if clicking on the resize handle — that gesture
@@ -384,8 +386,9 @@
     } else {
       // Tap: play chord preview. Prototype lines 1461–1464.
       // Phase 06: guard against rest slots — no chord to preview.
+      // note-placement Phase 01: also guard NoteSlot — no chord to preview.
       const ch = $sessionStore.harmony.progression[i];
-      if (ch && !('isRest' in ch)) {
+      if (ch && !('isRest' in ch) && !isNoteSlot(ch)) {
         playChord(ch.rootPc, ch.qual, ch.gain);
       }
     }
@@ -567,6 +570,39 @@
                 role="separator"
                 aria-orientation="vertical"
                 aria-label={$t('strip.resizeRestAria')}
+                on:pointerdown={(e) => handleResizePointerDown(e, i)}
+                on:pointermove={(e) => handleResizePointerMove(e, i)}
+                on:pointerup={(e) => handleResizePointerUp(e, i)}
+              ></div>
+            </div>
+          {:else if isNoteSlot(ch)}
+            <!--
+              note-placement Phase 01 step 01.2: NoteSlot chip rendering.
+              Accent-colored flat segment — no gain fill, no gain drag (same as rest).
+              Full chip rendering (note-head, pitch label) deferred to step 01.5.
+            -->
+            <div
+              class="seg note-seg"
+              style="
+                width: {segPx}px;
+                flex: 0 0 {segPx}px;
+              "
+              title="♩ Nota"
+              role="presentation"
+              tabindex="-1"
+            >
+              <span class="seg-content">
+                <span class="seg-label note-label">♩</span>
+                {#if durLabel}
+                  <span class="seg-dur">{durLabel}</span>
+                {/if}
+              </span>
+              <button class="rm" on:click={(e) => handleRemove(e, i)} tabindex="-1">✕</button>
+              <div
+                class="resize-handle"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Cambiar duración de nota"
                 on:pointerdown={(e) => handleResizePointerDown(e, i)}
                 on:pointermove={(e) => handleResizePointerMove(e, i)}
                 on:pointerup={(e) => handleResizePointerUp(e, i)}
@@ -888,6 +924,27 @@
     font-weight: 400;
     font-size: 14px;
     letter-spacing: 0.05em;
+  }
+
+  /*
+   * NoteSlot segment: accent-colored flat segment (CLAUDE.md tonal-function accent #8aa0ff).
+   * Full chip rendering deferred to step 01.5.
+   * note-placement Phase 01 step 01.2.
+   */
+  .seg.note-seg {
+    background: rgba(138, 160, 255, 0.18);
+    border-color: rgba(138, 160, 255, 0.45);
+    cursor: default;
+  }
+
+  /*
+   * NoteSlot chip label: musical note character ♩ in accent color.
+   */
+  .note-label {
+    color: #8aa0ff;
+    font-weight: 500;
+    font-size: 16px;
+    letter-spacing: 0.03em;
   }
 
   /*
