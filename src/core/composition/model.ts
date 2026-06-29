@@ -42,6 +42,8 @@ export interface Block {
 export interface Track {
   id: string;
   blocks: { blockId: string; bars: number }[];
+  muted?: boolean;
+  solo?: boolean;
 }
 
 /**
@@ -93,9 +95,17 @@ function totalBars(blocks: Block[], tracks: Track[]): number {
  * Ported from prototype lines 2054–2065 (with explicit `blocks`/`tracks`
  * params per OD-4; `'silence'` padding byte-for-byte preserved).
  */
+function trackAudible(track: Track, tracks: Track[]): boolean {
+  if (track.muted) return false;
+  const anySolo = tracks.some((t) => t.solo);
+  if (anySolo && !track.solo) return false;
+  return true;
+}
+
 export function buildComposition(blocks: Block[], tracks: Track[]): string {
   const tb = totalBars(blocks, tracks);
   const pats = tracks
+    .filter((t) => trackAudible(t, tracks))
     .map((t) => {
       const segs: string[] = [];
       let sum = 0;

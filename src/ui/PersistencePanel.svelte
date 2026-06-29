@@ -13,6 +13,7 @@
     listSavedSessions,
     deleteSession,
     encodeSession,
+    decodeSession,
   } from '../lib/persistence.js';
   import { t } from '../i18n/index.js';
 
@@ -69,6 +70,45 @@
       }, 2000);
     });
   }
+
+  function handleDownload(): void {
+    const encoded = encodeSession(get(sessionStore));
+    const blob = new Blob([encoded], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'orbifold-session.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  let uploadFeedback = '';
+  let uploadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleUpload(e: Event): void {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const saved = decodeSession(text);
+      if (saved !== null) {
+        applyLoadedSession(saved);
+        uploadFeedback = 'Sesión cargada ✓';
+        closePanel();
+      } else {
+        uploadFeedback = 'Archivo inválido';
+      }
+      if (uploadTimer !== null) clearTimeout(uploadTimer);
+      uploadTimer = setTimeout(() => {
+        uploadFeedback = '';
+        uploadTimer = null;
+      }, 2500);
+    };
+    reader.readAsText(file);
+    input.value = '';
+  }
 </script>
 
 <!--
@@ -121,5 +161,18 @@
   <div class="share-url-row">
     <button on:click={handleShare}>{$t('persistence.shareBtn')}</button>
     <div class="share-feedback">{shareFeedback}</div>
+  </div>
+
+  <div class="file-row">
+    <button class="file-btn" title="Descargar sesión completa como JSON" on:click={handleDownload}
+      >⬇ Descargar</button
+    >
+    <label class="file-btn" title="Importar sesión desde archivo JSON">
+      ⬆ Importar
+      <input type="file" accept=".json,application/json" on:change={handleUpload} />
+    </label>
+    {#if uploadFeedback}
+      <span class="upload-feedback">{uploadFeedback}</span>
+    {/if}
   </div>
 </div>

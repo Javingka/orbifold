@@ -51,6 +51,13 @@
   // ── Panel open/close state ────────────────────────────────────────────────
   let open = false;
 
+  // When the panel is open, push the persistence button out of the way so it
+  // doesn't overlap the chat input area (both use position:fixed right:14px).
+  $: {
+    if (open) document.body.classList.add('agent-open');
+    else document.body.classList.remove('agent-open');
+  }
+
   // ── Provider / model / key state ─────────────────────────────────────────
   // Prototype: providerSel, modelInput, keyInput (lines 1596–1606).
 

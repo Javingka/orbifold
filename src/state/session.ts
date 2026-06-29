@@ -1764,6 +1764,28 @@ export function addTrack(): void {
   }));
 }
 
+/** Toggle mute on a composition track. Re-plays composition if it is currently running. */
+export function muteTrack(trackIndex: number): void {
+  sessionStore.update((s) => {
+    const tracks = s.composition.tracks.map((t, i) =>
+      i === trackIndex ? { ...t, muted: !t.muted } : t
+    );
+    return { ...s, composition: { ...s.composition, tracks } };
+  });
+  if (get(sessionStore).nowPlaying.source === 'composition') void playComposition();
+}
+
+/** Toggle solo on a composition track. Re-plays composition if it is currently running. */
+export function soloTrack(trackIndex: number): void {
+  sessionStore.update((s) => {
+    const tracks = s.composition.tracks.map((t, i) =>
+      i === trackIndex ? { ...t, solo: !t.solo } : t
+    );
+    return { ...s, composition: { ...s.composition, tracks } };
+  });
+  if (get(sessionStore).nowPlaying.source === 'composition') void playComposition();
+}
+
 /**
  * Remove a track by index. If the removed track was the last one, re-adds a
  * single empty track so the timeline always has at least one lane.

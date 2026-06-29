@@ -293,6 +293,8 @@ const SavedBlockRefSchema = z.object({
 
 const SavedTrackSchema = z.object({
   blockRefs: z.array(SavedBlockRefSchema),
+  muted: z.boolean().optional(),
+  solo: z.boolean().optional(),
 });
 
 const SavedCompositionSchema = z.object({
@@ -435,6 +437,8 @@ export function serializeSession(state: SessionState): SavedSession {
             return { blockIndex: idx, bars: ref.bars };
           })
           .filter((r): r is { blockIndex: number; bars: number } => r !== null),
+        ...(t.muted ? { muted: true } : {}),
+        ...(t.solo ? { solo: true } : {}),
       })),
     },
   };
@@ -566,6 +570,8 @@ export function deserializeSession(
           blockId: String(ref.blockIndex), // placeholder — rebuilt by applyLoadedSession
           bars: ref.bars,
         })),
+        ...(t.muted ? { muted: true } : {}),
+        ...(t.solo ? { solo: true } : {}),
       })),
     },
   };

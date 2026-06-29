@@ -429,9 +429,8 @@ textarea {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 0 9px;
+  gap: 4px;
+  padding: 0 7px;
   border-bottom: 1px solid var(--stroke);
 }
 
@@ -1305,7 +1304,15 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  transition:
+    background 0.15s,
+    right 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* When the AI agent panel is open, shift the persistence button left so it
+   doesn't overlap the panel's chat input (both anchor at right:14px). */
+body.agent-open #sessionsBtn {
+  right: calc(372px + 14px + 10px);
 }
 
 #sessionsBtn:hover {
@@ -1500,4 +1507,45 @@ textarea {
   color: var(--subdom);
   text-align: center;
   min-height: 16px;
+}
+
+/* Download / Upload file row */
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--stroke);
+  flex-wrap: wrap;
+}
+
+.file-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.file-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+/* Hide the real file input inside the label */
+.file-btn input[type='file'] {
+  display: none;
+}
+
+.upload-feedback {
+  width: 100%;
+  font-size: 11.5px;
+  color: var(--subdom);
+  text-align: center;
 }

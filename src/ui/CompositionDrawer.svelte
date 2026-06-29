@@ -73,6 +73,8 @@
     openBlock,
     addTrack,
     removeTrack,
+    muteTrack,
+    soloTrack,
     addBlockToTrack,
     addBlockAsNewTrack,
     removeBlockFromTrack,
@@ -768,16 +770,30 @@
             Prototype lines 1997–2001.
           -->
           {#each trackIndices as ti (ti)}
-            <div class="tl-head">
+            {@const track = $sessionStore.composition.tracks[ti]}
+            <div class="tl-head" class:track-muted={track?.muted}>
               <span class="tname">{$t('composition.trackLabel', { N: String(ti + 1) })}</span>
-              <!--
-                Delete track button. Prototype line 2000:
-                `tracks.splice(ti,1); if(!tracks.length) tracks.push(...);`
-                Function: removeTrack(ti) — auto-re-adds empty if last.
-              -->
-              <button title={$t('composition.deleteTrackTitle')} on:click={() => removeTrack(ti)}
-                >🗑</button
-              >
+              <div class="track-ctl">
+                <button
+                  class="track-ms"
+                  class:on={track?.muted}
+                  title="Mute track"
+                  on:click={() => muteTrack(ti)}>M</button
+                >
+                <button
+                  class="track-ms solo"
+                  class:on={track?.solo}
+                  title="Solo track"
+                  on:click={() => soloTrack(ti)}>S</button
+                >
+                <!--
+                  Delete track button. Prototype line 2000.
+                  Function: removeTrack(ti) — auto-re-adds empty if last.
+                -->
+                <button title={$t('composition.deleteTrackTitle')} on:click={() => removeTrack(ti)}
+                  >🗑</button
+                >
+              </div>
             </div>
           {/each}
         </div>
@@ -1038,6 +1054,51 @@
     .comp-grid {
       grid-template-columns: 300px 1fr;
     }
+  }
+
+  /* Track mute/solo button group */
+  .track-ctl {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: auto;
+  }
+
+  .track-ms {
+    font-size: 10px;
+    font-weight: 700;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    padding: 0;
+    color: var(--faint);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition:
+      background 0.12s,
+      color 0.12s;
+  }
+
+  .track-ms:hover {
+    border-color: var(--stroke);
+    color: var(--text);
+  }
+
+  .track-ms.on:not(.solo) {
+    background: rgba(232, 123, 172, 0.18);
+    border-color: rgba(232, 123, 172, 0.45);
+    color: #e87bac;
+  }
+
+  .track-ms.solo.on {
+    background: rgba(138, 160, 255, 0.18);
+    border-color: rgba(138, 160, 255, 0.45);
+    color: var(--accent);
+  }
+
+  .tl-head.track-muted .tname {
+    opacity: 0.4;
   }
 
   /*
