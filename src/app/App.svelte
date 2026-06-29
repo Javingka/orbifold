@@ -339,7 +339,7 @@
 
   function toggleSoundPicker(layerIdx: number): void {
     const layer = $sessionStore.rhythm.layers[layerIdx];
-    if (!layer || layer.locked) return; // locked layers: no picker
+    if (!layer || (layer.locked && $sessionStore.autopilot.enabled)) return; // only block when autopilot is running
     if (showSoundPicker === layerIdx) {
       showSoundPicker = -1;
       return;
@@ -567,10 +567,12 @@
     {/if}
     <button
       class="sound-btn"
-      title={$sessionStore.rhythm.layers[hoveredLayerIndex]?.locked
-        ? 'Sound locked (recipe signature)'
+      title={$sessionStore.rhythm.layers[hoveredLayerIndex]?.locked &&
+      $sessionStore.autopilot.enabled
+        ? 'Sound locked (recipe — autopilot active)'
         : 'Change sound: ' + ($sessionStore.rhythm.layers[hoveredLayerIndex]?.sound ?? '?')}
-      style={$sessionStore.rhythm.layers[hoveredLayerIndex]?.locked
+      style={$sessionStore.rhythm.layers[hoveredLayerIndex]?.locked &&
+      $sessionStore.autopilot.enabled
         ? 'opacity:0.5;cursor:default'
         : ''}
       on:click|stopPropagation={() => toggleSoundPicker(hoveredLayerIndex)}

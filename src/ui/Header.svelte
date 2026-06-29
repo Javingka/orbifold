@@ -353,25 +353,26 @@
   CSS: header { display:flex; align-items:center; gap:18px; padding:11px 20px;
        margin:10px 12px 0; border-radius:18px; flex-wrap:wrap; } (lines 69–72).
 -->
-<header class="glass">
-  <!--
+<div class="header-wrap">
+  <header class="glass">
+    <!--
     Top row: primary navigation + language + tutorial (Phase 11 Checkpoint #5
     redesign). Always-present global controls live here; section-specific
     controls move to the bottom row so the Tutorial/language never wrap.
   -->
-  <div class="hdr-row hdr-top">
-    <!--
+    <div class="hdr-row hdr-top">
+      <!--
       Brand: glyph + title + tag. Prototype lines 359–363.
       Phase 11 Checkpoint #5: the brand is now a link to the landing page.
       "Orbifold" stays a [VERBATIM] token (OQ-6); only the title attr translates.
     -->
-    <a class="brand" href="./landing.html" title={$t('header.brandTitle')}>
-      <span class="glyph">꩜</span>
-      <h1>Orbifold</h1>
-      <span class="tag">{$t('header.tagline')}</span>
-    </a>
+      <a class="brand" href="./landing.html" title={$t('header.brandTitle')}>
+        <span class="glyph">꩜</span>
+        <h1>Orbifold</h1>
+        <span class="tag">{$t('header.tagline')}</span>
+      </a>
 
-    <!--
+      <!--
     4-tab primary navigation segmented control.
     Phase 09 step 09.4: expanded from 2 buttons (Armonía · Ritmo) to 4 equal-weight
     buttons (Armonía · Ritmo · Composición · Código Strudel). ADR 0013 D1.
@@ -379,98 +380,103 @@
     tab can dominate via font size or padding differences.
     Active class applied to the currently-selected view.
   -->
-    <div class="seg" id="viewSeg">
-      <button
-        data-view="harmony"
-        class={$sessionStore.view === 'harmony' ? 'active' : ''}
-        on:click={() => handleViewChange('harmony')}
-      >
-        {$t('header.nav.harmony')}
-      </button>
-      <button
-        data-view="rhythm"
-        class={$sessionStore.view === 'rhythm' ? 'active' : ''}
-        on:click={() => handleViewChange('rhythm')}
-      >
-        {$t('header.nav.rhythm')}
-      </button>
-      <button
-        data-view="composition"
-        class={$sessionStore.view === 'composition' ? 'active' : ''}
-        on:click={() => handleViewChange('composition')}
-      >
-        {$t('header.nav.composition')}
-      </button>
-      <button
-        data-view="code"
-        class={$sessionStore.view === 'code' ? 'active' : ''}
-        on:click={() => handleViewChange('code')}
-      >
-        {$t('header.nav.code')}
-      </button>
-    </div>
+      <div class="seg" id="viewSeg">
+        <button
+          data-view="harmony"
+          class={$sessionStore.view === 'harmony' ? 'active' : ''}
+          on:click={() => handleViewChange('harmony')}
+        >
+          {$t('header.nav.harmony')}
+        </button>
+        <button
+          data-view="rhythm"
+          class={$sessionStore.view === 'rhythm' ? 'active' : ''}
+          on:click={() => handleViewChange('rhythm')}
+        >
+          {$t('header.nav.rhythm')}
+        </button>
+        <button
+          data-view="composition"
+          class={$sessionStore.view === 'composition' ? 'active' : ''}
+          on:click={() => handleViewChange('composition')}
+        >
+          {$t('header.nav.composition')}
+        </button>
+        <button
+          data-view="code"
+          class={$sessionStore.view === 'code' ? 'active' : ''}
+          on:click={() => handleViewChange('code')}
+        >
+          {$t('header.nav.code')}
+        </button>
+      </div>
 
-    <!-- Spacer: pushes right-side controls to the right. Prototype: .sp (line 388). -->
-    <div class="sp"></div>
+      <!-- Spacer: pushes right-side controls to the right. Prototype: .sp (line 388). -->
+      <div class="sp"></div>
 
-    <!--
+      <!--
       Language selector (Phase 11 step 11.3 — ADR 0017 OQ-5).
       The 文A button (CJK + Latin glyph, Wikipedia/Google-style language globe idiom)
       opens a dropdown listing the four native language labels. Always visible.
       Clicking a language writes to the `lang` store → triggers localStorage write-back
       to 'orbifold.lang' (D3 contract). The dropdown closes on selection or focus-out.
     -->
-    <div class="lang-sel" role="group" aria-label="Language selector" on:focusout={handleLangBlur}>
-      <button
-        class="lang-btn"
-        title="Language / Idioma / Língua / 语言"
-        aria-haspopup="listbox"
-        aria-expanded={langMenuOpen}
-        on:click={handleLangToggle}>文A</button
+      <div
+        class="lang-sel"
+        role="group"
+        aria-label="Language selector"
+        on:focusout={handleLangBlur}
       >
-      {#if langMenuOpen}
-        <!-- position:absolute anchored to .lang-sel; the header's raised stacking
+        <button
+          class="lang-btn"
+          title="Language / Idioma / Língua / 语言"
+          aria-haspopup="listbox"
+          aria-expanded={langMenuOpen}
+          on:click={handleLangToggle}>文A</button
+        >
+        {#if langMenuOpen}
+          <!-- position:absolute anchored to .lang-sel; the header's raised stacking
              context (header { position:relative; z-index } below) lifts it above
              the PIXI canvas and the Legend bar. -->
-        <ul
-          class="lang-menu"
-          role="listbox"
-          aria-label="Select language"
-          on:pointerdown|stopPropagation
-          on:mousedown|stopPropagation
-        >
-          {#each LANGS as { code, label }}
-            <li role="option" aria-selected={$lang === code}>
-              <button
-                class="lang-option"
-                class:active={$lang === code}
-                on:click|stopPropagation={() => handleLangSelect(code)}>{label}</button
-              >
-            </li>
-          {/each}
-        </ul>
-      {/if}
+          <ul
+            class="lang-menu"
+            role="listbox"
+            aria-label="Select language"
+            on:pointerdown|stopPropagation
+            on:mousedown|stopPropagation
+          >
+            {#each LANGS as { code, label }}
+              <li role="option" aria-selected={$lang === code}>
+                <button
+                  class="lang-option"
+                  class:active={$lang === code}
+                  on:click|stopPropagation={() => handleLangSelect(code)}>{label}</button
+                >
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+
+      <a
+        href="./tutorial.html"
+        class="tutorial-link"
+        target="_blank"
+        rel="noopener"
+        title={$t('header.tutorialTitle')}>{$t('header.tutorialLabel')}</a
+      >
     </div>
 
-    <a
-      href="./tutorial.html"
-      class="tutorial-link"
-      target="_blank"
-      rel="noopener"
-      title={$t('header.tutorialTitle')}>{$t('header.tutorialLabel')}</a
-    >
-  </div>
-
-  <!--
+    <!--
     Bottom row: section-specific controls (Phase 11 Checkpoint #5 redesign).
     Always present so the template stays a balanced tree; collapsed via
     .hidden for views without inline controls (composition / code).
   -->
-  <div
-    class="hdr-row hdr-bottom"
-    class:hidden={!($sessionStore.view === 'rhythm' || $sessionStore.view === 'harmony')}
-  >
-    <!--
+    <div
+      class="hdr-row hdr-bottom"
+      class:hidden={!($sessionStore.view === 'rhythm' || $sessionStore.view === 'harmony')}
+    >
+      <!--
     Rhythm controls (Phase 09 step 09.5).
     Moved from RhythmControls.svelte overlay (ADR 0013 D3).
     All rhythm-specific controls inline here, gated by view === 'rhythm'.
@@ -479,212 +485,216 @@
     so that it wraps gracefully on narrow viewports without overflowing the header.
     The inner .rhythm-ctl div acts as the flex-wrap container.
   -->
-    {#if $sessionStore.view === 'rhythm'}
-      <div class="rhythm-ctl">
-        <!--
+      {#if $sessionStore.view === 'rhythm'}
+        <div class="rhythm-ctl">
+          <!--
         Morph toggle. Prototype: button#layoutToggle.mk (line 427).
         Toggles morphTarget (0|1) and calls setMorphTarget() from rhythm-scene.ts.
       -->
-        <button
-          class="rk"
-          id="layoutToggle"
-          data-tip={$t('header.rhythm.morphTip')}
-          style="background:rgba(138,160,255,.14);border-color:rgba(138,160,255,.4);color:var(--accent)"
-          on:click={handleMorphToggle}
-        >
-          {morphTarget === 0 ? $t('header.rhythm.morphLinear') : $t('header.rhythm.morphRadial')}
-        </button>
+          <button
+            class="rk"
+            id="layoutToggle"
+            data-tip={$t('header.rhythm.morphTip')}
+            style="background:rgba(138,160,255,.14);border-color:rgba(138,160,255,.4);color:var(--accent)"
+            on:click={handleMorphToggle}
+          >
+            {morphTarget === 0 ? $t('header.rhythm.morphLinear') : $t('header.rhythm.morphRadial')}
+          </button>
 
-        <span class="r-sep">│</span>
+          <span class="r-sep">│</span>
 
-        <!--
+          <!--
         Euclidean section header. Prototype line 429.
       -->
-        <span data-tip={$t('header.rhythm.euclidSectionTip')}>
-          {$t('header.rhythm.euclidLabel')}
-        </span>
+          <span data-tip={$t('header.rhythm.euclidSectionTip')}>
+            {$t('header.rhythm.euclidLabel')}
+          </span>
 
-        <!--
+          <!--
         Sound select. Prototype lines 430–434.
       -->
-        <select
-          id="euclidSound"
-          bind:value={euclidSound}
-          data-tip={$t('header.rhythm.soundTip')}
-          on:change={onConfigChange}
-        >
-          <optgroup label="Drum kit">
-            <option value="bd">bd</option>
-            <option value="sd">sd</option>
-            <option value="hh" selected>hh</option>
-            <option value="oh">oh</option>
-            <option value="cp">cp</option>
-            <option value="rim">rim</option>
-            <option value="lt">lt</option>
-            <option value="mt">mt</option>
-            <option value="ht">ht</option>
-          </optgroup>
-          <optgroup label="Percussion">
-            <option value="conga">conga</option>
-            <option value="cajon">cajon</option>
-            <option value="wood">wood</option>
-            <option value="shaker">shaker</option>
-            <option value="cb">cb</option>
-            <option value="perc">perc</option>
-            <option value="hand">hand</option>
-          </optgroup>
-        </select>
+          <select
+            id="euclidSound"
+            bind:value={euclidSound}
+            data-tip={$t('header.rhythm.soundTip')}
+            on:change={onConfigChange}
+          >
+            <optgroup label="Drum kit">
+              <option value="bd">bd</option>
+              <option value="sd">sd</option>
+              <option value="hh" selected>hh</option>
+              <option value="oh">oh</option>
+              <option value="cp">cp</option>
+              <option value="rim">rim</option>
+              <option value="lt">lt</option>
+              <option value="mt">mt</option>
+              <option value="ht">ht</option>
+            </optgroup>
+            <optgroup label="Percussion">
+              <option value="conga">conga</option>
+              <option value="cajon">cajon</option>
+              <option value="wood">wood</option>
+              <option value="shaker">shaker</option>
+              <option value="cb">cb</option>
+              <option value="perc">perc</option>
+              <option value="hand">hand</option>
+            </optgroup>
+          </select>
 
-        <!--
+          <!--
         E(k,n) readout. Prototype line 435.
       -->
-        <span data-tip={$t('header.rhythm.euclidInfoTip')}
-          >E(<b>{euclidK}</b>,<b>{euclidN}</b>)</span
-        >
+          <span data-tip={$t('header.rhythm.euclidInfoTip')}
+            >E(<b>{euclidK}</b>,<b>{euclidN}</b>)</span
+          >
 
-        <!--
+          <!--
         k slider. Prototype line 436.
       -->
-        <span data-tip={$t('header.rhythm.kTip')} title="k — golpes (hits)">k <b>{euclidK}</b></span
-        >
-        <input
-          type="range"
-          id="euclidK"
-          min="1"
-          max="16"
-          bind:value={euclidK}
-          aria-label="k — número de golpes"
-          title="k — número de golpes (hits)"
-          data-tip={$t('header.rhythm.kTip')}
-          on:input={onConfigChange}
-        />
+          <span class="euclid-readout" data-tip={$t('header.rhythm.kTip')} title="k — golpes (hits)"
+            >k <b>{euclidK}</b></span
+          >
+          <input
+            type="range"
+            id="euclidK"
+            min="1"
+            max="16"
+            bind:value={euclidK}
+            aria-label="k — número de golpes"
+            title="k — número de golpes (hits)"
+            data-tip={$t('header.rhythm.kTip')}
+            on:input={onConfigChange}
+          />
 
-        <!--
+          <!--
         n slider. Prototype line 437.
       -->
-        <span data-tip={$t('header.rhythm.nTip')} title="n — pasos (steps)">n <b>{euclidN}</b></span
-        >
-        <input
-          type="range"
-          id="euclidN"
-          min="2"
-          max="16"
-          bind:value={euclidN}
-          aria-label="n — número de pasos"
-          title="n — número de pasos (steps)"
-          data-tip={$t('header.rhythm.nTip')}
-          on:input={onConfigChange}
-        />
+          <span class="euclid-readout" data-tip={$t('header.rhythm.nTip')} title="n — pasos (steps)"
+            >n <b>{euclidN}</b></span
+          >
+          <input
+            type="range"
+            id="euclidN"
+            min="2"
+            max="16"
+            bind:value={euclidN}
+            aria-label="n — número de pasos"
+            title="n — número de pasos (steps)"
+            data-tip={$t('header.rhythm.nTip')}
+            on:input={onConfigChange}
+          />
 
-        <!--
+          <!--
         rot readout + slider. Prototype lines 438–439.
       -->
-        <span data-tip={$t('header.rhythm.rotTip')} title="rot — rotación (offset)"
-          >rot <b>{euclidR}</b></span
-        >
-        <input
-          type="range"
-          id="euclidR"
-          min="0"
-          max={euclidRMax}
-          bind:value={euclidR}
-          aria-label="rot — rotación del patrón"
-          title="rot — rotación del patrón (offset)"
-          data-tip={$t('header.rhythm.rotSliderTip')}
-          on:input={onConfigChange}
-        />
+          <span
+            class="euclid-readout"
+            data-tip={$t('header.rhythm.rotTip')}
+            title="rot — rotación (offset)">rot <b>{euclidR}</b></span
+          >
+          <input
+            type="range"
+            id="euclidR"
+            min="0"
+            max={euclidRMax}
+            bind:value={euclidR}
+            aria-label="rot — rotación del patrón"
+            title="rot — rotación del patrón (offset)"
+            data-tip={$t('header.rhythm.rotSliderTip')}
+            on:input={onConfigChange}
+          />
 
-        <!--
+          <!--
         Named pattern info. Prototype line 440.
       -->
-        <span class="euclid-info">{euclidInfo}</span>
+          <span class="euclid-info">{euclidInfo}</span>
 
-        <!--
+          <!--
         Preview toggle button. Prototype line 441 / lines 863–876.
       -->
-        <button
-          class="rk"
-          id="euclidPreview"
-          data-tip={$t('header.rhythm.previewTip')}
-          style={isPreviewing
-            ? 'background:rgba(232,123,172,.16);border-color:rgba(232,123,172,.4);color:var(--dom)'
-            : 'background:rgba(86,207,196,.16);border-color:rgba(86,207,196,.4);color:var(--subdom)'}
-          on:click={handlePreviewToggle}
-        >
-          {isPreviewing ? $t('header.rhythm.stopLabel') : $t('header.rhythm.listenLabel')}
-        </button>
+          <button
+            class="rk"
+            id="euclidPreview"
+            data-tip={$t('header.rhythm.previewTip')}
+            style={isPreviewing
+              ? 'background:rgba(232,123,172,.16);border-color:rgba(232,123,172,.4);color:var(--dom)'
+              : 'background:rgba(86,207,196,.16);border-color:rgba(86,207,196,.4);color:var(--subdom)'}
+            on:click={handlePreviewToggle}
+          >
+            {isPreviewing ? $t('header.rhythm.stopLabel') : $t('header.rhythm.listenLabel')}
+          </button>
 
-        <!--
+          <!--
         Add euclid orbit. Prototype line 442.
       -->
-        <button
-          class="rk"
-          id="addEuclid"
-          data-tip={$t('header.rhythm.addOrbitTip')}
-          on:click={handleAddEuclid}
-        >
-          {$t('header.rhythm.addOrbit')}
-        </button>
+          <button
+            class="rk"
+            id="addEuclid"
+            data-tip={$t('header.rhythm.addOrbitTip')}
+            on:click={handleAddEuclid}
+          >
+            {$t('header.rhythm.addOrbit')}
+          </button>
 
-        <!--
+          <!--
         Add empty layer. Prototype line 443.
       -->
-        <button
-          class="rk"
-          id="addLayerEmpty"
-          data-tip={$t('header.rhythm.addEmptyTip')}
-          style="background:rgba(255,255,255,.05);border-color:var(--stroke);color:var(--muted)"
-          on:click={handleAddEmpty}
-        >
-          {$t('header.rhythm.addEmpty')}
-        </button>
+          <button
+            class="rk"
+            id="addLayerEmpty"
+            data-tip={$t('header.rhythm.addEmptyTip')}
+            style="background:rgba(255,255,255,.05);border-color:var(--stroke);color:var(--muted)"
+            on:click={handleAddEmpty}
+          >
+            {$t('header.rhythm.addEmpty')}
+          </button>
 
-        <!--
+          <!--
         Context capture button: send current groove to the agent as rhythmic base.
         Prototype: button#rhythmToCtx in footer (line 511).
         Active state when $agentCtx.includeRhythm is true.
       -->
-        <button
-          class="rk r-ctx-btn"
-          class:active={$agentCtx.includeRhythm}
-          title={$t('header.rhythm.sendBaseTitle')}
-          on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}
-          >{$t('header.rhythm.sendBaseLabel')}</button
-        >
-      </div>
-    {/if}
+          <button
+            class="rk r-ctx-btn"
+            class:active={$agentCtx.includeRhythm}
+            title={$t('header.rhythm.sendBaseTitle')}
+            on:click={() => agentCtx.update((c) => ({ ...c, includeRhythm: true }))}
+            >{$t('header.rhythm.sendBaseLabel')}</button
+          >
+        </div>
+      {/if}
 
-    <!--
+      <!--
     Key selector: root pitch-class, mode, octave.
     Prototype: .field with #melRoot / #melMode / #melOctave selects (lines 370–386).
     On change calls setHarmonyKey(root, mode, octave) (session.ts step 04.2).
     Step 01.2: hidden in all non-harmony views (Rhythm / Composition / Session).
     The view-toggle (#viewSeg) above must never be hidden.
   -->
-    {#if $sessionStore.view === 'harmony'}
-      <!--
+      {#if $sessionStore.view === 'harmony'}
+        <!--
       Phase 08 (step 08.5): Tonnetz ⇄ Pentagrama sub-toggle.
       Toggles harmony.subview between 'tonnetz' and 'staff'.
       Calls setHarmonySubview() from session.ts which updates the store and
       calls setHarmonySubview() from stage.ts (via lazy import).
       ADR 0011 Amendment §D5.
     -->
-      <div class="seg" id="subviewSeg">
-        <button
-          class={$sessionStore.harmony.subview === 'tonnetz' ? 'active' : ''}
-          on:click={() => setHarmonySubview('tonnetz')}
-        >
-          {$t('header.harmony.subviewTonnetz')}
-        </button>
-        <button
-          class={$sessionStore.harmony.subview === 'staff' ? 'active' : ''}
-          on:click={() => setHarmonySubview('staff')}
-        >
-          {$t('header.harmony.subviewStaff')}
-        </button>
-      </div>
+        <div class="seg" id="subviewSeg">
+          <button
+            class={$sessionStore.harmony.subview === 'tonnetz' ? 'active' : ''}
+            on:click={() => setHarmonySubview('tonnetz')}
+          >
+            {$t('header.harmony.subviewTonnetz')}
+          </button>
+          <button
+            class={$sessionStore.harmony.subview === 'staff' ? 'active' : ''}
+            on:click={() => setHarmonySubview('staff')}
+          >
+            {$t('header.harmony.subviewStaff')}
+          </button>
+        </div>
 
-      <!--
+        <!--
       Phase 10 redesign (step 10.11, ADR 0015 D2): #registerModeSeg removed.
       The estricto/suavizado toggle was a Phase 08 addition. The Canvas 2D
       Pentagrama layer uses raw chordVoicing() pitches directly — no register
@@ -692,87 +702,87 @@
       type (inert, not rendered); voice-tracks.ts is left inert (not deleted).
     -->
 
-      <!--
+        <!--
       Phase 08 (step 08.6): Chord-mode segmented control relocated from HarmonyControls.svelte.
       Prototype: .seg2#chordModeSeg (HTML lines 449–452); moved here per ADR 0011 Amendment §D6.
       Two buttons: ◧ acorde (block) / ⋯ arpegio (arpeggio).
       Active state driven by $sessionStore.chordMode.
       On click: calls setChordMode() from session.ts which also calls requeueLive().
     -->
-      <div class="seg" id="chordModeSeg">
-        <button
-          class={$sessionStore.chordMode === 'chord' ? 'active' : ''}
-          data-mode="chord"
-          data-tip={$t('header.harmony.chordTip')}
-          on:click={() => setChordMode('chord')}
-        >
-          {$t('header.harmony.chordLabel')}
-        </button>
-        <button
-          class={$sessionStore.chordMode === 'arp' ? 'active' : ''}
-          data-mode="arp"
-          data-tip={$t('header.harmony.arpTip')}
-          on:click={() => setChordMode('arp')}
-        >
-          {$t('header.harmony.arpLabel')}
-        </button>
-      </div>
+        <div class="seg" id="chordModeSeg">
+          <button
+            class={$sessionStore.chordMode === 'chord' ? 'active' : ''}
+            data-mode="chord"
+            data-tip={$t('header.harmony.chordTip')}
+            on:click={() => setChordMode('chord')}
+          >
+            {$t('header.harmony.chordLabel')}
+          </button>
+          <button
+            class={$sessionStore.chordMode === 'arp' ? 'active' : ''}
+            data-mode="arp"
+            data-tip={$t('header.harmony.arpTip')}
+            on:click={() => setChordMode('arp')}
+          >
+            {$t('header.harmony.arpLabel')}
+          </button>
+        </div>
 
-      <!--
+        <!--
       Phase 08 (step 08.6): Marco context button relocated from HarmonyControls.svelte.
       Prototype: button#harmonyToCtx in footer (line 510); moved to top bar per ADR 0011 Amendment §D6.
       Active state when $agentCtx.includeHarmony is true.
       On click: sets agentCtx.includeHarmony = true so the next agent send includes the harmony context.
     -->
-      <button
-        class="marco-btn"
-        class:active={$agentCtx.includeHarmony}
-        title={$t('header.harmony.sendMarcoTitle')}
-        on:click={() => agentCtx.update((c) => ({ ...c, includeHarmony: true }))}
-      >
-        {$t('header.harmony.sendMarcoLabel')}
-      </button>
-
-      <div class="field">
-        <span>{$t('header.harmony.keyLabel')}</span>
-
-        <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
-        <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
-        <select
-          id="melRoot"
-          value={String($sessionStore.harmony.root)}
-          on:change={handleRootChange}
+        <button
+          class="marco-btn"
+          class:active={$agentCtx.includeHarmony}
+          title={$t('header.harmony.sendMarcoTitle')}
+          on:click={() => agentCtx.update((c) => ({ ...c, includeHarmony: true }))}
         >
-          {#each NOTE_NAMES as name, i}
-            <option value={String(i)}>{name}</option>
-          {/each}
-        </select>
+          {$t('header.harmony.sendMarcoLabel')}
+        </button>
 
-        <!-- Mode select. Prototype: #melMode (lines 373–382). -->
-        <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
-          <option value="major">{$t('header.harmony.modeMajor')}</option>
-          <option value="minor">{$t('header.harmony.modeMinor')}</option>
-          <option value="dorian">{$t('header.harmony.modeDorian')}</option>
-          <option value="phrygian">{$t('header.harmony.modePhrygian')}</option>
-          <option value="lydian">{$t('header.harmony.modeLydian')}</option>
-          <option value="mixolydian">{$t('header.harmony.modeMixolydian')}</option>
-          <option value="locrian">{$t('header.harmony.modeLocrian')}</option>
-          <option value="harmonic:minor">{$t('header.harmony.modeHarmonicMinor')}</option>
-        </select>
+        <div class="field">
+          <span>{$t('header.harmony.keyLabel')}</span>
 
-        <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
-        <select
-          id="melOctave"
-          value={String($sessionStore.harmony.octave)}
-          on:change={handleOctaveChange}
-        >
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-        </select>
-      </div>
+          <!-- Root pitch-class select: C, C#, …, B (0–11). Prototype: #melRoot (line 372). -->
+          <!-- value= is one-way from store; on:change reads event.currentTarget.value (Defect 2 fix). -->
+          <select
+            id="melRoot"
+            value={String($sessionStore.harmony.root)}
+            on:change={handleRootChange}
+          >
+            {#each NOTE_NAMES as name, i}
+              <option value={String(i)}>{name}</option>
+            {/each}
+          </select>
 
-      <!--
+          <!-- Mode select. Prototype: #melMode (lines 373–382). -->
+          <select id="melMode" value={$sessionStore.harmony.mode} on:change={handleModeChange}>
+            <option value="major">{$t('header.harmony.modeMajor')}</option>
+            <option value="minor">{$t('header.harmony.modeMinor')}</option>
+            <option value="dorian">{$t('header.harmony.modeDorian')}</option>
+            <option value="phrygian">{$t('header.harmony.modePhrygian')}</option>
+            <option value="lydian">{$t('header.harmony.modeLydian')}</option>
+            <option value="mixolydian">{$t('header.harmony.modeMixolydian')}</option>
+            <option value="locrian">{$t('header.harmony.modeLocrian')}</option>
+            <option value="harmonic:minor">{$t('header.harmony.modeHarmonicMinor')}</option>
+          </select>
+
+          <!-- Octave select: 2 / 3 (default) / 4. Prototype: #melOctave (lines 383–385). -->
+          <select
+            id="melOctave"
+            value={String($sessionStore.harmony.octave)}
+            on:change={handleOctaveChange}
+          >
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+
+        <!--
         Sound attribute controls (Phase 03 step 03.5 — ADR 0019).
         Redesigned: two <select> menus (Oscillator + Presets) replace the Phase 02
         instrument select + room/decay sliders. Room/decay are now preset-internal.
@@ -787,64 +797,70 @@
         Waveform/noise option values and preset option values are [VERBATIM] technical
         tokens (OQ-6/ADR 0017); display labels come from the i18n dictionary.
       -->
-      <div
-        class="sound-ctl"
-        class:sound-ctl--active={$selectedSlotIdxStore !== null}
-        class:sound-ctl--pulse={soundCtlPulsing}
-        title={$selectedSlotIdxStore !== null
-          ? $t('header.harmony.soundEditTip')
-          : $t('header.harmony.soundIntentTip')}
-      >
-        <span class="sound-lbl">{$t('header.harmony.soundLabel')}</span>
+        <div
+          class="sound-ctl"
+          class:sound-ctl--active={$selectedSlotIdxStore !== null}
+          class:sound-ctl--pulse={soundCtlPulsing}
+          title={$selectedSlotIdxStore !== null
+            ? $t('header.harmony.soundEditTip')
+            : $t('header.harmony.soundIntentTip')}
+        >
+          <span class="sound-lbl">{$t('header.harmony.soundLabel')}</span>
 
-        <!--
+          <!--
           Unified sound selector (Fix D 2026-06-26): one <select> replaces
           the previous Oscillator + Preset pair. Selecting a preset clears the
           oscillator intent; selecting an oscillator clears the preset intent.
           ADR 0019 D1/D2 mutual-exclusion applies in handleSoundChange.
         -->
-        <label class="sound-field" title={$t('header.harmony.soundLabel')}>
-          <span>{$t('header.harmony.soundLabel')}</span>
-          <select id="soundSelect" value={displaySound} on:change={handleSoundChange}>
-            <option value="">— ({$t('header.harmony.presetNone')})</option>
-            <optgroup label={$t('header.harmony.oscillatorLabel')}>
-              <option value="sawtooth">{$t('header.harmony.instrSawtooth')}</option>
-              <option value="sine">{$t('header.harmony.instrSine')}</option>
-              <option value="square">{$t('header.harmony.instrSquare')}</option>
-              <option value="triangle">{$t('header.harmony.instrTriangle')}</option>
-              <option value="pink">{$t('header.harmony.instrNoise')}</option>
-            </optgroup>
-            <optgroup label={$t('header.harmony.presetLabel')}>
-              <option value="piano">{$t('header.harmony.presetPiano')}</option>
-              <option value="guitar">{$t('header.harmony.presetGuitar')}</option>
-              <option value="synth-bass">{$t('header.harmony.presetSynthBass')}</option>
-            </optgroup>
-          </select>
-        </label>
-      </div>
-    {/if}
-  </div>
+          <label class="sound-field" title={$t('header.harmony.soundLabel')}>
+            <span>{$t('header.harmony.soundLabel')}</span>
+            <select id="soundSelect" value={displaySound} on:change={handleSoundChange}>
+              <option value="">— ({$t('header.harmony.presetNone')})</option>
+              <optgroup label={$t('header.harmony.oscillatorLabel')}>
+                <option value="sawtooth">{$t('header.harmony.instrSawtooth')}</option>
+                <option value="sine">{$t('header.harmony.instrSine')}</option>
+                <option value="square">{$t('header.harmony.instrSquare')}</option>
+                <option value="triangle">{$t('header.harmony.instrTriangle')}</option>
+                <option value="pink">{$t('header.harmony.instrNoise')}</option>
+              </optgroup>
+              <optgroup label={$t('header.harmony.presetLabel')}>
+                <option value="piano">{$t('header.harmony.presetPiano')}</option>
+                <option value="guitar">{$t('header.harmony.presetGuitar')}</option>
+                <option value="synth-bass">{$t('header.harmony.presetSynthBass')}</option>
+              </optgroup>
+            </select>
+          </label>
+        </div>
+      {/if}
+    </div>
 
-  <!--
+    <!--
     Right side: mic button deferred to a later phase (not in Phase 04 scope).
     Prototype: #micBtn (lines 390–393) — deferred.
     keyBox span (line 394) — deferred.
   -->
-</header>
+  </header>
 
-<!--
-  Euclid preview bar — sits immediately below the header in normal document flow.
+  <!--
+  Euclid preview bar — absolutely positioned below the header, outside document flow.
   Appears when the user moves any euclid control; disappears when "+" is pressed
   (fly-down animation) or when "×" is clicked (fade-up dismiss).
-  Being in normal flow means it never shifts the header controls.
+  position:absolute inside header-wrap ensures it never pushes the stage down,
+  which would trigger a PIXI resize / orbit rebuild and cause visual trembling.
 -->
-{#if showPreview}
-  <div class="preview-bar" class:preview-flying={isFlying} class:preview-dismissing={isDismissing}>
-    <span class="preview-label">preview</span>
-    <StepEditor layers={[previewLayer]} onToggle={handlePreviewStepToggle} />
-    <button class="preview-close" title="Descartar preview" on:click={dismissPreview}>×</button>
-  </div>
-{/if}
+  {#if showPreview}
+    <div
+      class="preview-bar"
+      class:preview-flying={isFlying}
+      class:preview-dismissing={isDismissing}
+    >
+      <span class="preview-label">preview</span>
+      <StepEditor layers={[previewLayer]} onToggle={handlePreviewStepToggle} />
+      <button class="preview-close" title="Descartar preview" on:click={dismissPreview}>×</button>
+    </div>
+  {/if}
+</div>
 
 <style>
   /*
@@ -1031,6 +1047,14 @@
   .euclid-info {
     font-size: 10px;
     color: var(--faint);
+  }
+
+  /* Fixed-width readout labels (k, n, rot) — prevent flex reflow when digit count changes. */
+  .euclid-readout {
+    min-width: 3.8em;
+    display: inline-block;
+    text-align: right;
+    white-space: nowrap;
   }
 
   /*
@@ -1229,14 +1253,27 @@
     font-size: 11px;
   }
 
-  /* Euclid preview bar — flows below the header, never inside it */
+  /* header-wrap: relative container so preview-bar can be absolute-positioned below. */
+  .header-wrap {
+    position: relative;
+  }
+
+  /*
+   * Euclid preview bar — absolutely positioned below the header, outside document flow.
+   * position:absolute inside .header-wrap means the stage height never changes when
+   * the preview bar appears, preventing a PIXI resize / buildRhythmScene call.
+   */
   .preview-bar {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 10px;
-    width: 100%;
     padding: 5px 16px 6px;
-    background: rgba(10, 13, 25, 0.72);
+    background: rgba(10, 13, 25, 0.88);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);

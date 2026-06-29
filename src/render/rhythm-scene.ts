@@ -197,7 +197,9 @@ export function buildRhythmScene(state: SessionState): void {
 
   // Layer sound labels — prototype lines 1062–1064
   _rGeo.forEach((g) => {
-    const label = g.layer.sound + (g.layer.euclid != null ? ` ·E(${g.layer.euclid})` : '');
+    const N = g.layer.steps.length;
+    // Show step count: for euclid layers N is already in the pattern string; for others append it.
+    const label = g.layer.sound + (g.layer.euclid != null ? ` ·E(${g.layer.euclid})` : ` · ${N}`);
     const lab = new PIXI.Text(label, {
       fontFamily: FONT_MONO,
       fontSize: 11.5,
