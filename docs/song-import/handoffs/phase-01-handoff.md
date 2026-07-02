@@ -288,3 +288,190 @@ None.
 
 - Step 01.4 is the final quality gate: `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build`.
 - All three inline validations already pass; `pnpm build` is the only remaining gate.
+
+### Planner Review
+
+**Decision:** APPROVED
+**Reviewed on:** 2026-07-02
+**Iteration:** 1 of 5
+**Reason:** All 8 acceptance IDs (A-01-16 through A-01-23) are fully covered; additive-only change confirmed (no version bump, legacy parse clean); buildComposition byte-identical guarantee proven by two unit tests; core/render boundary intact; reversibility confirmed; no new dependencies; commit scope matches spec exactly.
+**Next action:** Dev proceeds to step 01.4
+
+---
+
+## Step 01.4 — Quality gate
+
+**Date:** 2026-07-02
+**Iteration:** 1 of 5
+
+### Completed
+
+- Ran the full quality gate in order: `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build`.
+- All four commands exited 0 with no errors.
+- No fixes were required; all gates passed on the first run.
+
+### Command outputs (exact summary lines)
+
+**`pnpm test`**
+
+```
+ Test Files  45 passed (45)
+      Tests  2104 passed (2104)
+   Start at  11:50:22
+   Duration  2.94s (transform 2.94s, setup 0ms, collect 8.48s, tests 1.15s, environment 9ms, prepare 6.41s)
+```
+
+Total test count: **2104**. Strictly greater than 2069 baseline. ✓
+
+**`pnpm exec tsc --noEmit`**
+
+No output. Exit code: 0. ✓
+
+**`pnpm lint`**
+
+```
+All matched files use Prettier code style!
+EXIT:0
+```
+
+ESLint passed with no errors or warnings; Prettier check passed. Exit code: 0. ✓
+
+**`pnpm build`**
+
+```
+vite v5.4.11 building for production...
+✓ 569 modules transformed.
+dist/index.html                     2.32 kB │ gzip:   1.25 kB
+dist/assets/index-BAAE8lBe.css     42.47 kB │ gzip:   8.19 kB
+dist/assets/index-Dzltg7dl.js   1,218.80 kB │ gzip: 382.21 kB
+✓ built in 2.53s
+EXIT:0
+```
+
+Warnings present (dynamic import and chunk size) are pre-existing and not introduced by this phase. Exit code: 0. ✓
+
+### Files touched
+
+- `docs/song-import/handoffs/phase-01-handoff.md` (this file — step 01.4 entry + phase-completion entry)
+
+### Validation evidence (per Acceptance ID)
+
+- **A-01-24:** `pnpm test` → 2104 tests passed, 0 failed. 2104 > 2069. ✓
+- **A-01-25:** `pnpm exec tsc --noEmit` → exits 0 (no output, no errors). ✓
+- **A-01-26:** `pnpm lint` → exits 0 ("All matched files use Prettier code style!"). ✓
+- **A-01-27:** `pnpm build` → exits 0 (569 modules, output dist/ produced). ✓
+- **A-01-28:** Handoff includes exact test count (2104) and explicit confirmation it exceeds the 2069 baseline. ✓
+
+### Fixes applied
+
+None. All four commands passed on first run.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+|---|---|---|---|---|
+| A-01-24 | `pnpm test` all pass; count strictly greater than 2069 | all test files (45) | operability | covered — 2104 tests |
+| A-01-25 | `pnpm exec tsc --noEmit` exits 0 (final gate) | n/a | operability | covered |
+| A-01-26 | `pnpm lint` exits 0 (final gate) | n/a | operability | covered |
+| A-01-27 | `pnpm build` exits 0 | n/a | operability | covered |
+| A-01-28 | Handoff includes exact test count and confirmation exceeds 2069 | n/a | manual | covered — 2104 confirmed |
+
+### Decisions made (if any)
+
+None.
+
+### Environment state after this step
+
+- Branch: `song-import/phase-01`
+- Test count: 2104 (unchanged from step 01.3)
+- All quality-gate commands pass: `tsc --noEmit` ✓, `pnpm test` ✓, `pnpm lint` ✓, `pnpm build` ✓
+
+### Next-step context
+
+This is the final step of Phase 01. Phase is complete.
+
+---
+
+## Phase Completion — song-import Phase 01
+
+**Date:** 2026-07-02
+
+### Phase summary
+
+Phase 01 of the `song-import` initiative extended Orbifold's data model with two targeted additions required to represent real songs in a future import workflow:
+
+**1. `'pow'` power chord quality (steps 01.1–01.2)**
+
+- Added `'pow'` to the `Quality` union (`src/core/theory/chords.ts`).
+- `QUAL_INTERVALS['pow'] = [0, 7]` — root + perfect fifth, no third.
+- `chordLabel(rootPc, 'pow')` returns `<root>5` (e.g., `"E5"`) — standard power chord notation.
+- `chordPcs` and `chordVoicing` return exactly two elements for `'pow'` (no downstream assumption of 3 was broken — the 2-element array flows correctly through `notes.join(',')` to produce `note("E2,B2")` per OD-1).
+- `src/core/harmony/voice-tracks.ts` guarded against `'pow'` input (visual-only pipeline per ADR 0011 D6); the 3-voice cast is bypassed for pow chords.
+- `src/core/composition/snapshot.ts` `ChordSnapshotEntry.qual` widened to include `'pow'`.
+- `src/agent/apply.ts` local `SK_QUAL` updated.
+- Persistence and agent schemas: `SK_QUAL` updated, `SESSION_SCHEMA_VERSION` and `SCHEMA_VERSION` both bumped 6 → 7.
+- All existing tests that asserted version 6 updated to 7 (6 test files).
+- 25 new unit tests in `tests/song-import/pow-quality.test.ts`.
+
+**2. `Block.label?: string` section marker (step 01.3)**
+
+- `Block` interface in `src/core/composition/model.ts` extended with `label?: string` (pure additive, no version bump).
+- `SavedBlockSchema` in `src/lib/persistence.ts` extended with `label: z.string().optional()`.
+- `serializeSession` / `deserializeSession` carry `label` through when present; omit the key when `undefined`.
+- `src/ui/CompositionDrawer.svelte` renders the label in the timeline block chip via `{#if b.label}` guard.
+- `src/app/app.css` `.tl-block .bl` CSS rule — 9px, no-overflow, ellipsis.
+- `buildComposition` unaffected (label carries no musical semantics).
+- 9 new unit tests in `tests/song-import/block-label.test.ts`.
+
+### Final quality gate (step 01.4)
+
+- `pnpm test`: **2104 passed** (45 test files). Baseline was 2069 at note-placement Phase 01. +35 tests this phase.
+- `pnpm exec tsc --noEmit`: exits 0, no errors.
+- `pnpm lint`: exits 0, "All matched files use Prettier code style!"
+- `pnpm build`: exits 0, 569 modules, dist/ produced.
+
+### Acceptance IDs covered this phase
+
+All 28 acceptance IDs (A-01-01 through A-01-28) are covered:
+- A-01-01 through A-01-04: inventory (manual) — step 01.1
+- A-01-05 through A-01-15: `pow` quality + schema v7 — step 01.2
+- A-01-16 through A-01-23: Block label + timeline display — step 01.3
+- A-01-24 through A-01-28: quality gate — step 01.4
+
+### Files modified this phase
+
+**Source:**
+- `src/core/theory/chords.ts`
+- `src/core/codegen/strudel.ts`
+- `src/core/harmony/voice-tracks.ts`
+- `src/core/composition/snapshot.ts`
+- `src/core/composition/model.ts`
+- `src/lib/persistence.ts`
+- `src/agent/schema.ts`
+- `src/agent/apply.ts`
+- `src/ui/CompositionDrawer.svelte`
+- `src/app/app.css`
+
+**Tests:**
+- `tests/song-import/pow-quality.test.ts` (created)
+- `tests/song-import/block-label.test.ts` (created)
+- `tests/persistence.test.ts`
+- `tests/agent-block-persistence.test.ts`
+- `tests/schema.test.ts`
+- `tests/note-placement/note-slot-model.test.ts`
+- `tests/session.test.ts`
+- `tests/authentic-groove/locked-persistence.test.ts`
+
+**Docs:**
+- `docs/song-import/decisions.md` (created by Pilot — OD-1 and OD-2 recorded)
+- `docs/song-import/inventories/phase-01-inventory.md` (created)
+- `docs/song-import/handoffs/phase-01-handoff.md` (this file)
+
+### Deferred from this phase
+
+None. All scoped items were delivered.
+
+Items deferred from prior phases and still outstanding (not in scope for Phase 01):
+- Agent `notes` schema extension (NoteSlot support for autopilot/agent) — OD-3 from note-placement Phase 01.
+- `importSession` agent skill — the primary consumer of `pow` quality and `Block.label`; planned for song-import Phase 02.
+- Per-chord `lpf`/`lpq` direct user slider (D-3) — deferred from harmonic-rhythm-improvements Phase 01.
