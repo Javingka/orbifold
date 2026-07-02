@@ -56,8 +56,8 @@ const SK_SOUNDS: readonly string[] = [
   'hand',
 ];
 
-/** Valid quality names. */
-const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug'];
+/** Valid quality names. song-import Phase 01: 'pow' added for power chord quality. */
+const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug', 'pow'];
 
 // ── applyRhythmSpec ────────────────────────────────────────────────────────
 

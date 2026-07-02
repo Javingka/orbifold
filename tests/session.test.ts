@@ -500,7 +500,7 @@ describe('barsLabel — quarter fractions (A-03-07)', () => {
 describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
   it('safeParse succeeds for a chord with bars: 0.5 (old minimum)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -518,7 +518,7 @@ describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
 
   it('safeParse succeeds for a chord with bars: 0.25 (new minimum)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -536,7 +536,7 @@ describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
 
   it('safeParse succeeds for a chord without bars (backward-compat for old sessions)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',

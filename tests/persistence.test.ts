@@ -58,7 +58,7 @@ beforeEach(() => {
 // ── Test fixtures ──────────────────────────────────────────────────────────
 
 const MINIMAL_SAVED: SavedSession = {
-  version: 6,
+  version: 7,
   bpm: 120,
   view: 'harmony',
   chordMode: 'chord',
@@ -68,7 +68,7 @@ const MINIMAL_SAVED: SavedSession = {
 };
 
 const FULL_SAVED: SavedSession = {
-  version: 6,
+  version: 7,
   bpm: 140,
   view: 'rhythm',
   chordMode: 'arp',
@@ -183,16 +183,20 @@ describe('SavedSessionSchema', () => {
     expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 4 }).success).toBe(false);
   });
 
-  it('accepts version 6 (current schema version — note-placement Phase 01 step 01.2)', () => {
-    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 6 }).success).toBe(true);
+  it('accepts version 7 (current schema version — song-import Phase 01 step 01.2)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 7 }).success).toBe(true);
+  });
+
+  it('rejects version 6 (old schema — bumped by song-import Phase 01 pow quality)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 6 }).success).toBe(false);
   });
 
   it('rejects version 5 (old schema — bumped by note-placement Phase 01)', () => {
     expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 5 }).success).toBe(false);
   });
 
-  it('rejects version 7 (unknown future version)', () => {
-    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 7 }).success).toBe(false);
+  it('rejects version 8 (unknown future version)', () => {
+    expect(SavedSessionSchema.safeParse({ ...MINIMAL_SAVED, version: 8 }).success).toBe(false);
   });
 
   it('rejects bpm below 40', () => {
@@ -382,7 +386,7 @@ describe('saveSession / listSavedSessions / loadSavedSession / deleteSession', (
     expect(loaded).not.toBeNull();
     expect(loaded?.bpm).toBe(140);
     expect(loaded?.harmony.root).toBe(5);
-    expect(loaded?.version).toBe(6);
+    expect(loaded?.version).toBe(7);
   });
 
   it('loadSavedSession returns null for an unknown session name', () => {
@@ -454,10 +458,10 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
   });
 
   // A-06-06: chord-only session with current schema version still parses.
-  it('version-6 session with chord-only progression parses against SavedSessionSchema', () => {
-    // A chord-only session (no isRest fields) at schema v6 must parse correctly.
+  it('version-7 session with chord-only progression parses against SavedSessionSchema', () => {
+    // A chord-only session (no isRest fields) at schema v7 must parse correctly.
     const v6Payload = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -535,9 +539,9 @@ describe('rest-slot persistence (Phase 06, ADR 0012)', () => {
 
 // ── Phase 02 (harmonic-rhythm-improvements) — ADR 0018 D3 schema v3 (now dropped) ─────────
 
-describe('ADR 0018 D3: schema v3 → now dropped by v6 bump (A-02-05, A-02-06)', () => {
-  // A-02-05: v2 persistence blob is gracefully dropped (v3 → v4 → v5 → v6 bump means v2 also dropped)
-  it('A-02-05: v2 blob fails z.literal(6) check and is dropped (ADR 0013 D1)', () => {
+describe('ADR 0018 D3: schema v3 → now dropped by v7 bump (A-02-05, A-02-06)', () => {
+  // A-02-05: v2 persistence blob is gracefully dropped (v3 → v4 → v5 → v6 → v7 bumps mean v2 also dropped)
+  it('A-02-05: v2 blob fails z.literal(7) check and is dropped (ADR 0013 D1)', () => {
     const v2Payload = {
       version: 2,
       bpm: 120,
@@ -551,8 +555,8 @@ describe('ADR 0018 D3: schema v3 → now dropped by v6 bump (A-02-05, A-02-06)',
     expect(result.success).toBe(false);
   });
 
-  // v3 blobs are dropped (ADR 0019 D5 — version literal bumped to 4, then 5, now 6).
-  it('v3 blob fails z.literal(6) check and is dropped (ADR 0019 D5)', () => {
+  // v3 blobs are dropped (ADR 0019 D5 — version literal bumped to 4, then 5, 6, now 7).
+  it('v3 blob fails z.literal(7) check and is dropped (ADR 0019 D5)', () => {
     const v3Payload = {
       version: 3,
       bpm: 120,
@@ -566,10 +570,10 @@ describe('ADR 0018 D3: schema v3 → now dropped by v6 bump (A-02-05, A-02-06)',
     expect(result.success).toBe(false);
   });
 
-  // A-02-06: v6 blob with instrument/room/decay on a chord parses successfully
-  it('A-02-06: v6 blob with instrument/room/decay on a chord parses successfully', () => {
+  // A-02-06: v7 blob with instrument/room/decay on a chord parses successfully
+  it('A-02-06: v7 blob with instrument/room/decay on a chord parses successfully', () => {
     const v4WithAttrs = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -597,10 +601,10 @@ describe('ADR 0018 D3: schema v3 → now dropped by v6 bump (A-02-05, A-02-06)',
     }
   });
 
-  // A-02-06 variant: v6 blob with no new fields still parses; fields are undefined
-  it('A-02-06 variant: v6 blob without new sound fields parses; fields are undefined', () => {
+  // A-02-06 variant: v7 blob with no new fields still parses; fields are undefined
+  it('A-02-06 variant: v7 blob without new sound fields parses; fields are undefined', () => {
     const v4NoAttrs = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -672,7 +676,7 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
     const serialized = serializeSession(stateWithCode);
     // Serialized view must be 'code'.
     expect(serialized.view).toBe('code');
-    expect(serialized.version).toBe(6);
+    expect(serialized.version).toBe(7);
     // Schema v6 accepts 'code'.
     const parseResult = SavedSessionSchema.safeParse(
       JSON.parse(JSON.stringify(serialized)) as unknown
@@ -688,7 +692,7 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
   // A-09-03: an unrecognized view string falls back to 'harmony' (safe fallback).
   it("unrecognized view string defaults to 'harmony' via .catch fallback (A-09-03)", () => {
     const unknownViewPayload = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'unknown-future-view',
       chordMode: 'chord',
@@ -704,17 +708,17 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
     expect(result.data.view).toBe('harmony');
   });
 
-  // A-09-03: SESSION_SCHEMA_VERSION is now 6 (note-placement Phase 01 step 01.2).
-  it('SESSION_SCHEMA_VERSION is 6 (note-placement Phase 01 step 01.2 — NoteSlot added)', () => {
-    expect(SESSION_SCHEMA_VERSION).toBe(6);
+  // A-09-03: SESSION_SCHEMA_VERSION is now 7 (song-import Phase 01 step 01.2 — pow quality added).
+  it('SESSION_SCHEMA_VERSION is 7 (song-import Phase 01 step 01.2 — pow quality added)', () => {
+    expect(SESSION_SCHEMA_VERSION).toBe(7);
   });
 
   // A-09-01: all five view-type strings are accepted by the schema.
   it.each(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)(
-    "schema v6 accepts view:'%s' (A-09-01)",
+    "schema v7 accepts view:'%s' (A-09-01)",
     (viewValue) => {
       const payload = {
-        version: 6,
+        version: 7,
         bpm: 120,
         view: viewValue,
         chordMode: 'chord',
@@ -731,11 +735,11 @@ describe("Phase 09 schema: view field 'code' and safe fallback (A-09-01, A-09-03
   );
 });
 
-// ── Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D5 schema (now at v6) (A-03-11) ────
+// ── Phase 03 (harmonic-rhythm-improvements) — ADR 0019 D5 schema (now at v7) (A-03-11) ────
 
-describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 drop (A-03-11)', () => {
-  // A-03-11: v3 blob is rejected by z.literal(6) and loadSavedSession returns null (no crash).
-  it('A-03-11: v3 blob fails z.literal(6) check — safeParse returns false (ADR 0019 D5)', () => {
+describe('ADR 0019 D5: schema (now v7) — preset + filter/envelope + lossy v3 drop (A-03-11)', () => {
+  // A-03-11: v3 blob is rejected by z.literal(7) and loadSavedSession returns null (no crash).
+  it('A-03-11: v3 blob fails z.literal(7) check — safeParse returns false (ADR 0019 D5)', () => {
     const v3Payload = {
       version: 3,
       bpm: 120,
@@ -748,10 +752,10 @@ describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 d
     expect(SavedSessionSchema.safeParse(v3Payload).success).toBe(false);
   });
 
-  // A-03-11: v6 blob with preset field parses successfully.
-  it('A-03-11: v5 blob with preset: "piano" on a chord parses successfully', () => {
+  // A-03-11: v7 blob with preset field parses successfully.
+  it('A-03-11: v7 blob with preset: "piano" on a chord parses successfully', () => {
     const v5WithPreset = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -774,10 +778,10 @@ describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 d
     }
   });
 
-  // A-03-11: v6 blob with all new filter/envelope fields parses successfully.
-  it('A-03-11: v5 blob with full filter/envelope fields parses successfully', () => {
+  // A-03-11: v7 blob with all new filter/envelope fields parses successfully.
+  it('A-03-11: v7 blob with full filter/envelope fields parses successfully', () => {
     const v5WithAll = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -823,10 +827,10 @@ describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 d
     }
   });
 
-  // A-03-11: v6 blob with no new fields still parses (backward-compatible optional fields).
-  it('A-03-11: v5 blob with none of the new fields parses; new fields are undefined', () => {
+  // A-03-11: v7 blob with no new fields still parses (backward-compatible optional fields).
+  it('A-03-11: v7 blob with none of the new fields parses; new fields are undefined', () => {
     const v5NoNewFields = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -911,7 +915,7 @@ describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 d
   // A-03-11: invalid preset name is rejected by z.enum.
   it('A-03-11: invalid preset name rejected by z.enum', () => {
     const v5BadPreset = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -930,7 +934,7 @@ describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 d
   // A-03-11: attack below 0 is rejected.
   it('A-03-11: attack below 0 is rejected (min: 0)', () => {
     const v5BadAttack = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -949,7 +953,7 @@ describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 d
   // A-03-11: sustain above 1 is rejected.
   it('A-03-11: sustain above 1 is rejected (max: 1)', () => {
     const v5BadSustain = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -966,11 +970,11 @@ describe('ADR 0019 D5: schema (now v6) — preset + filter/envelope + lossy v3 d
   });
 });
 
-// ── ADR 0020 D5: schema v5 → now v6 — Block snapshot persistence (A-01-07) ────────────
+// ── ADR 0020 D5: schema v5 → now v7 — Block snapshot persistence (A-01-07) ────────────
 
-describe('ADR 0020 D5: schema v5 → now v6 — Block snapshot persistence (A-01-07)', () => {
-  // A-01-07: v4 blob is rejected by z.literal(6) → safeParse returns false → session reset.
-  it('A-01-07: v4 blob fails z.literal(6) check — safeParse returns false (ADR 0020 D5)', () => {
+describe('ADR 0020 D5: schema v5 → now v7 — Block snapshot persistence (A-01-07)', () => {
+  // A-01-07: v4 blob is rejected by z.literal(7) → safeParse returns false → session reset.
+  it('A-01-07: v4 blob fails z.literal(7) check — safeParse returns false (ADR 0020 D5)', () => {
     const v4Payload = {
       version: 4,
       bpm: 120,
@@ -1157,10 +1161,10 @@ describe('ADR 0020 D5: schema v5 → now v6 — Block snapshot persistence (A-01
     }
   });
 
-  // A-01-07: v6 session with a block that has NO snapshot loads as snapshot-less (undefined).
-  it('A-01-07: block without snapshot in v5 session loads as snapshot-less (undefined)', () => {
+  // A-01-07: v7 session with a block that has NO snapshot loads as snapshot-less (undefined).
+  it('A-01-07: block without snapshot in v7 session loads as snapshot-less (undefined)', () => {
     const v5WithoutSnapshot = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -1186,7 +1190,7 @@ describe('ADR 0020 D5: schema v5 → now v6 — Block snapshot persistence (A-01
   // A-01-07: snapshot with an invalid discriminant value is rejected.
   it('A-01-07: block with invalid snapshot discriminant type is rejected', () => {
     const v5BadSnapshot = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',

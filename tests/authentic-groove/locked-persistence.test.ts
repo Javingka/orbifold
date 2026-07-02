@@ -43,7 +43,7 @@ function makeSessionState(
 
 function makeBaseSavedSession(extraLayerFields: Record<string, unknown> = {}): SavedSession {
   return {
-    version: 6,
+    version: 7,
     bpm: 120,
     view: 'rhythm',
     chordMode: 'chord',
@@ -180,14 +180,15 @@ describe('backward-compatibility: pre-Phase-05 sessions (no locked field) parse 
     }
   });
 
-  it('SESSION_SCHEMA_VERSION is now 6 (bumped in note-placement Phase 01 step 01.2 — NoteSlot added)', () => {
+  it('SESSION_SCHEMA_VERSION is now 7 (bumped in song-import Phase 01 step 01.2 — pow quality added)', () => {
     // SESSION_SCHEMA_VERSION was 5 when the locked feature was added.
-    // note-placement Phase 01 step 01.2 bumped it to 6 (NoteSlot variant added to progression).
+    // note-placement Phase 01 step 01.2 bumped it to 6 (NoteSlot variant).
+    // song-import Phase 01 step 01.2 bumped it to 7 (pow quality added to SK_QUAL).
     // This test is updated to reflect the authorized bump.
     const blob = makeBaseSavedSession({ locked: true });
     const parsed = SavedSessionSchema.safeParse(blob);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    expect(parsed.data.version).toBe(6);
+    expect(parsed.data.version).toBe(7);
   });
 });

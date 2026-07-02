@@ -34,8 +34,9 @@ describe('SCHEMA_VERSION', () => {
   // Bumped from 5 to 6 in ai-jam Phase 03 step 03.2 — ADR 0023.
   // musicalIntent? field added to AgentOutputSchema; superRefine guard relaxed (ADR 0023 D2).
   // (Previously bumped from 4 to 5 in ai-composition-authoring Phase 01 — ADR 0021 D2.)
-  it('is numeric 6 — bumped in ai-jam Phase 03 step 03.2 (ADR 0023)', () => {
-    expect(SCHEMA_VERSION).toBe(6);
+  // Bumped from 6 to 7 in song-import Phase 01 step 01.2 — SK_QUAL extended with 'pow'.
+  it('is numeric 7 — bumped in song-import Phase 01 step 01.2 (pow quality added)', () => {
+    expect(SCHEMA_VERSION).toBe(7);
   });
 });
 
@@ -670,10 +671,10 @@ describe('HarmonyChordCoreSchema — ADR 0019 D6 preset + filter/envelope fields
     }
   });
 
-  // A-03-12 / A-01-06: SCHEMA_VERSION is now 6 (ADR 0023 — bumped in ai-jam Phase 03 step 03.2).
-  // Previously 5 from ADR 0021 D2 (ai-composition-authoring Phase 01).
-  it('A-03-12 / A-01-06: SCHEMA_VERSION is 6 (bumped from 5 by ADR 0023, ai-jam Phase 03)', () => {
-    expect(SCHEMA_VERSION).toBe(6);
+  // A-03-12 / A-01-06: SCHEMA_VERSION is now 7 (song-import Phase 01 — pow quality added).
+  // Previously 6 from ADR 0023 (ai-jam Phase 03 step 03.2); 5 from ADR 0021 D2.
+  it('A-03-12 / A-01-06: SCHEMA_VERSION is 7 (bumped from 6 by song-import Phase 01 — pow quality)', () => {
+    expect(SCHEMA_VERSION).toBe(7);
   });
 });
 
@@ -847,9 +848,9 @@ describe('SaveAsBlockSpecSchema.shape.type — structural alignment with Block.t
 // ai-jam Phase 03 step 03.2.
 // Covers acceptance IDs A-03-01, A-03-02, A-03-03.
 
-describe('SCHEMA_VERSION === 6 (A-03-03, ADR 0023 D3)', () => {
-  it('A-03-03: SCHEMA_VERSION is 6 — bumped in ai-jam Phase 03 step 03.2 (ADR 0023)', () => {
-    expect(SCHEMA_VERSION).toBe(6);
+describe('SCHEMA_VERSION === 7 (A-03-03, ADR 0023 D3, song-import Phase 01)', () => {
+  it('A-03-03: SCHEMA_VERSION is 7 — bumped in song-import Phase 01 step 01.2 (pow quality)', () => {
+    expect(SCHEMA_VERSION).toBe(7);
   });
 });
 

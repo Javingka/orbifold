@@ -47,7 +47,8 @@ export interface GrooveSnapshot {
 
 export interface ChordSnapshotEntry {
   rootPc: number; // 0–11
-  qual: 'maj' | 'min' | 'dim' | 'aug';
+  /** song-import Phase 01: 'pow' added to include power chord quality. */
+  qual: 'maj' | 'min' | 'dim' | 'aug' | 'pow';
   gain: number;
   bars?: number;
   // Sound attributes (ADR 0018 D1, ADR 0019 D4a — all preserved per A-01-04):

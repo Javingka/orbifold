@@ -234,6 +234,28 @@ export function computeVoiceTracks(
 
     // Chord slot.
     const ch = slot as ChordInput;
+
+    // song-import Phase 01: 'pow' chords have only 2 voices (root + fifth, no third).
+    // The 3-voice voice-leading pipeline assumes [number, number, number] inputs;
+    // feeding a 2-element array would produce corrupt output ("undefined3") at line
+    // QUAL_INTERVALS[ch.qual][perm[v]] when perm[2] is accessed on a 2-element
+    // permutation. Guard: treat 'pow' as opaque duration — emit rest events for all 3
+    // visual voice tracks and do NOT update prevPcs/prevMidi. Voice-leading continuity
+    // is preserved across the gap (same behaviour as rest/note slots above).
+    // voice-tracks output is visual-only (does not reach audio codegen — ADR 0011 D6).
+    if (ch.qual === 'pow') {
+      for (let v = 0; v < 3; v++) {
+        tracks[v].events.push({
+          isRest: true,
+          slotIndex: i,
+          bars,
+          startCycle,
+        });
+      }
+      startCycle += bars;
+      continue;
+    }
+
     const nextPcs = chordPcs(ch.rootPc, ch.qual) as [number, number, number];
 
     if (prevPcs === null) {
