@@ -61,6 +61,11 @@ None — inventory is read-only. OD-3 and the block-naming convention are alread
 ## Step 02.2 — `importSession` skill + Zod schema + golden-fixture test
 
 **Date:** 2026-07-02
+**Commit(s):**
+- 5daa005
+- **Terminal commit:** `docs(handoff): Phase 02 step 02.2 — append handoff with commit hash`
+  - Hash: self-referential — not recorded
+  - Note: This is the handoff-update commit. Its hash is not in this list because the list is in the commit itself.
 **Iteration:** 1 of 5
 
 ### Completed
