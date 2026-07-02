@@ -20,11 +20,17 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 
 ## Current initiative
 
-**Name:** `note-placement`
+**Name:** `song-import`
 
-**Phase 01** (complete, branch `note-placement/phase-01`, PR pending merge) — `NoteSlot` third slot type (`Chord | RestSlot | NoteSlot`), `SESSION_SCHEMA_VERSION` → 6, codegen `note("C4").s("triangle")…` via `resolveChordAttrs`, Tonnetz vertex click → note (spatial hit-test, no toggle), Pentagrama `pNote` paint + pitch-offset overlay, timbre attributes (`instrument`/`preset`/`gain`/`room`/`decay`/`attack`/`lpf`), floating sound panel on chord slots, unified sound selector in Header; 2069 tests. Docs: `docs/note-placement/`.
+**Vision:** Enable Orbifold to *interpret real music* — given a song (audio file / YouTube / Spotify link — input set being refined), extract its rhythm and harmony and build a Session that represents it in Orbifold's musical language and visual interface. This is a two-stage effort: (1) `song-import` lays the **data-model foundation** (the vocabulary needed to represent real songs); (2) a follow-on initiative builds the actual audio/tab ingestion + `importSession` agent skill. See the design discussion in the Pilot conversation of 2026-07-01/02.
+
+**Phase 01** (complete, branch `song-import/phase-01`, **NOT merged — held on branch until a user-facing feature is ready to ship to `main`**) — `Quality` extended with `'pow'` (power chords: root + fifth, no third) end-to-end (`QUAL_INTERVALS`, `chordLabel`→`"E5"`, `chordPcs`/`chordVoicing` 2-voice, `chordToStrudel`→`note("E2,B2")` reusing the generic comma-join path), `voice-tracks.ts` guarded against 2-voice input, `SESSION_SCHEMA_VERSION` & agent `SCHEMA_VERSION` → 7, `Block.label?: string` additive field + Composition-timeline section display; 2104 tests (34 new). Decisions OD-1 (power-chord codegen = comma-joined `note()`) and OD-2 (`pow` render = `accent` `#8aa0ff`, no Tonnetz triangle) in `docs/song-import/decisions.md`. Docs: `docs/song-import/`.
+
+Deferred to Phase 02+: compound/irregular time signatures (7/8, 14/8 — conflicts with the 1-cycle=4/4 invariant, needs its own architecture decision); the `importSession` agent skill (the bridge to the music-interpretation initiative).
 
 **Previous initiatives:**
+
+- `note-placement` (Phase 01, complete, branch `note-placement/phase-01`, merged to `main` at `abf213d`) — `NoteSlot` third slot type (`Chord | RestSlot | NoteSlot`), `SESSION_SCHEMA_VERSION` → 6, codegen `note("C4").s("triangle")…` via `resolveChordAttrs`, Tonnetz vertex click → note (spatial hit-test, no toggle), Pentagrama `pNote` paint + pitch-offset overlay, timbre attributes (`instrument`/`preset`/`gain`/`room`/`decay`/`attack`/`lpf`), floating sound panel on chord slots, unified sound selector in Header; 2069 tests. Docs: `docs/note-placement/`.
 
 - `authentic-groove` (Phases 01–09 + post-09 fixes, **complete**, merged `main` 2026-06-26) — genre-authentic sample palette (ADR 0025), multi-layer locked recipes, native step counts, velocity accents, swing/humanization, 16-sound palette, StepEditor, orbit sound switcher, euclid preview widget; 2020 tests. Docs: `docs/authentic-groove/`.
 - `ai-jam` (Phases 01 + 06–07, complete, merged `main` 2026-06-22) — autopilot LLM evolution loop, batched plan consumption (ADR 0024), harmony preset chips, waiting message; ADRs 0022–0024; 1589 tests.
@@ -57,13 +63,13 @@ Planner and Dev run as **isolated subagents** (`.claude/agents/planner.md`, `.cl
 ### Branch and commit
 
 - Main branch: `main`
-- Initiative branch pattern: `<initiative-name>/phase-NN` (prior: `authentic-groove/phase-NN`, `ai-jam/phase-NN`, `ai-composition-authoring/phase-NN`, `editable-composition/phase-NN`, `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`)
+- Initiative branch pattern: `<initiative-name>/phase-NN` (prior: `note-placement/phase-NN`, `authentic-groove/phase-NN`, `ai-jam/phase-NN`, `ai-composition-authoring/phase-NN`, `editable-composition/phase-NN`, `harmonic-rhythm-improvements/phase-NN`, `orbifold-v2/phase-NN`)
 - Commit format: `<type>(<scope>): Phase NN step NN.N — <description>` (types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`)
 - PR convention: one PR (or one merge commit) per phase, with its acceptance criteria verified, without breaking prior phases.
 
 ### Spec location
 
-Specs are the phase files in `docs/<initiative>/phases/phase-NN.md`. The master brief is `ORBIFOLD_KICKOFF.md` (architecture, domain model, invariants). Initiative specs: `docs/authentic-groove/phases/`, `docs/ai-jam/phases/`, `docs/ai-composition-authoring/phases/`, `docs/harmonic-rhythm-improvements/phases/`, `docs/orbifold-v2/phases/`, and `docs/orbifold-v1/phases/`.
+Specs are the phase files in `docs/<initiative>/phases/phase-NN.md`. The master brief is `ORBIFOLD_KICKOFF.md` (architecture, domain model, invariants). Initiative specs: `docs/song-import/phases/`, `docs/note-placement/phases/`, `docs/authentic-groove/phases/`, `docs/ai-jam/phases/`, `docs/ai-composition-authoring/phases/`, `docs/harmonic-rhythm-improvements/phases/`, `docs/orbifold-v2/phases/`, and `docs/orbifold-v1/phases/`.
 
 ### Test commands
 
