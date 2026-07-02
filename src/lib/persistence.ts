@@ -285,6 +285,8 @@ const SavedBlockSchema = z.object({
   bars: z.number().int().min(1).max(64),
   /** Block snapshot captured at save time (editable-composition Phase 01, ADR 0020 D5). */
   snapshot: SavedBlockSnapshotSchema.optional(),
+  /** Optional section label — song-import Phase 01. Additive; absent in pre-Phase-01 sessions. */
+  label: z.string().optional(),
 });
 
 const SavedBlockRefSchema = z.object({
@@ -429,6 +431,8 @@ export function serializeSession(state: SessionState): SavedSession {
         // id excluded — ADR 0009
         // snapshot included when present (ADR 0020 D5); omitted when undefined per Zod defaults
         ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
+        // label included when present (song-import Phase 01); omitted when undefined
+        ...(b.label !== undefined ? { label: b.label } : {}),
       })),
       tracks: state.composition.tracks.map((t) => ({
         // id excluded — ADR 0009
@@ -565,6 +569,8 @@ export function deserializeSession(
         bars: b.bars,
         // snapshot carried through when present (ADR 0020 D5); absent → undefined (legacy block)
         ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
+        // label carried through when present (song-import Phase 01); absent → undefined
+        ...(b.label !== undefined ? { label: b.label } : {}),
       })),
       tracks: saved.composition.tracks.map((t) => ({
         id: '',
