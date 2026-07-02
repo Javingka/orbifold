@@ -31,6 +31,22 @@ See `references/decisions-register-convention.md` for entry format.
 **Source:** Phase 01 step 01.1 inventory OD-2 recommendation; Pilot decision 2026-07-02.
 **Applies to:** `src/render/**` rutas de paint del Pentagrama/Tonnetz; cualquier fase futura que renderice qualities no triádicas.
 
+### OD-3 — Contrato de entrada de `importSession`: chart estructurado LLM-native (Option A)
+
+**Decision:** `importSession` recibe un objeto estructurado y validado — `{ songTitle, artist?, bpm, key, mode, sections: [{ label, chords: [{ root, quality, bars? }] }] }` — NO texto de tab crudo. La skill es un **validador+traductor puro**: mapea ese objeto a un `Session` de Orbifold válido, reutilizando `pow`, `Block.label`, los grooves existentes y `SCHEMA_VERSION 7`. Quién produce ese objeto (un LLM desde su conocimiento, un test, o un futuro scraper/UI) queda **fuera de esta fase**. El fixture golden es un objeto hardcodeado de esa forma.
+**Decided:** song-import Phase 02 scoping, 2026-07-02
+**Why:** Frontera de función limpia y testeable: el golden es un objeto simple, la función es demostrablemente correcta contra él, y la preocupación de "de dónde sale el chart" (LLM-native vs scraping de Ultimate Guitar/Chordify) permanece **aguas arriba** y se decide en una fase posterior — Option A no la cierra (un scraper podría igualmente poblar el objeto estructurado). Option B (texto de tab crudo `rawChart: string`) mezcla parsing + traducción en una sola skill, es frágil ante variaciones de formato y complica el test unitario.
+**Source:** Phase 02 step 02.1 OD-3 (planteada por el Planner en scoping); decisión del Pilot 2026-07-02.
+**Applies to:** `src/agent/import-session.ts` `ImportSessionInputSchema` y su lógica de mapeo; cualquier fase futura que alimente la skill (scraper/UI/LLM populan el objeto de entrada).
+
+### Convención de nombre de Block en `importSession`: `"<songTitle> — <sectionLabel>"`
+
+**Decision:** Los blocks creados por `importSession` se nombran `"<songTitle> — <sectionLabel>"` (p. ej. `"ONE — Intro"`). `Block.label` sigue llevando la **sección desnuda** (`"Intro"`) para el display de timeline introducido en Phase 01.
+**Decided:** song-import Phase 02 scoping, 2026-07-02
+**Why:** Auto-descriptivo en una session multi-canción; el chip de timeline muestra `label` (la sección) mientras que `name` desambigua la canción de origen. Nombrar sólo `"<sectionLabel>"` sería ambiguo si varias canciones comparten una session.
+**Source:** Pilot decision 2026-07-02.
+**Applies to:** `src/agent/import-session.ts` (construcción de `Block.name` / `Block.label`).
+
 ## Superseded decisions
 
 (empty)
