@@ -158,3 +158,111 @@ Two test failures were diagnosed and fixed immediately (not blockers):
 - **A-03-15 through A-03-23:** Belong to step 03.3 (import UI) — not in scope for this step.
 
 ---
+
+## Step 03.3 — Import UI + manual parity verification
+
+**Date:** 2026-07-03
+**Iteration:** 1 of 1
+
+### Transient fixes during implementation
+
+Two lint issues were diagnosed and fixed immediately (not blockers):
+
+1. `PROVIDERS` was imported in `ImportSong.svelte` but not used (the component only needs `loadApiKey` and `agentProvider`). Removed the unused import.
+2. Three `result!` non-null assertions in `tests/song-import/import-agent.test.ts` (from step 03.2 commit) triggered `@typescript-eslint/no-non-null-assertion`. Added `// eslint-disable-next-line` comments per project convention (the assertions are safe — each is guarded by `expect(result).not.toBeNull()` immediately above). Prettier reformatting applied after both fixes.
+
+### Completed
+
+- Read all required files: `CLAUDE.md`, `docs/orbifold-v1/decisions.md`, `docs/song-import/decisions.md`, `docs/song-import/phases/phase-03.md`, `docs/song-import/inventories/phase-03-inventory.md` (full), `src/ui/AgentPanel.svelte` (full), `src/app/App.svelte` (mount site), `src/agent/import-agent.ts` (full), `src/agent/import-session.ts` (full), `src/agent/apply.ts` (full), `src/ui/PersistencePanel.svelte` (UX precedent), `src/app/app.css` (CSS conventions: `.glass`, CSS custom properties, panel/input/button patterns).
+- Created `src/ui/ImportSong.svelte` — new standalone component with AGPL-3.0 header. Contains:
+  - Label "Nombre o link" + text input (placeholder "p. ej. ONE de Metallica").
+  - "Importar" button (disabled while loading or field empty or no API key).
+  - Loading state ("Importando…" text replaces button label during async call).
+  - Persistent `.import-warning` "Esta acción reemplazará tu sesión actual." shown when field is non-empty.
+  - Success message "✓ Sesión importada: <songTitle>" auto-clearing after 3 s.
+  - Persistent `.import-error` on failure, cleared on next attempt.
+  - API-key-absent placeholder "Configura tu proveedor de IA primero (panel de agente)" that disables the field when no key is found for the current provider (checked on `onMount` and on `handleOpen`).
+  - `handleImport()` wire-up exactly as the phase spec pseudocode: `sendImport(query)` → error path sets error + stop; ok path calls `importSession(result.input)` → `applyImportSession(saved)` → sets `successMsg` with 3 s auto-clear → clears `importQuery`.
+  - Own `open`/`close` state with a fixed left-edge tab trigger (symmetrical to AgentPanel's right-edge tab), consistent with the standalone-panel pattern of `PersistencePanel`.
+  - Minimal scoped CSS inside the component's `<style>` block: `.import-head`, `.import-body`, `.import-field-row`, `.import-label`, `.import-input`, `.import-warning`, `.import-btn`, `.import-success`, `.import-error` — all following `.glass`/input/button conventions from `app.css`. No new CSS framework or utility classes.
+- Imports in the component: `agentProvider` from `../agent/agent.js`; `loadApiKey`, `PROVIDERS` from `../agent/providers.js`; `sendImport` from `../agent/import-agent.js`; `importSession` from `../agent/import-session.js`; `applyImportSession` from `../agent/apply.js`. No import from `chatHistory` (A-03-20).
+- Modified `src/app/App.svelte` — added `import ImportSong from '../ui/ImportSong.svelte'` to the import block and `<ImportSong />` after `<PersistencePanel />` with a comment referencing the phase and step.
+- No new unit tests written (Svelte component unit tests require JSDOM, which is not in the test suite — per phase spec explicit instruction).
+- Manual parity note: PENDING — Pilot browser verification required (see checklist below).
+
+### Files touched
+
+- `src/ui/ImportSong.svelte` (created)
+- `src/app/App.svelte` (modified — import + mount)
+- `docs/song-import/handoffs/phase-03-handoff.md` (this file, extended)
+
+### Validation evidence (per Acceptance ID)
+
+**A-03-20 (proxy:static-analysis):** `src/ui/ImportSong.svelte` script imports: `agentProvider` from `../agent/agent.js`; `loadApiKey`, `PROVIDERS` from `../agent/providers.js`; `sendImport` from `../agent/import-agent.js`; `importSession` from `../agent/import-session.js`; `applyImportSession` from `../agent/apply.js`. No import from `chatHistory` — confirmed by reading the component source.
+
+**A-03-21 (proxy:static-analysis):** `src/ui/ImportSong.svelte` opens with `<!-- SPDX-License-Identifier: AGPL-3.0-only -->` on line 1. No other new files were created in this step.
+
+**A-03-22 (operability):** `pnpm test` → 2153 tests, all passing. Exact output:
+```
+ Test Files  47 passed (47)
+      Tests  2153 passed (2153)
+   Start at  11:49:52
+   Duration  2.21s (transform 2.57s, setup 0ms, collect 6.92s, tests 1.11s, environment 9ms, prepare 3.92s)
+```
+No regressions. Baseline was 2129; 2153 ≥ 2129.
+
+**A-03-23 (operability):** `pnpm exec tsc --noEmit` → exits 0, no output, no errors.
+
+**pnpm lint (operability):** `pnpm lint` → exits 0 after two targeted fixes (unused `PROVIDERS` import in `ImportSong.svelte`; three `eslint-disable-next-line` comments for `@typescript-eslint/no-non-null-assertion` in the step 03.2 test file; Prettier reformatting applied). Output: `All matched files use Prettier code style!`
+
+**pnpm build (operability):** `pnpm build` → exits 0. Output: `✓ built in 2.30s`. The chunk-size and dynamic-import warnings are pre-existing (confirmed by running build on the pre-step-03.3 stash: identical warnings). No new warnings introduced.
+
+### Manual parity note — PENDING (Pilot to complete)
+
+The acceptance criteria A-03-15 through A-03-19 are marked `manual` in the phase spec. They require running the app in a browser with a live LLM API key. The Dev subagent cannot perform interactive browser verification. The code is complete and the build succeeds. The Pilot must execute the following checklist.
+
+**Pilot manual verification checklist:**
+
+1. Run `pnpm dev`. Open the app in the browser.
+2. Click the "Agente" tab (right edge) to open the Agent Panel. Select a provider (e.g. Anthropic). Enter a valid API key in the key field. Close the Agent Panel.
+3. Click the "Importar" tab (left edge of the viewport) to open the Import Song panel.
+   - **A-03-15:** Confirm the import panel slides in and shows the "Nombre o link" label + text input + "Importar" button. The field should be enabled (key is now configured).
+4. Type "ONE de Metallica" (or "ONE by Metallica") into the import field (do NOT press Enter yet).
+   - **A-03-17:** Confirm the "Esta acción reemplazará tu sesión actual." warning appears while the field is non-empty.
+5. Click "Importar" (or press Enter). Wait up to 30 seconds.
+   - **A-03-15 (continued):** "Importando…" should appear on the button during the LLM call.
+   - **A-03-16:** On success: confirm at least 2 labelled composition blocks appear in the Composition timeline (open CompositionDrawer). The blocks should display section labels ("Intro", "Verse", "Chorus", or equivalent). The BPM should be approximately 85 (check the BPM display in the Header). The success message "✓ Sesión importada: ONE" (or the exact songTitle the LLM used) should appear and auto-clear after 3 seconds.
+6. To test **A-03-18** (error path): disconnect from the network (or intentionally enter an invalid API key), then try importing a different song name. Confirm the error message appears in the panel (red `.import-error` text) without crashing the app. Re-enable network / restore key.
+7. To test **A-03-19**: click the Play button on one of the imported composition blocks in the Composition timeline. Confirm audible Strudel audio plays (power-chord `note("…,…")` pattern or triadic pattern depending on the LLM's chart for the song).
+8. Record and fill in the parity note below:
+   - Provider used: _______________
+   - Model used: _______________
+   - LLM chart returned on first attempt: Yes / No
+   - Section labels returned: _______________
+   - BPM returned (approximate): _______________
+   - Blocks visible in Composition timeline: Yes / No
+   - Block labels match section labels: Yes / No
+   - Audio audible when playing a block: Yes / No
+   - Any discrepancies vs Phase 02 golden fixture (ONE – 3 sections, BPM 85): _______________
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / method | Test type | Gap / Coverage status |
+|---|---|---|---|---|
+| A-03-15 | Import field visible in running app with provider key configured | Browser manual | `manual` | PENDING — Pilot manual verification |
+| A-03-16 | Importing "ONE de Metallica" produces ≥ 2 labelled blocks in Composition timeline within 30 s | Browser manual | `manual` | PENDING — Pilot manual verification |
+| A-03-17 | "Esta acción reemplazará tu sesión actual." warning visible when field is non-empty | Browser manual | `manual` | PENDING — Pilot manual verification |
+| A-03-18 | Parse failure shows error message in panel without crash | Browser manual (network off or bad key) | `manual` | PENDING — Pilot manual verification |
+| A-03-19 | Playing an imported block generates audible Strudel audio | Browser manual | `manual` | PENDING — Pilot manual verification |
+| A-03-20 | Import component does NOT import from `chatHistory` | `src/ui/ImportSong.svelte` script block | `proxy:static-analysis` | Covered — no chatHistory import present |
+| A-03-21 | AGPL-3.0 header on all new `.svelte` files | `src/ui/ImportSong.svelte` line 1 | `proxy:static-analysis` | Covered — header present |
+| A-03-22 | All 2153 tests pass (≥ 2129 baseline) | `pnpm test` → 2153 passed | `operability` | Covered — 2153 ≥ 2129 |
+| A-03-23 | `pnpm exec tsc --noEmit` passes clean | `pnpm exec tsc --noEmit` → exit 0 | `operability` | Covered |
+
+### Gap notes
+
+- **A-03-15 through A-03-19:** All `manual` criteria. The component code is complete and the build succeeds. Verification requires the Pilot to run the app with a live API key. Checklist provided above.
+- **No new Svelte component unit tests:** Per phase spec explicit instruction — "No new unit tests for the Svelte component itself (Svelte component unit tests require JSDOM, which is not in the test suite)." The wire-up logic is covered by manual parity (A-03-15–A-03-19) and the A-03-11 regression test from step 03.2.
+- **Build warnings:** The chunk-size and dynamic-import warnings in `pnpm build` output are pre-existing (confirmed by stash+build comparison). No new warnings introduced by this step.
+
+---

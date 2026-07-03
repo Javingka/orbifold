@@ -27,7 +27,11 @@ import {
   importSession,
   type ImportSessionInput,
 } from '../../src/agent/import-session.js';
-import { applyLoadedSession, sessionStore, DEFAULT_SESSION_STATE } from '../../src/state/session.js';
+import {
+  applyLoadedSession,
+  sessionStore,
+  DEFAULT_SESSION_STATE,
+} from '../../src/state/session.js';
 import { SavedSessionSchema } from '../../src/lib/persistence.js';
 
 // ── Golden fixture (shared with import-session.test.ts) ───────────────────────
@@ -89,6 +93,7 @@ describe('extractJsonFromText', () => {
     // whitespace following "json". The leading newline is consumed by \s*.
     const result = extractJsonFromText(txt);
     expect(result).not.toBeNull();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(JSON.parse(result!)).toEqual({ foo: 1 });
   });
 
@@ -96,6 +101,7 @@ describe('extractJsonFromText', () => {
     const txt = '```JSON\n{"a":2}\n```';
     const result = extractJsonFromText(txt);
     expect(result).not.toBeNull();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(JSON.parse(result!)).toEqual({ a: 2 });
   });
 
@@ -127,6 +133,7 @@ describe('extractJsonFromText', () => {
     const result = extractJsonFromText(txt);
     // Fence match takes priority — result must come from the fence, not the trailing brace.
     expect(result).not.toBeNull();
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const parsed = JSON.parse(result!);
     expect(parsed).toHaveProperty('fenced', true);
     expect(parsed).not.toHaveProperty('trailing');
