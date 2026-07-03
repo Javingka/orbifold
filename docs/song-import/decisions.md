@@ -79,6 +79,14 @@ See `references/decisions-register-convention.md` for entry format.
 **Source:** Pilot decision 2026-07-03 (preferencia de placement, no bloqueante).
 **Applies to:** `src/ui/**` (nuevo componente de import); Phase 03 step 03.3.
 
+### OD-7 — Fuente del ritmo importado: signatura rítmica por sección (Option B), no groove genérico
+
+**Decision:** El ritmo de una canción importada NO es un backbeat genérico por defecto (Option A **rechazada**). Se trata como **first-class, con la misma estrategia que la armonía**: el LLM devuelve la **signatura rítmica** de la canción — un patrón de batería **por sección**, en paralelo a los acordes por sección — e `importSession` lo mapea a bloques `groove` (uno por sección) + una pista de ritmo, alineados bar-a-bar con los bloques de armonía en dos pistas que hacen `stack(...)`. El estado `rhythm` en vivo = groove de la **primera** sección (espejo de `harmony.progression` = acordes de la primera sección). Requiere: extender `SectionSpecSchema` con un campo `groove` **requerido** (`ImportGrooveSchema`: `layers[]` con `sound` restringido a la paleta soportada `SK_SOUNDS` y `steps` de longitud exacta 16, per invariante 1 ciclo = 4/4); subir `IMPORT_SCHEMA_VERSION` a **2**; extender `IMPORT_SYSTEM_PROMPT` para pedir el patrón característico con la paleta de sonidos; y subir `max_tokens` de `sendImport` (600 → 1600). Cada bloque (armonía y groove) lleva su snapshot (`ArmoniaSnapshot` / `GrooveSnapshot`) → editable vía `openBlock` (arregla también el gap "bloques no editables"). Compás compuesto/irregular sigue diferido (choca con 1 ciclo = 4/4).
+**Decided:** song-import Phase 03 step 03.4 scoping, 2026-07-03
+**Why:** El ritmo identifica una canción tanto o más que la armonía; una solución genérica no captura lo que hace reconocible a un tema (p. ej. el doble bombo de "ONE"). "No podemos dar soluciones genéricas, no va a funcionar; tenemos que encontrar la 'signatura rítmica' de las canciones, con la misma estrategia que hacemos con armonía." La fidelidad por-canción es el core de la propuesta de valor de song-import. `groove` requerido (no opcional): si el LLM lo omite, `safeParse` falla y el usuario reintenta — un fallback silencioso a sin-batería sería peor que un error informativo.
+**Source:** Phase 03 OD-7 (Planner scoping); decisión del Pilot 2026-07-03. Descubierto en la verificación manual de parity del step 03.3 (import en vivo de "ONE" con gpt-4o-mini: sin batería en la composición).
+**Applies to:** `src/agent/import-session.ts` (`ImportSessionInputSchema`/`SectionSpecSchema`, mapeo a bloques groove + pista de ritmo, snapshots); `src/agent/import-prompt.ts` (`IMPORT_SYSTEM_PROMPT`); `src/agent/import-agent.ts` (`max_tokens`); Phase 03 step 03.4.
+
 ## Superseded decisions
 
 (empty)

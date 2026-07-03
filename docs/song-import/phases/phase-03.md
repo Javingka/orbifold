@@ -82,6 +82,24 @@ What Option A entails concretely: (1) A new `IMPORT_SYSTEM_PROMPT` constant (in 
 
 **Recommendation: Surface to Pilot. No default recommendation.** Both options are defensible. Option A is faster to ship and has a clear UX precedent. Option B is more musically useful for the "import and jam" workflow but requires a new action in `session.ts` and a clearer spec about what "merge" means for rhythm/BPM. The Pilot must decide. If Option B is chosen, step 03.2 needs an explicit `mergeImportedSession` action in `session.ts` in scope.
 
+### OD-7 — Rhythmic signature of the imported song (RESOLVED)
+
+**Context:** Step 03.3 manual parity verification revealed that the imported composition plays harmony only — no drums. `importSession` sets a minimal `bd` groove in `SavedSession.rhythm` (standalone rhythm engine) but `composition.blocks` contains only harmony blocks in a single track. Playing the composition therefore plays only harmony.
+
+Step 03.4 fixes this by adding per-section groove blocks + a rhythm track to the composition. The question was where the groove pattern comes from.
+
+**Option A — Fixed default backbeat (REJECTED by Pilot):** A deterministic generic rock/pop pattern (bd+sd+hh) embedded in `importSession`. Simple, no schema change, fully deterministic. Rejected because it ignores what makes each song's rhythm distinctive — the "signatura rítmica" — and produces the same beat for Metallica as for a bossa nova.
+
+**Option B — LLM returns a per-section drum pattern (RESOLVED — Pilot decision):** The LLM returns a drum pattern for each section alongside the chord chart. The Pilot's rationale: "el ritmo identifica una canción tanto o más que la armonía; no podemos dar soluciones genéricas; tenemos que encontrar la 'signatura rítmica' de las canciones, con la misma estrategia que hacemos con armonía." Rhythm is now first-class — parallel to harmony, not an afterthought. Each section has both a `chords[]` array (harmony) and a `groove` object (rhythm), and `importSession` produces one `armonia` block + one `groove` block per section, arranged in two parallel composition tracks.
+
+**Option C — Tempo/genre heuristic:** Not recommended; also ruled out by the same reasoning as Option A.
+
+**Resolution: Option B — per-section song-specific rhythmic signature, first-class parity with harmony.** The generic backbeat (Option A) is explicitly not acceptable. The Pilot must resolve OD-7 before step 03.4 begins; this section records the resolution.
+
+**Schema change required:** `SectionSpecSchema` gains a `groove` field (required); `IMPORT_SCHEMA_VERSION` bumps from 1 to 2. These changes are implemented in step 03.4. `IMPORT_SYSTEM_PROMPT` (created in step 03.2) must be extended in step 03.4 to instruct the LLM to return drum patterns.
+
+**ADR implication:** `IMPORT_SCHEMA_VERSION` bump to 2 requires an ADR (amendment to ADR 0026, or a new ADR). The Pilot writes it. The input-side prompt extension also requires an ADR 0028 amendment. Both are flagged in the ADR Triggers section below.
+
 ---
 
 ## Step 03.1 — Inventory
@@ -135,6 +153,8 @@ CHECKPOINT → Commit message:
 ## Step 03.2 — `applyImportSession` + `label` fix + `sendImport` + `IMPORT_SYSTEM_PROMPT`
 
 PROMPT → Read `CLAUDE.md`, `docs/orbifold-v1/decisions.md`, `docs/song-import/decisions.md`, `docs/song-import/phases/phase-03.md`, and `docs/song-import/inventories/phase-03-inventory.md` before editing. The Pilot has resolved OD-4, OD-5, and OD-6. Apply the resolutions exactly. Implement the store-coupling half (`applyImportSession` in `apply.ts`, `Block.label` fix in `session.ts`) and the agent-call half (`IMPORT_SYSTEM_PROMPT` + `sendImport`). Write unit tests for `applyImportSession`'s composition of `importSession` + store load. STOP for Planner review.
+
+> **Note on `IMPORT_SYSTEM_PROMPT` scope:** Step 03.2 creates `src/agent/import-prompt.ts` with an `IMPORT_SYSTEM_PROMPT` covering harmony only (chords, sections, BPM, key, mode). Step 03.4 will extend this prompt to include per-section rhythm (OD-7 resolution). The harmony-only prompt created here is a valid intermediate artifact; do NOT attempt to include drum patterns in it — that is step 03.4's responsibility after OD-7 is resolved. The `max_tokens` set in step 03.2 (`600`) will also be revised upward in step 03.4 to accommodate the larger response with groove layers.
 
 **Required reading (in order):**
 
@@ -274,7 +294,7 @@ Note: If the Dev judges that the JSON extraction logic is too entangled with `fe
 
 - A-03-06: `src/state/session.ts` — `applyLoadedSession` carries `b.label` through to `newBlocks`. Verified by `proxy:static-analysis` (read the lines; confirmed by the regression test A-03-11).
 - A-03-07: `applyImportSession` is exported from `src/agent/apply.ts`; it accepts `SavedSession` and calls `applyLoadedSession`. AGPL-3.0 header on new file portions. Verified by `proxy:static-analysis`.
-- A-03-08: `src/agent/import-prompt.ts` exists; `IMPORT_SYSTEM_PROMPT` is exported; it includes the `ImportSessionInputSchema` shape, all quality values including `'pow'`, all 8 mode values, and the "si no conoces la canción, devuelve `{ error: ... }`" instruction. Verified by `proxy:static-analysis`.
+- A-03-08: `src/agent/import-prompt.ts` exists; `IMPORT_SYSTEM_PROMPT` is exported; it includes the `ImportSessionInputSchema` shape (harmony fields only at this step), all quality values including `'pow'`, all 8 mode values, and the "si no conoces la canción, devuelve `{ error: ... }`" instruction. Verified by `proxy:static-analysis`.
 - A-03-09: `src/agent/import-agent.ts` exists; `sendImport` and `ImportSendResult` are exported; AGPL-3.0 header present. Verified by `proxy:static-analysis`.
 - A-03-10: `sendImport` uses `agentProvider`, `loadApiKey`, `PROVIDERS`, `IMPORT_SYSTEM_PROMPT`, and `ImportSessionInputSchema.safeParse` — no new HTTP client, no new key-storage pattern. Verified by `proxy:static-analysis` (read imports).
 - A-03-11: Regression test — `applyLoadedSession` called with a `SavedSession` that has blocks with `label` fields (use the Phase 02 golden fixture output from `importSession(fixture)`) produces a session state where the blocks carry the same labels. Verified by `unit` (Vitest, pure-engine, read the store after the call — note: `applyLoadedSession` is store-coupled; the test must use `get(sessionStore)` in Vitest, which is valid as `sessionStore` is a Svelte writable that works in Node/Vitest without DOM).
@@ -376,7 +396,323 @@ CHECKPOINT → Commit message:
 
 ---
 
-## Step 03.4 — Quality gate + merge-readiness declaration
+## Step 03.4 — `importSession` enrichment: per-section rhythmic signatures + editable snapshots
+
+> **Acceptance-ID numbering note:** This step introduces IDs A-03-24 through A-03-37. The quality-gate step (step 03.5) uses IDs A-03-38 through A-03-43.
+
+PROMPT → Read `CLAUDE.md`, `docs/orbifold-v1/decisions.md`, `docs/song-import/decisions.md`, and `docs/song-import/phases/phase-03.md` (this file) in full before editing. The Pilot has resolved OD-7: per-section song-specific rhythmic signatures, first-class parity with harmony (Option B — generic backbeat rejected). Implement three targeted changes: (1) extend `SectionSpecSchema` with a required `groove` field and bump `IMPORT_SCHEMA_VERSION` to 2; (2) attach an `ArmoniaSnapshot` to each harmony block and a `GrooveSnapshot` to each groove block so all imported blocks are editable via `openBlock`; (3) add per-section groove blocks + a parallel rhythm track to the composition. Extend `IMPORT_SYSTEM_PROMPT` in `import-prompt.ts` and raise `max_tokens` in `sendImport` in `import-agent.ts`. Update the golden-fixture test in `tests/song-import/import-session.test.ts` to expect the new output shape. STOP for Planner review.
+
+**Context (what step 03.3 manual parity revealed):**
+
+Two product gaps were found when importing "ONE de Metallica" live:
+
+- **Finding 1 — silent composition:** The composition plays only harmony. The standalone rhythm engine groove and the composition are separate; the composition has no rhythm track.
+- **Finding 3 — blocks not editable:** Clicking a block in the Composition timeline is a no-op. `openBlock` in `session.ts` (line 2230) returns immediately when `block.snapshot === undefined`. Imported blocks have no `snapshot` field and are therefore permanently read-only.
+
+(Finding 2 — a separate, non-import-specific issue with `applyLoadedSession` — is out of scope for this step.)
+
+The Pilot resolved OD-7 as: rhythm is first-class, parallel to harmony — each section must carry its own rhythmic signature returned by the LLM.
+
+**Required reading (in order):**
+
+1. `CLAUDE.md`
+2. `docs/orbifold-v1/decisions.md`
+3. `docs/song-import/decisions.md`
+4. `docs/song-import/phases/phase-03.md` (this file)
+5. `src/agent/import-session.ts` (full — the function being modified)
+6. `src/core/composition/snapshot.ts` (full — `ArmoniaSnapshot`, `GrooveSnapshot`; `restoreArmoniaSnapshot`/`restoreGrooveSnapshot` to verify what fields are needed for a successful restore via `openBlock`)
+7. `src/state/session.ts` lines 2224–2265 (the `openBlock` function — confirm the `block.snapshot === undefined` guard and both restore dispatch paths: `restoreArmoniaSnapshot` for `armonia`, `restoreGrooveSnapshot` for `groove`)
+8. `src/lib/persistence.ts` (`SavedBlockSchema`, `SavedArmoniaSnapshotSchema`, `SavedGrooveSnapshotSchema`, `SavedGrooveLayerSchema` — confirm the `sound` enum and step constraints; confirm `snapshot?` is already accepted and round-trips)
+9. `src/core/codegen/strudel.ts` — confirm `rhythmToStrudel(layers: RhythmLayer[]): string` is exported and pure (no store imports); this is the function `importSession` must use to emit groove block code
+10. `src/core/rhythm/layers.ts` — confirm the `Sound` type enum (the supported sound names that `ImportGrooveLayerSchema` must restrict to)
+11. `src/agent/import-prompt.ts` (full — the file created in step 03.2, to be extended)
+12. `src/agent/import-agent.ts` (full — the file created in step 03.2; `max_tokens` must be raised)
+13. `tests/song-import/import-session.test.ts` (full — the golden-fixture test that must be updated)
+
+**What to produce:**
+
+### 1. Schema extension: `groove` per section + `IMPORT_SCHEMA_VERSION` bump
+
+In `src/agent/import-session.ts`, extend the input schema to include a required `groove` field on each section.
+
+**New `ImportGrooveLayerSchema`:**
+
+```typescript
+// Sound values mirror the Sound type from src/core/rhythm/layers.ts.
+// Restricted to the same set as SK_SOUNDS in persistence.ts so that
+// importSession's GrooveSnapshot layers pass SavedGrooveSnapshotSchema validation.
+const IMPORT_SK_SOUNDS = [
+  'bd','sd','hh','oh','cp','rim','lt','mt','ht',
+  'conga','cajon','wood','shaker','cb','perc','hand',
+] as const;
+
+export const ImportGrooveLayerSchema = z.object({
+  sound: z.enum(IMPORT_SK_SOUNDS),
+  /** Exactly 16 steps, each 0 or 1. Guardrail: 1 cycle = 4/4 = 16 steps. */
+  steps: z.array(z.number().int().min(0).max(1)).length(16),
+});
+```
+
+Note: `steps` is `.length(16)` — exactly 16, not `.min(1).max(16)`. The 4/4 guardrail (1 cycle = 16 steps) is a hard invariant at the import boundary. Compound/irregular time signatures remain deferred (noted in CLAUDE.md).
+
+**New `ImportGrooveSchema`:**
+
+```typescript
+export const ImportGrooveSchema = z.object({
+  layers: z.array(ImportGrooveLayerSchema).min(1).max(8),
+});
+```
+
+**Updated `SectionSpecSchema`:**
+
+```typescript
+export const SectionSpecSchema = z.object({
+  label: z.string().min(1).max(100),
+  chords: z.array(ChordSpecSchema).min(1).max(16),
+  groove: ImportGrooveSchema,  // required — OD-7 resolution: rhythm is first-class
+});
+```
+
+`groove` is **required** (not optional). Rationale: if the LLM omits it, `ImportSessionInputSchema.safeParse` fails and the user retries — which is the correct behavior. A section without a rhythmic signature is an incomplete chart. An optional `groove` with a silent fallback would silently produce no drums, which is worse than an informative parse error.
+
+**`IMPORT_SCHEMA_VERSION` bump:**
+
+```typescript
+// v2 — song-import Phase 03 step 03.4. Per-section `groove` added to SectionSpecSchema.
+//       Rhythm is now first-class (OD-7 Option B resolution).
+export const IMPORT_SCHEMA_VERSION = 2;
+```
+
+**Export the new types:**
+
+```typescript
+export type ImportGrooveLayer = z.infer<typeof ImportGrooveLayerSchema>;
+export type ImportGroove = z.infer<typeof ImportGrooveSchema>;
+```
+
+`ImportSessionInput` (inferred from `ImportSessionInputSchema`) automatically gains `sections[].groove` — no separate type change needed.
+
+### 2. `IMPORT_SYSTEM_PROMPT` extension (modifying `src/agent/import-prompt.ts`)
+
+The prompt created in step 03.2 covers harmony only. Extend it to include per-section rhythm. The updated prompt must:
+
+1. Add a `groove` field to the per-section JSON shape, immediately after `chords`:
+   ```
+   "groove": {
+     "layers": [
+       { "sound": "<drum sound>", "steps": [<16 integers, each 0 or 1>] }
+     ]
+   }
+   ```
+2. List the supported drum sounds: `bd` (kick), `sd` (snare), `hh` (closed hi-hat), `oh` (open hi-hat), `cp` (clap), `rim` (rimshot), `lt`/`mt`/`ht` (low/mid/high tom), `conga`, `cajon`, `wood`, `shaker`, `cb` (cowbell), `perc`, `hand`.
+3. Explain that `steps` is always exactly 16 integers (0 = silent, 1 = hit), representing a 4/4 bar at 1/16-note resolution (16 subdivisions).
+4. Emphasize capturing the song's **characteristic rhythmic signature** ("signatura rítmica") — what makes this specific song rhythmically recognizable — not a generic pattern. For example: the galloping double-bass of a metal section, the snare-on-2-and-4 of a pop verse, the syncopated clave of a salsa. The LLM must apply musical knowledge of the song to choose appropriate patterns per section.
+5. Recommend 1–4 layers per section (covering the most characteristic elements; not all sounds need to be present for every section — a sparse pattern can be more idiomatic than a dense one).
+6. The unknown-song fallback (`{ "error": "Canción desconocida" }`) is unchanged.
+
+**`max_tokens` update in `src/agent/import-agent.ts`:** With per-section grooves (up to 8 sections × 4 layers × 16 steps each = 512 integers, plus the chord chart), the response is substantially larger. Raise `max_tokens` from `600` to `1600` in the `sendImport` fetch call. This is the only change to `import-agent.ts`.
+
+### 3. Editable snapshots on harmony blocks (finding 3)
+
+In `importSession`, each harmony block gains an `ArmoniaSnapshot` field (`type: 'armonia'`). The snapshot is constructed inline from the data already available in the mapping function — `importSession` is store-free, so it must NOT call `captureArmoniaSnapshot(state)` (which requires a live `SessionState`). Instead, build the plain object directly:
+
+```typescript
+// Inside sections.map():
+const armoniaSnapshot: ArmoniaSnapshot = {
+  type: 'armonia',
+  root: harmonyRoot,          // already computed above: noteToPc(input.key)
+  mode: input.mode,
+  octave,                     // 2 — the constant already used for codegen
+  chordMode: 'chord',         // importSession always emits chord (block) mode
+  progression: slots.map((chord) => ({
+    rootPc: chord.rootPc,
+    qual: chord.qual,
+    gain: chord.gain,
+    ...(chord.bars !== undefined ? { bars: chord.bars } : {}),
+  })),
+};
+```
+
+Where `slots` is the chord array already built earlier in the same `sections.map` callback. The harmony block returned from `sections.map` gains the `snapshot` field:
+
+```typescript
+const armoniaBlock = {
+  name: `${input.songTitle} — ${section.label}`,
+  type: 'armonia' as const,
+  code,
+  bars,
+  label: section.label,
+  snapshot: armoniaSnapshot,
+};
+```
+
+**Why this makes `openBlock` work:** `openBlock` dispatches on `snapshot.type === 'armonia'` → `restoreArmoniaSnapshot(snapshot)` → `Partial<SessionState>` with harmony restored. The user opens the Armonía editor and sees the section's specific chords. Each block carries its own section's progression — not the globally shared live state.
+
+**Import path required:** `import type { ArmoniaSnapshot, GrooveSnapshot } from '../core/composition/snapshot.js';` — type-only import; snapshot.ts has no DOM/PIXI/Svelte imports, safe in a pure context.
+
+### 4. Per-section groove blocks + rhythm track (finding 1)
+
+For each section, build a groove block alongside the harmony block. The groove block's pattern comes from `section.groove.layers` (the LLM-returned rhythmic signature for that section). The groove block code is produced by calling `rhythmToStrudel(layers)` — a pure function exported from `src/core/codegen/strudel.ts` that `import-session.ts` can import directly alongside the already-imported `melodyLine`.
+
+**Import path required:** extend the existing import from `'../core/codegen/strudel.js'` to also import `rhythmToStrudel`. Confirm this import already exists (it imports `melodyLine`) — add `rhythmToStrudel` to the same import statement.
+
+**Also import `RhythmLayer` type** for the layer mapping: `import type { RhythmLayer } from '../core/rhythm/layers.js';` — type-only import; layers.ts has no DOM/PIXI/Svelte imports.
+
+**Per-section groove block construction (inside `sections.map`):**
+
+```typescript
+// Map ImportGrooveLayer → RhythmLayer (structural match, no cast needed).
+const grooveLayers: RhythmLayer[] = section.groove.layers.map((l) => ({
+  sound: l.sound,
+  steps: [...l.steps],
+}));
+
+// Emit the Strudel rhythm string using the pure codegen function.
+// rhythmToStrudel takes RhythmLayer[] and returns stack(...) or ''.
+const grooveCode = rhythmToStrudel(grooveLayers);
+
+const grooveSnapshot: GrooveSnapshot = {
+  type: 'groove',
+  layers: grooveLayers,
+};
+
+const grooveBlock = {
+  name: `${input.songTitle} — ${section.label} (ritmo)`,
+  type: 'groove' as const,
+  code: grooveCode,
+  bars,                    // same bars as the harmony block for this section
+  label: section.label,    // same section label — timeline shows paired blocks
+  snapshot: grooveSnapshot,
+};
+```
+
+**Note on `bars` for groove blocks:** Each groove block has `bars` equal to the corresponding harmony block's `bars` (i.e., `sum of chord bars for this section`). This ensures the harmony and rhythm tracks are bar-for-bar aligned with no need for `silence` padding.
+
+**Note on empty `grooveCode`:** `rhythmToStrudel` returns `''` when all layers are muted (which cannot happen here since imported layers have no `muted` field) or when the layers array is empty (prevented by `ImportGrooveSchema.layers.min(1)`). In practice `grooveCode` is always non-empty; the Dev should assert this is non-empty (or throw) if it ever returns empty, since an empty groove block code is invalid.
+
+**Assembled `sections.map` return:**
+
+Each iteration of `sections.map` now returns a pair `{ armoniaBlock, grooveBlock }`. Separate the harmony blocks and groove blocks after the map:
+
+```typescript
+const sectionPairs = input.sections.map((section) => {
+  // ... build armoniaBlock and grooveBlock as above ...
+  return { armoniaBlock, grooveBlock };
+});
+
+const armoniaBlocks = sectionPairs.map((p) => p.armoniaBlock);
+const grooveBlocks  = sectionPairs.map((p) => p.grooveBlock);
+const allBlocks = [...armoniaBlocks, ...grooveBlocks];
+// allBlocks: [intro-harm, verse-harm, chorus-harm, intro-groove, verse-groove, chorus-groove]
+// indices:   [0,           1,          2,            3,            4,            5           ]
+```
+
+**Harmony track:** References the harmony blocks in order (indices 0…N-1 where N = number of sections):
+
+```typescript
+const harmonyTrackRefs = armoniaBlocks.map((block, idx) => ({
+  blockIndex: idx,
+  bars: block.bars,
+}));
+```
+
+**Rhythm track:** References the groove blocks in order (indices N…2N-1):
+
+```typescript
+const rhythmTrackRefs = grooveBlocks.map((block, idx) => ({
+  blockIndex: armoniaBlocks.length + idx,
+  bars: block.bars,
+}));
+```
+
+**Assembled `composition` object:**
+
+```typescript
+composition: {
+  blocks: allBlocks,
+  tracks: [
+    { blockRefs: harmonyTrackRefs },  // harmony track
+    { blockRefs: rhythmTrackRefs },   // rhythm track (parallel, same total bars)
+  ],
+}
+```
+
+**Guardrail compliance:** Harmony track total bars = rhythm track total bars (each section's groove block has the same `bars` as its harmony block). No `silence` padding needed.
+
+**Standalone `rhythm` state:** Update `rhythm.layers` to use the FIRST section's groove layers (mirroring the pattern already used for `harmony.progression` = first section's chords):
+
+```typescript
+rhythm: {
+  layers: sectionPairs[0]!.grooveBlock.snapshot.layers,
+},
+```
+
+This keeps the standalone rhythm engine consistent with the first section's groove block. When the user opens the Rhythm view after import, they see the Intro's rhythmic signature.
+
+### 5. Golden-fixture test update (`tests/song-import/import-session.test.ts`)
+
+The fixture input must be updated to include `groove` per section. The `expectedSession` must be updated to reflect the new output shape. The `IMPORT_SCHEMA_VERSION` assertion must be updated to `2`.
+
+**Fixture groove patterns for "ONE" (Metallica) — three sections:**
+
+The Dev invents musically plausible patterns for the fixture (these are hardcoded deterministic data, not LLM output). Suggested patterns that capture the song's character:
+
+- **Intro (sparse, building tension):**
+  - `bd`: `[1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0]` (quarter-note kicks on 1 and 3)
+  - `hh`: `[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]` (eighth-note hi-hat)
+
+- **Verse (driving metal, galloping feel):**
+  - `bd`: `[1,0,1,0, 0,0,1,0, 1,0,1,0, 0,0,1,0]` (galloping double-bass pattern)
+  - `sd`: `[0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]` (snare on 2 and 4)
+  - `hh`: `[1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1]` (16th-note hi-hat)
+
+- **Chorus (full power, prominent kick + snare):**
+  - `bd`: `[1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]` (quarter-note kick every beat)
+  - `sd`: `[0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]` (snare on 2 and 4)
+  - `hh`: `[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]` (eighth-note hi-hat)
+
+The Dev must verify these patterns produce valid Strudel code via `rhythmToStrudel` and that they satisfy `ImportGrooveLayerSchema` (sound in enum, steps length 16, values 0/1).
+
+**Required changes to the test file:**
+
+- Add `groove` to each section in the `fixture` object.
+- Update `expectedSession`:
+  - `rhythm.layers` = first section's groove layers (Intro: bd + hh, 2 layers).
+  - `composition.blocks` = 6 entries: 3 harmony + 3 groove (indices 0–2 = harmony, indices 3–5 = groove), each with `snapshot`.
+  - `composition.tracks` = 2 entries: harmony track (refs 0,1,2) + rhythm track (refs 3,4,5).
+- Update `IMPORT_SCHEMA_VERSION` assertion: expect `2`, not `1`.
+- Update the "exactly one track" test to "exactly two tracks".
+- Update the "groove default" describe block: now asserts first-section groove layers (not a single `bd`).
+- Add new describe blocks for snapshot assertions, per-section groove blocks, and `openBlock` restoration (see acceptance criteria below).
+- All other existing tests (pow quality, block labels, block names, section count, version fields, `safeParse` success, regression guard) must continue to pass without modification — the `composition.blocks.length` assertion changes from 3 to 6 (the Dev must update that one assertion).
+
+**Note on `SavedSessionSchema.safeParse` round-trip:** The groove blocks now have `snapshot: { type: 'groove', layers: [...] }`. Confirm `SavedGrooveSnapshotSchema` and `SavedGrooveLayerSchema` in `persistence.ts` accept this shape — they do (sound is `z.enum(SK_SOUNDS)`, steps is `z.array(...).min(1).max(16)`, and the fixture's exactly-16-step arrays satisfy both constraints). The round-trip test already in the file will verify this automatically.
+
+**Note on `IMPORT_SCHEMA_VERSION`:** After this step `IMPORT_SCHEMA_VERSION === 2`. The test asserting `IMPORT_SCHEMA_VERSION === 1` must be updated to `=== 2`. The fixture golden output does NOT include `IMPORT_SCHEMA_VERSION` as a field (it is a module constant, not part of `SavedSession`) — the test asserts it separately.
+
+**Acceptance criteria:**
+
+- A-03-24: `IMPORT_SCHEMA_VERSION === 2` after this step. `unit` (update the existing IMPORT_SCHEMA_VERSION test to assert 2).
+- A-03-25: `ImportSessionInputSchema.safeParse` rejects a section with `sound: 'kazoo'` (unsupported drum sound) with a Zod error. `unit` (new negative test in the schema-validation describe block).
+- A-03-26: `ImportSessionInputSchema.safeParse` rejects a section with `steps` of length 15 (not 16). `unit` (new negative test — the `.length(16)` guardrail).
+- A-03-27: `ImportSessionInputSchema.safeParse` rejects a section with no `groove` field (groove is required). `unit` (new negative test — remove `groove` from one section, expect failure).
+- A-03-28: Each harmony block in `importSession` output has `snapshot.type === 'armonia'`. `unit` (assert on blocks at indices 0, 1, 2).
+- A-03-29: The `ArmoniaSnapshot` on the Intro harmony block has `root === 11`, `mode === 'minor'`, `octave === 2`, `chordMode === 'chord'`, `progression.length === 2`. `unit`.
+- A-03-30: `openBlock` on an imported harmony block (loaded into the store via `applyImportSession`) restores the section's chords into the Armonía editor. `unit` (after `applyImportSession(importSession(fixture))`, call `openBlock` on the block with the Intro's ID and assert `get(sessionStore).harmony.progression` contains two `pow` entries matching B and G).
+- A-03-31: Each groove block in `importSession` output has `snapshot.type === 'groove'`. `unit` (assert on blocks at indices 3, 4, 5).
+- A-03-32: `openBlock` on an imported groove block restores the section's rhythm into the Ritmo editor. `unit` (after `applyImportSession(importSession(fixture))`, call `openBlock` on the Intro groove block's ID and assert `get(sessionStore).rhythm.layers` matches the Intro section's groove layers).
+- A-03-33: `importSession` output has exactly 2 tracks; first track = N harmony blockRefs; second track = N groove blockRefs (N = sections count). `unit` (assert `tracks.length === 2`; assert `tracks[0].blockRefs.length === 3`; assert `tracks[1].blockRefs.length === 3`).
+- A-03-34: Rhythm track `blockRefs` reference the groove blocks by correct indices (N, N+1, … for N sections). `unit` (assert `tracks[1].blockRefs[0].blockIndex === 3`).
+- A-03-35: `rhythm.layers` in the output matches the first section's groove layers. `unit` (assert `result.rhythm.layers` deep-equals the Intro section's groove layers from the fixture).
+- A-03-36: `SavedSessionSchema.safeParse(importSession(fixture))` succeeds (round-trip with new output shape — 6 blocks, 2 tracks, groove snapshots). `unit`.
+- A-03-37: `import-session.ts` does NOT import from `src/state/session.ts` or any Svelte store module (A-02-13 purity constraint preserved). `proxy:static-analysis` (read imports; only `snapshot.ts`, `strudel.ts`, `layers.ts` added — all pure-engine files with no DOM/PIXI/Svelte imports).
+
+CHECKPOINT → Commit message:
+`feat(agent): Phase 03 step 03.4 — importSession: per-section rhythmic signatures, editable snapshots`
+
+---
+
+## Step 03.5 — Quality gate + merge-readiness declaration
 
 PROMPT → Read `CLAUDE.md`, `docs/orbifold-v1/decisions.md`, `docs/song-import/decisions.md`, and `docs/song-import/phases/phase-03.md` before doing anything else. Run the full quality gate in order: `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build`. Report exact output for each command. Confirm total test count is above 2129 (the Phase 02 baseline). State the Phases 01–03 merge-readiness verdict. STOP for Planner review.
 
@@ -408,15 +744,15 @@ In the handoff entry, include:
 
 **Acceptance criteria:**
 
-- A-03-24: `pnpm test` all tests pass (count strictly greater than 2129). `operability`
-- A-03-25: `pnpm exec tsc --noEmit` exits 0. `operability`
-- A-03-26: `pnpm lint` exits 0. `operability`
-- A-03-27: `pnpm build` exits 0. `operability`
-- A-03-28: Handoff includes exact test count and confirmation it exceeds the 2129 baseline. `manual`
-- A-03-29: Handoff includes the merge-readiness statement for Phases 01–03. `manual`
+- A-03-38: `pnpm test` all tests pass (count strictly greater than 2129). `operability`
+- A-03-39: `pnpm exec tsc --noEmit` exits 0. `operability`
+- A-03-40: `pnpm lint` exits 0. `operability`
+- A-03-41: `pnpm build` exits 0. `operability`
+- A-03-42: Handoff includes exact test count and confirmation it exceeds the 2129 baseline. `manual`
+- A-03-43: Handoff includes the merge-readiness statement for Phases 01–03. `manual`
 
 CHECKPOINT → Commit message:
-`chore(quality): Phase 03 step 03.4 — quality gate: all checks pass`
+`chore(quality): Phase 03 step 03.5 — quality gate: all checks pass`
 
 ---
 
@@ -440,7 +776,7 @@ This phase's acceptance covers the entire song-import initiative (Phases 01–03
   - Validation method: `proxy:static-analysis`
 - **A-03-07** — `applyImportSession` exported from `apply.ts`; delegates to `applyLoadedSession`; accepts `SavedSession`.
   - Validation method: `proxy:static-analysis`
-- **A-03-08** — `IMPORT_SYSTEM_PROMPT` exported from `import-prompt.ts`; includes schema shape, `pow`, 8 modes, unknown-song instruction.
+- **A-03-08** — `IMPORT_SYSTEM_PROMPT` exported from `import-prompt.ts`; includes harmony schema shape, `pow`, 8 modes, unknown-song instruction (harmony-only at step 03.2; extended with groove at step 03.4).
   - Validation method: `proxy:static-analysis`
 - **A-03-09** — `sendImport` and `ImportSendResult` exported from `import-agent.ts`; AGPL-3.0 header present.
   - Validation method: `proxy:static-analysis`
@@ -472,17 +808,45 @@ This phase's acceptance covers the entire song-import initiative (Phases 01–03
   - Validation method: `operability`
 - **A-03-23** — `pnpm exec tsc --noEmit` passes clean after step 03.3.
   - Validation method: `operability`
-- **A-03-24** — `pnpm test` all pass; count strictly greater than 2129 (final gate).
+- **A-03-24** — `IMPORT_SCHEMA_VERSION === 2` after step 03.4.
+  - Validation method: `unit`
+- **A-03-25** — `ImportSessionInputSchema.safeParse` rejects unsupported drum sound (`'kazoo'`).
+  - Validation method: `unit`
+- **A-03-26** — `ImportSessionInputSchema.safeParse` rejects groove steps of length ≠ 16.
+  - Validation method: `unit`
+- **A-03-27** — `ImportSessionInputSchema.safeParse` rejects section without `groove` field.
+  - Validation method: `unit`
+- **A-03-28** — Each harmony block has `snapshot.type === 'armonia'`.
+  - Validation method: `unit`
+- **A-03-29** — `ArmoniaSnapshot` on Intro block: `root === 11`, `mode === 'minor'`, `octave === 2`, `chordMode === 'chord'`, `progression.length === 2`.
+  - Validation method: `unit`
+- **A-03-30** — `openBlock` on imported harmony block restores section chords into harmony editor.
+  - Validation method: `unit`
+- **A-03-31** — Each groove block has `snapshot.type === 'groove'`.
+  - Validation method: `unit`
+- **A-03-32** — `openBlock` on imported groove block restores section rhythm into rhythm editor.
+  - Validation method: `unit`
+- **A-03-33** — `importSession` output has exactly 2 tracks; each has N blockRefs (N = sections).
+  - Validation method: `unit`
+- **A-03-34** — Rhythm track `blockRefs[0].blockIndex === N` (first groove block after N harmony blocks).
+  - Validation method: `unit`
+- **A-03-35** — `rhythm.layers` matches first section's groove layers.
+  - Validation method: `unit`
+- **A-03-36** — `SavedSessionSchema.safeParse(importSession(fixture))` succeeds with new output shape.
+  - Validation method: `unit`
+- **A-03-37** — `import-session.ts` does not import from `session.ts` or any Svelte store module.
+  - Validation method: `proxy:static-analysis`
+- **A-03-38** — `pnpm test` all pass; count strictly greater than 2129 (final gate).
   - Validation method: `operability`
-- **A-03-25** — `pnpm exec tsc --noEmit` exits 0 (final gate).
+- **A-03-39** — `pnpm exec tsc --noEmit` exits 0 (final gate).
   - Validation method: `operability`
-- **A-03-26** — `pnpm lint` exits 0 (final gate).
+- **A-03-40** — `pnpm lint` exits 0 (final gate).
   - Validation method: `operability`
-- **A-03-27** — `pnpm build` exits 0.
+- **A-03-41** — `pnpm build` exits 0.
   - Validation method: `operability`
-- **A-03-28** — Handoff includes exact test count and confirmation it exceeds 2129.
+- **A-03-42** — Handoff includes exact test count and confirmation it exceeds 2129.
   - Validation method: `manual`
-- **A-03-29** — Handoff includes merge-readiness statement for Phases 01–03.
+- **A-03-43** — Handoff includes merge-readiness statement for Phases 01–03.
   - Validation method: `manual`
 
 ### Cross-initiative merge criteria (Phases 01–03 together)
@@ -490,11 +854,11 @@ This phase's acceptance covers the entire song-import initiative (Phases 01–03
 These criteria are satisfied by prior phases but must remain unbroken at Phase 03 completion:
 
 - **X-01** — `Quality` type includes `'pow'`; `QUAL_INTERVALS['pow'] = [0, 7]`; `chordToStrudel` with `qual='pow'` produces `note("E2,B2")` for E at octave 2.
-  - Validation method: `operability` (existing tests from Phase 01 pass in step 03.4's `pnpm test`)
+  - Validation method: `operability` (existing tests from Phase 01 pass in step 03.5's `pnpm test`)
 - **X-02** — `Block.label?: string` is accepted by `SavedBlockSchema` and round-trips through `serializeSession`/`deserializeSession`.
   - Validation method: `operability` (existing tests from Phase 01 pass)
-- **X-03** — `importSession(fixture)` deep-equals the Phase 02 hardcoded golden `SavedSession`.
-  - Validation method: `operability` (existing test from Phase 02 passes)
+- **X-03** — `importSession(fixture)` deep-equals the updated golden `SavedSession` including per-section groove blocks, two tracks, and snapshots on all blocks.
+  - Validation method: `operability` (updated golden test from step 03.4 passes in step 03.5)
 - **X-04** — `SESSION_SCHEMA_VERSION === 7` and `SCHEMA_VERSION === 7`.
   - Validation method: `operability` (existing tests pass)
 - **X-05** — `applyLoadedSession` with a Phase-01-era saved session (no `label` field) does NOT crash and does NOT produce `label` fields in the loaded blocks.
@@ -503,13 +867,14 @@ These criteria are satisfied by prior phases but must remain unbroken at Phase 0
 ## Partial coverage from prior phases
 
 - Phase 01 A-01-08 (power-chord Strudel codegen), A-01-18/A-01-19 (block-label round-trip) provide prior coverage for X-01 and X-02 above.
-- Phase 02 A-02-07 (golden fixture deep-equal), A-02-08 (safeParse success) provide prior coverage for X-03.
-- Phase 02 A-02-14/A-02-16 (test count baselines) are superseded by A-03-24 (Phase 03 final gate).
+- Phase 02 A-02-07 (golden fixture deep-equal), A-02-08 (safeParse success) provide prior coverage for X-03 (golden test updated in step 03.4).
+- Phase 02 A-02-14/A-02-16 (test count baselines) are superseded by A-03-38 (Phase 03 final gate).
 
 ## ADR Triggers
 
 - **ADR 0027 — `applyImportSession` and session-replace behavior (OD-6):** Trigger: step 03.2 resolution of OD-6. If the Pilot confirms replace-on-import (Option A), an ADR documenting the replace-not-merge decision and its UX rationale should be written. If Option B (merge) is chosen, the ADR documents the merge semantics and the constraints on what "merge" means for BPM/harmony. Open at or before step 03.3.
-- **ADR 0028 — `IMPORT_SYSTEM_PROMPT` and chart-sourcing contract (OD-4):** Trigger: step 03.2. If OD-4 is resolved as Option A (LLM-native), an ADR documenting the prompt design, the `ImportSessionInputSchema`-as-output-contract, and the "unknown song → `{ error: ... }` response" convention should be written alongside `import-prompt.ts`. This is the input-side complement to ADR 0026 (which documents the schema shape from the translator's perspective).
+- **ADR 0028 — `IMPORT_SYSTEM_PROMPT` and chart-sourcing contract (OD-4 + OD-7):** Trigger: steps 03.2 and 03.4. An ADR documenting the prompt design — the `ImportSessionInputSchema`-as-output-contract for harmony (step 03.2) and rhythm (step 03.4 extension), the per-section `groove` structure, and the "unknown song → `{ error: ... }` response" convention — should be written. This is the input-side complement to ADR 0026. **The OD-7 rhythm extension must be explicitly recorded in this ADR** since it changes the prompt contract, the schema, and `IMPORT_SCHEMA_VERSION`.
+- **ADR 0026 amendment — `importSession` input and output contract changes (step 03.4):** `IMPORT_SCHEMA_VERSION` bumps from 1 to 2 (new `groove` field on each section). `importSession` output contract expands: 2N blocks (N harmony + N groove) + 2 tracks, both block types carry editable snapshots. This is a breaking change to the golden-fixture shape and to the input schema. ADR 0026 must be amended (or a new ADR must be written) to record: (1) the per-section `groove` input field shape and enum constraints; (2) the IMPORT_SCHEMA_VERSION → 2 rationale; (3) the parity-with-harmony design principle (OD-7 resolution). The Pilot writes this.
 
 ## Handoff Note
 
@@ -519,3 +884,4 @@ At the end of this phase, the Dev appends per-step entries and a phase-completio
 - The final test count progression table (Phase 01: 2104, Phase 02: 2129, Phase 03: ≥ 2129 + new tests).
 - The merge-readiness statement: "Phases 01–03 of the `song-import` initiative are complete. Branch `song-import/phase-01` is ready to merge to `main` pending Pilot approval."
 - Any pending Register proposals (for the Pilot to resolve at phase approval).
+- Confirmation that OD-7 is recorded in the Register (the Pilot writes the Register entry; the Dev confirms it is there before declaring the phase complete).
