@@ -47,6 +47,38 @@ See `references/decisions-register-convention.md` for entry format.
 **Source:** Pilot decision 2026-07-02.
 **Applies to:** `src/agent/import-session.ts` (construcción de `Block.name` / `Block.label`).
 
+### OD-4 — Mecanismo de sourcing del chart: LLM-native (Option A)
+
+**Decision:** El chart se obtiene vía **LLM-native**: la UI de import dispara una llamada one-shot al provider del usuario (reusando `providers.ts`/`agent.ts`) con un `IMPORT_SYSTEM_PROMPT` + la query de la canción; la respuesta se valida con `ImportSessionInputSchema.safeParse`. **NO** scraping — Option B queda descartado para el MVP (CORS en navegador sin backend + dudas de ToS). "Canción desconocida" → el LLM devuelve `{ "error": "…" }` → `safeParse` falla → error legible en la UI.
+**Decided:** song-import Phase 03 scoping, 2026-07-03
+**Why:** Consume directo el contrato Option A (OD-3) ya construido en Phase 02; sin backend, sin deps nuevas, sin workaround de CORS; la extracción fence→brace de JSON ya existe en `agent.ts` y se reutiliza. `sendImport` es un wrapper delgado (~60 líneas) sobre el patrón fetch ya probado por `send()`/`sendEvolution()`.
+**Source:** Phase 03 OD-4 (Planner scoping); decisión del Pilot 2026-07-03.
+**Applies to:** `src/agent/agent.ts`/`apply.ts` (`sendImport`, `IMPORT_SYSTEM_PROMPT`); la superficie de import UI (Phase 03).
+
+### OD-5 — Manejo de links en Phase 03: solo nombre (Option A)
+
+**Decision:** El campo de import es **texto libre / solo nombre** (p. ej. `"ONE by Metallica"`). URLs no se procesan en Phase 03. La resolución **YouTube→oEmbed** (identificador vía `youtube.com/oembed`, sin key, sin descarga de audio — per la decisión "MVP = Pipeline B") se **difiere a Phase 04** como add-on autocontenido (el campo sigue siendo un string, sin consecuencias de arquitectura).
+**Decided:** song-import Phase 03 scoping, 2026-07-03
+**Why:** Valida el camino LLM-native end-to-end sin ruido; oEmbed añade 3 error paths (red, vídeo privado, URL no-YouTube) + un paso async para ganancia marginal en el MVP; diferirlo no tiene coste arquitectónico.
+**Source:** Phase 03 OD-5 (Planner scoping); decisión del Pilot 2026-07-03.
+**Applies to:** El campo de import UI (Phase 03); resolución de links (Phase 04).
+
+### OD-6 — Import reemplaza la sesión actual (Option A)
+
+**Decision:** `applyImportSession` **reemplaza** la sesión actual (delega en `applyLoadedSession`): la canción importada ES la sesión nueva. Requiere **avisar al usuario** antes de sobreescribir (precedente UX: el botón "load" del panel de persistencia). **NO** fusión/append (Option B) — su semántica de BPM/armonía al fusionar es ambigua; queda como feature "jam" (importar estructura de acordes sobre el groove actual) deferible si se pide.
+**Decided:** song-import Phase 03 scoping, 2026-07-03
+**Why:** Simple y con precedente; encaja con la visión "dado un song, construye un Session que lo representa". La fusión es power-user con semántica ambigua y expandiría el scope de la fase.
+**Source:** Phase 03 OD-6 (Planner scoping, planteada sin default); decisión del Pilot 2026-07-03.
+**Applies to:** `src/agent/apply.ts` `applyImportSession`.
+
+### Ubicación de la UI de import: componente `ImportSong` dedicado
+
+**Decision:** El campo de import vive en un **componente nuevo dedicado** (p. ej. `ImportSong` / `ImportPanel` en `src/ui/`), no como subsección de `AgentPanel`. Feature de primera clase con foco propio.
+**Decided:** song-import Phase 03 scoping, 2026-07-03
+**Why:** Visibilidad como funcionalidad de primera clase; separa la UX de import de la interacción general del agente.
+**Source:** Pilot decision 2026-07-03 (preferencia de placement, no bloqueante).
+**Applies to:** `src/ui/**` (nuevo componente de import); Phase 03 step 03.3.
+
 ## Superseded decisions
 
 (empty)
