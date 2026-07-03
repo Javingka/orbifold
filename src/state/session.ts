@@ -2008,6 +2008,10 @@ export function applyLoadedSession(saved: SavedSession): void {
     type: b.type,
     code: b.code,
     bars: b.bars,
+    // song-import Phase 03: carry through the optional label introduced in Phase 01.
+    // Pre-Phase-01 sessions have no label field; the conditional spread produces {} for
+    // undefined, so the output is byte-identical to the pre-fix behavior for old sessions.
+    ...(b.label !== undefined ? { label: b.label } : {}),
   }));
 
   const newTracks = saved.composition.tracks.map((t) => ({
