@@ -305,7 +305,7 @@ export function importSession(input: ImportSessionInput): SavedSession {
       name: `${input.songTitle} — ${section.label} (ritmo)`,
       type: 'groove' as const,
       code: grooveCode,
-      bars,          // same bars as the harmony block — bar-for-bar alignment
+      bars, // same bars as the harmony block — bar-for-bar alignment
       label: section.label,
       snapshot: grooveSnapshot,
     };
@@ -317,6 +317,14 @@ export function importSession(input: ImportSessionInput): SavedSession {
 
   const armoniaBlocks = sectionPairs.map((p) => p.armoniaBlock);
   const grooveBlocks = sectionPairs.map((p) => p.grooveBlock);
+
+  // sectionPairs is non-empty: ImportSessionInputSchema enforces sections.min(1).
+  // This guard is unreachable at runtime but satisfies the no-non-null-assertion rule.
+  const firstPair = sectionPairs[0];
+  if (!firstPair) {
+    // Unreachable: schema enforces at least one section.
+    throw new Error('importSession: no sections in input (unreachable — schema enforces min 1)');
+  }
 
   // allBlocks: [intro-harm, verse-harm, …, intro-groove, verse-groove, …]
   // Harmony blocks occupy indices 0…N-1; groove blocks occupy N…2N-1.
@@ -351,13 +359,13 @@ export function importSession(input: ImportSessionInput): SavedSession {
       // First section's groove layers — mirrors harmony.progression = first section's chords.
       // When the user opens the Rhythm view after import, they see the Intro's rhythmic
       // signature (OD-7 resolution).
-      layers: sectionPairs[0]!.grooveBlock.snapshot.layers,
+      layers: firstPair.grooveBlock.snapshot.layers,
     },
     composition: {
       blocks: allBlocks,
       tracks: [
         { blockRefs: harmonyTrackRefs }, // harmony track
-        { blockRefs: rhythmTrackRefs },  // rhythm track (parallel, same total bars)
+        { blockRefs: rhythmTrackRefs }, // rhythm track (parallel, same total bars)
       ],
     },
   };

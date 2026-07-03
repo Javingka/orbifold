@@ -36,7 +36,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 ### Acceptance Coverage Table
 
 | Acceptance ID | Required behavior | Test file | Test type | Gap status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | A-03-01 | Inventory document exists with all six sections (a–f) | n/a | manual | covered |
 | A-03-02 | Section (a) reproduces `applyLoadedSession` gap verbatim and states the fix | n/a | manual | covered |
 | A-03-03 | Section (c) confirms fetch pattern and `max_tokens` recommendation | n/a | manual | covered |
@@ -140,7 +140,7 @@ Two test failures were diagnosed and fixed immediately (not blockers):
 ### Acceptance Coverage Table
 
 | Acceptance ID | Required behavior | Test file | Test type | Gap / Coverage status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | A-03-06 | `applyLoadedSession` carries `b.label` through to `newBlocks` | `tests/song-import/import-agent.test.ts` (A-03-11 tests) | `proxy:static-analysis` + `unit` | covered |
 | A-03-07 | `applyImportSession` exported from `apply.ts`; delegates to `applyLoadedSession`; accepts `SavedSession`; AGPL-3.0 header | n/a | `proxy:static-analysis` | covered |
 | A-03-08 | `IMPORT_SYSTEM_PROMPT` exported; includes schema shape, `pow`, 8 modes, unknown-song `{ error }` instruction | n/a | `proxy:static-analysis` | covered |
@@ -248,7 +248,7 @@ The acceptance criteria A-03-15 through A-03-19 are marked `manual` in the phase
 ### Acceptance Coverage Table
 
 | Acceptance ID | Required behavior | Test file / method | Test type | Gap / Coverage status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | A-03-15 | Import field visible in running app with provider key configured | Browser manual | `manual` | PENDING — Pilot manual verification |
 | A-03-16 | Importing "ONE de Metallica" produces ≥ 2 labelled blocks in Composition timeline within 30 s | Browser manual | `manual` | PENDING — Pilot manual verification |
 | A-03-17 | "Esta acción reemplazará tu sesión actual." warning visible when field is non-empty | Browser manual | `manual` | PENDING — Pilot manual verification |
@@ -365,7 +365,7 @@ No import from `src/state/session.ts`, no `svelte/store`, no DOM. Purity constra
 ### Acceptance Coverage Table
 
 | Acceptance ID | Required behavior | Test file | Test type | Coverage status |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | A-03-24 | `IMPORT_SCHEMA_VERSION === 2` | `tests/song-import/import-session.test.ts` | `unit` | Covered — `expect(IMPORT_SCHEMA_VERSION).toBe(2)` |
 | A-03-25 | `safeParse` rejects `sound: 'kazoo'` | `tests/song-import/import-session.test.ts` | `unit` | Covered — `ImportGrooveLayerSchema.safeParse` negative test |
 | A-03-26 | `safeParse` rejects `steps` of length ≠ 16 | `tests/song-import/import-session.test.ts` | `unit` | Covered — length 15 and length 17 negative tests |
@@ -388,3 +388,203 @@ No import from `src/state/session.ts`, no `svelte/store`, no DOM. Purity constra
 - **`applyLoadedSession` snapshot carry-through:** Not a named acceptance criterion but required for A-03-30/A-03-32. Documented as a transient fix above. Proven by the `openBlock` restoration unit tests.
 
 ---
+
+## Step 03.5 — Quality gate + merge-readiness declaration
+
+**Date:** 2026-07-03
+**Iteration:** 1 of 1
+
+### Completed
+
+- Read `CLAUDE.md`, `docs/orbifold-v1/decisions.md`, `docs/song-import/decisions.md`, and `docs/song-import/phases/phase-03.md` in full before running any commands.
+- Ran all four quality-gate commands in order. `pnpm lint` initially failed with 5 non-null assertion errors; diagnosed and applied targeted fixes in `src/agent/import-session.ts` and `tests/song-import/import-session.test.ts`. Applied Prettier formatting via `pnpm exec prettier --write`. All four commands pass clean.
+- Appended this step 03.5 entry and the phase-completion entry to the handoff file.
+
+### Fixes applied during this step
+
+Two files were modified to eliminate `@typescript-eslint/no-non-null-assertion` errors surfaced by `pnpm lint`:
+
+1. **`src/agent/import-session.ts`** — Replaced `sectionPairs[0]!.grooveBlock.snapshot.layers` with a `const firstPair = sectionPairs[0]; if (!firstPair) throw new Error(...)` guard followed by `firstPair.grooveBlock.snapshot.layers`. The guard is unreachable at runtime (schema enforces `sections.min(1)`), but satisfies the ESLint rule without the `!` operator.
+
+2. **`tests/song-import/import-session.test.ts`** — Four `!` assertions removed:
+   - `fixture.sections[0]!.groove` (inside the "chord root H" test): replaced with a local `const fixtureIntroSection = fixture.sections[0]; if (!fixtureIntroSection) throw new Error(...)` guard.
+   - `fixture.sections[0]!.groove.layers.map(...)` (inside the A-03-35 test): replaced with a local `const fixtureIntro = fixture.sections[0]; if (!fixtureIntro) throw new Error(...)` guard.
+   - `openBlock(introBlock!.id)` (inside the A-03-30 test): replaced with `if (!introBlock) throw new Error(...); openBlock(introBlock.id)`.
+   - `openBlock(introGrooveBlock!.id)` (inside the A-03-32 test): replaced with `if (!introGrooveBlock) throw new Error(...); openBlock(introGrooveBlock.id)`.
+
+Prettier reformatting applied after ESLint fixes via `pnpm exec prettier --write` on the two modified files plus `tests/song-import/import-agent.test.ts` (which had a pending format issue from a prior step).
+
+### Quality gate — exact command outputs
+
+#### 1a. `pnpm test` (initial run, before lint fixes — tests not affected by lint fixes)
+
+```text
+ Test Files  47 passed (47)
+      Tests  2178 passed (2178)
+   Start at  15:30:41
+   Duration  4.13s (transform 3.48s, setup 0ms, collect 11.66s, tests 1.88s, environment 14ms, prepare 8.90s)
+```
+
+#### 1b. `pnpm test` (final run, after lint fixes)
+
+```text
+ Test Files  47 passed (47)
+      Tests  2178 passed (2178)
+   Start at  15:34:12
+   Duration  2.57s (transform 2.86s, setup 0ms, collect 8.24s, tests 916ms, environment 8ms, prepare 4.96s)
+```
+
+All 2178 tests pass. **2178 > 2129** (Phase 02 baseline). 2178 equals the step 03.4 expected figure.
+
+#### 2. `pnpm exec tsc --noEmit`
+
+```text
+(no output — exit 0)
+```
+
+TypeScript strict type check passes with zero errors.
+
+#### 3a. `pnpm lint` (initial run — FAILED)
+
+```text
+/Users/virtualmachine/Development/personal/Orbifold/src/agent/import-session.ts
+  354:15  error  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+/Users/virtualmachine/Development/personal/Orbifold/tests/song-import/import-session.test.ts
+  418:19  error  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  747:31  error  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  777:15  error  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+  811:15  error  Forbidden non-null assertion  @typescript-eslint/no-non-null-assertion
+
+✖ 5 problems (5 errors, 0 warnings)
+```
+
+Root cause: step 03.4 introduced `sectionPairs[0]!` (source) and four `fixture.sections[0]!`/`introBlock!`/`introGrooveBlock!` patterns (test) that the `@typescript-eslint/no-non-null-assertion` rule (part of `tseslint.configs.strict`) forbids. Fixed with if-guards.
+
+#### 3b. `pnpm lint` (final run — after fixes)
+
+```sh
+> orbifold@0.0.1 lint /Users/virtualmachine/Development/personal/Orbifold
+> eslint . && prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+```
+
+Exit 0, no errors or warnings.
+
+#### 4. `pnpm build`
+
+```sh
+> orbifold@0.0.1 build /Users/virtualmachine/Development/personal/Orbifold
+> vite build
+
+vite v5.4.11 building for production...
+transforming...
+✓ 574 modules transformed.
+(!) /Users/.../src/render/stage.ts is dynamically imported by .../session.ts but also statically imported by App.svelte, rhythm-scene.ts, tonnetz-scene.ts, dynamic import will not move module into another chunk.
+(!) /Users/.../src/audio/strudel.ts is dynamically imported by .../session.ts but also statically imported by AgentPanel.svelte, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+dist/index.html                     2.32 kB │ gzip:   1.25 kB
+dist/assets/index-BHW1poU3.css     45.27 kB │ gzip:   8.51 kB
+dist/assets/index-3qghaOFO.js   1,230.81 kB │ gzip: 386.93 kB
+
+(!) Some chunks are larger than 500 kB after minification.
+✓ built in 2.19s
+```
+
+Exit 0. The chunk-size and dynamic-import warnings are pre-existing (unchanged from prior steps; confirmed in step 03.3 handoff).
+
+### Files touched
+
+- `src/agent/import-session.ts` (modified — `sectionPairs[0]!` → `firstPair` guard, Prettier reformat)
+- `tests/song-import/import-session.test.ts` (modified — 4 non-null assertions replaced with if-guards, Prettier reformat)
+- `tests/song-import/import-agent.test.ts` (Prettier reformat only — no logic change)
+- `docs/song-import/handoffs/phase-03-handoff.md` (this file — step 03.5 entry + phase-completion entry appended)
+
+### Validation evidence (per Acceptance ID)
+
+**A-03-38 (operability):** `pnpm test` — **2178 tests, all passing. 2178 > 2129 (Phase 02 baseline)**. Confirmed.
+
+**A-03-39 (operability):** `pnpm exec tsc --noEmit` — exits 0, no output, no errors. Confirmed.
+
+**A-03-40 (operability):** `pnpm lint` — exits 0 after targeted fixes. ESLint: 0 errors, 0 warnings. Prettier: "All matched files use Prettier code style!" Confirmed.
+
+**A-03-41 (operability):** `pnpm build` — exits 0. `✓ built in 2.19s`. Pre-existing warnings only (chunk size, dynamic import overlap). Confirmed.
+
+**A-03-42 (manual):** Total test count: **2178**. Strictly greater than 2129 (Phase 02 baseline): confirmed. See exact `pnpm test` output above.
+
+**A-03-43 (manual):** Phases 01–03 of the `song-import` initiative PASS all automated gates (test/tsc/lint/build). Merge-readiness is PENDING the Pilot's manual re-verification of the post-03.4 build (A-03-15…A-03-19 + the 03.4 UX: composition drums audible in the composition, blocks openable in the graphic editor, per-section grooves).
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file / method | Test type | Coverage status |
+| --- | --- | --- | --- | --- |
+| A-03-38 | `pnpm test` all pass; count > 2129 | `pnpm test` → 2178 passed | `operability` | Covered — 2178 > 2129 |
+| A-03-39 | `pnpm exec tsc --noEmit` exits 0 | `pnpm exec tsc --noEmit` → exit 0 | `operability` | Covered |
+| A-03-40 | `pnpm lint` exits 0 | `pnpm lint` → exit 0 (after 2-file targeted fix) | `operability` | Covered |
+| A-03-41 | `pnpm build` exits 0 | `pnpm build` → exit 0 | `operability` | Covered |
+| A-03-42 | Handoff includes exact test count; confirms > 2129 | This handoff entry | `manual` | Covered — 2178 stated above |
+| A-03-43 | Handoff includes conditional merge-readiness statement | This handoff entry | `manual` | Covered — conditional statement above |
+
+---
+
+## Phase 03 Completion — song-import Phases 01–03
+
+**Date:** 2026-07-03
+
+### Deliverables summary — all steps 03.1–03.5
+
+**Files created (Phase 03):**
+
+- `src/agent/import-prompt.ts` — `IMPORT_SYSTEM_PROMPT` constant (LLM chart-sourcing prompt, OD-4 resolution; extended in step 03.4 with per-section groove / `signatura rítmica` instructions)
+- `src/agent/import-agent.ts` — `sendImport`, `ImportSendResult`, `extractJsonFromText` (one-shot LLM call; `max_tokens` raised 600→1600 in step 03.4)
+- `src/ui/ImportSong.svelte` — standalone import UI panel (AGPL-3.0 header; wire-up: `sendImport` → `importSession` → `applyImportSession`; replace-session warning; loading/success/error feedback; key-absent placeholder)
+- `docs/song-import/inventories/phase-03-inventory.md` — read-only inventory (step 03.1)
+- `docs/adr/0027-apply-import-session-replace.md` — OD-6 decision (replace-on-import; step 03.2)
+- `docs/adr/0028-import-system-prompt-chart-sourcing.md` — OD-4 + OD-7 decision (LLM-native prompt design; created step 03.2, amended step 03.4)
+- `tests/song-import/import-agent.test.ts` — 24 unit tests (`extractJsonFromText`, `ImportSessionInputSchema.safeParse`, `applyLoadedSession` label carry-through, X-05 pre-Phase-01 regression)
+
+**Files modified (Phase 03):**
+
+- `src/state/session.ts` — (1) `applyLoadedSession` label carry-through fix (`b.label`, step 03.2); (2) `applyLoadedSession` snapshot carry-through fix (`b.snapshot`, step 03.4)
+- `src/agent/apply.ts` — `applyImportSession` export + `applyLoadedSession`/`SavedSession` imports (step 03.2)
+- `src/agent/import-session.ts` — `IMPORT_SCHEMA_VERSION` 1→2; `ImportGrooveLayerSchema`/`ImportGrooveSchema`/`groove` on `SectionSpecSchema`; 2N blocks + 2 tracks + snapshots; `rhythmToStrudel`/snapshot imports; `sectionPairs[0]!` → `firstPair` guard (step 03.4 + 03.5 fix)
+- `src/agent/import-prompt.ts` — extended with per-section groove shape, 16-sound list, 16-step rule, `signatura rítmica` emphasis (step 03.4)
+- `src/agent/import-agent.ts` — `max_tokens` 600→1600 (step 03.4)
+- `src/app/App.svelte` — `<ImportSong />` mount + import (step 03.3)
+- `tests/song-import/import-session.test.ts` — fixture + `expectedSession` updated for groove; 25 new tests (A-03-24…A-03-37); 4 non-null assertions replaced with guards (step 03.4 + 03.5 fix)
+- `tests/song-import/import-agent.test.ts` — fixtures updated with `groove`; label carry-through assertions updated for 6-block output; Prettier formatting (steps 03.2, 03.4, 03.5)
+- `docs/adr/0026-import-session-input-contract.md` — Amendment A1: groove input contract, `IMPORT_SCHEMA_VERSION` 1→2 rationale, OD-7 design principle, output contract changes (step 03.4)
+- `docs/adr/0028-import-system-prompt-chart-sourcing.md` — Amendment A1: D8 groove instructions + D9 `max_tokens` rationale (step 03.4)
+- `docs/song-import/handoffs/phase-03-handoff.md` — extended with step entries (this file)
+
+### Test-count progression
+
+| Phase | Tests | Delta |
+| --- | --- | --- |
+| Phase 01 (complete) | 2104 | +34 vs prior baseline |
+| Phase 02 (complete) | 2129 | +25 vs Phase 01 |
+| Phase 03 (step 03.5 final gate) | **2178** | +49 vs Phase 02 |
+
+### Merge-readiness statement (conditional)
+
+Phases 01–03 of the `song-import` initiative PASS all automated gates (test/tsc/lint/build). Merge-readiness is PENDING the Pilot's manual re-verification of the post-03.4 build (A-03-15…A-03-19 + the 03.4 UX: composition drums audible in the composition, blocks openable in the graphic editor, per-section grooves). The branch is `song-import/phase-02` (carries Phases 01–03 commits). On Pilot approval after manual verification, the branch is ready to merge to `main`.
+
+### Pending Register proposals for the Pilot
+
+- **ADR 0026 amendment** — `IMPORT_SCHEMA_VERSION` bump 1→2. Amendment A1 was appended to `docs/adr/0026-import-session-input-contract.md` in step 03.4 by the Dev. Pilot review requested.
+- **ADR 0027** — `applyImportSession` replace-not-merge behavior (OD-6). Written in step 03.2. Pilot review requested.
+- **ADR 0028** — `IMPORT_SYSTEM_PROMPT` chart-sourcing contract (OD-4 + OD-7). Written step 03.2, amended step 03.4. Pilot review requested.
+- **OD-7 Register entry** — confirmed present in `docs/song-import/decisions.md` (added by Pilot during Phase 03 scoping). No new proposals from step 03.5.
+
+**Planner Review:** APPROVED on 2026-07-03. Iteration: 1 of 5.
+
+**Next action:** Pilot approval required before merge, reason: phase is complete — all automated gates pass, but A-03-15…A-03-19 + the 03.4 UX (composition drums, block editability, per-section grooves) require the Pilot's browser re-verification on the post-03.4 build before `song-import/phase-02` merges to `main`. Pending Register proposals (ADR 0026 amendment, ADR 0027, ADR 0028) also require Pilot review.
+
+**Pending Register proposals (Pilot decides at phase approval):**
+- ADR 0026 amendment — `IMPORT_SCHEMA_VERSION` 1→2, groove input/output contract, OD-7 design principle — surfaced in step 03.4
+- ADR 0027 — `applyImportSession` replace-not-merge (OD-6 resolution) — surfaced in step 03.2
+- ADR 0028 — `IMPORT_SYSTEM_PROMPT` chart-sourcing + groove contract (OD-4 + OD-7) — surfaced in steps 03.2 and 03.4

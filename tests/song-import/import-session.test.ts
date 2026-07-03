@@ -56,8 +56,8 @@ const fixture: ImportSessionInput = {
       groove: {
         // Sparse, building tension: quarter-note kicks + eighth-note hi-hat
         layers: [
-          { sound: 'bd', steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0] },
-          { sound: 'hh', steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+          { sound: 'bd', steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0] },
+          { sound: 'hh', steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
         ],
       },
     },
@@ -71,9 +71,9 @@ const fixture: ImportSessionInput = {
       groove: {
         // Driving metal, galloping double-bass feel
         layers: [
-          { sound: 'bd', steps: [1,0,1,0, 0,0,1,0, 1,0,1,0, 0,0,1,0] },
-          { sound: 'sd', steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
-          { sound: 'hh', steps: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1] },
+          { sound: 'bd', steps: [1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0] },
+          { sound: 'sd', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+          { sound: 'hh', steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
         ],
       },
     },
@@ -87,9 +87,9 @@ const fixture: ImportSessionInput = {
       groove: {
         // Full power: quarter-note kick every beat, snare on 2+4, eighth hi-hat
         layers: [
-          { sound: 'bd', steps: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0] },
-          { sound: 'sd', steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
-          { sound: 'hh', steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+          { sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+          { sound: 'sd', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+          { sound: 'hh', steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
         ],
       },
     },
@@ -168,8 +168,8 @@ const expectedSession = {
   rhythm: {
     // First section (Intro) groove layers — mirrors harmony.progression = first section's chords
     layers: [
-      { sound: 'bd' as const, steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0] },
-      { sound: 'hh' as const, steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+      { sound: 'bd' as const, steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0] },
+      { sound: 'hh' as const, steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
     ],
   },
   composition: {
@@ -189,7 +189,7 @@ const expectedSession = {
           chordMode: 'chord',
           progression: [
             { rootPc: 11, qual: 'pow' as const, gain: 0.6 },
-            { rootPc: 7,  qual: 'pow' as const, gain: 0.6 },
+            { rootPc: 7, qual: 'pow' as const, gain: 0.6 },
           ],
         },
       },
@@ -240,8 +240,8 @@ const expectedSession = {
         snapshot: {
           type: 'groove' as const,
           layers: [
-            { sound: 'bd' as const, steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0] },
-            { sound: 'hh' as const, steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+            { sound: 'bd' as const, steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0] },
+            { sound: 'hh' as const, steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
           ],
         },
       },
@@ -254,9 +254,9 @@ const expectedSession = {
         snapshot: {
           type: 'groove' as const,
           layers: [
-            { sound: 'bd' as const, steps: [1,0,1,0, 0,0,1,0, 1,0,1,0, 0,0,1,0] },
-            { sound: 'sd' as const, steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
-            { sound: 'hh' as const, steps: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1] },
+            { sound: 'bd' as const, steps: [1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0] },
+            { sound: 'sd' as const, steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+            { sound: 'hh' as const, steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
           ],
         },
       },
@@ -269,9 +269,9 @@ const expectedSession = {
         snapshot: {
           type: 'groove' as const,
           layers: [
-            { sound: 'bd' as const, steps: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0] },
-            { sound: 'sd' as const, steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
-            { sound: 'hh' as const, steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+            { sound: 'bd' as const, steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+            { sound: 'sd' as const, steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+            { sound: 'hh' as const, steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
           ],
         },
       },
@@ -311,7 +311,7 @@ describe('ImportGrooveLayerSchema schema guardrails (A-03-25 / A-03-26 / A-03-27
   it('A-03-25: safeParse rejects unsupported drum sound "kazoo"', () => {
     const result = ImportGrooveLayerSchema.safeParse({
       sound: 'kazoo',
-      steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+      steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
     });
     expect(result.success).toBe(false);
   });
@@ -319,7 +319,7 @@ describe('ImportGrooveLayerSchema schema guardrails (A-03-25 / A-03-26 / A-03-27
   it('A-03-26: safeParse rejects steps array of length 15 (not 16)', () => {
     const result = ImportGrooveLayerSchema.safeParse({
       sound: 'bd',
-      steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0],  // 15 elements
+      steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0], // 15 elements
     });
     expect(result.success).toBe(false);
   });
@@ -327,7 +327,7 @@ describe('ImportGrooveLayerSchema schema guardrails (A-03-25 / A-03-26 / A-03-27
   it('A-03-26: safeParse rejects steps array of length 17 (not 16)', () => {
     const result = ImportGrooveLayerSchema.safeParse({
       sound: 'bd',
-      steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0, 0],  // 17 elements
+      steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], // 17 elements
     });
     expect(result.success).toBe(false);
   });
@@ -349,11 +349,28 @@ describe('ImportGrooveLayerSchema schema guardrails (A-03-25 / A-03-26 / A-03-27
   });
 
   it('all 16 supported sounds are accepted by ImportGrooveLayerSchema', () => {
-    const sounds = ['bd','sd','hh','oh','cp','rim','lt','mt','ht','conga','cajon','wood','shaker','cb','perc','hand'];
+    const sounds = [
+      'bd',
+      'sd',
+      'hh',
+      'oh',
+      'cp',
+      'rim',
+      'lt',
+      'mt',
+      'ht',
+      'conga',
+      'cajon',
+      'wood',
+      'shaker',
+      'cb',
+      'perc',
+      'hand',
+    ];
     sounds.forEach((s) => {
       const result = ImportGrooveLayerSchema.safeParse({
         sound: s,
-        steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+        steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
       });
       expect(result.success).toBe(true);
     });
@@ -409,13 +426,17 @@ describe('ImportSessionInputSchema validation (A-02-06)', () => {
 
   it('chord root: "H" (invalid note name) fails safeParse with clear error', () => {
     // Guard: ChordSpecSchema.root .refine() must reject invalid note names
+    // fixture.sections[0] is guaranteed by the fixture definition above; the guard
+    // below satisfies the no-non-null-assertion ESLint rule without the ! operator.
+    const fixtureIntroSection = fixture.sections[0];
+    if (!fixtureIntroSection) throw new Error('fixture must have at least one section');
     const invalid = {
       ...fixture,
       sections: [
         {
           label: 'Intro',
           chords: [{ root: 'H', quality: 'pow' as const }],
-          groove: fixture.sections[0]!.groove,
+          groove: fixtureIntroSection.groove,
         },
       ],
     };
@@ -622,9 +643,7 @@ describe('regression guard — no pow in maj-only chart', () => {
             { root: 'F', quality: 'maj' },
           ],
           groove: {
-            layers: [
-              { sound: 'bd', steps: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0] },
-            ],
+            layers: [{ sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] }],
           },
         },
       ],
@@ -660,7 +679,7 @@ describe('ArmoniaSnapshot on harmony blocks (A-03-28 / A-03-29)', () => {
     const introBlock = result.composition.blocks[0];
     expect(introBlock?.snapshot?.type).toBe('armonia');
     if (introBlock?.snapshot?.type === 'armonia') {
-      expect(introBlock.snapshot.root).toBe(11);      // B = pc 11
+      expect(introBlock.snapshot.root).toBe(11); // B = pc 11
       expect(introBlock.snapshot.mode).toBe('minor');
       expect(introBlock.snapshot.octave).toBe(2);
       expect(introBlock.snapshot.chordMode).toBe('chord');
@@ -744,7 +763,9 @@ describe('GrooveSnapshot on groove blocks (A-03-31)', () => {
 describe('rhythm.layers matches first section groove layers (A-03-35)', () => {
   it('A-03-35: result.rhythm.layers deep-equals the Intro section groove layers', () => {
     const result = importSession(fixture);
-    const introGrooveLayers = fixture.sections[0]!.groove.layers.map((l) => ({
+    const fixtureIntro = fixture.sections[0];
+    if (!fixtureIntro) throw new Error('fixture must have at least one section');
+    const introGrooveLayers = fixtureIntro.groove.layers.map((l) => ({
       sound: l.sound,
       steps: [...l.steps],
     }));
@@ -772,9 +793,10 @@ describe('openBlock restores harmony section via ArmoniaSnapshot (A-03-30)', () 
       (b) => b.name === 'ONE — Intro' && b.type === 'armonia'
     );
     expect(introBlock).toBeDefined();
+    if (!introBlock) throw new Error('introBlock must be defined (expect above guards this)');
 
     // openBlock should switch to harmony view and restore the Intro's ArmoniaSnapshot
-    openBlock(introBlock!.id);
+    openBlock(introBlock.id);
 
     const afterState = get(sessionStore);
     expect(afterState.view).toBe('harmony');
@@ -806,9 +828,11 @@ describe('openBlock restores rhythm section via GrooveSnapshot (A-03-32)', () =>
       (b) => b.name === 'ONE — Intro (ritmo)' && b.type === 'groove'
     );
     expect(introGrooveBlock).toBeDefined();
+    if (!introGrooveBlock)
+      throw new Error('introGrooveBlock must be defined (expect above guards this)');
 
     // openBlock should switch to rhythm view and restore the Intro's GrooveSnapshot
-    openBlock(introGrooveBlock!.id);
+    openBlock(introGrooveBlock.id);
 
     const afterState = get(sessionStore);
     expect(afterState.view).toBe('rhythm');
@@ -817,8 +841,12 @@ describe('openBlock restores rhythm section via GrooveSnapshot (A-03-32)', () =>
     expect(afterState.rhythm.layers[1]?.sound).toBe('hh');
 
     // Verify the exact steps match the fixture
-    expect(afterState.rhythm.layers[0]?.steps).toEqual([1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0]);
-    expect(afterState.rhythm.layers[1]?.steps).toEqual([1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]);
+    expect(afterState.rhythm.layers[0]?.steps).toEqual([
+      1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+    expect(afterState.rhythm.layers[1]?.steps).toEqual([
+      1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0,
+    ]);
   });
 });
 

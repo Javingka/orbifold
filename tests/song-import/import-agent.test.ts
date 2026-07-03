@@ -42,9 +42,7 @@ import { SavedSessionSchema } from '../../src/lib/persistence.js';
 // Tests that use inline fixture objects must supply it.
 
 const MINIMAL_GROOVE = {
-  layers: [
-    { sound: 'bd' as const, steps: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0] },
-  ],
+  layers: [{ sound: 'bd' as const, steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] }],
 };
 
 // ── Golden fixture (shared with import-session.test.ts) ───────────────────────
@@ -68,8 +66,8 @@ const fixture: ImportSessionInput = {
       ],
       groove: {
         layers: [
-          { sound: 'bd', steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0] },
-          { sound: 'hh', steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+          { sound: 'bd', steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0] },
+          { sound: 'hh', steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
         ],
       },
     },
@@ -82,9 +80,9 @@ const fixture: ImportSessionInput = {
       ],
       groove: {
         layers: [
-          { sound: 'bd', steps: [1,0,1,0, 0,0,1,0, 1,0,1,0, 0,0,1,0] },
-          { sound: 'sd', steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
-          { sound: 'hh', steps: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1] },
+          { sound: 'bd', steps: [1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0] },
+          { sound: 'sd', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+          { sound: 'hh', steps: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
         ],
       },
     },
@@ -97,9 +95,9 @@ const fixture: ImportSessionInput = {
       ],
       groove: {
         layers: [
-          { sound: 'bd', steps: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0] },
-          { sound: 'sd', steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
-          { sound: 'hh', steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+          { sound: 'bd', steps: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0] },
+          { sound: 'sd', steps: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },
+          { sound: 'hh', steps: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0] },
         ],
       },
     },
@@ -196,7 +194,9 @@ describe('ImportSessionInputSchema.safeParse', () => {
       bpm: 120,
       key: 'E',
       mode: 'minor',
-      sections: [{ label: 'Intro', chords: [{ root: 'E', quality: 'pow' }], groove: MINIMAL_GROOVE }],
+      sections: [
+        { label: 'Intro', chords: [{ root: 'E', quality: 'pow' }], groove: MINIMAL_GROOVE },
+      ],
     };
     const result = ImportSessionInputSchema.safeParse(input);
     expect(result.success).toBe(true);
@@ -208,7 +208,9 @@ describe('ImportSessionInputSchema.safeParse', () => {
       bpm: 120,
       key: 'A',
       mode: 'harmonic:minor',
-      sections: [{ label: 'Verse', chords: [{ root: 'A', quality: 'min' }], groove: MINIMAL_GROOVE }],
+      sections: [
+        { label: 'Verse', chords: [{ root: 'A', quality: 'min' }], groove: MINIMAL_GROOVE },
+      ],
     };
     expect(ImportSessionInputSchema.safeParse(input).success).toBe(true);
   });
