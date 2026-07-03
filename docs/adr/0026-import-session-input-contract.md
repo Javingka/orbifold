@@ -143,17 +143,19 @@ is specified.
 
 ---
 
-### D5 — Groove default
+### D5 — Groove default (SUPERSEDED by Amendment §A1 below)
 
-**Decision:** `importSession` sets rhythm to a minimal default: a single `bd` layer
+**Decision (Phase 02):** `importSession` set rhythm to a minimal default: a single `bd` layer
 with steps `[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0]` (kick on beats 1 and 3 of a 16-step
-pattern). The skill does not attempt to infer or generate groove.
+pattern). The skill did not attempt to infer or generate groove.
 
-**Rationale:** Groove generation is a separate concern handled by the existing
-autopilot/recipe system. Attempting to infer groove from chord charts is out of scope
-for Phase 02 and would bloat `importSession` beyond its "pure translator" mandate.
-The default satisfies `SavedRhythmSchema` constraints while leaving groove customisation
-to the user.
+**Rationale (Phase 02):** Groove generation was a separate concern handled by the existing
+autopilot/recipe system. The default satisfied `SavedRhythmSchema` constraints while leaving
+groove customisation to the user.
+
+**Superseded:** See Amendment §A1 (Phase 03 step 03.4). Groove is now first-class and
+per-section, returned by the LLM alongside the chord chart (OD-7 Option B resolution).
+The generic default is replaced by LLM-sourced per-section rhythmic signatures.
 
 ---
 
@@ -191,3 +193,100 @@ All existing files remain unchanged. The skill is purely additive.
   `IMPORT_SCHEMA_VERSION` bump.
 - If the parsing/interpretation source is decided (LLM prompt, scraper, UI form):
   that concern lives upstream and does not change `importSession`'s contract.
+
+---
+
+## Amendment A1 — Phase 03 step 03.4: per-section groove + `IMPORT_SCHEMA_VERSION` → 2
+
+- **Date:** 2026-07-03
+- **Initiative / Phase:** song-import / Phase 03 (step 03.4)
+- **Trigger:** OD-7 resolution (per-section song-specific rhythmic signatures, first-class
+  parity with harmony — Option B chosen, generic backbeat Option A rejected by Pilot).
+
+### Changes to the input contract (`IMPORT_SCHEMA_VERSION` 1 → 2)
+
+D1 (`ImportSessionInputSchema`) is amended: `SectionSpecSchema` gains a **required** `groove`
+field (`ImportGrooveSchema`). This is a breaking change to the v1 input contract —
+fixtures and LLM prompts must include `groove` on every section.
+
+**New `ImportGrooveLayerSchema`:**
+```typescript
+z.object({
+  sound: z.enum(IMPORT_SK_SOUNDS),   // mirrors SK_SOUNDS / Sound type
+  steps: z.array(z.number().int().min(0).max(1)).length(16),  // exactly 16 — 1 cycle = 4/4
+})
+```
+
+**New `ImportGrooveSchema`:**
+```typescript
+z.object({
+  layers: z.array(ImportGrooveLayerSchema).min(1).max(8),
+})
+```
+
+**Updated `SectionSpecSchema`:**
+```typescript
+z.object({
+  label: z.string().min(1).max(100),
+  chords: z.array(ChordSpecSchema).min(1).max(16),
+  groove: ImportGrooveSchema,   // REQUIRED — OD-7: rhythm first-class
+})
+```
+
+`groove` is **required** (not optional). If the LLM omits it, `safeParse` fails and the
+user retries. A silent fallback to no drums would be worse than an informative error.
+
+**`IMPORT_SCHEMA_VERSION` bump rationale:**
+- v1 → v2 because `SectionSpecSchema` gains a required field, breaking existing v1 fixtures.
+- Independent of `SCHEMA_VERSION` (agent schema) and `SESSION_SCHEMA_VERSION` (persistence).
+
+### Changes to the output contract
+
+D5 (groove default) is superseded. `importSession` now:
+
+1. **Builds one harmony block + one groove block per section** (2N blocks total for N sections).
+   - Harmony blocks (type `'armonia'`, indices 0…N-1): unchanged from Phase 02 except each
+     now carries an inline `ArmoniaSnapshot` (makes `openBlock` work).
+   - Groove blocks (type `'groove'`, indices N…2N-1): code generated via
+     `rhythmToStrudel(section.groove.layers)` (pure, no store); carry a `GrooveSnapshot`.
+   - Both block types carry `label = section.label` for timeline display.
+
+2. **Assembles two parallel composition tracks** (harmony track + rhythm track), bar-for-bar
+   aligned. No `silence` padding needed because each groove block has the same `bars` value as
+   its corresponding harmony block.
+
+3. **Sets `rhythm.layers`** to the first section's groove layers (mirrors
+   `harmony.progression = first section's chords` — the "live" standalone rhythm engine state).
+
+4. **Editable snapshots on all blocks**: both `ArmoniaSnapshot` and `GrooveSnapshot` are built
+   inline (store-free — the `capture*` functions from `snapshot.ts` are NOT called, as they
+   require a live `SessionState`). This fixes the "blocks not editable" gap found in step 03.3.
+
+5. **`applyLoadedSession` snapshot carry-through** (fix in `src/state/session.ts`): the
+   `applyLoadedSession` function now carries the optional `snapshot` field through to the
+   runtime `Block` object. Without this, any saved session with block snapshots (including
+   all `importSession` output after this amendment) would lose its snapshot on load, making
+   blocks permanently read-only. This fix is additive and non-breaking for pre-snapshot
+   sessions (conditional spread produces `{}` for `undefined`).
+
+### OD-7 design principle
+
+**Rhythm is first-class — parity with harmony.** The LLM returns a drum pattern per section
+alongside the chord chart. Each section has both a `chords[]` array (harmony) and a `groove`
+object (rhythm). `importSession` produces one `armonia` block + one `groove` block per section,
+arranged in two parallel composition tracks.
+
+> "El ritmo identifica una canción tanto o más que la armonía; no podemos dar soluciones
+> genéricas; tenemos que encontrar la 'signatura rítmica' de las canciones, con la misma
+> estrategia que hacemos con armonía." — Pilot rationale, 2026-07-03.
+
+### Files modified in Phase 03 step 03.4
+
+| File | Nature |
+|---|---|
+| `src/agent/import-session.ts` | Extended: `IMPORT_SCHEMA_VERSION` → 2, `ImportGrooveLayerSchema`, `ImportGrooveSchema`, `groove` on `SectionSpecSchema`; 2N blocks + 2 tracks + snapshots |
+| `src/state/session.ts` | Extended: `applyLoadedSession` now carries `snapshot` field through to runtime Block |
+| `tests/song-import/import-session.test.ts` | Updated: fixture gains `groove` per section; 26 new / updated tests (A-03-24…A-03-37) |
+| `tests/song-import/import-agent.test.ts` | Updated: fixtures and inline inputs gain `groove` field; label carry-through assertions updated for 6-block output |
+| `src/agent/import-prompt.ts` | Extended: per-section `groove` in `IMPORT_SYSTEM_PROMPT` (see ADR 0028 §D8) |
+| `src/agent/import-agent.ts` | Updated: `max_tokens` 600 → 1600 (see ADR 0028 §D8) |

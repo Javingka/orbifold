@@ -188,3 +188,58 @@ signature.
   `ImportSessionInput` object and calls `importSession()` directly — bypassing
   `sendImport` entirely. The two sourcing paths converge at the
   `importSession()` boundary (ADR 0026 D3).
+
+---
+
+## Amendment A1 — Phase 03 step 03.4: rhythm extension of `IMPORT_SYSTEM_PROMPT`
+
+- **Date:** 2026-07-03
+- **Initiative / Phase:** song-import / Phase 03 (step 03.4)
+- **Trigger:** OD-7 resolution (per-section rhythmic signatures) and `IMPORT_SCHEMA_VERSION`
+  bump to 2 (see ADR 0026 Amendment A1).
+
+### D8 — `IMPORT_SYSTEM_PROMPT` extended with per-section `groove` field
+
+**Decision:** `IMPORT_SYSTEM_PROMPT` in `src/agent/import-prompt.ts` is extended to instruct
+the LLM to return a per-section `groove` object alongside `chords`. The extension:
+
+1. Adds `groove` to the documented JSON shape inside the prompt, immediately after `chords`:
+   ```
+   "groove": {
+     "layers": [
+       { "sound": "<drum sound>", "steps": [<16 integers, 0 or 1>] }
+     ]
+   }
+   ```
+2. Lists all 16 supported drum sounds (mirrors `SK_SOUNDS` in `schema.ts` / `Sound` type in
+   `layers.ts`): `bd`, `sd`, `hh`, `oh`, `cp`, `rim`, `lt`, `mt`, `ht`, `conga`, `cajon`,
+   `wood`, `shaker`, `cb`, `perc`, `hand`.
+3. Specifies that `steps` is always exactly 16 integers (0/1) — representing a 4/4 bar at
+   1/16-note resolution. This enforces the hard project invariant: 1 cycle = 4/4 = 16 steps.
+4. Explicitly instructs the LLM to capture the song's **characteristic rhythmic signature**
+   ("signatura rítmica") — not a generic pattern. Each section should sound like that specific
+   section of that specific song (e.g., the galloping double-bass of a metal intro vs. the
+   driving quarter-note pattern of a climactic chorus).
+5. Recommends 1–4 layers per section. The unknown-song fallback (`{ "error": "..." }`) is
+   unchanged.
+
+**Rationale (OD-7):** Rhythm is now first-class alongside harmony. The same design principle
+that makes harmony section-specific ("what chords does each section have?") applies to rhythm
+("what drum pattern characterizes each section?"). A generic backbeat applied uniformly would
+produce identical rhythmic output for every song — defeating the purpose of song-import.
+
+### D9 — `max_tokens` raised from 600 to 1600
+
+**Decision:** The `max_tokens` parameter in `sendImport` is raised from 600 to 1600.
+
+**Rationale:** With per-section grooves, the LLM response is substantially larger. Upper
+bound estimate: 8 sections × 4 layers × 16 steps = 512 integers, plus the chord chart
+(≈ 350–480 tokens for a typical song), plus prompt overhead. 1600 provides safe headroom
+for the full payload without risking truncation that would produce a malformed JSON response.
+
+**Files modified:**
+
+- `src/agent/import-prompt.ts` — `IMPORT_SYSTEM_PROMPT` extended with groove instructions
+  (rhythm section, supported sounds, steps format, "signatura rítmica" emphasis).
+- `src/agent/import-agent.ts` — `max_tokens` argument in the `provider.body(...)` call
+  changed from `600` to `1600`. This is the only change to this file.

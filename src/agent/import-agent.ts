@@ -73,8 +73,10 @@ export function extractJsonFromText(txt: string): string | null {
  *     body: JSON.stringify(provider.body(model, IMPORT_SYSTEM_PROMPT,
  *       [{ role: 'user', content: query }], 600)) })
  *
- * max_tokens = 600: a typical ImportSessionInput (6–8 sections × 6–8 chords)
- * is ≈ 350–480 tokens of JSON. 600 provides headroom. See inventory section (c).
+ * max_tokens = 1600: with per-section grooves (up to 8 sections × 4 layers × 16
+ * steps each = 512 integers, plus the chord chart), the response is substantially
+ * larger than a harmony-only chart. 1600 provides headroom for the full payload
+ * (OD-7 step 03.4 amendment; was 600 in step 03.2). See ADR 0028 amendment §D8.
  *
  * Error paths (all return { type: 'error', message }):
  *   - No API key configured for the current provider.
@@ -116,7 +118,7 @@ export async function sendImport(query: string): Promise<ImportSendResult> {
       method: 'POST',
       headers: provider.headers(key),
       body: JSON.stringify(
-        provider.body(model, IMPORT_SYSTEM_PROMPT, [{ role: 'user', content: query }], 600)
+        provider.body(model, IMPORT_SYSTEM_PROMPT, [{ role: 'user', content: query }], 1600)
       ),
     });
     const data: unknown = await res.json();

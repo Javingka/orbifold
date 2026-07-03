@@ -4,6 +4,8 @@
 //        applyLoadedSession label carry-through (A-03-11), X-05 regression.
 //
 // song-import Phase 03 step 03.2 — acceptance IDs A-03-06 through A-03-14.
+// song-import Phase 03 step 03.4 — fixtures updated to include required `groove` field
+//                                   (OD-7: rhythm is first-class, per-section required).
 //
 // Note on fetch coverage:
 //   sendImport() makes a live fetch() call to an external provider. Fetch is not
@@ -34,10 +36,22 @@ import {
 } from '../../src/state/session.js';
 import { SavedSessionSchema } from '../../src/lib/persistence.js';
 
+// ── Minimal groove helper ──────────────────────────────────────────────────────
+//
+// Phase 03 step 03.4: `groove` is now a required field on every section.
+// Tests that use inline fixture objects must supply it.
+
+const MINIMAL_GROOVE = {
+  layers: [
+    { sound: 'bd' as const, steps: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0] },
+  ],
+};
+
 // ── Golden fixture (shared with import-session.test.ts) ───────────────────────
 //
 // Metallica "ONE"-inspired chart. Used here to produce a SavedSession with
 // labelled blocks for the applyLoadedSession carry-through test (A-03-11).
+// Phase 03 step 03.4: each section now carries a required `groove` field.
 
 const fixture: ImportSessionInput = {
   songTitle: 'ONE',
@@ -52,6 +66,12 @@ const fixture: ImportSessionInput = {
         { root: 'B', quality: 'pow' },
         { root: 'G', quality: 'pow' },
       ],
+      groove: {
+        layers: [
+          { sound: 'bd', steps: [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0] },
+          { sound: 'hh', steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+        ],
+      },
     },
     {
       label: 'Verse',
@@ -60,6 +80,13 @@ const fixture: ImportSessionInput = {
         { root: 'E', quality: 'min' },
         { root: 'G', quality: 'maj' },
       ],
+      groove: {
+        layers: [
+          { sound: 'bd', steps: [1,0,1,0, 0,0,1,0, 1,0,1,0, 0,0,1,0] },
+          { sound: 'sd', steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
+          { sound: 'hh', steps: [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1] },
+        ],
+      },
     },
     {
       label: 'Chorus',
@@ -68,6 +95,13 @@ const fixture: ImportSessionInput = {
         { root: 'G', quality: 'pow' },
         { root: 'A', quality: 'pow' },
       ],
+      groove: {
+        layers: [
+          { sound: 'bd', steps: [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0] },
+          { sound: 'sd', steps: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
+          { sound: 'hh', steps: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0] },
+        ],
+      },
     },
   ],
 };
@@ -162,7 +196,7 @@ describe('ImportSessionInputSchema.safeParse', () => {
       bpm: 120,
       key: 'E',
       mode: 'minor',
-      sections: [{ label: 'Intro', chords: [{ root: 'E', quality: 'pow' }] }],
+      sections: [{ label: 'Intro', chords: [{ root: 'E', quality: 'pow' }], groove: MINIMAL_GROOVE }],
     };
     const result = ImportSessionInputSchema.safeParse(input);
     expect(result.success).toBe(true);
@@ -174,7 +208,7 @@ describe('ImportSessionInputSchema.safeParse', () => {
       bpm: 120,
       key: 'A',
       mode: 'harmonic:minor',
-      sections: [{ label: 'Verse', chords: [{ root: 'A', quality: 'min' }] }],
+      sections: [{ label: 'Verse', chords: [{ root: 'A', quality: 'min' }], groove: MINIMAL_GROOVE }],
     };
     expect(ImportSessionInputSchema.safeParse(input).success).toBe(true);
   });
@@ -187,7 +221,7 @@ describe('ImportSessionInputSchema.safeParse', () => {
         bpm: 100,
         key: 'C',
         mode: 'major',
-        sections: [{ label: 'S', chords: [{ root: 'C', quality }] }],
+        sections: [{ label: 'S', chords: [{ root: 'C', quality }], groove: MINIMAL_GROOVE }],
       };
       expect(ImportSessionInputSchema.safeParse(input).success).toBe(true);
     }
@@ -210,7 +244,7 @@ describe('ImportSessionInputSchema.safeParse', () => {
         bpm: 100,
         key: 'C',
         mode,
-        sections: [{ label: 'S', chords: [{ root: 'C', quality: 'maj' }] }],
+        sections: [{ label: 'S', chords: [{ root: 'C', quality: 'maj' }], groove: MINIMAL_GROOVE }],
       };
       expect(ImportSessionInputSchema.safeParse(input).success).toBe(true);
     }
@@ -222,7 +256,7 @@ describe('ImportSessionInputSchema.safeParse', () => {
       bpm: 120,
       key: 'H', // H is not a valid note name
       mode: 'major',
-      sections: [{ label: 'S', chords: [{ root: 'C', quality: 'maj' }] }],
+      sections: [{ label: 'S', chords: [{ root: 'C', quality: 'maj' }], groove: MINIMAL_GROOVE }],
     };
     const result = ImportSessionInputSchema.safeParse(input);
     expect(result.success).toBe(false);
@@ -234,7 +268,7 @@ describe('ImportSessionInputSchema.safeParse', () => {
       bpm: 120,
       key: 'C',
       mode: 'major',
-      sections: [{ label: 'S', chords: [{ root: 'C', quality: '7th' }] }],
+      sections: [{ label: 'S', chords: [{ root: 'C', quality: '7th' }], groove: MINIMAL_GROOVE }],
     };
     expect(ImportSessionInputSchema.safeParse(input).success).toBe(false);
   });
@@ -245,7 +279,7 @@ describe('ImportSessionInputSchema.safeParse', () => {
       bpm: 120,
       key: 'C',
       mode: 'blues', // not in SK_MODES
-      sections: [{ label: 'S', chords: [{ root: 'C', quality: 'maj' }] }],
+      sections: [{ label: 'S', chords: [{ root: 'C', quality: 'maj' }], groove: MINIMAL_GROOVE }],
     };
     expect(ImportSessionInputSchema.safeParse(input).success).toBe(false);
   });
@@ -273,9 +307,11 @@ describe('ImportSessionInputSchema.safeParse', () => {
 // ── A-03-11: applyLoadedSession label carry-through ────────────────────────────
 //
 // Produces a SavedSession from the golden fixture via importSession(), which
-// attaches label = "Intro" / "Verse" / "Chorus" to the three blocks. Then calls
-// applyLoadedSession() and reads the store. The loaded blocks must carry the
-// same label strings — proving the Phase 03 label carry-through fix in session.ts.
+// attaches label = "Intro" / "Verse" / "Chorus" to the harmony blocks (and the
+// groove blocks). Phase 03 step 03.4: the composition now has 6 blocks (3 harmony
+// + 3 groove). The label carry-through test targets the harmony blocks (indices 0–2).
+// Then calls applyLoadedSession() and reads the store. The loaded blocks must carry
+// the same label strings — proving the Phase 03 label carry-through fix in session.ts.
 
 describe('applyLoadedSession — label carry-through (A-03-11)', () => {
   beforeEach(() => {
@@ -286,10 +322,15 @@ describe('applyLoadedSession — label carry-through (A-03-11)', () => {
   it('carries block labels through applyLoadedSession', () => {
     const saved = importSession(fixture);
 
-    // Confirm the SavedSession produced by importSession has labels.
+    // Confirm the SavedSession produced by importSession has labels on harmony blocks.
+    // Phase 03 step 03.4: blocks 0–2 are harmony blocks, 3–5 are groove blocks.
     expect(saved.composition.blocks[0]?.label).toBe('Intro');
     expect(saved.composition.blocks[1]?.label).toBe('Verse');
     expect(saved.composition.blocks[2]?.label).toBe('Chorus');
+    // Groove blocks also carry the section label.
+    expect(saved.composition.blocks[3]?.label).toBe('Intro');
+    expect(saved.composition.blocks[4]?.label).toBe('Verse');
+    expect(saved.composition.blocks[5]?.label).toBe('Chorus');
 
     // Apply to the live store.
     applyLoadedSession(saved);
@@ -297,10 +338,14 @@ describe('applyLoadedSession — label carry-through (A-03-11)', () => {
     const state = get(sessionStore);
     const blocks = state.composition.blocks;
 
-    expect(blocks).toHaveLength(3);
+    // 6 blocks total: 3 harmony + 3 groove
+    expect(blocks).toHaveLength(6);
     expect(blocks[0]?.label).toBe('Intro');
     expect(blocks[1]?.label).toBe('Verse');
     expect(blocks[2]?.label).toBe('Chorus');
+    expect(blocks[3]?.label).toBe('Intro');
+    expect(blocks[4]?.label).toBe('Verse');
+    expect(blocks[5]?.label).toBe('Chorus');
   });
 
   it('carries block names and metadata through applyLoadedSession', () => {
@@ -310,10 +355,14 @@ describe('applyLoadedSession — label carry-through (A-03-11)', () => {
     const state = get(sessionStore);
     const blocks = state.composition.blocks;
 
-    // Block names follow the "<songTitle> — <sectionLabel>" convention (decisions.md).
+    // Harmony block names follow the "<songTitle> — <sectionLabel>" convention (decisions.md).
     expect(blocks[0]?.name).toBe('ONE — Intro');
     expect(blocks[1]?.name).toBe('ONE — Verse');
     expect(blocks[2]?.name).toBe('ONE — Chorus');
+    // Groove block names follow the "<songTitle> — <sectionLabel> (ritmo)" convention.
+    expect(blocks[3]?.name).toBe('ONE — Intro (ritmo)');
+    expect(blocks[4]?.name).toBe('ONE — Verse (ritmo)');
+    expect(blocks[5]?.name).toBe('ONE — Chorus (ritmo)');
 
     // BPM and harmony root are set from the fixture.
     expect(state.bpm).toBe(85);

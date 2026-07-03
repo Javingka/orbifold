@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — importSession skill: structured song chart → SavedSession.
 // song-import Phase 02. Pure translator; no Svelte store imports.
-// Input schema: ImportSessionInputSchema (IMPORT_SCHEMA_VERSION 1).
+// Input schema: ImportSessionInputSchema (IMPORT_SCHEMA_VERSION 2).
 // Output: SavedSession (SESSION_SCHEMA_VERSION 7, SCHEMA_VERSION 7).
 //
-// Codegen note: melodyLine is called DIRECTLY from src/core/codegen/strudel.ts,
-// NOT via harmonyCode/sessionCode from src/state/session.ts. Reason: session.ts
-// imports svelte/store at module load time; importing it in a Node/Vitest context
-// drags in the entire Svelte store graph. melodyLine in strudel.ts has no
-// DOM/PIXI/Svelte imports — it is pure-engine and safe to call from any context.
-// This satisfies A-02-13 (no Svelte store imports in this file).
-// See inventory phase-02-inventory.md section (b) for the full call chain analysis.
+// Codegen note: melodyLine and rhythmToStrudel are called DIRECTLY from
+// src/core/codegen/strudel.ts, NOT via harmonyCode/sessionCode from
+// src/state/session.ts. Reason: session.ts imports svelte/store at module
+// load time; importing it in a Node/Vitest context drags in the entire
+// Svelte store graph. melodyLine / rhythmToStrudel in strudel.ts have no
+// DOM/PIXI/Svelte imports — they are pure-engine and safe to call from any
+// context. This satisfies A-02-13 (no Svelte store imports in this file).
+// See inventory phase-02-inventory.md section (b) for the full call chain
+// analysis.
 
 import { z } from 'zod';
-import { melodyLine } from '../core/codegen/strudel.js';
+import { melodyLine, rhythmToStrudel } from '../core/codegen/strudel.js';
 import { noteToPc } from '../core/theory/pitch.js';
 import { SESSION_SCHEMA_VERSION, type SavedSession } from '../lib/persistence.js';
+import type { ArmoniaSnapshot, GrooveSnapshot } from '../core/composition/snapshot.js';
+import type { RhythmLayer } from '../core/rhythm/layers.js';
 
 // ── IMPORT_SCHEMA_VERSION ──────────────────────────────────────────────────────
 //
@@ -25,8 +29,13 @@ import { SESSION_SCHEMA_VERSION, type SavedSession } from '../lib/persistence.js
 //
 // v1 — song-import Phase 02. Initial structured chart contract (OD-3 Option A):
 //      { songTitle, artist?, bpm, key, mode, sections: [{ label, chords: [{ root, quality, bars? }] }] }.
+//
+// v2 — song-import Phase 03 step 03.4. Per-section `groove` added to SectionSpecSchema.
+//      Rhythm is now first-class (OD-7 Option B resolution).
+//      importSession output: 2N blocks (N harmony + N groove) + 2 tracks (harmony + rhythm).
+//      Both block types carry editable snapshots (ArmoniaSnapshot / GrooveSnapshot).
 
-export const IMPORT_SCHEMA_VERSION = 1;
+export const IMPORT_SCHEMA_VERSION = 2;
 
 // ── Constants (mirrored from agent/schema.ts SK_ arrays) ─────────────────────
 
@@ -43,6 +52,30 @@ const IMPORT_SK_MODES = [
   'mixolydian',
   'locrian',
   'harmonic:minor',
+] as const;
+
+/**
+ * Supported drum sound names (mirrors SK_SOUNDS in schema.ts and Sound type in layers.ts).
+ * Restricted to this set so that ImportGrooveLayerSchema layers pass
+ * SavedGrooveSnapshotSchema validation at the persistence layer.
+ */
+const IMPORT_SK_SOUNDS = [
+  'bd',
+  'sd',
+  'hh',
+  'oh',
+  'cp',
+  'rim',
+  'lt',
+  'mt',
+  'ht',
+  'conga',
+  'cajon',
+  'wood',
+  'shaker',
+  'cb',
+  'perc',
+  'hand',
 ] as const;
 
 // ── ChordSpecSchema ────────────────────────────────────────────────────────────
@@ -64,11 +97,39 @@ export const ChordSpecSchema = z.object({
   bars: z.number().min(0.25).max(8).optional(),
 });
 
+// ── ImportGrooveLayerSchema ────────────────────────────────────────────────────
+//
+// A single drum layer within a section's groove.
+//
+// `sound` is restricted to IMPORT_SK_SOUNDS (mirrors SK_SOUNDS in schema.ts /
+// Sound type in layers.ts). Only supported sounds can be emitted by the LLM;
+// unsupported names (e.g. "kazoo") are rejected at safeParse time.
+//
+// `steps` must be exactly 16 integers, each 0 or 1. This enforces the hard
+// project invariant: 1 Strudel cycle = 1 bar of 4/4 = 16 subdivision steps.
+// Compound/irregular time signatures remain deferred.
+
+export const ImportGrooveLayerSchema = z.object({
+  sound: z.enum(IMPORT_SK_SOUNDS),
+  /** Exactly 16 steps, each 0 or 1. Guardrail: 1 cycle = 4/4 = 16 steps. */
+  steps: z.array(z.number().int().min(0).max(1)).length(16),
+});
+
+// ── ImportGrooveSchema ─────────────────────────────────────────────────────────
+
+export const ImportGrooveSchema = z.object({
+  layers: z.array(ImportGrooveLayerSchema).min(1).max(8),
+});
+
 // ── SectionSpecSchema ──────────────────────────────────────────────────────────
 
 export const SectionSpecSchema = z.object({
   label: z.string().min(1).max(100),
   chords: z.array(ChordSpecSchema).min(1).max(16),
+  /** Required per OD-7 resolution: rhythm is first-class, parallel to harmony.
+   *  If the LLM omits this field, safeParse fails and the user retries.
+   *  A silent fallback to no drums would be worse than an informative error. */
+  groove: ImportGrooveSchema,
 });
 
 // ── ImportSessionInputSchema ───────────────────────────────────────────────────
@@ -90,8 +151,10 @@ export const ImportSessionInputSchema = z.object({
   sections: z.array(SectionSpecSchema).min(1).max(16),
 });
 
-// ── ImportSessionInput ─────────────────────────────────────────────────────────
+// ── Exported types ─────────────────────────────────────────────────────────────
 
+export type ImportGrooveLayer = z.infer<typeof ImportGrooveLayerSchema>;
+export type ImportGroove = z.infer<typeof ImportGrooveSchema>;
 export type ImportSessionInput = z.infer<typeof ImportSessionInputSchema>;
 
 // ── importSession ──────────────────────────────────────────────────────────────
@@ -106,7 +169,7 @@ export type ImportSessionInput = z.infer<typeof ImportSessionInputSchema>;
  *
  * No Svelte store reads or writes — this is a pure function. To apply the
  * resulting session to the live store, wrap it in an `applyImportSession`
- * call in `apply.ts` (out of scope for Phase 02).
+ * call in `apply.ts`.
  *
  * ## Octave default rule (documented per phase spec requirement)
  *
@@ -124,12 +187,19 @@ export type ImportSessionInput = z.infer<typeof ImportSessionInputSchema>;
  * the user sees when the session is loaded. Section structure lives in the
  * composition blocks.
  *
- * ## Groove default
+ * ## Groove (OD-7 resolution: rhythm first-class, parallel to harmony)
  *
- * Rhythm is set to a minimal default: a single `bd` layer with a kick on beats
- * 1 and 3 (`[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0]`). Groove generation is a
- * separate concern (the existing autopilot/recipe system handles it). The
- * import skill's scope is harmony + section structure, not rhythm.
+ * Each section has both a harmony block (type: 'armonia') and a groove block
+ * (type: 'groove') carrying the LLM-returned rhythmic signature for that section.
+ * The composition has two parallel tracks: harmony track + rhythm track.
+ * The standalone `rhythm.layers` is set to the FIRST section's groove layers
+ * (mirroring the pattern that harmony.progression = first section's chords).
+ *
+ * ## Editable snapshots
+ *
+ * Both harmony and groove blocks carry their snapshot inline so that
+ * `openBlock()` in session.ts can restore the section's state into the
+ * Armonía / Ritmo editors (fixes the "blocks not editable" gap from step 03.3).
  *
  * @param input - A pre-validated `ImportSessionInput` object.
  * @returns A `SavedSession` ready for `SavedSessionSchema.safeParse`.
@@ -165,9 +235,11 @@ export function importSession(input: ImportSessionInput): SavedSession {
     };
   });
 
-  // ── Blocks — one per section ───────────────────────────────────────────────
+  // ── Build section pairs (harmony + groove block per section) ───────────────
 
-  const blocks = input.sections.map((section) => {
+  const sectionPairs = input.sections.map((section) => {
+    // ── Harmony block ──────────────────────────────────────────────────────
+
     // Map ChordSpec → HarmonySlotInput-compatible object for melodyLine.
     // Note: melodyLine accepts { rootPc, qual, gain?, bars? } — a structural match
     // to the chord arm of HarmonySlotInput. No cast needed; the object is a subtype.
@@ -186,21 +258,79 @@ export function importSession(input: ImportSessionInput): SavedSession {
     const rawBars = section.chords.reduce((sum, chord) => sum + (chord.bars ?? 1), 0);
     const bars = Math.max(1, Math.min(64, Math.round(rawBars)));
 
-    // Block name: "<songTitle> — <sectionLabel>" per decisions.md convention.
-    // Block label: bare section label for composition-timeline display (Phase 01).
-    return {
+    // Build the ArmoniaSnapshot inline (store-free; do NOT call captureArmoniaSnapshot
+    // which requires a live SessionState). This enables openBlock() to restore the
+    // section's specific chords into the Armonía editor.
+    const armoniaSnapshot: ArmoniaSnapshot = {
+      type: 'armonia',
+      root: harmonyRoot,
+      mode: input.mode,
+      octave,
+      chordMode: 'chord',
+      progression: slots.map((slot) => ({
+        rootPc: slot.rootPc,
+        qual: slot.qual,
+        gain: slot.gain,
+        ...(slot.bars !== undefined ? { bars: slot.bars } : {}),
+      })),
+    };
+
+    const armoniaBlock = {
       name: `${input.songTitle} — ${section.label}`,
       type: 'armonia' as const,
       code,
       bars,
       label: section.label,
+      snapshot: armoniaSnapshot,
     };
+
+    // ── Groove block ───────────────────────────────────────────────────────
+
+    // Map ImportGrooveLayer → RhythmLayer (structural match, no cast needed).
+    const grooveLayers: RhythmLayer[] = section.groove.layers.map((l) => ({
+      sound: l.sound,
+      steps: [...l.steps],
+    }));
+
+    // Emit the Strudel rhythm string using the pure codegen function.
+    // rhythmToStrudel takes RhythmLayer[] and returns stack(...) or ''.
+    const grooveCode = rhythmToStrudel(grooveLayers);
+
+    const grooveSnapshot: GrooveSnapshot = {
+      type: 'groove',
+      layers: grooveLayers,
+    };
+
+    const grooveBlock = {
+      name: `${input.songTitle} — ${section.label} (ritmo)`,
+      type: 'groove' as const,
+      code: grooveCode,
+      bars,          // same bars as the harmony block — bar-for-bar alignment
+      label: section.label,
+      snapshot: grooveSnapshot,
+    };
+
+    return { armoniaBlock, grooveBlock };
   });
 
-  // ── Track: single track referencing all blocks in order ────────────────────
+  // ── Split into parallel arrays ─────────────────────────────────────────────
 
-  const blockRefs = blocks.map((block, idx) => ({
+  const armoniaBlocks = sectionPairs.map((p) => p.armoniaBlock);
+  const grooveBlocks = sectionPairs.map((p) => p.grooveBlock);
+
+  // allBlocks: [intro-harm, verse-harm, …, intro-groove, verse-groove, …]
+  // Harmony blocks occupy indices 0…N-1; groove blocks occupy N…2N-1.
+  const allBlocks = [...armoniaBlocks, ...grooveBlocks];
+
+  // ── Track references ───────────────────────────────────────────────────────
+
+  const harmonyTrackRefs = armoniaBlocks.map((block, idx) => ({
     blockIndex: idx,
+    bars: block.bars,
+  }));
+
+  const rhythmTrackRefs = grooveBlocks.map((block, idx) => ({
+    blockIndex: armoniaBlocks.length + idx,
     bars: block.bars,
   }));
 
@@ -218,21 +348,16 @@ export function importSession(input: ImportSessionInput): SavedSession {
       progression: harmonyProgression,
     },
     rhythm: {
-      // Minimal groove default: kick on beats 1 and 3 of a 16-step pattern.
-      // Rhythm generation is out of scope; this satisfies SavedRhythmSchema.
-      layers: [
-        {
-          sound: 'bd',
-          steps: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-        },
-      ],
+      // First section's groove layers — mirrors harmony.progression = first section's chords.
+      // When the user opens the Rhythm view after import, they see the Intro's rhythmic
+      // signature (OD-7 resolution).
+      layers: sectionPairs[0]!.grooveBlock.snapshot.layers,
     },
     composition: {
-      blocks,
+      blocks: allBlocks,
       tracks: [
-        {
-          blockRefs,
-        },
+        { blockRefs: harmonyTrackRefs }, // harmony track
+        { blockRefs: rhythmTrackRefs },  // rhythm track (parallel, same total bars)
       ],
     },
   };

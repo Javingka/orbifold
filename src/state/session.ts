@@ -2012,6 +2012,11 @@ export function applyLoadedSession(saved: SavedSession): void {
     // Pre-Phase-01 sessions have no label field; the conditional spread produces {} for
     // undefined, so the output is byte-identical to the pre-fix behavior for old sessions.
     ...(b.label !== undefined ? { label: b.label } : {}),
+    // song-import Phase 03 step 03.4: carry through the optional snapshot introduced in
+    // editable-composition Phase 01. Without this, imported blocks with snapshots would
+    // lose their snapshot on load, making them permanently read-only via openBlock.
+    // Pre-snapshot sessions (no snapshot field) produce {} via conditional spread — non-breaking.
+    ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
   }));
 
   const newTracks = saved.composition.tracks.map((t) => ({
