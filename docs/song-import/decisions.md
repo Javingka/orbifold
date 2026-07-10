@@ -57,11 +57,12 @@ See `references/decisions-register-convention.md` for entry format.
 
 ### OD-5 — Manejo de links en Phase 03: solo nombre (Option A)
 
-**Decision:** El campo de import es **texto libre / solo nombre** (p. ej. `"ONE by Metallica"`). URLs no se procesan en Phase 03. La resolución **YouTube→oEmbed** (identificador vía `youtube.com/oembed`, sin key, sin descarga de audio — per la decisión "MVP = Pipeline B") se **difiere a Phase 04** como add-on autocontenido (el campo sigue siendo un string, sin consecuencias de arquitectura).
+**Decision:** El campo de import es **texto libre / solo nombre** (p. ej. `"ONE by Metallica"`). URLs no se procesan en Phase 03. La resolución **YouTube→oEmbed** (identificador vía `youtube.com/oembed`, sin key, sin descarga de audio — per la decisión "MVP = Pipeline B") se **difiere a una fase posterior** como add-on autocontenido (el campo sigue siendo un string, sin consecuencias de arquitectura). Ver Amendment (2026-07-10).
 **Decided:** song-import Phase 03 scoping, 2026-07-03
 **Why:** Valida el camino LLM-native end-to-end sin ruido; oEmbed añade 3 error paths (red, vídeo privado, URL no-YouTube) + un paso async para ganancia marginal en el MVP; diferirlo no tiene coste arquitectónico.
 **Source:** Phase 03 OD-5 (Planner scoping); decisión del Pilot 2026-07-03.
-**Applies to:** El campo de import UI (Phase 03); resolución de links (Phase 04).
+**Amendment (2026-07-10):** El destino de la deferral de oEmbed cambia de Phase 04 a una fase posterior. Phase 04 fue re-scopeada por el Pilot como **"closing polish"** (colocación manual de calidad `pow`/`dim`/`aug` + recalibración del offset fijo de latencia del playhead) antes de mergear song-import a `main`. oEmbed no aborda ninguno de los tres dolores hallados en la verificación manual de Phase 03 y se re-difiere para mantener la fase de cierre mínima. Decisión del Pilot 2026-07-10.
+**Applies to:** El campo de import UI (Phase 03); resolución de links (fase posterior a Phase 04).
 
 ### OD-6 — Import reemplaza la sesión actual (Option A)
 
@@ -86,6 +87,30 @@ See `references/decisions-register-convention.md` for entry format.
 **Why:** El ritmo identifica una canción tanto o más que la armonía; una solución genérica no captura lo que hace reconocible a un tema (p. ej. el doble bombo de "ONE"). "No podemos dar soluciones genéricas, no va a funcionar; tenemos que encontrar la 'signatura rítmica' de las canciones, con la misma estrategia que hacemos con armonía." La fidelidad por-canción es el core de la propuesta de valor de song-import. `groove` requerido (no opcional): si el LLM lo omite, `safeParse` falla y el usuario reintenta — un fallback silencioso a sin-batería sería peor que un error informativo.
 **Source:** Phase 03 OD-7 (Planner scoping); decisión del Pilot 2026-07-03. Descubierto en la verificación manual de parity del step 03.3 (import en vivo de "ONE" con gpt-4o-mini: sin batería en la composición).
 **Applies to:** `src/agent/import-session.ts` (`ImportSessionInputSchema`/`SectionSpecSchema`, mapeo a bloques groove + pista de ritmo, snapshots); `src/agent/import-prompt.ts` (`IMPORT_SYSTEM_PROMPT`); `src/agent/import-agent.ts` (`max_tokens`); Phase 03 step 03.4.
+
+### OD-8 — Win A: control de calidad en Header, solo-edición
+
+**Decision:** La colocación manual de calidad de acorde se hace vía un control en el panel del slot seleccionado en `Header.svelte`, **habilitado solo cuando hay un acorde seleccionado** (solo-edición, NO siempre-visible). No se añade hit-test de arista del Tonnetz (Option B descartada). El Tonnetz sigue creando solo `maj`/`min` (OD-2 intacto).
+**Decided:** song-import Phase 04, 2026-07-10
+**Why:** Reusa el patrón select→edit ya probado (oscilador/preset), cero paradigma de interacción nuevo. Solo-edición porque la calidad no tiene concepto de "intención para el próximo acorde" (los acordes nuevos siempre nacen `maj`/`min` por el click del Tonnetz), así que un control siempre-activo sin target sería UI muerta/confusa.
+**Source:** Phase 04 OD-8 (Planner scoping); inventario 04.1 §(b) (eje solo-edición vs siempre-visible); decisión del Pilot 2026-07-10.
+**Applies to:** `src/ui/Header.svelte` (control de calidad); `src/state/session.ts` (`setChordQuality`).
+
+### OD-9 — Win A: el control expone las cinco calidades
+
+**Decision:** El control de calidad expone las **cinco** calidades (`maj`/`min`/`dim`/`aug`/`pow`) como fuente única de verdad de la calidad de un acorde ya colocado — no solo las tres inalcanzables (`dim`/`aug`/`pow`).
+**Decided:** song-import Phase 04, 2026-07-10
+**Why:** Modelo mental simétrico (permite convertir un `maj` colocado en el Tonnetz a `dim` y de vuelta, sin borrar y recolocar); no remueve ninguna capacidad existente (los clicks del Tonnetz siguen creando `maj`/`min` nuevos exactamente igual). Exponer solo `dim`/`aug`/`pow` dejaría el camino `dim`→`maj` sin salida salvo borrar el slot y re-clickear un triángulo.
+**Source:** Phase 04 OD-9 (Planner scoping); decisión del Pilot 2026-07-10.
+**Applies to:** `src/ui/Header.svelte` (opciones del control de calidad).
+
+### OD-10 — Win B: auto-incluir el scheduler lookahead en el offset (Option A)
+
+**Decision:** `measureLatencyOffsetMs` suma el `_scheduler.latency` del `Cyclist` de Strudel (~100 ms de lookahead, confirmados audibles en el inventario 04.1 §(d)) al offset de latencia medido. La firma se extiende con un parámetro opcional `schedulerLatencySec = 0` (los 4 tests existentes pasan sin editarse); `syncVisualPhaseAfterRunNow` pasa `_scheduler?.latency ?? 0`. El knob manual de calibración conserva su default `0` y queda como fine-tune encima de una base ya correcta. Option B (cambiar el default del knob) descartada por esconder la causa raíz en un valor manual reseteable.
+**Decided:** song-import Phase 04, 2026-07-10
+**Why:** El inventario 04.1 §(d) trazó el bundle pinneado de `@strudel/web@1.0.3` y confirmó con evidencia (`Cyclist` → `superdough` → `.start(when)`) que `latency` sí desplaza hacia adelante el instante audible de cada hap; el JSDoc previo en `phase-anchor.ts` que afirmaba lo contrario era factualmente incorrecto (nunca trazó la fuente). Option A arregla la causa raíz en la medición en vez de esconderla. Restricción de honestidad: Win B **reduce** el offset fijo, no lo elimina — la deriva progresiva (relojes independientes) queda fuera de scope y diferida.
+**Source:** Phase 04 OD-10 (Planner scoping); inventario 04.1 §(d) veredicto con evidencia contra el bundle; decisión del Pilot 2026-07-10.
+**Applies to:** `src/state/phase-anchor.ts` (`measureLatencyOffsetMs` + JSDoc); `src/audio/strudel.ts` (`syncVisualPhaseAfterRunNow`); `src/vite-env.d.ts` (`Cyclist.latency`).
 
 ## Superseded decisions
 
