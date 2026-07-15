@@ -220,3 +220,65 @@ None new. The `tonnetz-scene.ts` `_lastPick` staleness finding from step 04.2 re
 **Next action:** Dev proceeds to step 04.4 (quality gate + Phases 01–04 merge-readiness declaration). Before declaring merge-readiness, the Pilot must explicitly triage two carried-forward items: (1) the `tonnetz-scene.ts` `_lastPick` staleness finding from step 04.2 (fast-follow vs. documented deferred known-issue — either acceptable, but must be a stated decision, not a silent omission), and (2) the still-unwritten OD-10 ADR owed by this phase's "ADR Triggers" section (Pilot-authored per the phase file; step 04.4's Definition-of-Done check on "ADRs in 'ADR Triggers' are committed" cannot pass without it). Neither blocks step 04.3's own approval; both must be resolved, not silently omitted, before the merge-ready statement.
 
 ---
+
+## Step 04.4 — Quality gate + Phases 01–04 merge-readiness declaration
+
+**Date:** 2026-07-15
+**Iteration:** 1 of 1
+
+### Completed
+
+- Ran the full quality gate in order, exactly as specified: `pnpm test`, `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build`. All four passed clean on the first run — no fixes were needed at this step (step 04.3 already resolved the one Prettier formatting issue that arose during its own gate run).
+- Confirmed OD-8, OD-9, and OD-10 are present in `docs/song-import/decisions.md` (`grep -c "^### OD-8\|^### OD-9\|^### OD-10"` → `3`).
+- Drafted `docs/adr/0029-latency-offset-scheduler-lookahead.md` — the ADR owed by this phase's "ADR Triggers" section for OD-10's corrected `Cyclist.latency` semantics. Per that section's explicit instruction ("The Pilot writes it"), this is filed with **Status: Proposed — drafted by Dev, awaiting Pilot ratification**, not `Accepted`. The Dev drafting the content and the Pilot ratifying it are treated as distinct acts here, consistent with methodology Checkpoint #2 ("ADR being created — Pilot reviews the architectural decision").
+- Did **not** resolve the `tonnetz-scene.ts` `_lastPick` staleness finding (carried forward from step 04.2, restated below) — that remains an explicit Pilot triage item, not something to silently patch or silently drop at this step.
+
+### Files touched
+
+- `docs/adr/0029-latency-offset-scheduler-lookahead.md` (created, status `Proposed`)
+- `docs/song-import/handoffs/phase-04-handoff.md` (this entry)
+
+No source files were modified in this step — it is quality-gate execution plus documentation, per the phase file's declared scope for 04.4.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-04-26:** `pnpm test` — **2186 passed, 47 files**, strictly greater than the 2178 Phase 03 baseline (+4 from step 04.2's `setChordQuality` tests, +4 from step 04.3's `measureLatencyOffsetMs` tests).
+- **A-04-27:** `pnpm exec tsc --noEmit` — exits 0, no output.
+- **A-04-28:** `pnpm lint` — `eslint . && prettier --check .` both exit 0 ("All matched files use Prettier code style!").
+- **A-04-29:** `pnpm build` — exits 0 ("✓ built in 3.66s"); only pre-existing, unrelated chunk-size warnings (present before this phase, not introduced by it).
+- **A-04-30:** Handoff (this section) states the exact count (2186) and confirms it exceeds 2178.
+- **A-04-31:** Merge-readiness statement below.
+- **A-04-32:** Confirmed via `grep` (above) — OD-8, OD-9, OD-10 all present as `### OD-N` entries in `docs/song-import/decisions.md`.
+- **A-04-33:** Restated below.
+
+### Test count progression
+
+| Phase | Test count |
+| --- | --- |
+| Phase 01 | 2104 |
+| Phase 02 | 2129 |
+| Phase 03 | 2178 |
+| Phase 04 | **2186** |
+
+### Merge-readiness statement
+
+**Phases 01–04 of the `song-import` initiative are complete. Branch `song-import/phase-02` is ready to merge to `main` pending Pilot approval.**
+
+This statement is **technical**, not final: two items below remain open Pilot-triage decisions that the phase file's own Handoff Note requires be surfaced, not silently resolved by the Dev, before the phase-approval checkpoint closes.
+
+### Win B honesty framing (restated per phase file requirement)
+
+Win B's latency-offset recalibration **reduces** the constant (non-progressive) portion of the see-vs-hear playhead gap by folding Strudel's scheduler-lookahead constant into the auto-measured offset. It does **not** eliminate that offset — hardware output latency remains imperfectly measured on some platforms, and the manual `±200ms` knob remains available as a user fine-tune on top of the corrected baseline. It does **not** address progressive drift: the visual clock (`performance.now()`) and the audio clock (Web Audio's own clock) run independently and will diverge over time regardless of this fix. Re-anchoring the playhead onto the audio clock to eliminate drift is a separate, larger architectural change, explicitly out of scope for this closing-polish phase, and remains deferred to a future initiative.
+
+### Open items requiring explicit Pilot decision before the phase-approval checkpoint closes
+
+1. **`tonnetz-scene.ts` `_lastPick` staleness** (found during step 04.2's manual verification; root cause and fix identified but not applied — see the step 04.2 entry above for full detail). Options: (a) land the one-clause fix (`else { _lastPick = null; }` in `updateTonnetzDynamic`) as a small fast-follow before merge, (b) accept as a documented, deferred known-issue for a future initiative. Either is acceptable; what is not acceptable is merging without a stated decision.
+2. **ADR 0029 ratification.** The ADR is drafted (`docs/adr/0029-latency-offset-scheduler-lookahead.md`, status `Proposed`) with the full technical verdict, the corrected `Cyclist.latency` semantics, the new `measureLatencyOffsetMs` signature, its interaction with the manual calibration knob, and the "reduces, does not eliminate" framing. It needs the Pilot's review and, on approval, a status change to `Accepted` (per this project's ADR convention, the Pilot ratifies architectural decisions — the Dev does not self-approve its own drafted ADR).
+
+Both items are independent of each other and of the merge decision itself — the Pilot may approve the merge while deferring either or both to backlog, as long as that is a recorded choice.
+
+**Planner Review:** Pending.
+
+**Next action:** Planner reviews this step. On APPROVE, this phase's outstanding items (ADR 0029 ratification, `tonnetz-scene.ts` triage, and the merge-to-`main` timing itself) go to the Pilot at the Phase Complete checkpoint (Checkpoint #5) — do not auto-continue past this point without Pilot input, per the methodology's checkpoint structure.
+
+---
