@@ -251,6 +251,37 @@ No source files were modified in this step — it is quality-gate execution plus
 - **A-04-32:** Confirmed via `grep` (above) — OD-8, OD-9, OD-10 all present as `### OD-N` entries in `docs/song-import/decisions.md`.
 - **A-04-33:** Restated below.
 
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+| --- | --- | --- | --- | --- |
+| A-04-26 | `pnpm test` all pass, count strictly > 2178 | n/a | operability | covered (2186) |
+| A-04-27 | `tsc --noEmit` exits 0 | n/a | operability | covered |
+| A-04-28 | `pnpm lint` exits 0 | n/a | operability | covered |
+| A-04-29 | `pnpm build` exits 0 | n/a | operability | covered |
+| A-04-30 | Handoff states exact count, confirms it exceeds 2178 | this section | manual | covered |
+| A-04-31 | Merge-readiness statement present, correct wording | this section | manual | covered |
+| A-04-32 | OD-8/OD-9/OD-10 confirmed present in Register | `docs/song-import/decisions.md` (grep) | proxy:static-analysis | covered |
+| A-04-33 | "Reduced, not eliminated" / drift-deferred framing restated | this section | manual | covered |
+
+### Deliverables summary — both Wins (consolidated, per phase file's Handoff Note)
+
+**Win A (manual chord-quality placement, step 04.2):**
+
+- `src/state/session.ts` — `setChordQuality(index, qual)`.
+- `src/ui/Header.svelte` — edit-only quality `<select>` control (OD-8), all five qualities (OD-9).
+- `src/i18n/types.ts` + `src/i18n/locales/{en,es,pt,zh}.ts` — 8 new keys each.
+- `tests/session.test.ts` — 4 new tests (`describe('setChordQuality', ...)`).
+
+**Win B (latency offset recalibration, step 04.3):**
+
+- `src/vite-env.d.ts` — `Cyclist.latency: number` declared.
+- `src/state/phase-anchor.ts` — `measureLatencyOffsetMs(ctx, schedulerLatencySec = 0)`; corrected JSDoc.
+- `src/audio/strudel.ts` — `syncVisualPhaseAfterRunNow` passes live `_scheduler?.latency ?? 0`.
+- `tests/phase-anchor.test.ts` — 4 new tests; the 4 pre-existing tests are byte-identical, unmodified.
+
+**Both Wins together:** 8 source/test files modified, 0 new files among them (no new npm dependencies, no new component files — matches the phase file's "No new npm dependencies" constraint), +8 tests (2178 → 2186). Plus this phase's documentation deliverables: `docs/song-import/inventories/phase-04-inventory.md`, `docs/song-import/handoffs/phase-04-handoff.md` (this file), three Planner review files (`docs/song-import/reviews/phase-04-step-04.{2,3,4}-review-1.md`), and `docs/adr/0029-latency-offset-scheduler-lookahead.md` (status `Proposed`).
+
 ### Test count progression
 
 | Phase | Test count |
