@@ -50,6 +50,14 @@ declare module '@strudel/web' {
     pause(): void;
     started: boolean;
     cps: number;
+    /**
+     * Scheduler lookahead in seconds (default 0.1 / 100 ms). Shifts every
+     * hap's Web-Audio-scheduled trigger time forward by this amount — it is
+     * audible, not just an internal buffering detail (song-import Phase 04
+     * inventory §(d), traced against the pinned bundle's Cyclist →
+     * superdough → `.start(when)` path).
+     */
+    latency: number;
   }
 
   /**

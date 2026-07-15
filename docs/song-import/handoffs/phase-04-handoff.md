@@ -155,3 +155,68 @@ OD-8 and OD-9 are now **implemented** (this step). OD-10 remains open for step 0
 **Next action:** Dev proceeds to step 04.3 (Win B: latency offset recalibration) — Win B does not touch `tonnetz-scene.ts` and is unaffected by the finding above. Before step 04.4 (the Phases 01–04 merge-readiness declaration), **the Pilot must explicitly triage the `tonnetz-scene.ts` `_lastPick` staleness finding** — Planner recommends a small, scoped fast-follow (a single `else { _lastPick = null; }` clause) landed as step 04.3b or a 04.4 addendum, since it touches the spirit of OD-2 (no Tonnetz highlight for a non-triadic quality) and is newly reachable specifically because of this step's own new capability; accepting it instead as a documented, deferred known-issue for a future initiative is also an acceptable Pilot call — but it must be a stated decision, not a silent omission from the merge-ready statement.
 
 ---
+
+## Step 04.3 — Win B: latency offset recalibration
+
+**Date:** 2026-07-15
+**Iteration:** 1 of 1
+
+### Completed
+
+- OD-10 resolved by the Pilot as **Option A** (`docs(scope)` commit `988c665`; recorded in `docs/song-import/decisions.md`): auto-include the Strudel scheduler's lookahead constant in the auto-measured offset; manual knob default stays `0` as a pure fine-tune.
+- `src/vite-env.d.ts` — added `latency: number;` to the `Cyclist` interface, with a doc comment recording the inventory's traced evidence (Cyclist → superdough → `.start(when)`) for why this property is audible, not just an internal scheduling-buffer detail.
+- `src/state/phase-anchor.ts` — extended `measureLatencyOffsetMs(ctx, schedulerLatencySec = 0)`: now returns `((outputLatency||0) + (baseLatency||0) + schedulerLatencySec) * 1000`. The default keeps all four pre-existing call sites' behavior byte-identical. Corrected the JSDoc on both `measureLatencyOffsetMs` and `anchorVisualPhase` that previously argued (incorrectly, per the inventory's traced verdict) that including the lookahead would "over-compensate and invert the bug" — replaced with the verified rationale and an explicit note that the prior claim was never traced against the actual scheduling source.
+- `src/audio/strudel.ts` — `syncVisualPhaseAfterRunNow` now passes `_scheduler?.latency ?? 0` as the function's new second argument, summed with the hardware offset and the manual calibration offset exactly as before.
+- `tests/phase-anchor.test.ts` — the four pre-existing tests are byte-identical, unmodified. Added 4 new tests: default-param behavior reproduces the old single-arg result; a non-zero `schedulerLatencySec` adds the exact expected ms; the delta between with/without lookahead is exactly the lookahead term; explicit `0` behaves identically to the omitted default.
+- Ran the full quality gate: `pnpm exec vitest run tests/phase-anchor.test.ts` — 8/8 passed (4 original + 4 new); `pnpm test` — 2186/2186 passed (47 files, +4 over the step-04.2 baseline of 2182); `pnpm exec tsc --noEmit` — clean; `pnpm lint` — one Prettier formatting issue in the new test block, auto-fixed with `prettier --write`, re-verified clean; `pnpm build` — exit 0 (pre-existing chunk-size warnings only, unrelated to this step).
+- Manually smoke-tested in the same real browser session used for step 04.2 (Playwright + cached Chromium against the still-running `pnpm dev` on port 5174 — Vite HMR picked up the `phase-anchor.ts`/`strudel.ts`/`vite-env.d.ts` changes live). Placed a chord, pressed Harmony Play, then switched to Rhythm view and pressed Rhythm Play — both play/hush cycles completed with the new `_scheduler?.latency` read live in the audio-init path, transport UI and playhead rendering looked normal (screenshot `11-step04.3-rhythm-playing.png`), and **zero console errors**.
+- **A-04-23 (the subjective perceptual criterion) is explicitly NOT self-graded here**, per the phase file's own instruction ("This is subjective and Pilot-adjudicated — the Dev records what was observed, not a self-graded pass"). What I can state factually: the mechanism is verified correct by unit test (the offset used to anchor the visual playhead is now larger by exactly the scheduler's `~100ms` lookahead value whenever a real `Cyclist` is present), and manually the app plays audio and renders the playhead with no functional regression. I did not attempt to judge, by ear, whether the constant see-vs-hear gap feels smaller — that requires the Pilot's own listening comparison against pre-phase `main`, on their own hardware, which I have no basis to substitute for.
+
+### Files touched
+
+- `src/vite-env.d.ts` (added `Cyclist.latency`)
+- `src/state/phase-anchor.ts` (`measureLatencyOffsetMs` signature + JSDoc correction)
+- `src/audio/strudel.ts` (`syncVisualPhaseAfterRunNow` passes live scheduler latency)
+- `tests/phase-anchor.test.ts` (4 new tests, 4 pre-existing untouched)
+
+No playhead-consumer render file (`pentagrama-scene.ts`, `ProgressionStrip.svelte`, `rhythm-scene.ts`, `tonnetz-scene.ts`) appears in this step's diff — confirmed by `git diff --stat`.
+
+Commit: pending (to be made immediately after this handoff entry, per convention — code + handoff in one commit) — `fix(audio): Phase 04 step 04.3 — recalibrate fixed latency offset`.
+
+### Validation evidence (per Acceptance ID)
+
+- **A-04-17:** `grep -n "latency: number" src/vite-env.d.ts` — present on the `Cyclist` interface.
+- **A-04-18:** `pnpm exec vitest run tests/phase-anchor.test.ts` — the four pre-existing tests (`sums outputLatency and baseLatency`, `returns 0 when both properties are zero`, `guards absent properties`, `handles output-latency-only scenario`) pass **unmodified** — confirmed via `git diff` showing zero changes to those four `it(...)` blocks.
+- **A-04-19:** Same test run — new test `'a non-zero schedulerLatencySec changes the result by exactly that amount, in ms'` asserts `withLookahead - withoutLookahead` is `toBeCloseTo(100, 10)` for a `0.1`s input, i.e. exactly the lookahead term in ms.
+- **A-04-20:** `grep -n "_scheduler?.latency" src/audio/strudel.ts` — `syncVisualPhaseAfterRunNow` passes it as `measureLatencyOffsetMs(getAudioContext(), _scheduler?.latency ?? 0)`.
+- **A-04-21:** Read `phase-anchor.ts` — JSDoc on `anchorVisualPhase` and `measureLatencyOffsetMs` now states the lookahead **is** included and audible, with the corrected rationale; no remaining contradiction with the implemented behavior.
+- **A-04-22:** `git diff --stat` — only `src/vite-env.d.ts`, `src/state/phase-anchor.ts`, `src/audio/strudel.ts`, `tests/phase-anchor.test.ts` changed; none of the four playhead-consumer render files appear.
+- **A-04-23 (manual, Pilot-adjudicated):** See "Completed" above — mechanism verified, functional smoke-test passed with zero console errors; perceptual judgment explicitly deferred to the Pilot, not self-graded.
+- **A-04-24:** `pnpm test` — 2186 passed, 47 files (2182 step-04.2 baseline + 4 new).
+- **A-04-25:** `pnpm exec tsc --noEmit` — exits 0, no output.
+
+### Acceptance Coverage Table
+
+| Acceptance ID | Required behavior | Test file | Test type | Gap status |
+| --- | --- | --- | --- | --- |
+| A-04-17 | `Cyclist.latency` declared | `src/vite-env.d.ts` (static read) | proxy:static-analysis | covered |
+| A-04-18 | Four pre-existing tests pass unmodified | `tests/phase-anchor.test.ts` | unit | covered |
+| A-04-19 | New test: lookahead term included, exact ms delta | `tests/phase-anchor.test.ts` | unit | covered |
+| A-04-20 | `syncVisualPhaseAfterRunNow` passes live scheduler latency | `src/audio/strudel.ts` (static read) | proxy:static-analysis | covered |
+| A-04-21 | JSDoc no longer contradicts implemented behavior | `src/state/phase-anchor.ts` (static read) | proxy:static-analysis | covered |
+| A-04-22 | No playhead-consumer render file touched | `git diff --stat` | proxy:static-analysis | covered |
+| A-04-23 | Manual: perceptibly smaller constant offset | manual (Pilot-adjudicated) | manual | **mechanism verified; perceptual judgment explicitly deferred to Pilot, not self-graded** |
+| A-04-24 | All tests pass, count ≥ 2178 + Win A's tests | `pnpm test` | operability | covered (2186) |
+| A-04-25 | `tsc --noEmit` clean | n/a | operability | covered |
+
+### Key findings for Pilot/Planner review
+
+None new. The `tonnetz-scene.ts` `_lastPick` staleness finding from step 04.2 remains open for Pilot triage before step 04.4's merge-readiness declaration (see that step's entry above) — Win B did not touch that file and does not change the finding's status.
+
+**Honesty framing restated per the phase file's explicit requirement:** Win B **reduces** the constant (non-progressive) see-vs-hear playhead offset by folding in the scheduler's ~100ms lookahead term; it does **not** eliminate the offset, and does **not** address progressive drift between the visual (`performance.now()`) and audio (Web Audio) clocks — that remains a separate, deferred architectural concern, unaddressed by this step.
+
+**Planner Review:** Pending.
+
+**Next action:** Planner reviews this step; on APPROVE, Dev proceeds to step 04.4 (quality gate + Phases 01–04 merge-readiness declaration), which must include the Pilot's explicit triage decision on the `tonnetz-scene.ts` finding.
+
+---
