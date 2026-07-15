@@ -40,12 +40,14 @@
     setChordMode,
     setChordOscillator,
     setChordPreset,
+    setChordQuality,
     addEuclidLayer,
     addEmptyLayer,
     previewEuclid,
     hushAll,
     isNoteSlot,
   } from '../state/session.js';
+  import type { Quality } from '../core/theory/chords.js';
   import StepEditor from './StepEditor.svelte';
   import { bjorklund, rotate } from '../core/rhythm/euclid.js';
   import type { RhythmLayer } from '../core/rhythm/layers.js';
@@ -345,6 +347,24 @@
         setChordPreset($selectedSlotIdxStore, undefined);
       }
     }
+  }
+
+  // ── Chord quality control (Phase 04 song-import step 04.2 — OD-8/OD-9) ────
+  // Edit-only (OD-8): enabled only when a chord slot is selected. Quality has
+  // no "intent for the next chord" concept — new chords are always created
+  // maj/min via a Tonnetz click (OD-2) — so there is no sensible default to
+  // preview when nothing is selected, unlike the always-visible sound control.
+  // Exposes all five qualities (OD-9) as the single source of truth for an
+  // already-placed chord's quality; does not affect Tonnetz triangle logic.
+  $: selQual =
+    selIsChord && selSlot !== undefined && !('isRest' in selSlot) && !isNoteSlot(selSlot)
+      ? selSlot.qual
+      : undefined;
+
+  function handleQualityChange(e: Event): void {
+    if ($selectedSlotIdxStore === null || !selIsChord) return;
+    const val = (e.currentTarget as HTMLSelectElement).value as Quality;
+    setChordQuality($selectedSlotIdxStore, val);
   }
 </script>
 
@@ -829,6 +849,40 @@
                 <option value="guitar">{$t('header.harmony.presetGuitar')}</option>
                 <option value="synth-bass">{$t('header.harmony.presetSynthBass')}</option>
               </optgroup>
+            </select>
+          </label>
+        </div>
+
+        <!--
+        Chord-quality control (song-import Phase 04 step 04.2 — OD-8/OD-9).
+        Edit-only (OD-8): disabled when no chord slot is selected — quality has
+        no "intent for the next chord" concept (new chords are always created
+        maj/min via a Tonnetz click, OD-2). Exposes all five qualities (OD-9)
+        as the single source of truth for an already-placed chord's quality.
+        Quality tokens (maj/min/dim/aug/pow) are [VERBATIM] in the value
+        attribute (OQ-6/ADR 0017); display labels + glyph suffixes come from
+        the i18n dictionary / chordLabel's existing glyph convention.
+      -->
+        <div
+          class="sound-ctl quality-ctl"
+          class:sound-ctl--active={selIsChord}
+          title={selIsChord
+            ? $t('header.harmony.qualityEditTip')
+            : $t('header.harmony.qualityDisabledTip')}
+        >
+          <label class="sound-field" title={$t('header.harmony.qualityLabel')}>
+            <span>{$t('header.harmony.qualityLabel')}</span>
+            <select
+              id="qualitySelect"
+              value={selQual ?? ''}
+              disabled={!selIsChord}
+              on:change={handleQualityChange}
+            >
+              <option value="maj">{$t('header.harmony.qualityMaj')}</option>
+              <option value="min">{$t('header.harmony.qualityMin')} (m)</option>
+              <option value="dim">{$t('header.harmony.qualityDim')} (°)</option>
+              <option value="aug">{$t('header.harmony.qualityAug')} (+)</option>
+              <option value="pow">{$t('header.harmony.qualityPow')} (5)</option>
             </select>
           </label>
         </div>
