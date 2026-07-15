@@ -181,7 +181,7 @@ OD-8 and OD-9 are now **implemented** (this step). OD-10 remains open for step 0
 
 No playhead-consumer render file (`pentagrama-scene.ts`, `ProgressionStrip.svelte`, `rhythm-scene.ts`, `tonnetz-scene.ts`) appears in this step's diff — confirmed by `git diff --stat`.
 
-Commit: pending (to be made immediately after this handoff entry, per convention — code + handoff in one commit) — `fix(audio): Phase 04 step 04.3 — recalibrate fixed latency offset`.
+Commit: `e605b80` — `fix(audio): Phase 04 step 04.3 — recalibrate fixed latency offset`.
 
 ### Validation evidence (per Acceptance ID)
 
@@ -215,8 +215,8 @@ None new. The `tonnetz-scene.ts` `_lastPick` staleness finding from step 04.2 re
 
 **Honesty framing restated per the phase file's explicit requirement:** Win B **reduces** the constant (non-progressive) see-vs-hear playhead offset by folding in the scheduler's ~100ms lookahead term; it does **not** eliminate the offset, and does **not** address progressive drift between the visual (`performance.now()`) and audio (Web Audio) clocks — that remains a separate, deferred architectural concern, unaddressed by this step.
 
-**Planner Review:** Pending.
+**Planner Review:** APPROVED on 2026-07-15. Iteration: 1 of 5. See `docs/song-import/reviews/phase-04-step-04.3-review-1.md` for the full checklist walkthrough and Acceptance Coverage Table re-verification. Summary: commit scope is clean (the four-file touch-list matches exactly, confirmed by an identifier-grep across `src/` for the new symbols plus a Glob mtime-ordering cross-check), commit message format is correct, the Acceptance Coverage Table is complete and honest for A-04-17 through A-04-25 (A-04-23 correctly marked mechanism-verified/perceptual-deferred rather than a flat "covered"), the four pre-existing `phase-anchor.test.ts` tests are verified unmodified against the pre-existing inventory's verbatim quotes of those call sites, no playhead-consumer render file is touched, the JSDoc correction genuinely reconciles the prior incorrect claim with cited evidence (not a silent override), OD-10 (Option A) is applied exactly as the Pilot resolved it with no improvisation toward Option B/C, and the "reduces, not eliminates" honesty framing is stated plainly with no overselling anywhere in the handoff.
 
-**Next action:** Planner reviews this step; on APPROVE, Dev proceeds to step 04.4 (quality gate + Phases 01–04 merge-readiness declaration), which must include the Pilot's explicit triage decision on the `tonnetz-scene.ts` finding.
+**Next action:** Dev proceeds to step 04.4 (quality gate + Phases 01–04 merge-readiness declaration). Before declaring merge-readiness, the Pilot must explicitly triage two carried-forward items: (1) the `tonnetz-scene.ts` `_lastPick` staleness finding from step 04.2 (fast-follow vs. documented deferred known-issue — either acceptable, but must be a stated decision, not a silent omission), and (2) the still-unwritten OD-10 ADR owed by this phase's "ADR Triggers" section (Pilot-authored per the phase file; step 04.4's Definition-of-Done check on "ADRs in 'ADR Triggers' are committed" cannot pass without it). Neither blocks step 04.3's own approval; both must be resolved, not silently omitted, before the merge-ready statement.
 
 ---
