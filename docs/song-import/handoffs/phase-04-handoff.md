@@ -308,8 +308,32 @@ Win B's latency-offset recalibration **reduces** the constant (non-progressive) 
 
 Both items are independent of each other and of the merge decision itself — the Pilot may approve the merge while deferring either or both to backlog, as long as that is a recorded choice.
 
-**Planner Review:** Pending.
+**Planner Review:** APPROVED (see `docs/song-import/reviews/phase-04-step-04.4-review-1.md`).
 
 **Next action:** Planner reviews this step. On APPROVE, this phase's outstanding items (ADR 0029 ratification, `tonnetz-scene.ts` triage, and the merge-to-`main` timing itself) go to the Pilot at the Phase Complete checkpoint (Checkpoint #5) — do not auto-continue past this point without Pilot input, per the methodology's checkpoint structure.
+
+---
+
+## Checkpoint #5 — Pilot resolution (2026-07-16)
+
+The Pilot resolved all three open items in one pass: "dar por terminada la iniciativa... tener un codebase limpio y todas las documentaciones completas y actualizadas."
+
+1. **ADR 0029 ratified.** `docs/adr/0029-latency-offset-scheduler-lookahead.md` status changed `Proposed` → `Accepted — ratified by Pilot 2026-07-16`. No changes to its technical content.
+
+2. **`tonnetz-scene.ts` `_lastPick` staleness — fixed as a fast-follow, not deferred.** Per OD-11 (`docs/song-import/decisions.md`): added `else { _lastPick = null; }` to the `if (sel !== null)` block in `updateTonnetzDynamic` (`src/render/tonnetz-scene.ts`). Manually verified via Playwright (dev server, cached Chromium): placed a C major chord (Tonnetz triangle + R/L/P highlight visible, screenshot `20-fix-maj-placed-triangle-lit.png`), selected the slot in the Pentagrama subview, changed its quality to `pow` via the Header quality control, switched back to the Tonnetz subview — the sustained highlight was correctly **absent** (screenshot `21-fix-quality-pow-tonnetz-view.png`; before the fix, the stale C-major triangle + R/L/P labels would have remained). Zero console errors across the run. This is a render-layer file (PIXI/Canvas 2D, no DOM-free unit test exists for it, consistent with the project's engine/render split) — parity is established via this manual verification, not a unit test, per the project's Prototype-parity checklist addition for render/UI changes.
+
+3. **Merge timing: now.** `song-import/phase-02` (carrying Phases 01–04, 2186 tests + the OD-11 fix) merges to `main` via a merge commit (matching the `note-placement`/`authentic-groove` precedent — no squash, no fast-forward, branch history preserved).
+
+**Files touched for Checkpoint #5 closing:**
+
+- `docs/adr/0029-latency-offset-scheduler-lookahead.md` (Status → Accepted)
+- `src/render/tonnetz-scene.ts` (`_lastPick` fast-follow fix)
+- `docs/song-import/decisions.md` (OD-11 + Checkpoint #5 closing entry — Pilot-authored per this resolution)
+- `docs/song-import/handoffs/phase-04-handoff.md` (this section)
+- `CLAUDE.md` (song-import moved from Current initiative to Previous initiatives)
+
+**Test count after the OD-11 fix:** re-run at the closing quality gate below.
+
+**Status: song-import initiative (Phases 01–04) CLOSED. Checkpoint #5 satisfied. Proceeding to merge.**
 
 ---

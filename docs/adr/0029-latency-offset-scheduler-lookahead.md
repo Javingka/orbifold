@@ -4,10 +4,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # ADR 0029 — Corrected `Cyclist.latency` semantics; fold scheduler lookahead into the auto-measured latency offset
 
-- **Status:** Proposed — drafted by Dev per the Phase 04 "ADR Triggers" section ("The Pilot writes it"); awaiting Pilot ratification.
+- **Status:** Accepted — ratified by Pilot 2026-07-16.
 - **Date:** 2026-07-15
 - **Initiative / Phase:** song-import / Phase 04 (step 04.3, "Win B")
-- **Deciders:** Pilot (Javier) — ratification pending.
+- **Deciders:** Pilot (Javier).
 
 ## Context
 

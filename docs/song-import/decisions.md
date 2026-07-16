@@ -112,6 +112,22 @@ See `references/decisions-register-convention.md` for entry format.
 **Source:** Phase 04 OD-10 (Planner scoping); inventario 04.1 §(d) veredicto con evidencia contra el bundle; decisión del Pilot 2026-07-10.
 **Applies to:** `src/state/phase-anchor.ts` (`measureLatencyOffsetMs` + JSDoc); `src/audio/strudel.ts` (`syncVisualPhaseAfterRunNow`); `src/vite-env.d.ts` (`Cyclist.latency`).
 
+### OD-11 — Checkpoint #5: `_lastPick` staleness fix aplicado como fast-follow (no diferido)
+
+**Decision:** El bug hallado en la verificación manual de step 04.2 (`src/render/tonnetz-scene.ts`, `updateTonnetzDynamic`: el bloque `if (sel !== null) { _lastPick = {...} }` no tenía `else`, así que `_lastPick` conservaba su valor previo cuando la calidad de un acorde cambiaba a una sin triángulo en el Tonnetz — highlight sostenido obsoleto) se corrige **ahora**, antes del merge, con la cláusula de un línea `else { _lastPick = null; }`. No se difiere como known-issue.
+**Decided:** song-import Checkpoint #5, 2026-07-16
+**Why:** Fix de una línea, causa raíz ya identificada con precisión (root-caused durante step 04.2), sin ambigüedad de diseño ni riesgo de regresión — corregirlo ahora deja el codebase limpio para el merge en vez de cargar un known-issue documentado que de todos modos habría que resolver eventualmente. Verificado manualmente vía Playwright: acorde C mayor colocado (triángulo + R/L/P highlight visibles) → calidad cambiada a `pow` → highlight correctamente ausente (antes del fix habría quedado el triángulo de C mayor obsoleto). Cero errores de consola.
+**Source:** Hallazgo de step 04.2 (handoffs/phase-04-handoff.md); decisión del Pilot 2026-07-16 ("codebase limpio").
+**Applies to:** `src/render/tonnetz-scene.ts` (`updateTonnetzDynamic`).
+
+### Checkpoint #5 — song-import (Phases 01–04) cerrado y mergeado a `main`
+
+**Decision:** El ADR 0029 (OD-10, scheduler lookahead) queda **ratificado** (`Status: Accepted`). La iniciativa `song-import` (Phases 01–04, rama `song-import/phase-02`) se da por **completa y se mergea a `main`** mediante un merge commit (no squash, no fast-forward), preservando el historial de fases — mismo patrón que `note-placement`/`authentic-groove`. OD-5 (oEmbed para links de YouTube) permanece diferido a una iniciativa futura, sin cambios.
+**Decided:** song-import Checkpoint #5, 2026-07-16
+**Why:** Todos los steps de las 4 fases pasaron review del Planner; los tres pendientes de Checkpoint #5 (ratificación del ADR 0029, triage de `_lastPick`, timing de merge) quedan resueltos en esta misma sesión de Pilot review.
+**Source:** Decisión del Pilot 2026-07-16 ("dar por terminada la iniciativa... codebase limpio... documentación completa y actualizada").
+**Applies to:** Cierre de la iniciativa `song-import`; `CLAUDE.md` (Current initiative → Previous initiatives).
+
 ## Superseded decisions
 
 (empty)
