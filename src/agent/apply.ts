@@ -26,8 +26,10 @@ import {
   renameBlock,
   addBlockAsNewTrack,
   setLastRecipeApplied,
+  applyLoadedSession,
 } from '../state/session.js';
 import type { RhythmSpec, HarmonySpec, SaveAsBlockSpec } from './schema.js';
+import type { SavedSession } from '../lib/persistence.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -56,8 +58,8 @@ const SK_SOUNDS: readonly string[] = [
   'hand',
 ];
 
-/** Valid quality names. */
-const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug'];
+/** Valid quality names. song-import Phase 01: 'pow' added for power chord quality. */
+const SK_QUAL: readonly string[] = ['maj', 'min', 'dim', 'aug', 'pow'];
 
 // ── applyRhythmSpec ────────────────────────────────────────────────────────
 
@@ -377,4 +379,34 @@ export function applySampleMap(map: Partial<Record<string, string>>): void {
 /** Convenience accessor for reading store state in apply functions (pure). */
 export function getSessionState() {
   return get(sessionStore);
+}
+
+// ── applyImportSession ─────────────────────────────────────────────────────
+
+/**
+ * Load an importSession output into the live session store.
+ *
+ * Accepts the SavedSession produced by importSession() and delegates to
+ * applyLoadedSession() from src/state/session.ts, which atomically replaces
+ * the current session (harmony, rhythm, BPM, composition blocks + tracks).
+ *
+ * This is the store-coupled half of the importSession pipeline. The pure
+ * translation half (chart → SavedSession) lives in import-session.ts.
+ *
+ * Call sequence (song-import Phase 03):
+ *   importSession(input)       → SavedSession (pure, no store)
+ *   applyImportSession(saved)  → void (store update, no audio)
+ *
+ * OD-6 (Option A — replace): Import fully replaces the current session. This
+ * mirrors the behavior of the Persistence Panel's "cargar" button, which also
+ * calls applyLoadedSession. The UI must warn the user before calling this
+ * function ("Esta acción reemplazará tu sesión actual"). See ADR 0027.
+ *
+ * Audio is NOT started — the user presses Play after import. Per guardrails:
+ * audio starts only after a user gesture.
+ *
+ * @param saved - The SavedSession produced by importSession().
+ */
+export function applyImportSession(saved: SavedSession): void {
+  applyLoadedSession(saved);
 }

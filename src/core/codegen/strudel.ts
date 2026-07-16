@@ -73,6 +73,11 @@ export function tempoWrap(code: string, _bpm: number): string {
  * `chordMode === 'arp'`   → space-separated (sequential arpeggio).
  * `gain` defaults to `0.6` when `null`.
  *
+ * song-import Phase 01 (OD-1 resolution): 'pow' quality is handled automatically
+ * by the existing notes.join(',') path. chordVoicing(rootPc, 'pow', octave) returns
+ * a 2-element array [root, fifth], so chord mode → note("E2,B2") — two simultaneous
+ * notes. This is byte-identical to the non-pow path (same join pattern, same chain).
+ *
  * Ported from prototype lines 758–763 (with explicit params per OD-1/OD-6).
  */
 export function chordToStrudel(

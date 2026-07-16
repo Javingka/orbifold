@@ -106,7 +106,9 @@ function syncVisualPhaseAfterRunNow(queued: boolean): void {
     // suspenders; in practice syncVisualPhaseAfterRunNow is only reachable after
     // audioReady = true, so getAudioContext() returns the live instance).
     try {
-      const offsetMs = measureLatencyOffsetMs(getAudioContext()) + getCalibrationOffsetMs();
+      const offsetMs =
+        measureLatencyOffsetMs(getAudioContext(), _scheduler?.latency ?? 0) +
+        getCalibrationOffsetMs();
       anchorVisualPhase(offsetMs);
     } catch {
       anchorVisualPhase(0);

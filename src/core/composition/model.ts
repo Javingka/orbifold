@@ -7,6 +7,8 @@
 //
 // Phase 01 step 01.3 (editable-composition): Block extended with optional
 // `snapshot?` field per ADR 0020 D2.
+// song-import Phase 01 step 01.3: Block extended with optional `label?` field
+// for section markers (Intro, Verse, Chorus, etc.) set by song import tooling.
 
 import type { BlockSnapshot } from './snapshot.js';
 
@@ -32,6 +34,14 @@ export interface Block {
    * ADR 0020 D2.
    */
   snapshot?: BlockSnapshot;
+  /**
+   * Optional section label for this block (e.g., "Verse", "Chorus", "Bridge").
+   * Used to annotate blocks created during song import or manual organization.
+   * Ephemeral in the sense that it carries no musical semantics — it is purely
+   * organizational metadata. Persisted in the session schema (additive field).
+   * Introduced in song-import Phase 01.
+   */
+  label?: string;
 }
 
 /**

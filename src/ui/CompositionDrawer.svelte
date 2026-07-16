@@ -872,6 +872,15 @@
                       <span class="bn">{b.name}</span>
 
                       <!--
+                        Section label — song-import Phase 01.
+                        Rendered only when block.label is a non-empty string.
+                        No editing UI in Phase 01 — read-only display.
+                      -->
+                      {#if b.label}
+                        <span class="bl">{b.label}</span>
+                      {/if}
+
+                      <!--
                         Bar count input. Prototype lines 2013, 2017–2019.
                         handleBarsInput: live resize preview.
                         handleBarsChange: commits via setBlockBars.

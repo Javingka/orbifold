@@ -41,6 +41,7 @@ import {
   setBpm,
   requeueLive,
   setChordBars,
+  setChordQuality,
   clampBars,
   barsLabel,
   reorderSlot,
@@ -428,6 +429,75 @@ describe('setChordBars', () => {
   });
 });
 
+// ── setChordQuality — song-import Phase 04 step 04.2 (A-04-08..A-04-10) ────
+// OD-8/OD-9: manual chord-quality placement (dim/aug/pow previously unreachable
+// by any user action — only the agent/import path could produce them).
+
+describe('setChordQuality', () => {
+  it('updates progression[index].qual on a valid chord slot', () => {
+    sessionStore.set({
+      ...DEFAULT_SESSION_STATE,
+      harmony: {
+        ...DEFAULT_SESSION_STATE.harmony,
+        progression: [{ rootPc: 4, qual: 'maj', gain: 0.6 }],
+      },
+    });
+    setChordQuality(0, 'pow');
+    const after = get(sessionStore);
+    const slot = after.harmony.progression[0] as Chord;
+    expect(slot.qual).toBe('pow');
+    // Only qual changes — other fields untouched.
+    expect(slot.rootPc).toBe(4);
+    expect(slot.gain).toBe(0.6);
+  });
+
+  it('is a no-op for an out-of-range index', () => {
+    const initial: SessionState = {
+      ...DEFAULT_SESSION_STATE,
+      harmony: {
+        ...DEFAULT_SESSION_STATE.harmony,
+        progression: [{ rootPc: 0, qual: 'maj', gain: 0.6 }],
+      },
+    };
+    sessionStore.set(initial);
+    const before = get(sessionStore);
+    setChordQuality(1, 'dim');
+    setChordQuality(-1, 'aug');
+    const after = get(sessionStore);
+    expect(after.harmony.progression).toEqual(before.harmony.progression);
+  });
+
+  it('is a no-op for a rest slot', () => {
+    const initial: SessionState = {
+      ...DEFAULT_SESSION_STATE,
+      harmony: {
+        ...DEFAULT_SESSION_STATE.harmony,
+        progression: [{ isRest: true, bars: 1 }],
+      },
+    };
+    sessionStore.set(initial);
+    const before = get(sessionStore);
+    setChordQuality(0, 'aug');
+    const after = get(sessionStore);
+    expect(after.harmony.progression).toEqual(before.harmony.progression);
+  });
+
+  it('is a no-op for a NoteSlot', () => {
+    const initial: SessionState = {
+      ...DEFAULT_SESSION_STATE,
+      harmony: {
+        ...DEFAULT_SESSION_STATE.harmony,
+        progression: [{ isNote: true, rootPc: 7, octaveOffset: 0 }],
+      },
+    };
+    sessionStore.set(initial);
+    const before = get(sessionStore);
+    setChordQuality(0, 'dim');
+    const after = get(sessionStore);
+    expect(after.harmony.progression).toEqual(before.harmony.progression);
+  });
+});
+
 // ── clampBars — Phase 03 granularity 0.25 (A-03-06) ─────────────────────────
 // Acceptance criterion A-03-06: unit tests for the new 0.25-step clamping.
 
@@ -500,7 +570,7 @@ describe('barsLabel — quarter fractions (A-03-07)', () => {
 describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
   it('safeParse succeeds for a chord with bars: 0.5 (old minimum)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -518,7 +588,7 @@ describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
 
   it('safeParse succeeds for a chord with bars: 0.25 (new minimum)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',
@@ -536,7 +606,7 @@ describe('SavedChordSchema backward-compat — bars: 0.5 (A-03-08)', () => {
 
   it('safeParse succeeds for a chord without bars (backward-compat for old sessions)', () => {
     const result = SavedSessionSchema.safeParse({
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'harmony',
       chordMode: 'chord',

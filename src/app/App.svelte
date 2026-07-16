@@ -21,6 +21,7 @@
   import CompositionDrawer from '../ui/CompositionDrawer.svelte';
   import AgentPanel from '../ui/AgentPanel.svelte';
   import PersistencePanel from '../ui/PersistencePanel.svelte';
+  import ImportSong from '../ui/ImportSong.svelte';
   import Hud from '../ui/Hud.svelte';
   import Legend from '../ui/Legend.svelte';
   import Tooltip from '../ui/Tooltip.svelte';
@@ -649,6 +650,12 @@
   Phase 07 step 07.4.
 -->
 <PersistencePanel />
+
+<!--
+  Import song panel: tab + slide-in panel for LLM-based song import.
+  song-import Phase 03 step 03.3.
+-->
+<ImportSong />
 
 <!--
   Global tooltip: tracks [data-tip] elements across the whole document.

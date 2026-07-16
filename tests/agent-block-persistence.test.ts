@@ -70,10 +70,11 @@ beforeEach(() => {
 // ── SESSION_SCHEMA_VERSION confirmation ───────────────────────────────────
 
 // ADR 0021 D2: SESSION_SCHEMA_VERSION was 5 when agent-block persistence was added.
-// note-placement Phase 01 step 01.2 bumped it to 6 (NoteSlot variant added to progression union).
+// note-placement Phase 01 step 01.2 bumped it to 6 (NoteSlot variant).
+// song-import Phase 01 step 01.2 bumped it to 7 (pow quality added to SK_QUAL).
 describe('SESSION_SCHEMA_VERSION — ADR 0021 D2', () => {
-  it('SESSION_SCHEMA_VERSION is 6 (bumped from 5 in note-placement Phase 01 — NoteSlot added)', () => {
-    expect(SESSION_SCHEMA_VERSION).toBe(6);
+  it('SESSION_SCHEMA_VERSION is 7 (bumped from 6 in song-import Phase 01 — pow quality added)', () => {
+    expect(SESSION_SCHEMA_VERSION).toBe(7);
   });
 });
 
@@ -292,11 +293,11 @@ describe('Regression guard: session with no agent-created blocks (no saveAsBlock
     expect(restored.composition.blocks[0].snapshot).toBeUndefined();
   });
 
-  it('regression: session with blocks that DO have a snapshot still validates at version 6', () => {
+  it('regression: session with blocks that DO have a snapshot still validates at version 7', () => {
     // This is a direct schema validation test using a hand-crafted payload
     // that mirrors what serializeSession produces for a block with a groove snapshot.
     const payloadWithSnapshot = {
-      version: 6,
+      version: 7,
       bpm: 120,
       view: 'rhythm',
       chordMode: 'chord',

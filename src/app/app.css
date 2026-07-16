@@ -527,6 +527,16 @@ textarea {
   text-overflow: ellipsis;
 }
 
+/* .bl — section label (song-import Phase 01). Smaller font; ellipsis overflow. */
+.tl-block .bl {
+  font-size: 9px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.72;
+}
+
 .tl-block .bb {
   display: flex;
   align-items: center;

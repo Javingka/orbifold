@@ -67,7 +67,7 @@ const SAMPLE_REST: RestSlot = { isRest: true };
 const SAMPLE_NOTE: NoteSlot = { isNote: true, rootPc: 5, octaveOffset: 0 };
 
 // A v5 session blob with chord-only progression (no NoteSlot entries).
-// Used to verify backward compatibility: chord-only progressions parse at v6.
+// Used to verify backward compatibility: chord-only progressions parse at v7 (after upgrade).
 const V5_SESSION_BLOB = {
   version: 5 as const,
   bpm: 120,
@@ -86,9 +86,9 @@ const V5_SESSION_BLOB = {
   composition: { blocks: [], tracks: [] },
 };
 
-// A v6 session blob with a NoteSlot entry in the progression.
+// A v7 session blob with a NoteSlot entry in the progression.
 const V6_SESSION_WITH_NOTE = {
-  version: 6 as const,
+  version: 7 as const,
   bpm: 120,
   view: 'harmony' as const,
   chordMode: 'chord' as const,
@@ -109,8 +109,8 @@ const V6_SESSION_WITH_NOTE = {
 // ── Test suite ─────────────────────────────────────────────────────────────
 
 describe('SESSION_SCHEMA_VERSION', () => {
-  it('A-01-10: SESSION_SCHEMA_VERSION equals 6', () => {
-    expect(SESSION_SCHEMA_VERSION).toBe(6);
+  it('A-01-10: SESSION_SCHEMA_VERSION equals 7 (song-import Phase 01 — pow quality added)', () => {
+    expect(SESSION_SCHEMA_VERSION).toBe(7);
   });
 });
 
@@ -190,10 +190,10 @@ describe('SavedNoteSlotSchema (A-01-11)', () => {
 });
 
 describe('A-01-12: backward compatibility — v5 chord-only session parses correctly', () => {
-  it('parses a v6-upgraded blob with chord-only progression without error', () => {
-    // V5_SESSION_BLOB has version: 5 (rejected by current schema z.literal(6)).
-    // Simulate the same payload at version 6 (what an app upgrade would do).
-    const upgradedBlob = { ...V5_SESSION_BLOB, version: 6 as const };
+  it('parses a v7-upgraded blob with chord-only progression without error', () => {
+    // V5_SESSION_BLOB has version: 5 (rejected by current schema z.literal(7)).
+    // Simulate the same payload at version 7 (what an app upgrade would do).
+    const upgradedBlob = { ...V5_SESSION_BLOB, version: 7 as const };
     const result = SavedSessionSchema.safeParse(upgradedBlob);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -207,7 +207,7 @@ describe('A-01-12: backward compatibility — v5 chord-only session parses corre
     }
   });
 
-  it('v6 session blob with mixed chord/note/rest progression parses all three types', () => {
+  it('v7 session blob with mixed chord/note/rest progression parses all three types', () => {
     const result = SavedSessionSchema.safeParse(V6_SESSION_WITH_NOTE);
     expect(result.success).toBe(true);
     if (result.success) {

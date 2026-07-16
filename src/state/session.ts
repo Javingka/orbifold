@@ -1455,6 +1455,41 @@ export function setChordOscillator(index: number, instrument: string): void {
 }
 
 /**
+ * Set the quality (maj/min/dim/aug/pow) for the chord slot at `index`.
+ *
+ * Updates `progression[index].qual` and calls `requeueLive()` so a running
+ * harmony engine picks up the change at the next cycle boundary. Has no
+ * effect if `index` is out of range or points to a rest slot / NoteSlot.
+ *
+ * The only setter that changes a slot's *musical identity* rather than a
+ * sound/timing attribute — `qual` drives codegen (chordToStrudel), voice-track
+ * rendering, and Pentagrama color, all of which already handle all five
+ * qualities uniformly (song-import Phase 04 inventory §(a)). Does NOT touch
+ * Tonnetz triangle logic (OD-2 invariant) — a slot's qual changing has no
+ * effect on which triangles exist on the grid; Tonnetz clicks still only
+ * ever create 'maj'/'min' chords.
+ *
+ * Introduced in Phase 04 (song-import) step 04.2 — OD-8/OD-9.
+ *
+ * @param index - Zero-based progression slot index.
+ * @param qual  - New quality ('maj' | 'min' | 'dim' | 'aug' | 'pow').
+ */
+export function setChordQuality(index: number, qual: Quality): void {
+  sessionStore.update((s) => {
+    if (index < 0 || index >= s.harmony.progression.length) return s;
+    const slot = s.harmony.progression[index];
+    // NoteSlot quality support is not applicable (notes have no quality); rest slots are silent.
+    if (slot === undefined || 'isRest' in slot || isNoteSlot(slot)) return s;
+    const updated: Chord = { ...slot, qual };
+    const progression: ProgressionSlot[] = s.harmony.progression.map((ch, i) =>
+      i === index ? updated : ch
+    );
+    return { ...s, harmony: { ...s.harmony, progression } };
+  });
+  requeueLive();
+}
+
+/**
  * Append a rest slot with `bars: 1` to the end of the progression.
  *
  * Delegates to `addRestAt(progression.length)`.
@@ -2008,6 +2043,15 @@ export function applyLoadedSession(saved: SavedSession): void {
     type: b.type,
     code: b.code,
     bars: b.bars,
+    // song-import Phase 03: carry through the optional label introduced in Phase 01.
+    // Pre-Phase-01 sessions have no label field; the conditional spread produces {} for
+    // undefined, so the output is byte-identical to the pre-fix behavior for old sessions.
+    ...(b.label !== undefined ? { label: b.label } : {}),
+    // song-import Phase 03 step 03.4: carry through the optional snapshot introduced in
+    // editable-composition Phase 01. Without this, imported blocks with snapshots would
+    // lose their snapshot on load, making them permanently read-only via openBlock.
+    // Pre-snapshot sessions (no snapshot field) produce {} via conditional spread — non-breaking.
+    ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
   }));
 
   const newTracks = saved.composition.tracks.map((t) => ({

@@ -1,21 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Orbifold — QUAL_INTERVALS, triadQuality, chordLabel, voicing.
 // Ported from reference/orbifold.html lines 703–710, 742–757.
+// song-import Phase 01 step 01.2: 'pow' quality added (root + perfect fifth, no third).
 
 import { NOTE_NAMES } from './pitch.js';
 
-/** The four triad qualities the engine recognises. */
-export type Quality = 'maj' | 'min' | 'dim' | 'aug';
+/**
+ * The five chord qualities the engine recognises.
+ * song-import Phase 01: 'pow' (power chord = root + fifth, no third) added as the fifth member.
+ */
+export type Quality = 'maj' | 'min' | 'dim' | 'aug' | 'pow';
 
 /**
  * Semitone intervals above the root for each quality.
  * Prototype line 742.
+ * 'pow': [0, 7] = root + perfect fifth; no third. Returns a 2-element array for power chords.
+ * Callers that assume exactly 3 elements must guard on qual === 'pow'
+ * (documented in song-import/inventories/phase-01-inventory.md §b).
  */
 export const QUAL_INTERVALS: Record<Quality, readonly number[]> = {
   maj: [0, 4, 7],
   min: [0, 3, 7],
   dim: [0, 3, 6],
   aug: [0, 4, 8],
+  pow: [0, 7], // root + perfect fifth; no third — song-import Phase 01
 };
 
 /**
@@ -35,10 +43,12 @@ export function triadQuality(abs: [number, number, number]): Quality | '?' {
 }
 
 /**
- * Human-readable label for a chord (e.g., "Cm", "F#", "B°", "D+").
+ * Human-readable label for a chord (e.g., "Cm", "F#", "B°", "D+", "E5").
  * Prototype lines 743–745.
+ * song-import Phase 01: 'pow' arm returns "<root>5" convention (e.g., "E5" for E power chord).
  */
 export function chordLabel(rootPc: number, qual: Quality): string {
+  if (qual === 'pow') return NOTE_NAMES[rootPc] + '5';
   return (
     NOTE_NAMES[rootPc] + (qual === 'min' ? 'm' : qual === 'dim' ? '°' : qual === 'aug' ? '+' : '')
   );

@@ -24,8 +24,10 @@ import { z } from 'zod';
  * Phase 03 (ai-jam): bumped from 5 to 6 — `AgentOutputSchema` gains `musicalIntent?`
  * field (`MusicalIntentSchema`); `superRefine` guard relaxed to accept at least one of
  * `rhythm`, `harmony`, `saveAsBlock`, or `musicalIntent` (ADR 0023 D1–D2).
+ * Phase 01 (song-import): bumped from 6 to 7 — `SK_QUAL` extended with `'pow'` quality;
+ * `HarmonyChordCoreSchema.quality` now accepts `'pow'` (power chord = root + fifth).
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 // ── Constants (prototype lines 1670–1673) ─────────────────────────────────
 
@@ -57,7 +59,7 @@ const SK_MODES = [
   'locrian',
   'harmonic:minor',
 ] as const;
-const SK_QUAL = ['maj', 'min', 'dim', 'aug'] as const;
+const SK_QUAL = ['maj', 'min', 'dim', 'aug', 'pow'] as const; // song-import Phase 01: 'pow' added
 
 // ── RhythmLayer — steps OR euclid variant (exactly one) ───────────────────
 

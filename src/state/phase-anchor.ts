@@ -33,33 +33,40 @@ export function getVisualPhaseAnchor(): number {
  * `performance.now() - _anchorMs` equals what it would have been at t=0
  * under zero latency — visuals now align with audible output.
  *
- * Note: Scheduler lookahead (`_scheduler.latency`, default 100 ms) is
- * intentionally excluded. The lookahead shifts audio events uniformly forward
- * on the audio clock but does NOT contribute to the human-audible output
- * delay. Including it would over-compensate by ~100 ms and invert the bug.
- * Only the hardware path (`outputLatency + baseLatency`) belongs here.
+ * Note: Scheduler lookahead (`_scheduler.latency`, default 100 ms) is folded
+ * into `measureLatencyOffsetMs`'s return value by the caller (step 04.3;
+ * song-import Phase 04 inventory §(d), OD-10 Option A) — it DOES shift the
+ * audible Web-Audio-scheduled trigger time of every hap forward by that
+ * amount, confirmed by tracing the pinned `@strudel/web@1.0.3` bundle's
+ * Cyclist → superdough → `.start(when)` path. A prior version of this
+ * comment claimed the opposite (that including it would over-compensate);
+ * that claim was never traced against the actual scheduling source and was
+ * factually incorrect.
  */
 export function anchorVisualPhase(offsetMs = 0): void {
   _anchorMs = performance.now() - offsetMs;
 }
 
 /**
- * Compute the hardware audible-output offset in milliseconds from an
- * AudioContext instance.
+ * Compute the audible-output offset in milliseconds from an AudioContext
+ * instance plus the Strudel scheduler's lookahead constant.
  *
- * Returns `(outputLatency + baseLatency) * 1000` where both properties are
- * guarded with `|| 0` for platforms that omit them (e.g. some Safari
- * versions do not expose `outputLatency`).
+ * Returns `(outputLatency + baseLatency) * 1000 + schedulerLatencySec * 1000`.
+ * The AudioContext properties are guarded with `|| 0` for platforms that
+ * omit them (e.g. some Safari versions do not expose `outputLatency`).
+ * `schedulerLatencySec` defaults to `0` (reproduces pre-step-04.3 behavior)
+ * — callers pass the live `Cyclist.latency` value (song-import Phase 04,
+ * OD-10 Option A). This offset **reduces** the constant see-vs-hear
+ * playhead gap; it does not eliminate it, and does not address progressive
+ * drift between the visual and audio clocks (deferred, out of scope).
  *
  * This is a pure function — no side effects, no module state. It is
  * co-located with the phase anchor because `measureLatencyOffsetMs` and
  * `anchorVisualPhase` are always used together: the caller measures the
  * offset and immediately passes it to the anchor.
- *
- * Scheduler lookahead is excluded: see JSDoc on `anchorVisualPhase`.
  */
-export function measureLatencyOffsetMs(ctx: AudioContext): number {
-  return ((ctx.outputLatency || 0) + (ctx.baseLatency || 0)) * 1000;
+export function measureLatencyOffsetMs(ctx: AudioContext, schedulerLatencySec = 0): number {
+  return ((ctx.outputLatency || 0) + (ctx.baseLatency || 0) + schedulerLatencySec) * 1000;
 }
 
 // ── Calibration offset API (step 04.3) ───────────────────────────────────────

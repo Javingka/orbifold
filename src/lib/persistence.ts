@@ -8,17 +8,18 @@ import type { SessionState } from '../state/session.js';
 // ── Schema version ─────────────────────────────────────────────────────────
 
 /**
- * Schema version 6 — note-placement Phase 01 step 01.2.
- * Change from v5: `SavedNoteSlotSchema` added to the `progression` union in
- * `SavedHarmonySchema` (new `NoteSlot` variant — `isNote: true` discriminant).
- * Old v5 blobs fail the `z.literal(6)` check and are dropped by the existing
- * safeParse graceful-degradation path — no migration function needed (chord-only
- * progressions continue to load). Pilot-confirmed tradeoff consistent with
- * ADR 0020 D5 / ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1 precedent.
+ * Schema version 7 — song-import Phase 01 step 01.2.
+ * Change from v6: `SK_QUAL` extended with `'pow'` (power chord quality).
+ * `SavedChordSchema.qual` and `SavedChordSnapshotEntrySchema.qual` now accept `'pow'`.
+ * Old v6 blobs fail the `z.literal(7)` check and are dropped by the existing
+ * safeParse graceful-degradation path — no migration function needed (non-pow
+ * progressions continue to load after re-creation). Pilot-confirmed tradeoff
+ * consistent with ADR 0020 D5 / ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1 precedent.
  *
+ * v6 (prior): `SavedNoteSlotSchema` added — note-placement Phase 01 step 01.2.
  * v5 (prior): `SavedBlockSchema` + `snapshot?` field — editable-composition Phase 01, ADR 0020 D5.
  */
-export const SESSION_SCHEMA_VERSION = 6;
+export const SESSION_SCHEMA_VERSION = 7;
 
 // ── Shared enum constants (mirror agent/schema.ts SK_ arrays) ─────────────
 
@@ -50,7 +51,7 @@ const SK_MODES = [
   'locrian',
   'harmonic:minor',
 ] as const;
-const SK_QUAL = ['maj', 'min', 'dim', 'aug'] as const;
+const SK_QUAL = ['maj', 'min', 'dim', 'aug', 'pow'] as const; // song-import Phase 01: 'pow' added
 
 // ── Sub-schemas ────────────────────────────────────────────────────────────
 
@@ -284,6 +285,8 @@ const SavedBlockSchema = z.object({
   bars: z.number().int().min(1).max(64),
   /** Block snapshot captured at save time (editable-composition Phase 01, ADR 0020 D5). */
   snapshot: SavedBlockSnapshotSchema.optional(),
+  /** Optional section label — song-import Phase 01. Additive; absent in pre-Phase-01 sessions. */
+  label: z.string().optional(),
 });
 
 const SavedBlockRefSchema = z.object({
@@ -303,21 +306,22 @@ const SavedCompositionSchema = z.object({
 });
 
 /**
- * SavedSessionSchema v6 — note-placement Phase 01 step 01.2.
+ * SavedSessionSchema v7 — song-import Phase 01 step 01.2.
  *
- * Changes from v5:
- *   - `version` literal bumped from 5 to 6.
- *   - `SavedNoteSlotSchema` added to the `progression` union in `SavedHarmonySchema`.
- *     New `NoteSlot` variant with `isNote: true` discriminant (OD-1 resolution).
+ * Changes from v6:
+ *   - `version` literal bumped from 6 to 7.
+ *   - `SK_QUAL` extended with `'pow'` — `SavedChordSchema.qual` and
+ *     `SavedChordSnapshotEntrySchema.qual` now accept `'pow'` quality.
  *
- * Version 5 blobs fail the `z.literal(6)` check → dropped by safeParse (existing
+ * Version 6 blobs fail the `z.literal(7)` check → dropped by safeParse (existing
  * graceful-degradation behavior, Pilot-confirmed tradeoff consistent with
  * ADR 0020 D5 / ADR 0019 D5 / ADR 0018 D3 / ADR 0013 D1 precedent).
  *
+ * v6 (prior): NoteSlot variant — note-placement Phase 01 step 01.2.
  * v5 (prior): SavedBlockSchema + snapshot? field — editable-composition Phase 01, ADR 0020 D5.
  */
 export const SavedSessionSchema = z.object({
-  version: z.literal(6),
+  version: z.literal(7),
   bpm: z.number().int().min(40).max(280),
   view: z
     .enum(['rhythm', 'harmony', 'composition', 'session', 'code'] as const)
@@ -427,6 +431,8 @@ export function serializeSession(state: SessionState): SavedSession {
         // id excluded — ADR 0009
         // snapshot included when present (ADR 0020 D5); omitted when undefined per Zod defaults
         ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
+        // label included when present (song-import Phase 01); omitted when undefined
+        ...(b.label !== undefined ? { label: b.label } : {}),
       })),
       tracks: state.composition.tracks.map((t) => ({
         // id excluded — ADR 0009
@@ -563,6 +569,8 @@ export function deserializeSession(
         bars: b.bars,
         // snapshot carried through when present (ADR 0020 D5); absent → undefined (legacy block)
         ...(b.snapshot !== undefined ? { snapshot: b.snapshot } : {}),
+        // label carried through when present (song-import Phase 01); absent → undefined
+        ...(b.label !== undefined ? { label: b.label } : {}),
       })),
       tracks: saved.composition.tracks.map((t) => ({
         id: '',

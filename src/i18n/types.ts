@@ -129,6 +129,22 @@ export interface Dictionary {
       soundEditTip: string;
       /** Tooltip when the sound block is in intent mode (no slot selected) */
       soundIntentTip: string;
+      /**
+       * Chord-quality control (song-import Phase 04 step 04.2 — OD-8/OD-9).
+       * Edit-only: enabled only when a chord slot is selected (quality has no
+       * "intent for the next chord" concept). Quality tokens (maj/min/dim/aug/pow)
+       * are [VERBATIM] in the value attribute — only display labels translate.
+       */
+      qualityLabel: string;
+      qualityMaj: string;
+      qualityMin: string;
+      qualityDim: string;
+      qualityAug: string;
+      qualityPow: string;
+      /** Tooltip when a chord slot is selected (control enabled) */
+      qualityEditTip: string;
+      /** Tooltip/aria explaining the control is disabled when no chord slot is selected */
+      qualityDisabledTip: string;
     };
     /** Tutorial link */
     tutorialTitle: string;

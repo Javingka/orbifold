@@ -38,4 +38,31 @@ describe('measureLatencyOffsetMs', () => {
       100
     );
   });
+
+  // ── Scheduler lookahead (step 04.3, OD-10 Option A) ─────────────────────────
+
+  it('defaults schedulerLatencySec to 0, reproducing pre-04.3 behavior', () => {
+    expect(
+      measureLatencyOffsetMs({ outputLatency: 0.05, baseLatency: 0.01 } as AudioContext)
+    ).toBeCloseTo(60, 10);
+  });
+
+  it('adds schedulerLatencySec (converted to ms) to the hardware offset', () => {
+    // 0.05 + 0.01 = 0.06 s hardware, + 0.1 s scheduler lookahead = 0.16 s = 160 ms.
+    expect(
+      measureLatencyOffsetMs({ outputLatency: 0.05, baseLatency: 0.01 } as AudioContext, 0.1)
+    ).toBeCloseTo(160, 10);
+  });
+
+  it('a non-zero schedulerLatencySec changes the result by exactly that amount, in ms', () => {
+    const ctx = { outputLatency: 0.02, baseLatency: 0 } as AudioContext;
+    const withoutLookahead = measureLatencyOffsetMs(ctx);
+    const withLookahead = measureLatencyOffsetMs(ctx, 0.1);
+    expect(withLookahead - withoutLookahead).toBeCloseTo(100, 10);
+  });
+
+  it('treats a zero schedulerLatencySec explicitly the same as the default', () => {
+    const ctx = { outputLatency: 0.03, baseLatency: 0.005 } as AudioContext;
+    expect(measureLatencyOffsetMs(ctx, 0)).toBe(measureLatencyOffsetMs(ctx));
+  });
 });
