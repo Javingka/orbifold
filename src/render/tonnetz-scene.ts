@@ -326,6 +326,11 @@ export function updateTonnetzDynamic(state: SessionState): void {
       const sel = findRenderTriForChord(last, prevCx, prevCy);
       if (sel !== null) {
         _lastPick = { rootPc: sel.rootPc, qual: sel.qual, cx: sel.cx, cy: sel.cy };
+      } else {
+        // dim/aug/pow have no Tonnetz triangle (OD-2) — clear rather than leave
+        // stale, else a quality change away from maj/min keeps highlighting the
+        // last matching triangle (song-import Phase 04 Checkpoint #5 fast-follow).
+        _lastPick = null;
       }
     }
   } else {
